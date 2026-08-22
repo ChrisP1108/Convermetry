@@ -13,7 +13,7 @@ if (!defined('ABSPATH')) exit;
 final class AboutPage
 {
     /** Menu slug for the submenu page. */
-    public const string MENU_SLUG = 'convermetry-about';
+    public const MENU_SLUG = 'convermetry-about';
 
     /**
      * Registers the menu hook.

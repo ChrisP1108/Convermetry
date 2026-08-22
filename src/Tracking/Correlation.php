@@ -39,16 +39,16 @@ use Convermetry\Settings\Options;
 final class Correlation
 {
     /** Hidden input: the per-attempt conversion token. */
-    public const string FIELD_CONVERSION = 'cvm_conversion_id';
+    public const FIELD_CONVERSION = 'cvm_conversion_id';
 
     /** Hidden input: the analytics session id. */
-    public const string FIELD_SESSION = 'cvm_session_id';
+    public const FIELD_SESSION = 'cvm_session_id';
 
     /** Hidden input: the JSON attribution context snapshot. */
-    public const string FIELD_CONTEXT = 'cvm_context';
+    public const FIELD_CONTEXT = 'cvm_context';
 
     /** Maximum accepted bytes for the cvm_context JSON. */
-    private const int MAX_CONTEXT_BYTES = 4096;
+    private const MAX_CONTEXT_BYTES = 4096;
 
     /**
      * @param string                $conversionId    Validated conversion id (always non-empty).
@@ -249,7 +249,7 @@ final class Correlation
             'page_url'         => '',
         ];
 
-        if (!is_string($raw) || $raw === '' || strlen($raw) > self::MAX_CONTEXT_BYTES || !json_validate($raw)) {
+        if (!is_string($raw) || $raw === '' || strlen($raw) > self::MAX_CONTEXT_BYTES) {
             return $empty;
         }
 

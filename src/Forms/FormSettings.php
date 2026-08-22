@@ -28,7 +28,7 @@ if (!defined('ABSPATH')) exit;
 final class FormSettings
 {
     /** The wp_options key holding all per-form configuration. */
-    public const string OPTION_KEY = 'cvm_form_settings';
+    public const OPTION_KEY = 'cvm_form_settings';
 
     /**
      * Returns every stored per-form configuration.
@@ -64,6 +64,41 @@ final class FormSettings
                 ? array_values(array_filter($entry['headers'], 'is_array'))
                 : [],
         ];
+    }
+
+    /**
+     * Picks which stored key actually holds a form's configuration, when a
+     * provider has migrated the identity it keys settings by.
+     *
+     * Elementor is the case this exists for: settings used to be keyed by form
+     * NAME, which collapses every widget sharing a name into one shared
+     * configuration. They are now keyed by the widget id, but an existing site
+     * still has entries under the old name key — and simply switching would
+     * silently orphan them. Resolution is therefore: use the new key when it
+     * has an entry, otherwise fall back to the legacy key, otherwise the new
+     * key (so a brand-new form is configured under the new identity).
+     *
+     * The legacy entry is never deleted here. Submissions queued before an
+     * admin re-saves still carry the legacy form key and read it when their
+     * delivery is first frozen, which can be long after the row was written.
+     *
+     * @param string $primaryKey Current provider-scoped form key.
+     * @param string $legacyKey  Previous key for the same form ('' when none).
+     * @return string The key to read configuration from.
+     */
+    public static function resolveKey(string $primaryKey, string $legacyKey): string
+    {
+        if ($legacyKey === '' || $legacyKey === $primaryKey) {
+            return $primaryKey;
+        }
+
+        $all = self::all();
+
+        if (isset($all[$primaryKey])) {
+            return $primaryKey;
+        }
+
+        return isset($all[$legacyKey]) ? $legacyKey : $primaryKey;
     }
 
     /**

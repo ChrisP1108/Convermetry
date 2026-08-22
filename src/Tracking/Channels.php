@@ -37,22 +37,22 @@ use Convermetry\Settings\Options;
 final class Channels
 {
     /** @var string[] Ad-click identifier parameter names the tracker recognizes. */
-    public const array CLICK_ID_TYPES = ['gclid', 'gbraid', 'wbraid', 'fbclid', 'msclkid', 'ttclid', 'twclid', 'li_fat_id'];
+    public const CLICK_ID_TYPES = ['gclid', 'gbraid', 'wbraid', 'fbclid', 'msclkid', 'ttclid', 'twclid', 'li_fat_id'];
 
     /** @var string[] Click identifiers that only paid-search ads produce. */
-    private const array PAID_SEARCH_CLICK_IDS = ['gclid', 'gbraid', 'wbraid', 'msclkid'];
+    private const PAID_SEARCH_CLICK_IDS = ['gclid', 'gbraid', 'wbraid', 'msclkid'];
 
     /** @var string[] Click identifiers that only paid-social ads produce. */
-    private const array PAID_SOCIAL_CLICK_IDS = ['ttclid', 'twclid', 'li_fat_id'];
+    private const PAID_SOCIAL_CLICK_IDS = ['ttclid', 'twclid', 'li_fat_id'];
 
     /** @var string[] Canonical search-engine source names (also matched as referrer host labels). */
-    private const array SEARCH_SOURCES = [
+    private const SEARCH_SOURCES = [
         'google', 'bing', 'yahoo', 'duckduckgo', 'baidu', 'yandex',
         'ecosia', 'qwant', 'brave', 'startpage', 'aol', 'ask',
     ];
 
     /** @var string[] Canonical social-network source names (also matched as referrer host labels). */
-    private const array SOCIAL_SOURCES = [
+    private const SOCIAL_SOURCES = [
         'facebook', 'instagram', 'twitter', 'linkedin', 'pinterest', 'tiktok',
         'youtube', 'reddit', 'threads', 'snapchat', 'mastodon', 'bluesky',
         'whatsapp', 'telegram', 'messenger', 'discord', 'tumblr', 'quora', 'nextdoor',

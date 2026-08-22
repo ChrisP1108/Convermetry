@@ -34,10 +34,17 @@ use Convermetry\Forms\Providers\WPFormsProvider;
 final class FormProviderRegistry
 {
     /** Transient key prefix for per-provider discovery caches. */
-    private const string DISCOVERY_CACHE_PREFIX = 'cvm_forms_';
+    /**
+     * Transient prefix for cached provider discovery. The suffix is a shape
+     * version: discovery entries gained legacy_id/shared_id, and Elementor's
+     * native_id changed from the form name to the widget id, so cached entries
+     * written by an earlier release describe forms differently. Bumping this
+     * retires them instead of serving a stale shape until they expire.
+     */
+    private const DISCOVERY_CACHE_PREFIX = 'cvm_forms_v2_';
 
     /** Seconds a provider's discovered-forms list is cached. */
-    private const int DISCOVERY_CACHE_TTL = 5 * MINUTE_IN_SECONDS;
+    private const DISCOVERY_CACHE_TTL = 5 * MINUTE_IN_SECONDS;
 
     /** @var array<string, FormProviderInterface>|null Memoized provider map (key → provider). */
     private ?array $providers = null;

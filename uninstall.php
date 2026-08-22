@@ -38,6 +38,8 @@ function cvm_uninstall_current_site(): void
     delete_option('cvm_form_settings');
     delete_option('cvm_db_version');
     delete_option('cvm_delivery_db_version');
+    delete_option('cvm_delivery_log_migration');
+    delete_option('cvm_webhook_state_migration');
     delete_option('cvm_submissions_db_version');
     delete_option('cvm_queue_db_version');
     delete_option('cvm_delivery_api_active');

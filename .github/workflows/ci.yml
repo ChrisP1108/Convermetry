@@ -1,0 +1,113 @@
+name: CI
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Tests (PHP ${{ matrix.php }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # 8.1 is the declared floor and the one that actually matters: newer
+        # runtimes happily parse syntax an 8.1 host would reject.
+        php: ['8.1', '8.2', '8.3']
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          coverage: none
+          tools: composer:v2
+
+      - name: Install dependencies
+        run: composer install --no-interaction --no-progress
+
+      - name: Syntax check every PHP file
+        run: |
+          find src tests convermetry.php uninstall.php -name '*.php' -print0 \
+            | xargs -0 -n1 -P4 php -l
+
+      - name: Unit suite
+        run: composer test
+
+  runtime-floor:
+    name: No syntax above the PHP 8.1 floor
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up PHP 8.1
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.1'
+          coverage: none
+
+      # Belt and braces alongside the 8.1 lint above: these constructs parse
+      # fine on the maintainers' newer local PHP, so a grep is the cheapest way
+      # to keep them from creeping back in.
+      - name: Reject PHP 8.2+/8.3+ constructs
+        run: |
+          set -e
+          fail=0
+          check() {
+            if grep -rnE "$1" --include='*.php' src/ tests/ convermetry.php uninstall.php; then
+              echo "::error::Found $2, which does not run on PHP 8.1"
+              fail=1
+            fi
+          }
+          check "^\s+(public|private|protected) const (int|string|bool|float|array|mixed|iterable|object) " "typed class constants (8.3+)"
+          check "\bjson_validate\s*\(" "json_validate() (8.3+)"
+          check "\breadonly class\b" "readonly classes (8.2+)"
+          check "\bmb_str_pad\s*\(" "mb_str_pad() (8.3+)"
+          exit $fail
+
+  package:
+    name: Release ZIP is clean
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Build the distributable ZIP
+        run: bash bin/build-zip.sh
+
+      # The build script already fails on a contaminated staging directory;
+      # this asserts the same thing against the finished archive, so a future
+      # change to the script cannot quietly start shipping dev files.
+      - name: Assert no development artifacts were shipped
+        run: |
+          set -e
+          ZIP="$(find build -name '*.zip' -print -quit)"
+          if [ -z "$ZIP" ]; then
+            echo "::error::No ZIP was produced"; exit 1
+          fi
+          echo "Inspecting $ZIP"
+          unzip -l "$ZIP"
+          if unzip -l "$ZIP" | grep -E '(^|/)(\.git|tests|vendor|bin|\.github)/|composer\.(json|lock)|phpunit\.xml|\.distignore|\.gitignore'; then
+            echo "::error::Development artifacts leaked into the release ZIP"
+            exit 1
+          fi
+          for required in convermetry.php uninstall.php README.md; do
+            unzip -l "$ZIP" | grep -q "convermetry/$required" || {
+              echo "::error::Release ZIP is missing $required"; exit 1; }
+          done
+          echo "Release ZIP is clean."
+
+      - name: Upload the built plugin
+        uses: actions/upload-artifact@v4
+        with:
+          name: convermetry-plugin
+          path: build/*.zip
+          if-no-files-found: error

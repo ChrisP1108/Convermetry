@@ -7,6 +7,7 @@ if (!defined('ABSPATH')) exit;
 
 use Convermetry\Settings\Options;
 use Convermetry\Webhook\AnalyticsDispatcher;
+use Convermetry\Webhook\DeliveryLog;
 use Convermetry\Webhook\FormDeliveryQueue;
 
 /**
@@ -36,13 +37,13 @@ use Convermetry\Webhook\FormDeliveryQueue;
 final class WebhooksPage
 {
     /** Menu slug for the submenu page. */
-    public const string MENU_SLUG = 'convermetry-webhooks';
+    public const MENU_SLUG = 'convermetry-webhooks';
 
     /** admin-post action name for saving the page. */
-    private const string SAVE_ACTION = 'cvm_save_webhooks';
+    private const SAVE_ACTION = 'cvm_save_webhooks';
 
     /** Admin action name for discarding one pending analytics retry. */
-    private const string DISCARD_ACTION = 'cvm_discard_retry';
+    private const DISCARD_ACTION = 'cvm_discard_retry';
 
     /**
      * Registers menu, save, discard, notice, asset, and AJAX hooks.
@@ -161,14 +162,49 @@ final class WebhooksPage
                 continue;
             }
 
+            // The id round-trips through a hidden field so that editing an
+            // endpoint's URL keeps it the SAME endpoint: its analytics
+            // window, retry chain, and pending queue rows all hang off this
+            // id. Only a genuinely new row gets a fresh one — regenerating an
+            // existing id would strand exactly the state it anchors.
+            $postedId = preg_replace('/[^a-f0-9-]/i', '', (string) ($entry['id'] ?? ''));
             $seen[$url]  = true;
             $endpoints[] = [
+                'id'        => $postedId !== '' ? $postedId : wp_generate_uuid4(),
                 'url'       => $url,
                 'label'     => mb_substr(sanitize_text_field((string) ($entry['label'] ?? '')), 0, 100),
                 'secret'    => mb_substr(sanitize_text_field((string) ($entry['secret'] ?? '')), 0, 190),
                 'analytics' => !empty($entry['analytics']),
                 'forms'     => !empty($entry['forms']),
             ];
+        }
+
+        // Endpoints present before this save but absent from it were removed.
+        // Their queued leads have nowhere left to go, so they are discarded
+        // rather than retried forever against a deleted destination — and the
+        // discard is recorded in the Activity Log so the loss is auditable.
+        $keptIds = array_column($endpoints, 'id');
+        foreach (Options::endpoints() as $existing) {
+            if ($existing['id'] === '' || in_array($existing['id'], $keptIds, true)) {
+                continue;
+            }
+
+            $discarded = FormDeliveryQueue::discardForEndpoint($existing['id'], $existing['url']);
+            if ($discarded > 0) {
+                DeliveryLog::log([
+                    'ok'             => false,
+                    'endpoint_url'   => $existing['url'],
+                    'endpoint_label' => $existing['label'],
+                    'message_type'   => 'form_submission',
+                    'kind'           => 'immediate',
+                    'response_code'  => 0,
+                    'message'        => sprintf(
+                        'Endpoint removed from settings — %d queued deliver%s discarded.',
+                        $discarded,
+                        $discarded === 1 ? 'y' : 'ies'
+                    ),
+                ]);
+            }
         }
 
         $interval = sanitize_key((string) ($_POST['cvm_interval'] ?? 'daily'));
@@ -396,7 +432,8 @@ final class WebhooksPage
                 (string) $endpoint['label'],
                 (string) ($endpoint['secret'] ?? ''),
                 !empty($endpoint['analytics']),
-                !empty($endpoint['forms'])
+                !empty($endpoint['forms']),
+                (string) ($endpoint['id'] ?? '')
             );
         }
         echo '</div>';
@@ -514,17 +551,40 @@ final class WebhooksPage
      * @param bool   $forms     Whether the endpoint receives form submissions.
      * @return void
      */
-    private static function renderEndpointBlock(int $index, string $url, string $label, string $secret, bool $analytics, bool $forms): void
+    private static function renderEndpointBlock(int $index, string $url, string $label, string $secret, bool $analytics, bool $forms, string $endpointId = ''): void
     {
         echo '<div class="cvm-webhook-block" data-webhook-index="' . esc_attr((string) $index) . '">';
+
+        // Carries the endpoint's permanent identity across a save, so editing
+        // the URL below does not orphan its delivery window or retry chain.
+        // Blank for a row added in the browser; the save path mints one.
+        echo '<input type="hidden" class="cvm-webhook-id-input" '
+            . 'name="cvm_webhooks[' . esc_attr((string) $index) . '][id]" '
+            . 'value="' . esc_attr($endpointId) . '">';
+
+        // Removing an endpoint discards its undelivered leads on save, so the
+        // button carries the count and confirms before the block disappears.
+        $pending = $endpointId !== '' ? FormDeliveryQueue::pendingCountForEndpoint($endpointId, $url) : 0;
 
         echo '<div class="cvm-webhook-block-header">';
         echo '<strong class="cvm-webhook-block-title">Endpoint ' . esc_html((string) ($index + 1)) . '</strong>';
         if ($index > 0) {
-            echo '<button type="button" class="button cvm-remove-webhook-btn" aria-label="Remove endpoint '
-                . esc_attr((string) ($index + 1)) . '">Remove</button>';
+            echo '<button type="button" class="button cvm-remove-webhook-btn"'
+                . ' data-pending="' . esc_attr((string) $pending) . '"'
+                . ' aria-label="Remove endpoint ' . esc_attr((string) ($index + 1)) . '">Remove</button>';
         }
         echo '</div>';
+
+        if ($pending > 0) {
+            echo '<p class="description cvm-webhook-pending-note">'
+                . esc_html(sprintf(
+                    '%d queued deliver%s waiting for this endpoint. Removing it discards %s.',
+                    $pending,
+                    $pending === 1 ? 'y is' : 'ies are',
+                    $pending === 1 ? 'that delivery' : 'them'
+                ))
+                . '</p>';
+        }
 
         echo '<div class="cvm-webhook-url-row">';
         echo '<input type="url" class="cvm-webhook-url-input regular-text code" '

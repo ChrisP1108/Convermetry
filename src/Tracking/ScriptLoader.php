@@ -19,7 +19,7 @@ use Convermetry\Settings\Options;
 final class ScriptLoader
 {
     /** Script handle for the frontend tracker. */
-    private const string HANDLE = 'cvm-tracker';
+    private const HANDLE = 'cvm-tracker';
 
     /**
      * Registers the wp_enqueue_scripts hook.

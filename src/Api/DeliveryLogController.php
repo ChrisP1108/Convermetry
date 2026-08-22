@@ -21,8 +21,12 @@ use Convermetry\Webhook\DeliveryLog;
  *   endpoint     - md5 hash of the endpoint URL (from a previous response's
  *                  endpoint_key), or an endpoint label
  *   provider     - form provider key (e.g. 'elementor')
- *   form_id      - exact form name filter
- *   after / before - UTC date bounds (YYYY-MM-DD)
+ *   form_id      - exact match on the delivered form id (the payload's
+ *                  form_submission.form_id). Rows logged before this column
+ *                  existed are backfilled from the stored payload; any that
+ *                  carried no form id stay empty and match no filter.
+ *   after / before - inclusive UTC day bounds (YYYY-MM-DD). An invalid
+ *                  calendar date fails the request with a 400.
  *
  * Authentication: pass the API key as the Authorization request header.
  * Only a SHA-256 hash of the key is stored; the raw key is shown once at
@@ -41,19 +45,19 @@ use Convermetry\Webhook\DeliveryLog;
 final class DeliveryLogController
 {
     /** Option key storing whether the API is enabled. */
-    private const string ACTIVE_OPTION = 'cvm_delivery_api_active';
+    private const ACTIVE_OPTION = 'cvm_delivery_api_active';
 
     /** Option key storing the SHA-256 hash of the API key. */
-    private const string KEY_HASH_OPTION = 'cvm_delivery_api_key_hash';
+    private const KEY_HASH_OPTION = 'cvm_delivery_api_key_hash';
 
     /** Failed authentications per IP allowed within the throttle window. */
-    private const int AUTH_FAILURE_MAX = 10;
+    private const AUTH_FAILURE_MAX = 10;
 
     /** Authentication-failure throttle window, in seconds. */
-    private const int AUTH_FAILURE_WINDOW = 5 * MINUTE_IN_SECONDS;
+    private const AUTH_FAILURE_WINDOW = 5 * MINUTE_IN_SECONDS;
 
-    private const int DEFAULT_PER_PAGE = 25;
-    private const int MAX_PER_PAGE     = 100;
+    private const DEFAULT_PER_PAGE = 25;
+    private const MAX_PER_PAGE     = 100;
 
     /**
      * Registers the REST route and the CORS filter.
@@ -189,11 +193,13 @@ final class DeliveryLogController
                     'default'           => '',
                     'type'              => 'string',
                     'sanitize_callback' => 'sanitize_text_field',
+                    'validate_callback' => [self::class, 'validateDateParam'],
                 ],
                 'before' => [
                     'default'           => '',
                     'type'              => 'string',
                     'sanitize_callback' => 'sanitize_text_field',
+                    'validate_callback' => [self::class, 'validateDateParam'],
                 ],
             ],
         ]);
@@ -298,23 +304,72 @@ final class DeliveryLogController
      * @param \WP_REST_Request $request The incoming request.
      * @return array<string, string>
      */
+    /**
+     * Parses a YYYY-MM-DD date parameter as midnight UTC.
+     *
+     * Format matching alone is not validation: '2026-99-99' matches the shape
+     * but is not a date, and PHP would happily roll it over into 2034. The
+     * round-trip comparison rejects any input the parser had to normalize, and
+     * the '!' resets unspecified time fields to zero rather than "now".
+     *
+     * @param string $value Raw parameter value.
+     * @return \DateTimeImmutable|null Midnight UTC, or null when empty/invalid.
+     */
+    private static function parseDateParam(string $value): ?\DateTimeImmutable
+    {
+        if ($value === '') {
+            return null;
+        }
+
+        $date = \DateTimeImmutable::createFromFormat('!Y-m-d', $value, new \DateTimeZone('UTC'));
+
+        return ($date !== false && $date->format('Y-m-d') === $value) ? $date : null;
+    }
+
+    /**
+     * REST validate_callback for the after/before date bounds — an invalid
+     * date fails the request with a 400 rather than being silently ignored.
+     *
+     * @param mixed $value Raw parameter value.
+     * @return bool|\WP_Error
+     */
+    public static function validateDateParam(mixed $value): bool|\WP_Error
+    {
+        $value = is_scalar($value) ? (string) $value : '';
+
+        if ($value === '' || self::parseDateParam($value) !== null) {
+            return true;
+        }
+
+        return new \WP_Error(
+            'rest_invalid_param',
+            'Date parameters must be a valid calendar date in YYYY-MM-DD form (UTC).',
+            ['status' => 400]
+        );
+    }
+
     private static function requestFilters(\WP_REST_Request $request): array
     {
         $filters = [
             'status'       => (string) $request->get_param('status'),
             'message_type' => (string) $request->get_param('message_type'),
             'provider'     => (string) $request->get_param('provider'),
-            'form_name'    => (string) $request->get_param('form_id'),
+            'form_id'      => (string) $request->get_param('form_id'),
         ];
 
-        // Date range: after/before (YYYY-MM-DD) are mapped to the log's
-        // year/month filters when they describe one calendar month; broader
-        // ranges are served page-by-page by created_at ordering. Kept
-        // simple and index-friendly.
-        $after = (string) $request->get_param('after');
-        if (preg_match('~^(\d{4})-(\d{2})$~', $after, $m) || preg_match('~^(\d{4})-(\d{2})-\d{2}$~', $after, $m)) {
-            $filters['year']  = $m[1];
-            $filters['month'] = $m[2];
+        // Date range: a half-open UTC interval [after 00:00:00, before+1d
+        // 00:00:00) over created_at, which is stored via gmdate(). 'before' is
+        // documented as an inclusive day bound, hence the +1 day. Both params
+        // are already known-valid here — validateDateParam() rejects anything
+        // else with a 400 before this runs.
+        $after = self::parseDateParam((string) $request->get_param('after'));
+        if ($after !== null) {
+            $filters['after'] = $after->format('Y-m-d H:i:s');
+        }
+
+        $before = self::parseDateParam((string) $request->get_param('before'));
+        if ($before !== null) {
+            $filters['before'] = $before->modify('+1 day')->format('Y-m-d H:i:s');
         }
 
         $endpointParam = (string) $request->get_param('endpoint');
@@ -413,6 +468,7 @@ final class DeliveryLogController
             'conversion_id'  => (string) ($entry['conversion_id'] ?? ''),
             'form_provider'  => (string) ($entry['form_provider'] ?? ''),
             'form_name'      => (string) ($entry['form_name'] ?? ''),
+            'form_id'        => (string) ($entry['form_id'] ?? ''),
             'response_code'  => (int) ($entry['response_code'] ?? 0),
             'request_data'   => is_array($requestDecoded) ? $requestDecoded : [],
             'response_data'  => is_array($responseDecoded) ? $responseDecoded : (string) ($entry['response_data'] ?? ''),

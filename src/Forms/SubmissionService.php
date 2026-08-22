@@ -57,8 +57,11 @@ final class SubmissionService
      * @param array<string, mixed>  $runtimeQuery   Extra query parameters for this submission only.
      * @param array<string, string> $runtimeHeaders Extra request headers for this submission only.
      * @param string           $identity       The identity per-form settings are keyed by, when it
-     *                                         differs from the native id (e.g. Elementor keys by
-     *                                         form NAME while the widget id travels as native_form_id).
+     *                                         differs from the native id.
+     * @param string           $legacyIdentity A previous identity the same form's settings may still
+     *                                         be stored under (Elementor moved from form NAME to
+     *                                         widget id). Used only when the current key has no
+     *                                         stored configuration; never written to.
      * @return SubmissionResult
      */
     public function record(
@@ -70,16 +73,30 @@ final class SubmissionService
         bool $sync = false,
         array $runtimeQuery = [],
         array $runtimeHeaders = [],
-        string $identity = ''
+        string $identity = '',
+        string $legacyIdentity = ''
     ): SubmissionResult {
-        $provider = sanitize_key($provider);
-        $formName = sanitize_text_field($formName);
-        $nativeId = sanitize_text_field($nativeId);
-        $identity = sanitize_text_field($identity);
-        $formKey  = FormProviderRegistry::formKey(
+        $provider       = sanitize_key($provider);
+        $formName       = sanitize_text_field($formName);
+        $nativeId       = sanitize_text_field($nativeId);
+        $identity       = sanitize_text_field($identity);
+        $legacyIdentity = sanitize_text_field($legacyIdentity);
+
+        $formKey = FormProviderRegistry::formKey(
             $provider,
             $identity !== '' ? $identity : ($nativeId !== '' ? $nativeId : $formName)
         );
+
+        // Resolved once, here, and then frozen onto the submission row — every
+        // later reader (queue freeze, retries, payload build) works from the
+        // stored key, so a settings migration mid-flight cannot change which
+        // configuration an already-accepted submission was recorded under.
+        if ($legacyIdentity !== '') {
+            $formKey = FormSettings::resolveKey(
+                $formKey,
+                FormProviderRegistry::formKey($provider, $legacyIdentity)
+            );
+        }
 
         if (FormSettings::isExcluded($formKey)) {
             return new SubmissionResult(ok: false, msg: 'This form is excluded from Convermetry by the current settings.');
@@ -235,10 +252,9 @@ final class SubmissionService
         $payload = PayloadBuilder::formSubmission($submission);
         $runtime = $this->decodeRuntime($submission);
 
-        $formKey   = (string) ($submission['form_key'] ?? '');
-        $pageQuery = json_validate((string) ($submission['page_query'] ?? ''))
-            ? (array) json_decode((string) $submission['page_query'], true)
-            : [];
+        $formKey      = (string) ($submission['form_key'] ?? '');
+        $decodedQuery = json_decode((string) ($submission['page_query'] ?? ''), true);
+        $pageQuery    = is_array($decodedQuery) ? $decodedQuery : [];
 
         $overallOk        = true;
         $lastStatus       = 0;
@@ -259,11 +275,17 @@ final class SubmissionService
                 $result = ['ok' => false, 'code' => 0, 'message' => 'Payload could not be JSON-encoded', 'body' => ''];
                 $encoded = '';
             } else {
-                $result = Http::postJson(
-                    $requestUrl,
+                // Built once and reused below for the log, so the Activity Log
+                // records the headers actually sent rather than the base set.
+                $headers = RequestFactory::withProtocolHeaders(
+                    $headers,
+                    (string) ($endpoint['id'] ?? ''),
                     $encoded,
-                    RequestFactory::withProtocolHeaders($headers, $endpoint['url'], $encoded, $deliveryId)
+                    $deliveryId,
+                    $endpoint['url']
                 );
+
+                $result = Http::postJson($requestUrl, $encoded, $headers);
             }
 
             DeliveryLog::log([
@@ -278,6 +300,7 @@ final class SubmissionService
                 'conversion_id'   => $conversionId,
                 'form_provider'   => (string) ($submission['provider'] ?? ''),
                 'form_name'       => (string) ($submission['form_name'] ?? ''),
+                'form_id'         => (string) ($submission['form_id'] ?? ''),
                 'request_url'     => $requestUrl,
                 'request_headers' => $headers,
                 'request_data'    => $encoded,
@@ -287,9 +310,14 @@ final class SubmissionService
             ]);
 
             $lastStatus = (int) $result['code'];
-            $lastData   = $result['body'] !== '' && json_validate((string) $result['body'])
-                ? json_decode((string) $result['body'], true)
-                : ($result['body'] !== '' ? $result['body'] : null);
+
+            // An empty body yields null; a valid JSON body is decoded (including
+            // a literal "null"); anything else is kept as the raw string.
+            $responseBody = (string) $result['body'];
+            $decodedBody  = $responseBody !== '' ? json_decode($responseBody, true) : null;
+            $lastData     = $responseBody === ''
+                ? null
+                : (json_last_error() === JSON_ERROR_NONE ? $decodedBody : $responseBody);
 
             if (!$result['ok']) {
                 $overallOk          = false;
@@ -470,7 +498,7 @@ final class SubmissionService
     {
         $raw = (string) ($submission['runtime'] ?? '');
 
-        if ($raw !== '' && json_validate($raw)) {
+        if ($raw !== '') {
             $decoded = json_decode($raw, true);
             if (is_array($decoded)) {
                 return [

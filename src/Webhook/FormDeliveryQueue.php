@@ -49,25 +49,25 @@ use Convermetry\Support\Http;
 final class FormDeliveryQueue
 {
     /** Table name without the wpdb prefix. */
-    private const string TABLE = 'cvm_delivery_queue';
+    private const TABLE = 'cvm_delivery_queue';
 
     /** Option key storing the installed schema version. */
-    private const string DB_VERSION_OPTION = 'cvm_queue_db_version';
+    private const DB_VERSION_OPTION = 'cvm_queue_db_version';
 
     /** Current schema version; bump when the CREATE TABLE below changes. */
-    private const string DB_VERSION = '1.0.0';
+    private const DB_VERSION = '1.1.0';
 
     /** Cron hook name for the queue worker. */
-    public const string WORKER_HOOK = 'cvm_process_form_queue';
+    public const WORKER_HOOK = 'cvm_process_form_queue';
 
     /** Maximum queue rows one worker pass may claim. */
-    private const int BATCH_SIZE = 10;
+    private const BATCH_SIZE = 10;
 
     /** Wall-clock seconds budgeted per worker pass. */
-    private const int TIME_BUDGET = 45;
+    private const TIME_BUDGET = 45;
 
     /** Seconds after which a 'sending' claim is considered dead and reclaimed. */
-    private const int CLAIM_TIMEOUT = 10 * MINUTE_IN_SECONDS;
+    private const CLAIM_TIMEOUT = 10 * MINUTE_IN_SECONDS;
 
     /**
      * Returns the fully-prefixed queue table name.
@@ -100,6 +100,7 @@ final class FormDeliveryQueue
             submission_row BIGINT UNSIGNED NOT NULL DEFAULT 0,
             submission_id VARCHAR(40) NOT NULL,
             endpoint_key CHAR(32) NOT NULL,
+            endpoint_id VARCHAR(36) NOT NULL DEFAULT '',
             endpoint_url TEXT NOT NULL,
             delivery_id CHAR(32) NOT NULL,
             status VARCHAR(12) NOT NULL DEFAULT 'pending',
@@ -119,7 +120,7 @@ final class FormDeliveryQueue
         dbDelta($sql);
 
         $expected = [
-            'id', 'submission_row', 'submission_id', 'endpoint_key', 'endpoint_url',
+            'id', 'submission_row', 'submission_id', 'endpoint_key', 'endpoint_id', 'endpoint_url',
             'delivery_id', 'status', 'attempt', 'next_attempt_at', 'claim',
             'claimed_at', 'frozen_url', 'frozen_headers', 'frozen_body', 'created_at',
         ];
@@ -196,12 +197,17 @@ final class FormDeliveryQueue
         foreach ($endpoints as $endpoint) {
             $inserted = $wpdb->query($wpdb->prepare(
                 'INSERT IGNORE INTO ' . self::tableName()
-                . ' (submission_row, submission_id, endpoint_key, endpoint_url, delivery_id,'
+                . ' (submission_row, submission_id, endpoint_key, endpoint_id, endpoint_url, delivery_id,'
                 . " status, attempt, next_attempt_at, created_at)"
-                . " VALUES (%d, %s, %s, %s, %s, 'pending', 0, %s, %s)",
+                . " VALUES (%d, %s, %s, %s, %s, %s, 'pending', 0, %s, %s)",
                 $submissionRow,
                 $submissionId,
                 md5($endpoint['url']),
+                // The endpoint's permanent identity, captured at enqueue. The
+                // signature is resolved from this rather than from the URL, so
+                // editing the URL mid-retry still signs with this endpoint's
+                // own secret instead of falling through to the shared one.
+                $endpoint['id'],
                 $endpoint['url'],
                 self::deliveryId($endpoint['url'], $submissionId),
                 $now,
@@ -390,13 +396,20 @@ final class FormDeliveryQueue
             }
         }
 
-        $result = Http::postJson(
-            $frozenUrl,
+        // Built once and used for BOTH the request and the log, so the Activity
+        // Log shows the headers actually sent — including User-Agent,
+        // Idempotency-Key, and the signature — rather than the pre-protocol set.
+        $sentHeaders = RequestFactory::withProtocolHeaders(
+            $frozenHeaders,
+            (string) ($row['endpoint_id'] ?? ''),
             $frozenBody,
-            RequestFactory::withProtocolHeaders($frozenHeaders, $endpointUrl, $frozenBody, (string) $row['delivery_id'])
+            (string) $row['delivery_id'],
+            $endpointUrl
         );
 
-        self::logAttempt($row, $submission, $attempt, $frozenUrl, $frozenHeaders, $frozenBody, $result);
+        $result = Http::postJson($frozenUrl, $frozenBody, $sentHeaders);
+
+        self::logAttempt($row, $submission, $attempt, $frozenUrl, $sentHeaders, $frozenBody, $result);
 
         if ($result['ok']) {
             $wpdb->delete($table, ['id' => $rowId], ['%d']);
@@ -478,6 +491,10 @@ final class FormDeliveryQueue
             'conversion_id'   => (string) ($submission['conversion_id'] ?? ''),
             'form_provider'   => (string) ($submission['provider'] ?? ''),
             'form_name'       => (string) ($submission['form_name'] ?? ''),
+            // Frozen on the submission row at insert time — a retry hours
+            // later must log the id that was actually delivered, not what
+            // per-form settings happen to say now.
+            'form_id'         => (string) ($submission['form_id'] ?? ''),
             'request_url'     => $requestUrl,
             'request_headers' => $headers,
             'request_data'    => $body,
@@ -525,6 +542,55 @@ final class FormDeliveryQueue
      *
      * @return int
      */
+    /**
+     * Pending/sending deliveries queued for one endpoint.
+     *
+     * Counted by the endpoint's permanent id, so an endpoint whose URL was
+     * edited still reports its own backlog. Rows queued before endpoint ids
+     * existed carry an empty endpoint_id and fall back to the URL.
+     *
+     * @param string $endpointId  Endpoint's permanent id.
+     * @param string $endpointUrl Endpoint URL, for pre-id rows.
+     * @return int
+     */
+    public static function pendingCountForEndpoint(string $endpointId, string $endpointUrl): int
+    {
+        global $wpdb;
+
+        return (int) $wpdb->get_var($wpdb->prepare(
+            'SELECT COUNT(*) FROM ' . self::tableName()
+            . " WHERE status IN ('pending', 'sending')"
+            . ' AND (endpoint_id = %s OR (endpoint_id = %s AND endpoint_url = %s))',
+            $endpointId,
+            '',
+            $endpointUrl
+        ));
+    }
+
+    /**
+     * Deletes every queued delivery belonging to one endpoint.
+     *
+     * Called when an administrator removes an endpoint: the destination is
+     * gone, so its undelivered leads cannot be sent anywhere. Destructive, and
+     * therefore only ever invoked behind an explicit confirmation.
+     *
+     * @param string $endpointId  Endpoint's permanent id.
+     * @param string $endpointUrl Endpoint URL, for pre-id rows.
+     * @return int Rows discarded.
+     */
+    public static function discardForEndpoint(string $endpointId, string $endpointUrl): int
+    {
+        global $wpdb;
+
+        return (int) $wpdb->query($wpdb->prepare(
+            'DELETE FROM ' . self::tableName()
+            . ' WHERE endpoint_id = %s OR (endpoint_id = %s AND endpoint_url = %s)',
+            $endpointId,
+            '',
+            $endpointUrl
+        ));
+    }
+
     public static function pendingCount(): int
     {
         global $wpdb;
@@ -635,7 +701,7 @@ final class FormDeliveryQueue
             $result = Http::postJson(
                 $requestUrl,
                 $encoded,
-                RequestFactory::withProtocolHeaders($headers, $url, $encoded, (string) $payload['delivery_id'])
+                RequestFactory::withProtocolHeaders($headers, (string) (Options::endpointByUrl($url)['id'] ?? ''), $encoded, (string) $payload['delivery_id'], $url)
             );
         }
 
@@ -668,7 +734,7 @@ final class FormDeliveryQueue
      */
     private static function decodeJson(string $json): array
     {
-        if ($json === '' || !json_validate($json)) {
+        if ($json === '') {
             return [];
         }
 

@@ -102,6 +102,12 @@ final class Plugin
         DeliveryLog::maybeCreateTable();
         FormDeliveryQueue::maybeUpgrade();
 
+        // Re-keys per-endpoint analytics state (last-success markers, retry
+        // chains, and their cron arguments) from md5(url) onto permanent
+        // endpoint ids, assigning those ids first. Guarded by a stored version,
+        // so this is a single option read once it has run.
+        AnalyticsDispatcher::migrateEndpointState();
+
         TrackingController::init();
         ScriptLoader::init();
         AnalyticsDispatcher::init();
@@ -132,6 +138,9 @@ final class Plugin
 
         add_action('cvm_cleanup_old_events', [DatabaseManager::class, 'cleanupOldEvents']);
         add_action('cvm_cleanup_old_events', [DeliveryLog::class, 'purgeOld']);
+        // Runs after purgeOld() so rows about to be deleted are never rewritten
+        // first; a no-op once the migration has completed.
+        add_action('cvm_cleanup_old_events', [DeliveryLog::class, 'migrateStoredRows']);
         add_action('cvm_cleanup_old_events', [FormSubmissions::class, 'purgeOld']);
         add_action('cvm_cleanup_old_events', [FormDeliveryQueue::class, 'ensureWorkerScheduled']);
         add_action(DatabaseManager::CLEANUP_CATCHUP_HOOK, [DatabaseManager::class, 'cleanupOldEventsCatchUp']);

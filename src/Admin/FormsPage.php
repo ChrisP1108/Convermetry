@@ -31,10 +31,10 @@ use Convermetry\Forms\FormSettings;
 final class FormsPage
 {
     /** Menu slug for the submenu page. */
-    public const string MENU_SLUG = 'convermetry-forms';
+    public const MENU_SLUG = 'convermetry-forms';
 
     /** admin-post action name for saving the page. */
-    private const string SAVE_ACTION = 'cvm_save_forms';
+    private const SAVE_ACTION = 'cvm_save_forms';
 
     private static ?FormProviderRegistry $registry = null;
 
@@ -250,6 +250,11 @@ final class FormsPage
                     'provider_label' => $provider->getLabel(),
                     'native_id'      => (string) $form['native_id'],
                     'name'           => (string) $form['name'],
+                    // Providers that have migrated the identity they key
+                    // settings by expose the previous one, so an existing
+                    // configuration keeps showing until the form is re-saved.
+                    'legacy_id'      => (string) ($form['legacy_id'] ?? ''),
+                    'shared_id'      => !empty($form['shared_id']),
                 ];
             }
         }
@@ -301,15 +306,25 @@ final class FormsPage
     /**
      * Renders one discovered form's configuration block.
      *
-     * @param array{provider: string, provider_label: string, native_id: string, name: string} $form Discovered form.
+     * @param array{provider: string, provider_label: string, native_id: string, name: string, legacy_id?: string, shared_id?: bool} $form Discovered form.
      * @return void
      */
     private static function renderFormBlock(array $form): void
     {
         $formKey = FormProviderRegistry::formKey($form['provider'], $form['native_id']);
-        $config  = FormSettings::forForm($formKey);
-        $hash    = md5($formKey);
-        $name    = 'cvm_forms[' . $hash . ']';
+
+        // Read through the legacy key when the current one holds nothing yet,
+        // so a pre-migration configuration is displayed rather than silently
+        // appearing as defaults. Saving writes under $formKey — the new
+        // identity — which copies the configuration across without deleting
+        // the legacy entry that in-flight queued deliveries may still read.
+        $legacyKey  = (string) ($form['legacy_id'] ?? '') !== ''
+            ? FormProviderRegistry::formKey($form['provider'], (string) $form['legacy_id'])
+            : '';
+        $sourceKey = FormSettings::resolveKey($formKey, $legacyKey);
+        $config    = FormSettings::forForm($sourceKey);
+        $hash      = md5($formKey);
+        $name      = 'cvm_forms[' . $hash . ']';
 
         echo '<details class="cvm-form-block"'
             . ' data-provider="' . esc_attr($form['provider']) . '"'
@@ -330,7 +345,24 @@ final class FormsPage
 
         echo '<table class="form-table" role="presentation">';
 
-        echo '<tr><th scope="row">Native Form ID</th><td><code>' . esc_html($form['native_id']) . '</code></td></tr>';
+        echo '<tr><th scope="row">Native Form ID</th><td><code>' . esc_html($form['native_id']) . '</code>';
+        echo '<p class="description">The provider\'s own identifier for this form, sent as '
+            . '<code>native_form_id</code> in webhook payloads.</p>';
+
+        if (!empty($form['shared_id'])) {
+            echo '<p class="description cvm-form-warning"><strong>Heads up:</strong> this identifier '
+                . 'appears on more than one page, usually because a page was duplicated. Those copies '
+                . 'share the settings below. Give one of them a distinct form in Elementor to configure '
+                . 'them separately.</p>';
+        }
+
+        if ($sourceKey !== $formKey) {
+            echo '<p class="description"><strong>Note:</strong> these settings are currently stored '
+                . 'under this form\'s previous identifier. Saving this form moves them onto the '
+                . 'identifier above; nothing changes until you do.</p>';
+        }
+
+        echo '</td></tr>';
 
         echo '<tr><th scope="row"><label for="cvm-form-id-' . esc_attr($hash) . '">Custom/External Form ID</label></th><td>';
         echo '<input type="text" id="cvm-form-id-' . esc_attr($hash) . '" class="regular-text cvm-form-id-input" '

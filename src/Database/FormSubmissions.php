@@ -31,22 +31,22 @@ use Convermetry\Settings\Options;
 final class FormSubmissions
 {
     /** Table name without the wpdb prefix. */
-    private const string TABLE = 'cvm_form_submissions';
+    private const TABLE = 'cvm_form_submissions';
 
     /** Option key storing the installed schema version. */
-    private const string DB_VERSION_OPTION = 'cvm_submissions_db_version';
+    private const DB_VERSION_OPTION = 'cvm_submissions_db_version';
 
     /** Current schema version; bump when the CREATE TABLE below changes. */
-    private const string DB_VERSION = '1.0.0';
+    private const DB_VERSION = '1.0.0';
 
     /** Rows deleted per statement during retention cleanup. */
-    private const int CLEANUP_CHUNK = 2000;
+    private const CLEANUP_CHUNK = 2000;
 
     /** Maximum delete chunks per cron run. */
-    private const int CLEANUP_MAX_CHUNKS = 20;
+    private const CLEANUP_MAX_CHUNKS = 20;
 
     /** Wall-clock seconds budgeted for one purgeOld() run. */
-    private const int CLEANUP_TIME_BUDGET = 20;
+    private const CLEANUP_TIME_BUDGET = 20;
 
     /**
      * Returns the fully-prefixed submissions table name.

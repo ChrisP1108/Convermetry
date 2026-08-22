@@ -31,10 +31,10 @@ use Convermetry\Webhook\DeliveryLog;
 final class ActivityLogPage
 {
     /** Menu slug for the submenu page. */
-    public const string MENU_SLUG = 'convermetry-activity';
+    public const MENU_SLUG = 'convermetry-activity';
 
     /** Rows fetched per database round-trip while streaming an export. */
-    private const int EXPORT_CHUNK = 200;
+    private const EXPORT_CHUNK = 200;
 
     /**
      * Registers menu, asset, action, and AJAX hooks.

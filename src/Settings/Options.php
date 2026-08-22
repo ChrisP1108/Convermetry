@@ -25,16 +25,16 @@ if (!defined('ABSPATH')) exit;
 final class Options
 {
     /** The wp_options key holding tracking/data/identity settings. */
-    public const string OPTION_KEY = 'cvm_settings';
+    public const OPTION_KEY = 'cvm_settings';
 
     /** The wp_options key holding webhook configuration. */
-    public const string WEBHOOK_OPTION_KEY = 'cvm_webhook_settings';
+    public const WEBHOOK_OPTION_KEY = 'cvm_webhook_settings';
 
     /** @var string[] Event types the frontend tracker can record. */
-    public const array EVENT_TYPES = ['pageview', 'click', 'form_submit', 'form_success', 'hover', 'scroll_depth'];
+    public const EVENT_TYPES = ['pageview', 'click', 'form_submit', 'form_success', 'hover', 'scroll_depth'];
 
     /** @var string[] Cron recurrences selectable for analytics webhook dispatch. */
-    public const array INTERVALS = ['hourly', 'twicedaily', 'daily', 'weekly'];
+    public const INTERVALS = ['hourly', 'twicedaily', 'daily', 'weekly'];
 
     /**
      * Returns the default value for every general setting.
@@ -251,7 +251,7 @@ final class Options
      * optional label, an optional per-endpoint signing secret, and two
      * delivery-type flags controlling which message types it receives.
      *
-     * @return array<int, array{url: string, label: string, secret: string, analytics: bool, forms: bool}>
+     * @return array<int, array{id: string, url: string, label: string, secret: string, analytics: bool, forms: bool}>
      */
     public static function endpoints(): array
     {
@@ -272,6 +272,7 @@ final class Options
             }
 
             $out[] = [
+                'id'        => trim((string) ($entry['id'] ?? '')),
                 'url'       => $url,
                 'label'     => trim((string) ($entry['label'] ?? '')),
                 'secret'    => trim((string) ($entry['secret'] ?? '')),
@@ -284,9 +285,119 @@ final class Options
     }
 
     /**
+     * Assigns a permanent id to any saved endpoint that lacks one.
+     *
+     * Endpoints used to be identified by md5(url) everywhere — analytics
+     * last-success markers, retry-state keys, retry cron arguments, and the
+     * secret lookup. That identity is derived from a mutable field, so editing
+     * an endpoint's URL made it a different endpoint: its delivery window
+     * reset, its pending retry chain was pruned, and its cron event could no
+     * longer be cancelled (wp_unschedule_event() matches on the original
+     * arguments). A stored id fixes all of those at the root.
+     *
+     * Idempotent, and never regenerates an existing id — an id that changed
+     * would strand exactly the state it exists to keep attached.
+     *
+     * @return bool True when ids were assigned and the settings were written.
+     */
+    public static function ensureEndpointIds(): bool
+    {
+        $settings = self::webhookAll();
+        $raw      = is_array($settings['endpoints'] ?? null) ? $settings['endpoints'] : [];
+        $changed  = false;
+
+        foreach ($raw as $index => $entry) {
+            if (!is_array($entry) || trim((string) ($entry['url'] ?? '')) === '') {
+                continue;
+            }
+
+            if (trim((string) ($entry['id'] ?? '')) === '') {
+                $raw[$index]['id'] = wp_generate_uuid4();
+                $changed           = true;
+            }
+        }
+
+        if ($changed) {
+            $settings['endpoints'] = $raw;
+            update_option(self::WEBHOOK_OPTION_KEY, $settings);
+        }
+
+        return $changed;
+    }
+
+    /**
+     * Looks up one saved endpoint by its permanent id.
+     *
+     * @param string $endpointId Endpoint id.
+     * @return array{id: string, url: string, label: string, secret: string, analytics: bool, forms: bool}|null
+     */
+    public static function endpointById(string $endpointId): ?array
+    {
+        if ($endpointId === '') {
+            return null;
+        }
+
+        foreach (self::endpoints() as $endpoint) {
+            if ($endpoint['id'] === $endpointId) {
+                return $endpoint;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Looks up one saved endpoint by URL.
+     *
+     * Only for immediate operations (a test send) where the endpoint is known
+     * to exist right now. Anything that spans time — a queued delivery, a
+     * retry chain — must hold the endpoint's id instead, because the URL is
+     * editable.
+     *
+     * @param string $url Endpoint URL.
+     * @return array{id: string, url: string, label: string, secret: string, analytics: bool, forms: bool}|null
+     */
+    public static function endpointByUrl(string $url): ?array
+    {
+        foreach (self::endpoints() as $endpoint) {
+            if ($endpoint['url'] === $url) {
+                return $endpoint;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * The signing secret for one endpoint, resolved by its permanent id.
+     *
+     * A resolved endpoint with no secret of its own still inherits the shared
+     * secret — that is the documented design, and unchanged. The difference
+     * from {@see self::secretFor()} is what happens when the endpoint cannot be
+     * resolved at all (deleted, or an id from state that no longer matches any
+     * configuration): this returns '' rather than silently signing with the
+     * shared secret. A signature made with the wrong key is worse than no
+     * signature, because a receiver cannot tell it from a forgery.
+     *
+     * @param string $endpointId Endpoint id.
+     * @return string Secret to sign with, or '' when signing is not configured
+     *                or the endpoint no longer exists.
+     */
+    public static function secretForId(string $endpointId): string
+    {
+        $endpoint = self::endpointById($endpointId);
+
+        if ($endpoint === null) {
+            return '';
+        }
+
+        return $endpoint['secret'] !== '' ? $endpoint['secret'] : self::sharedSecret();
+    }
+
+    /**
      * Endpoints that receive scheduled analytics reports.
      *
-     * @return array<int, array{url: string, label: string, secret: string, analytics: bool, forms: bool}>
+     * @return array<int, array{id: string, url: string, label: string, secret: string, analytics: bool, forms: bool}>
      */
     public static function analyticsEndpoints(): array
     {
@@ -296,7 +407,7 @@ final class Options
     /**
      * Endpoints that receive immediate form-submission deliveries.
      *
-     * @return array<int, array{url: string, label: string, secret: string, analytics: bool, forms: bool}>
+     * @return array<int, array{id: string, url: string, label: string, secret: string, analytics: bool, forms: bool}>
      */
     public static function formEndpoints(): array
     {

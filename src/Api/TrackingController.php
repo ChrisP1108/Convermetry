@@ -42,31 +42,31 @@ use Convermetry\Settings\Options;
 final class TrackingController
 {
     /** REST namespace for all plugin routes. */
-    private const string ROUTE_NAMESPACE = 'convermetry/v1';
+    private const ROUTE_NAMESPACE = 'convermetry/v1';
 
     /** Maximum events accepted in a single request. */
-    private const int MAX_EVENTS_PER_REQUEST = 25;
+    private const MAX_EVENTS_PER_REQUEST = 25;
 
     /** Maximum request body size in bytes (64 KB). */
-    private const int MAX_BODY_BYTES = 65536;
+    private const MAX_BODY_BYTES = 65536;
 
     /** Default maximum events accepted per IP per rate-limit window. */
-    private const int RATE_LIMIT_MAX = 300;
+    private const RATE_LIMIT_MAX = 300;
 
     /** Default maximum events accepted site-wide per rate-limit window. */
-    private const int RATE_LIMIT_GLOBAL_MAX = 3000;
+    private const RATE_LIMIT_GLOBAL_MAX = 3000;
 
     /** Rate-limit window length in seconds. */
-    private const int RATE_LIMIT_WINDOW = 60;
+    private const RATE_LIMIT_WINDOW = 60;
 
     /** Object-cache group for rate-limit counters. */
-    private const string CACHE_GROUP = 'cvm_rate_limit';
+    private const CACHE_GROUP = 'cvm_rate_limit';
 
     /** Transient flagging that the site-wide rate limit was hit (read by the dashboard). */
-    public const string RATE_LIMITED_FLAG = 'cvm_rate_limited_at';
+    public const RATE_LIMITED_FLAG = 'cvm_rate_limited_at';
 
     /** @var string[] Campaign parameters extracted from attributed events into dedicated columns. */
-    private const array CAMPAIGN_PARAMS = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_id', 'utm_term', 'utm_content'];
+    private const CAMPAIGN_PARAMS = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_id', 'utm_term', 'utm_content'];
 
     /**
      * @var string[] Event types that carry campaign attribution fields — all
@@ -74,7 +74,7 @@ final class TrackingController
      *      the session's attribution snapshot too, so intermediate funnel
      *      steps can be segmented by campaign.
      */
-    private const array ATTRIBUTED_TYPES = ['pageview', 'click', 'form_submit', 'form_success', 'hover', 'scroll_depth'];
+    private const ATTRIBUTED_TYPES = ['pageview', 'click', 'form_submit', 'form_success', 'hover', 'scroll_depth'];
 
     /**
      * Registers the rest_api_init hook.

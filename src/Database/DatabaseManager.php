@@ -31,13 +31,13 @@ use Convermetry\Tracking\Channels;
 final class DatabaseManager
 {
     /** Table name without the wpdb prefix. */
-    private const string TABLE = 'cvm_events';
+    private const TABLE = 'cvm_events';
 
     /** Option key storing the installed schema version. */
-    private const string DB_VERSION_OPTION = 'cvm_db_version';
+    private const DB_VERSION_OPTION = 'cvm_db_version';
 
     /** Current schema version; bump when the CREATE TABLE below changes. */
-    private const string DB_VERSION = '1.0.0';
+    private const DB_VERSION = '1.0.0';
 
     /**
      * Returns the fully-prefixed events table name.
@@ -178,10 +178,10 @@ final class DatabaseManager
      *      type, so clicks, form attempts, hovers, and scroll milestones can
      *      be segmented by channel just like pageviews and conversions.
      */
-    private const array ATTRIBUTED_TYPES = ['pageview', 'click', 'form_submit', 'form_success', 'hover', 'scroll_depth'];
+    private const ATTRIBUTED_TYPES = ['pageview', 'click', 'form_submit', 'form_success', 'hover', 'scroll_depth'];
 
     /** @var string[] Insertable columns, in the order bulk inserts serialize them. */
-    private const array COLUMNS = [
+    private const COLUMNS = [
         'event_type', 'page_url', 'page_title', 'element_tag', 'element_label',
         'target_url', 'event_value', 'referrer', 'session_id', 'device',
         'utm_source', 'utm_medium', 'utm_campaign', 'utm_id', 'utm_term',
@@ -189,10 +189,10 @@ final class DatabaseManager
     ];
 
     /** Rows deleted per statement during retention cleanup. */
-    private const int CLEANUP_CHUNK = 5000;
+    private const CLEANUP_CHUNK = 5000;
 
     /** Maximum delete chunks per daily cron run, so one request can't run indefinitely. */
-    private const int CLEANUP_MAX_CHUNKS = 40;
+    private const CLEANUP_MAX_CHUNKS = 40;
 
     /**
      * Maximum delete chunks per catch-up invocation — deliberately smaller
@@ -200,7 +200,7 @@ final class DatabaseManager
      * is, by definition, an unattended follow-up run rather than the main
      * scheduled pass.
      */
-    private const int CLEANUP_CATCHUP_MAX_CHUNKS = 8;
+    private const CLEANUP_CATCHUP_MAX_CHUNKS = 8;
 
     /**
      * Wall-clock seconds budgeted per invocation for a bounded delete loop.
@@ -209,17 +209,17 @@ final class DatabaseManager
      * overloaded shared host, replication lag); this is comfortably under
      * typical PHP max_execution_time defaults.
      */
-    private const int CLEANUP_TIME_BUDGET = 20;
+    private const CLEANUP_TIME_BUDGET = 20;
 
     /** Option key for the cleanup mutex (events-table deletion only — see acquireCleanupLock()). */
-    private const string CLEANUP_LOCK_OPTION = 'cvm_cleanup_lock';
+    private const CLEANUP_LOCK_OPTION = 'cvm_cleanup_lock';
 
     /**
      * Seconds after which the cleanup lock's lease is considered stale and
      * may be stolen. Tied to CLEANUP_TIME_BUDGET by formula (2x) so the two
      * can't drift out of sync if one is retuned later.
      */
-    private const int CLEANUP_LOCK_TIMEOUT = self::CLEANUP_TIME_BUDGET * 2;
+    private const CLEANUP_LOCK_TIMEOUT = self::CLEANUP_TIME_BUDGET * 2;
 
     /**
      * Cron hook for a one-shot catch-up continuation, scheduled when a
@@ -227,25 +227,25 @@ final class DatabaseManager
      * lock could not be acquired, or was lost mid-loop, or a DELETE itself
      * failed). Self-perpetuating from there until a run reports 'completed'.
      */
-    public const string CLEANUP_CATCHUP_HOOK = 'cvm_cleanup_old_events_catchup';
+    public const CLEANUP_CATCHUP_HOOK = 'cvm_cleanup_old_events_catchup';
 
     /** Seconds before retrying after a failed lock acquisition. */
-    private const int CLEANUP_RETRY_COOLDOWN = 5 * MINUTE_IN_SECONDS;
+    private const CLEANUP_RETRY_COOLDOWN = 5 * MINUTE_IN_SECONDS;
 
     /**
      * Seconds before the next catch-up attempt when the previous one
      * genuinely ran (acquired the lock) but did not finish the backlog.
      */
-    private const int CLEANUP_CATCHUP_CADENCE = 20 * MINUTE_IN_SECONDS;
+    private const CLEANUP_CATCHUP_CADENCE = 20 * MINUTE_IN_SECONDS;
 
     /** Rate-limit-counter option rows deleted per statement. */
-    private const int CLEANUP_RATE_LIMIT_CHUNK = 5000;
+    private const CLEANUP_RATE_LIMIT_CHUNK = 5000;
 
     /**
      * Maximum rate-limit-counter delete chunks per run — generous relative
      * to plausible per-IP-hash row volume for one day's distinct IPs.
      */
-    private const int CLEANUP_RATE_LIMIT_MAX_CHUNKS = 20;
+    private const CLEANUP_RATE_LIMIT_MAX_CHUNKS = 20;
 
     /**
      * Inserts a single event row.

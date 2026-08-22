@@ -37,35 +37,52 @@ use Convermetry\Settings\Options;
 final class DeliveryLog
 {
     /** Table name without the wpdb prefix. */
-    private const string TABLE = 'cvm_webhook_deliveries';
+    private const TABLE = 'cvm_webhook_deliveries';
 
     /** Option key storing the installed schema version. */
-    private const string DB_VERSION_OPTION = 'cvm_delivery_db_version';
+    private const DB_VERSION_OPTION = 'cvm_delivery_db_version';
 
     /** Current schema version; bump when the CREATE TABLE below changes. */
-    private const string DB_VERSION = '1.0.0';
+    private const DB_VERSION = '1.1.0';
+
+    /** Progress/state of the one-time stored-row migration. Never autoloaded. */
+    private const MIGRATION_OPTION = 'cvm_delivery_log_migration';
+
+    /**
+     * Migration contract version. Bumping this re-runs
+     * {@see self::migrateStoredRows()} over the table from the start, so raise
+     * it only when stored rows genuinely need rewriting again.
+     */
+    private const MIGRATION_VERSION = '1.1.0';
+
+    /**
+     * Rows rewritten per migration batch. Much smaller than CLEANUP_CHUNK
+     * because each row is read, re-encoded, and written back — and carries two
+     * potentially-64 KB bodies — rather than merely deleted.
+     */
+    private const MIGRATION_BATCH = 200;
 
     /** Maximum stored bytes for the request payload and response body. */
-    public const int MAX_BODY_BYTES = 65536;
+    public const MAX_BODY_BYTES = 65536;
 
     /** Valid message_type values. */
-    public const array MESSAGE_TYPES = ['analytics_report', 'form_submission'];
+    public const MESSAGE_TYPES = ['analytics_report', 'form_submission'];
 
     /** Valid kind values. */
-    public const array KINDS = ['scheduled', 'immediate', 'retry', 'test'];
+    public const KINDS = ['scheduled', 'immediate', 'retry', 'test'];
 
     /** Rows deleted per statement during retention cleanup. */
-    private const int CLEANUP_CHUNK = 5000;
+    private const CLEANUP_CHUNK = 5000;
 
     /** Maximum delete chunks per cron run, so one request can't run indefinitely. */
-    private const int CLEANUP_MAX_CHUNKS = 20;
+    private const CLEANUP_MAX_CHUNKS = 20;
 
     /**
      * Wall-clock seconds budgeted for one purgeOld() run, alongside the
      * chunk-count cap. These rows carry full request/response bodies
      * (LONGTEXT), so a slow DELETE is plausible.
      */
-    private const int CLEANUP_TIME_BUDGET = 20;
+    private const CLEANUP_TIME_BUDGET = 20;
 
     /**
      * Substrings of keys whose values are redacted from stored JSON bodies
@@ -74,12 +91,23 @@ final class DeliveryLog
      * Authorization values, and form payloads can contain credential-like
      * fields — the log must not become a credential store.
      *
+     * Keys are canonicalized by {@see self::isSensitiveKey()} before matching
+     * (lowercased, with '-' and spaces folded to '_'), so one underscored
+     * pattern covers every spelling a header or a form-field LABEL can take:
+     * 'api_key' matches X-API-Key, "API Key", and api-key alike. That folding
+     * is why several obvious names are absent here rather than missing —
+     * 'proxy_authorization' contains 'authorization', 'set_cookie' contains
+     * 'cookie', and 'x_api_key' contains 'api_key'.
+     *
+     * Deliberately NOT included: a bare 'auth' pattern, which would redact
+     * legitimate fields named 'author'.
+     *
      * @var string[]
      */
-    private const array SENSITIVE_KEY_PATTERNS = [
+    private const SENSITIVE_KEY_PATTERNS = [
         'password', 'passwd', 'pwd', 'secret', 'token', 'api_key', 'apikey',
         'authorization', 'credential', 'private_key', 'access_token',
-        'refresh_token', 'client_secret',
+        'refresh_token', 'client_secret', 'cookie',
     ];
 
     /**
@@ -121,6 +149,7 @@ final class DeliveryLog
             conversion_id VARCHAR(100) NOT NULL DEFAULT '',
             form_provider VARCHAR(32) NOT NULL DEFAULT '',
             form_name VARCHAR(191) NOT NULL DEFAULT '',
+            form_id VARCHAR(191) NOT NULL DEFAULT '',
             request_url TEXT NOT NULL,
             request_headers LONGTEXT NOT NULL,
             request_data LONGTEXT NOT NULL,
@@ -133,6 +162,7 @@ final class DeliveryLog
             KEY endpoint_url (endpoint_url(100)),
             KEY message_type (message_type),
             KEY form_provider (form_provider),
+            KEY form_id (form_id),
             KEY submission_id (submission_id)
         ) {$charset};";
 
@@ -144,7 +174,7 @@ final class DeliveryLog
         $expected = [
             'id', 'success', 'endpoint_url', 'endpoint_label', 'delivery_id',
             'message_type', 'kind', 'attempt', 'submission_id', 'conversion_id',
-            'form_provider', 'form_name', 'request_url', 'request_headers',
+            'form_provider', 'form_name', 'form_id', 'request_url', 'request_headers',
             'request_data', 'response_code', 'response_data', 'created_at',
         ];
         if (DatabaseManager::tableHasColumns($table, $expected)) {
@@ -226,9 +256,10 @@ final class DeliveryLog
             'conversion_id'   => (string) ($entry['conversion_id'] ?? ''),
             'form_provider'   => mb_substr((string) ($entry['form_provider'] ?? ''), 0, 32),
             'form_name'       => mb_substr((string) ($entry['form_name'] ?? ''), 0, 191),
+            'form_id'         => mb_substr((string) ($entry['form_id'] ?? ''), 0, 191),
             'request_url'     => (string) ($entry['request_url'] ?? ($entry['endpoint_url'] ?? '')),
             'request_headers' => (string) wp_json_encode(self::redactHeaders((array) ($entry['request_headers'] ?? []))),
-            'request_data'    => self::capBody($requestData),
+            'request_data'    => self::capBody(self::redactSensitiveJson($requestData)),
             'response_code'   => $code,
             'response_data'   => self::capBody(self::redactSensitiveJson($responseBody)),
             'created_at'      => gmdate('Y-m-d H:i:s'),
@@ -250,7 +281,7 @@ final class DeliveryLog
         $wpdb->insert(
             self::tableName(),
             $row,
-            ['%d', '%s', '%s', '%s', '%s', '%s', '%d', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%d', '%s', '%s']
+            ['%d', '%s', '%s', '%s', '%s', '%s', '%d', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%d', '%s', '%s']
         );
     }
 
@@ -264,7 +295,7 @@ final class DeliveryLog
      */
     private static function stripSubmissionData(string $requestData): string
     {
-        if ($requestData === '' || !json_validate($requestData)) {
+        if ($requestData === '') {
             return $requestData;
         }
 
@@ -292,18 +323,38 @@ final class DeliveryLog
     {
         $out = [];
         foreach ($headers as $name => $value) {
-            $lower = strtolower((string) $name);
-            $redact = false;
-            foreach (self::SENSITIVE_KEY_PATTERNS as $pattern) {
-                if (str_contains($lower, $pattern)) {
-                    $redact = true;
-                    break;
-                }
-            }
-            $out[(string) $name] = $redact ? '[REDACTED]' : (string) $value;
+            $out[(string) $name] = self::isSensitiveKey((string) $name)
+                ? '[REDACTED]'
+                : (string) $value;
         }
 
         return $out;
+    }
+
+    /**
+     * Whether a header name or JSON key names a value that must not be stored.
+     *
+     * The key is canonicalized before matching: lowercased, with '-' and
+     * spaces folded to '_'. Without that folding 'X-API-Key' matches neither
+     * 'api_key' nor 'apikey' and a common credential header is stored in the
+     * clear; the same applies to form-field labels like "API Key", which
+     * providers such as Gravity Forms and Elementor use verbatim as payload
+     * keys.
+     *
+     * @param string $key Header name or JSON object key.
+     * @return bool
+     */
+    private static function isSensitiveKey(string $key): bool
+    {
+        $canonical = str_replace(['-', ' '], '_', strtolower($key));
+
+        foreach (self::SENSITIVE_KEY_PATTERNS as $pattern) {
+            if (str_contains($canonical, $pattern)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -339,14 +390,9 @@ final class DeliveryLog
 
         $redact = static function (array $data) use (&$redact): array {
             foreach ($data as $key => $value) {
-                if (is_string($key)) {
-                    $lower = strtolower($key);
-                    foreach (self::SENSITIVE_KEY_PATTERNS as $pattern) {
-                        if (str_contains($lower, $pattern)) {
-                            $data[$key] = '[REDACTED]';
-                            continue 2;
-                        }
-                    }
+                if (is_string($key) && self::isSensitiveKey($key)) {
+                    $data[$key] = '[REDACTED]';
+                    continue;
                 }
                 if (is_array($value)) {
                     $data[$key] = $redact($value);
@@ -578,6 +624,168 @@ final class DeliveryLog
     }
 
     /**
+     * Brings rows written before this release up to the current storage
+     * contract, in bounded batches on the daily cleanup cron.
+     *
+     * Two things are repaired per row:
+     *
+     *  1. Redaction. Earlier releases redacted only response_data, and matched
+     *     header names without folding '-'/' ' to '_' — so stored payloads can
+     *     hold form fields named 'password' or 'API Key', and stored headers
+     *     can hold an X-API-Key value in the clear. Those rows remain readable
+     *     through the admin view, the CSV and JSON exports, and the REST API,
+     *     so fixing log() forward is not sufficient.
+     *  2. form_id. The column is new; the value is recovered from the stored
+     *     payload rather than from current settings, so it matches what was
+     *     actually delivered. It survives in request_data even when submission
+     *     logging is disabled, because stripSubmissionData() replaces only the
+     *     submission_data branch.
+     *
+     * Bounded like {@see self::purgeOld()} (batch cap plus wall-clock budget)
+     * and resumable via a stored cursor, since one request cannot rewrite a
+     * long-retention table carrying two LONGTEXT bodies per row. The id
+     * high-water mark is pinned when the run starts: rows written afterwards
+     * are already correct, and without the pin a busy site could keep the
+     * migration from ever reaching the end. Re-running is a no-op — each row
+     * is only written when redaction or backfill actually changes it.
+     *
+     * @return void
+     */
+    public static function migrateStoredRows(): void
+    {
+        global $wpdb;
+
+        $state = get_option(self::MIGRATION_OPTION, []);
+        $state = is_array($state) ? $state : [];
+
+        if (($state['version'] ?? '') === self::MIGRATION_VERSION && !empty($state['done'])) {
+            return;
+        }
+
+        $table = self::tableName();
+
+        // Backfill reads and writes form_id, so the schema change must have
+        // landed first; retry on the next cron run if it has not.
+        if (!DatabaseManager::tableHasColumns($table, ['form_id'])) {
+            return;
+        }
+
+        if (($state['version'] ?? '') !== self::MIGRATION_VERSION) {
+            $state = [
+                'version'    => self::MIGRATION_VERSION,
+                'high_water' => (int) $wpdb->get_var("SELECT MAX(id) FROM {$table}"),
+                'cursor'     => 0,
+                'done'       => false,
+            ];
+            update_option(self::MIGRATION_OPTION, $state, false);
+        }
+
+        $highWater = (int) ($state['high_water'] ?? 0);
+        $cursor    = (int) ($state['cursor'] ?? 0);
+
+        if ($highWater <= 0 || $cursor >= $highWater) {
+            $state['done'] = true;
+            update_option(self::MIGRATION_OPTION, $state, false);
+            return;
+        }
+
+        $deadline = microtime(true) + self::CLEANUP_TIME_BUDGET;
+        $runs     = 0;
+
+        do {
+            $rows = $wpdb->get_results(
+                $wpdb->prepare(
+                    "SELECT id, form_id, request_headers, request_data FROM {$table}"
+                    . ' WHERE id > %d AND id <= %d ORDER BY id ASC LIMIT %d',
+                    $cursor,
+                    $highWater,
+                    self::MIGRATION_BATCH
+                ),
+                ARRAY_A
+            );
+
+            if (!is_array($rows) || $rows === []) {
+                break;
+            }
+
+            foreach ($rows as $row) {
+                $cursor = max($cursor, (int) $row['id']);
+                $update = [];
+
+                $data     = (string) $row['request_data'];
+                $redacted = self::capBody(self::redactSensitiveJson($data));
+                if ($redacted !== $data) {
+                    $update['request_data'] = $redacted;
+                }
+
+                $headers = json_decode((string) $row['request_headers'], true);
+                if (is_array($headers)) {
+                    $reHeaders = (string) wp_json_encode(self::redactHeaders($headers));
+                    if ($reHeaders !== (string) $row['request_headers']) {
+                        $update['request_headers'] = $reHeaders;
+                    }
+                }
+
+                if ((string) $row['form_id'] === '') {
+                    $formId = self::formIdFromPayload($data);
+                    if ($formId !== '') {
+                        $update['form_id'] = mb_substr($formId, 0, 191);
+                    }
+                }
+
+                if ($update !== []) {
+                    $wpdb->update(
+                        $table,
+                        $update,
+                        ['id' => (int) $row['id']],
+                        array_fill(0, count($update), '%s'),
+                        ['%d']
+                    );
+                }
+            }
+
+            // Persist progress after each batch, so an interrupted run resumes
+            // where it stopped instead of rewriting rows it already fixed.
+            $state['cursor'] = $cursor;
+            update_option(self::MIGRATION_OPTION, $state, false);
+        } while (
+            count($rows) === self::MIGRATION_BATCH
+            && $cursor < $highWater
+            && ++$runs < self::CLEANUP_MAX_CHUNKS
+            && microtime(true) < $deadline
+        );
+
+        // Completion is recorded only once the cursor has actually crossed the
+        // pinned high-water mark — never merely because a batch ended.
+        if ($cursor >= $highWater) {
+            $state['done'] = true;
+            update_option(self::MIGRATION_OPTION, $state, false);
+        }
+    }
+
+    /**
+     * Recovers the delivered form_id from a stored form-submission payload.
+     *
+     * @param string $requestData Stored request payload.
+     * @return string The form id, or '' when the payload holds none.
+     */
+    private static function formIdFromPayload(string $requestData): string
+    {
+        if ($requestData === '') {
+            return '';
+        }
+
+        $decoded = json_decode($requestData, true);
+        if (!is_array($decoded) || !isset($decoded['form_submission']['form_id'])) {
+            return '';
+        }
+
+        $formId = $decoded['form_submission']['form_id'];
+
+        return is_scalar($formId) ? (string) $formId : '';
+    }
+
+    /**
      * Truncates a body to the storage cap, marking the cut.
      *
      * The limit is enforced in BYTES (plain substr), not characters — the
@@ -618,6 +826,9 @@ final class DeliveryLog
         $messageType = (string) ($filters['message_type'] ?? '');
         $provider    = (string) ($filters['provider'] ?? '');
         $formName    = (string) ($filters['form_name'] ?? '');
+        $formId      = (string) ($filters['form_id'] ?? '');
+        $after       = (string) ($filters['after'] ?? '');
+        $before      = (string) ($filters['before'] ?? '');
 
         $conditions = [];
         $values     = [];
@@ -659,6 +870,26 @@ final class DeliveryLog
         if ($formName !== '') {
             $conditions[] = 'form_name = %s';
             $values[]     = $formName;
+        }
+
+        if ($formId !== '') {
+            $conditions[] = 'form_id = %s';
+            $values[]     = $formId;
+        }
+
+        // Half-open UTC range on the indexed created_at column. Callers pass
+        // pre-validated 'YYYY-MM-DD HH:MM:SS' bounds (see the REST layer's
+        // validate_callback); the YEAR()/MONTH() filters above stay for the
+        // admin month dropdown, but a plain comparison is what actually uses
+        // KEY created_at — wrapping the column in a function cannot.
+        if ($after !== '') {
+            $conditions[] = 'created_at >= %s';
+            $values[]     = $after;
+        }
+
+        if ($before !== '') {
+            $conditions[] = 'created_at < %s';
+            $values[]     = $before;
         }
 
         $where = $conditions ? 'WHERE ' . implode(' AND ', $conditions) : '';

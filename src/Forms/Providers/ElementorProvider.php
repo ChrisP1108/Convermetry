@@ -16,9 +16,12 @@ use Convermetry\Settings\Options;
  * that fires after a submission passed validation and was processed — and
  * feeds the record into the shared submission pipeline.
  *
- * Identity: per-form settings are keyed by the form NAME (the identity the
- * legacy Forms Webhook Integrator used, stable across widget copies), while
- * the Elementor widget id travels in payloads as native_form_id.
+ * Identity: per-form settings are keyed by the Elementor widget id, which also
+ * travels in payloads as native_form_id, so two widgets sharing a name hold
+ * independent configuration. Settings saved under the older name-based key (the
+ * identity the legacy Forms Webhook Integrator used) are still honoured as a
+ * fallback until an administrator re-saves the form; see
+ * {@see \Convermetry\Forms\FormSettings::resolveKey()}.
  *
  * Failure modes: in the default 'background' mode the visitor always sees
  * the normal success state and failed webhook deliveries retry in the
@@ -49,15 +52,27 @@ final class ElementorProvider implements FormProviderInterface
     }
 
     /**
-     * Discovers every Elementor form widget on the site by name.
+     * Discovers every Elementor form widget on the site, identified by widget id.
      *
-     * @return array<int, array{native_id: string, name: string}>
+     * Each entry carries the widget id as native_id (the identity settings are
+     * keyed by, and the one that ships in payloads as native_form_id), the form
+     * name for display, and legacy_id — the name this widget's settings used to
+     * be keyed by, so the Forms page can fall back to an existing configuration
+     * that predates the switch.
+     *
+     * Widget ids are unique within an Elementor document but not guaranteed
+     * unique across posts, since duplicating a page can copy element ids
+     * verbatim. Any id seen in more than one post is reported via shared_id so
+     * the admin can be warned rather than two distinct widgets silently sharing
+     * one configuration.
+     *
+     * @return array<int, array{native_id: string, name: string, legacy_id: string, post_id: int, shared_id: bool}>
      */
     public function getForms(): array
     {
         global $wpdb;
 
-        $names = [];
+        $widgets = [];
 
         /** @var string[] $postIds */
         $postIds = $wpdb->get_col($wpdb->prepare(
@@ -77,13 +92,19 @@ final class ElementorProvider implements FormProviderInterface
                 continue;
             }
 
-            $this->extractFormNames($elements, $names);
+            $this->extractFormWidgets($elements, (int) $postId, $widgets);
         }
 
-        return array_map(
-            static fn(string $name): array => ['native_id' => $name, 'name' => $name],
-            array_values(array_unique($names))
-        );
+        // A widget id appearing under more than one post is a duplication
+        // artefact, not two references to the same form.
+        $out = [];
+        foreach ($widgets as $widget) {
+            $widget['shared_id'] = count($widget['post_ids']) > 1;
+            unset($widget['post_ids']);
+            $out[] = $widget;
+        }
+
+        return $out;
     }
 
     public function registerHooks(SubmissionService $service): void
@@ -137,7 +158,11 @@ final class ElementorProvider implements FormProviderInterface
             formName: $formName,
             fields: $fields,
             sync: $sync,
-            identity: $formName
+            // Settings are keyed by widget id, falling back to the form name
+            // for configurations saved before that switch. A widget with no id
+            // keeps the name as its identity, matching discovery.
+            identity: $widgetId !== '' ? $widgetId : $formName,
+            legacyIdentity: $formName
         );
 
         // Only the synchronous mode surfaces failures to the visitor —
@@ -160,11 +185,17 @@ final class ElementorProvider implements FormProviderInterface
     /**
      * Recursively walks Elementor element trees to find form widget names.
      *
-     * @param array<int|string, mixed> $elements Element tree.
-     * @param string[]                 $names    Collected form names (by reference).
+     * A widget is keyed by its Elementor element id, falling back to the form
+     * name when an element carries no id — an id-less widget cannot be told
+     * apart from another of the same name, which is exactly the pre-migration
+     * behaviour and the best available for that element.
+     *
+     * @param array<int|string, mixed>                                                                    $elements Element tree.
+     * @param int                                                                                         $postId   Post the tree belongs to.
+     * @param array<string, array{native_id: string, name: string, legacy_id: string, post_id: int, shared_id: bool}> $widgets  Collected widgets (by reference).
      * @return void
      */
-    private function extractFormNames(array $elements, array &$names): void
+    private function extractFormWidgets(array $elements, int $postId, array &$widgets): void
     {
         foreach ($elements as $element) {
             if (!is_array($element)) {
@@ -176,11 +207,28 @@ final class ElementorProvider implements FormProviderInterface
                 && is_string($element['settings']['form_name'] ?? null)
                 && $element['settings']['form_name'] !== ''
             ) {
-                $names[] = $element['settings']['form_name'];
+                $name     = (string) $element['settings']['form_name'];
+                $widgetId = is_scalar($element['id'] ?? null) ? (string) $element['id'] : '';
+                $nativeId = $widgetId !== '' ? $widgetId : $name;
+
+                if (isset($widgets[$nativeId])) {
+                    // Same id in another post: record the extra post so the
+                    // duplicate can be reported, and keep the first name.
+                    $widgets[$nativeId]['post_ids'][$postId] = true;
+                } else {
+                    $widgets[$nativeId] = [
+                        'native_id' => $nativeId,
+                        'name'      => $name,
+                        'legacy_id' => $name,
+                        'post_id'   => $postId,
+                        'post_ids'  => [$postId => true],
+                        'shared_id' => false,
+                    ];
+                }
             }
 
             if (!empty($element['elements']) && is_array($element['elements'])) {
-                $this->extractFormNames($element['elements'], $names);
+                $this->extractFormWidgets($element['elements'], $postId, $widgets);
             }
         }
     }

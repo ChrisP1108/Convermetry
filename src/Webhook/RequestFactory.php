@@ -110,18 +110,36 @@ final class RequestFactory
      * and — when a signing secret is configured for the endpoint — the
      * X-Convermetry-Signature HMAC header computed over the exact body bytes.
      *
+     * The signing secret is resolved by the endpoint's permanent id, captured
+     * when the delivery was frozen — not by its URL. Resolving by URL meant an
+     * endpoint renamed mid-retry matched nothing and fell through to the shared
+     * secret, so the receiver got a well-formed signature that failed
+     * validation: indistinguishable from a forgery, and worse than no signature
+     * at all. An id that no longer resolves (the endpoint was deleted) yields
+     * no signature rather than a wrong one.
+     *
      * @param array<string, string> $headers     Frozen delivery headers.
-     * @param string                $endpointUrl Configured endpoint URL (secret lookup key).
+     * @param string                $endpointId  Endpoint's permanent id (secret lookup key).
      * @param string                $body        Exact JSON body bytes being sent.
      * @param string                $deliveryId  The delivery's idempotency id.
+     * @param string                $endpointUrl Endpoint URL, used only to resolve deliveries
+     *                                           frozen before endpoint ids existed.
      * @return array<string, string>
      */
-    public static function withProtocolHeaders(array $headers, string $endpointUrl, string $body, string $deliveryId): array
-    {
+    public static function withProtocolHeaders(
+        array $headers,
+        string $endpointId,
+        string $body,
+        string $deliveryId,
+        string $endpointUrl = ''
+    ): array {
         $headers['User-Agent']      = 'WordPress/Convermetry ' . CVM_VERSION;
         $headers['Idempotency-Key'] = $deliveryId;
 
-        $secret = Options::secretFor($endpointUrl);
+        $secret = $endpointId !== ''
+            ? Options::secretForId($endpointId)
+            : Options::secretFor($endpointUrl);
+
         if ($secret !== '') {
             $headers['X-Convermetry-Signature'] = 'sha256=' . hash_hmac('sha256', $body, $secret);
         }

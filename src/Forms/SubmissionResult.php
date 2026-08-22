@@ -13,7 +13,7 @@ if (!defined('ABSPATH')) exit;
  * convermetry_submit_form() helper so callers can inspect the outcome —
  * do_action() callers get fire-and-forget semantics instead.
  */
-final readonly class SubmissionResult
+final class SubmissionResult
 {
     /**
      * @param bool   $ok               True when the submission was recorded and every attempted
@@ -37,14 +37,14 @@ final readonly class SubmissionResult
      *                                 Convermetry manages itself.
      */
     public function __construct(
-        public bool $ok,
-        public string $submissionId = '',
-        public string $conversionId = '',
-        public int $status = 0,
-        public string $msg = '',
-        public mixed $data = null,
-        public bool $queued = false,
-        public array $failedDeliveries = [],
+        public readonly bool $ok,
+        public readonly string $submissionId = '',
+        public readonly string $conversionId = '',
+        public readonly int $status = 0,
+        public readonly string $msg = '',
+        public readonly mixed $data = null,
+        public readonly bool $queued = false,
+        public readonly array $failedDeliveries = [],
     ) {
     }
 }

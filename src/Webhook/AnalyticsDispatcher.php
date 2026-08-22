@@ -75,10 +75,10 @@ use Convermetry\Support\Http;
 final class AnalyticsDispatcher
 {
     /** Cron hook name for scheduled dispatch. */
-    public const string CRON_HOOK = 'cvm_dispatch_webhooks';
+    public const CRON_HOOK = 'cvm_dispatch_webhooks';
 
     /** Cron hook name for single-event delivery retries. */
-    public const string RETRY_HOOK = 'cvm_retry_webhook';
+    public const RETRY_HOOK = 'cvm_retry_webhook';
 
     /**
      * Default delay before each retry attempt, in seconds:
@@ -87,23 +87,29 @@ final class AnalyticsDispatcher
      *
      * @var int[]
      */
-    private const array RETRY_DELAYS = [300, 1800, 7200, 21600, 57600];
+    private const RETRY_DELAYS = [300, 1800, 7200, 21600, 57600];
 
-    /** Option key mapping md5(endpoint URL) → last-success unix timestamp. */
-    private const string LAST_SENT_OPTION = 'cvm_webhook_last_sent';
+    /** Option key mapping endpoint id → last-success unix timestamp. */
+    private const LAST_SENT_OPTION = 'cvm_webhook_last_sent';
 
-    /** Option key mapping md5(endpoint URL) → pending retry state. */
-    private const string RETRY_STATE_OPTION = 'cvm_webhook_retry_state';
+    /** Option key mapping endpoint id → pending retry state. */
+    private const RETRY_STATE_OPTION = 'cvm_webhook_retry_state';
 
     /** Option key for the fallback dispatch mutex (when GET_LOCK is unavailable). */
-    private const string LOCK_OPTION = 'cvm_webhook_dispatch_lock';
+    private const LOCK_OPTION = 'cvm_webhook_dispatch_lock';
+
+    /** Records that per-endpoint state has been re-keyed onto endpoint ids. */
+    private const STATE_MIGRATION_OPTION = 'cvm_webhook_state_migration';
+
+    /** Bump to re-run {@see self::migrateEndpointState()}. */
+    private const STATE_MIGRATION_VERSION = '1.1.0';
 
     /**
      * Transient key throttling repeated "report query failed" error_log()
      * calls, so a sustained database outage doesn't write the same
      * diagnostic on every cron tick.
      */
-    private const string REPORT_FAILURE_LOG_FLAG = 'cvm_report_query_failure_logged';
+    private const REPORT_FAILURE_LOG_FLAG = 'cvm_report_query_failure_logged';
 
     /**
      * Sanitized message used for the Activity Log when a report query fails.
@@ -111,7 +117,7 @@ final class AnalyticsDispatcher
      * table/column names or query fragments not meant for an admin-facing or
      * receiver-adjacent surface; the raw message goes only to error_log().
      */
-    private const string REPORT_FAILURE_MESSAGE = 'Report data could not be generated (database error)';
+    private const REPORT_FAILURE_MESSAGE = 'Report data could not be generated (database error)';
 
     /**
      * Seconds after which a fallback option lock's LEASE is considered stale
@@ -119,7 +125,7 @@ final class AnalyticsDispatcher
      * delivery windows, so even a run that legally exceeds this duration is
      * never mistaken for dead.
      */
-    private const int LOCK_TIMEOUT = 15 * MINUTE_IN_SECONDS;
+    private const LOCK_TIMEOUT = 15 * MINUTE_IN_SECONDS;
 
     /**
      * Maximum individual conversions per delivery. A window holding more is
@@ -127,10 +133,10 @@ final class AnalyticsDispatcher
      * the overflow becomes the next delivery's window instead of being
      * silently dropped — conversion delivery is lossless.
      */
-    private const int MAX_CONVERSIONS_PER_DELIVERY = 100;
+    private const MAX_CONVERSIONS_PER_DELIVERY = 100;
 
     /** Maximum consecutive windows one endpoint may send per dispatch run, bounding catch-up work. */
-    private const int MAX_WINDOWS_PER_RUN = 10;
+    private const MAX_WINDOWS_PER_RUN = 10;
 
     /**
      * Maximum rows per "top_*" list in the webhook payload (filterable via
@@ -138,7 +144,7 @@ final class AnalyticsDispatcher
      * dashboard's top 10: a receiver aggregating deliveries long-term needs
      * (near-)complete dimension rankings.
      */
-    private const int REPORT_ROW_LIMIT = 200;
+    private const REPORT_ROW_LIMIT = 200;
 
     /**
      * Registers the cron callbacks and the settings-change listener.
@@ -274,7 +280,7 @@ final class AnalyticsDispatcher
         $horizon = time();
 
         foreach ($urls as $url) {
-            $state = self::getRetryStates()[md5($url)] ?? null;
+            $state = self::getRetryStates()[self::stateKey($url)] ?? null;
 
             if ($state !== null) {
                 if (self::retryChainActive($url, $state)) {
@@ -337,11 +343,17 @@ final class AnalyticsDispatcher
      * @param string $url The endpoint URL this retry targets.
      * @return void
      */
-    public static function retry(string $url): void
+    public static function retry(string $endpointRef): void
     {
+        // Events are scheduled with the endpoint id, but one scheduled by an
+        // earlier release carries the raw URL. Accept both: an id resolves to
+        // its endpoint's current URL, anything else is treated as a URL.
+        $endpoint = Options::endpointById($endpointRef);
+        $url      = $endpoint !== null ? $endpoint['url'] : $endpointRef;
+
         $lock = self::acquireLock();
         if ($lock === null) {
-            wp_schedule_single_event(time() + MINUTE_IN_SECONDS, self::RETRY_HOOK, [$url]);
+            wp_schedule_single_event(time() + MINUTE_IN_SECONDS, self::RETRY_HOOK, [self::cronArg($url)]);
             return;
         }
 
@@ -353,7 +365,7 @@ final class AnalyticsDispatcher
                 return;
             }
 
-            $state = self::getRetryStates()[md5($url)] ?? null;
+            $state = self::getRetryStates()[self::stateKey($url)] ?? null;
 
             // No stored state means the frozen delivery was already
             // acknowledged (or explicitly discarded) while this cron event
@@ -418,7 +430,7 @@ final class AnalyticsDispatcher
             return false;
         }
 
-        if (wp_next_scheduled(self::RETRY_HOOK, [$url]) !== false) {
+        if (wp_next_scheduled(self::RETRY_HOOK, [self::cronArg($url)]) !== false) {
             return true;
         }
 
@@ -479,7 +491,7 @@ final class AnalyticsDispatcher
             $result = Http::postJson(
                 $requestUrl,
                 $encoded,
-                RequestFactory::withProtocolHeaders($headers, $url, $encoded, (string) $payload['delivery_id'])
+                RequestFactory::withProtocolHeaders($headers, self::endpointIdFor($url), $encoded, (string) $payload['delivery_id'], $url)
             );
         }
 
@@ -640,7 +652,7 @@ final class AnalyticsDispatcher
         $lastSent = get_option(self::LAST_SENT_OPTION, []);
         $lastSent = is_array($lastSent) ? $lastSent : [];
 
-        $startTs = isset($lastSent[md5($url)]) ? (int) $lastSent[md5($url)] : $fallback;
+        $startTs = isset($lastSent[self::stateKey($url)]) ? (int) $lastSent[self::stateKey($url)] : $fallback;
 
         return max($startTs, $maxAge);
     }
@@ -797,11 +809,17 @@ final class AnalyticsDispatcher
                 : 'Payload could not be JSON-encoded';
             $result  = ['ok' => false, 'code' => 0, 'message' => $message, 'body' => ''];
         } else {
-            $result = Http::postJson(
-                $requestUrl,
+            // One array for both the request and the log, so the Activity Log
+            // reflects the headers actually sent.
+            $headers = RequestFactory::withProtocolHeaders(
+                $headers,
+                self::endpointIdFor($url),
                 $body,
-                RequestFactory::withProtocolHeaders($headers, $url, $body, (string) $delivery['delivery_id'])
+                (string) $delivery['delivery_id'],
+                $url
             );
+
+            $result = Http::postJson($requestUrl, $body, $headers);
         }
 
         DeliveryLog::log([
@@ -824,7 +842,7 @@ final class AnalyticsDispatcher
             $lastSent = get_option(self::LAST_SENT_OPTION, []);
             $lastSent = is_array($lastSent) ? $lastSent : [];
 
-            $key = md5($url);
+            $key    = self::stateKey($url);
             $lastSent[$key] = max((int) ($lastSent[$key] ?? 0), (int) $delivery['window_end']);
 
             update_option(self::LAST_SENT_OPTION, $lastSent, false);
@@ -857,7 +875,7 @@ final class AnalyticsDispatcher
 
         $when = time() + $delays[$attempt - 1];
 
-        if (wp_schedule_single_event($when, self::RETRY_HOOK, [$url]) === false) {
+        if (wp_schedule_single_event($when, self::RETRY_HOOK, [self::cronArg($url)]) === false) {
             self::storeRetryState($url, max(1, $attempt - 1), 0, $delivery, true);
             return;
         }
@@ -878,7 +896,7 @@ final class AnalyticsDispatcher
     private static function storeRetryState(string $url, int $attempt, int $scheduledFor, array $delivery, bool $exhausted): void
     {
         $states = self::getRetryStates();
-        $key    = md5($url);
+        $key    = self::stateKey($url);
 
         // frozen_at marks when this DELIVERY first froze, not when the state
         // row was last rewritten — later attempts in the same chain must not
@@ -915,7 +933,7 @@ final class AnalyticsDispatcher
     private static function clearRetry(string $url): void
     {
         $states = self::getRetryStates();
-        $key    = md5($url);
+        $key    = self::stateKey($url);
 
         if (!isset($states[$key])) {
             return;
@@ -923,7 +941,16 @@ final class AnalyticsDispatcher
 
         $timestamp = (int) ($states[$key]['scheduled_for'] ?? 0);
         if ($timestamp > 0) {
-            wp_unschedule_event($timestamp, self::RETRY_HOOK, [$url]);
+            // WP-Cron cancels an event only on an exact argument match, so an
+            // event scheduled by an earlier release under the raw URL must be
+            // cancelled under that URL. Both spellings are attempted because a
+            // chain can straddle the upgrade; unscheduling a non-existent
+            // event is harmless.
+            $cronArg = self::cronArg($url);
+            wp_unschedule_event($timestamp, self::RETRY_HOOK, [$cronArg]);
+            if ($cronArg !== $url) {
+                wp_unschedule_event($timestamp, self::RETRY_HOOK, [$url]);
+            }
         }
 
         unset($states[$key]);
@@ -1081,7 +1108,153 @@ final class AnalyticsDispatcher
     }
 
     /**
-     * Returns the stored retry state map (md5(url) → state).
+     * Moves per-endpoint analytics state off md5(url) keys and onto permanent
+     * endpoint ids, once.
+     *
+     * Everything an endpoint accumulates used to hang off a hash of its URL:
+     * the last-success marker that defines the next delivery window, the
+     * pending retry chain, and the argument its retry cron event was scheduled
+     * with. Editing a URL therefore reset the window (re-sending or losing
+     * reporting history), made pruning treat the endpoint as deleted, and left
+     * a cron event that could no longer be cancelled — wp_unschedule_event()
+     * matches on the original arguments — yet still fired.
+     *
+     * Re-keying the options alone is not enough: any already-scheduled event
+     * still carries the old URL argument, so each migrated chain is unscheduled
+     * under its old argument and rescheduled under the id at the same time.
+     * Events whose state was already pruned cannot be found here, which is why
+     * {@see self::retry()} also accepts a raw URL for one release.
+     *
+     * State whose URL matches no configured endpoint is dropped, exactly as
+     * {@see self::pruneStaleState()} would have.
+     *
+     * @return void
+     */
+    public static function migrateEndpointState(): void
+    {
+        if (get_option(self::STATE_MIGRATION_OPTION) === self::STATE_MIGRATION_VERSION) {
+            return;
+        }
+
+        Options::ensureEndpointIds();
+
+        // md5(url) → id, for every endpoint that now has an id.
+        $keyMap = [];
+        $urlMap = [];
+        foreach (Options::endpoints() as $endpoint) {
+            if ($endpoint['id'] !== '') {
+                $keyMap[md5($endpoint['url'])] = $endpoint['id'];
+                $urlMap[$endpoint['id']]       = $endpoint['url'];
+            }
+        }
+
+        $lastSent = get_option(self::LAST_SENT_OPTION, []);
+        if (is_array($lastSent)) {
+            $migrated = [];
+            foreach ($lastSent as $key => $value) {
+                $key = (string) $key;
+                // An entry already under an id is left alone, so re-running
+                // cannot undo a completed migration.
+                if (isset($urlMap[$key])) {
+                    $migrated[$key] = $value;
+                } elseif (isset($keyMap[$key])) {
+                    $migrated[$keyMap[$key]] = $value;
+                }
+            }
+            update_option(self::LAST_SENT_OPTION, $migrated, false);
+        }
+
+        $states = self::getRetryStates();
+        if ($states !== []) {
+            $migrated = [];
+            foreach ($states as $key => $state) {
+                $key = (string) $key;
+
+                if (isset($urlMap[$key])) {
+                    $migrated[$key] = $state;
+                    continue;
+                }
+
+                if (!isset($keyMap[$key])) {
+                    continue; // No configured endpoint — drop, as pruning would.
+                }
+
+                $id  = $keyMap[$key];
+                $url = (string) ($state['url'] ?? $urlMap[$id]);
+
+                // Re-point the pending cron event at the id before storing the
+                // re-keyed state, so a chain is never left with state under one
+                // identity and an event under another.
+                $scheduledFor = (int) ($state['scheduled_for'] ?? 0);
+                if ($scheduledFor > 0 && empty($state['exhausted'])) {
+                    wp_unschedule_event($scheduledFor, self::RETRY_HOOK, [$url]);
+                    wp_schedule_single_event($scheduledFor, self::RETRY_HOOK, [$id]);
+                }
+
+                $migrated[$id] = $state;
+            }
+            update_option(self::RETRY_STATE_OPTION, $migrated, false);
+        }
+
+        update_option(self::STATE_MIGRATION_OPTION, self::STATE_MIGRATION_VERSION, false);
+    }
+
+    /**
+     * The permanent id of the endpoint currently configured at $url.
+     *
+     * @param string $url Endpoint URL.
+     * @return string Endpoint id, or '' when no configured endpoint matches.
+     */
+    private static function endpointIdFor(string $url): string
+    {
+        foreach (Options::endpoints() as $endpoint) {
+            if ($endpoint['url'] === $url && $endpoint['id'] !== '') {
+                return $endpoint['id'];
+            }
+        }
+
+        return '';
+    }
+
+    /**
+     * The key an endpoint's per-endpoint state is stored under.
+     *
+     * Prefers the endpoint's permanent id. Falls back to md5(url) — the
+     * historical key — only for an endpoint that has no id yet, which can
+     * happen for state written before {@see Options::ensureEndpointIds()} ran.
+     * That fallback is what made editing a URL behave like deleting one
+     * endpoint and creating another: the marker, the retry chain, and the cron
+     * event all hung off a hash of the field being edited.
+     *
+     * @param string $url Endpoint URL.
+     * @return string
+     */
+    private static function stateKey(string $url): string
+    {
+        $id = self::endpointIdFor($url);
+
+        return $id !== '' ? $id : md5($url);
+    }
+
+    /**
+     * The argument a retry cron event is scheduled with.
+     *
+     * The id when there is one, so the event survives a URL edit — WP-Cron
+     * matches events by their exact arguments, so an event scheduled under the
+     * old URL could not be cancelled once the URL changed, and fired anyway.
+     *
+     * @param string $url Endpoint URL.
+     * @return string
+     */
+    private static function cronArg(string $url): string
+    {
+        $id = self::endpointIdFor($url);
+
+        return $id !== '' ? $id : $url;
+    }
+
+    /**
+     * Returns the stored retry state map (endpoint id → state).
      *
      * @return array<string, array<string, mixed>>
      */
@@ -1103,7 +1276,10 @@ final class AnalyticsDispatcher
      */
     private static function pruneStaleState(array $activeUrls): void
     {
-        $activeKeys = array_map('md5', $activeUrls);
+        // Keyed the same way state is written. Using md5(url) here while state
+        // is keyed by endpoint id would make every active endpoint look stale
+        // and delete the markers and chains this is meant to preserve.
+        $activeKeys = array_map([self::class, 'stateKey'], $activeUrls);
 
         $lastSent = get_option(self::LAST_SENT_OPTION, []);
         if (is_array($lastSent)) {

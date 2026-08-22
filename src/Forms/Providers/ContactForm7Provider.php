@@ -60,6 +60,17 @@ final class ContactForm7Provider implements FormProviderInterface
         return $out;
     }
 
+    /**
+     * Spam handling: none is needed here, and adding a status check would be
+     * dead code. Contact Form 7 sets a submission's status to 'spam' during
+     * validation and then skips sending mail entirely, so wpcf7_mail_sent —
+     * which fires only after mail was successfully sent — is never reached for
+     * a spam submission. The other providers hook events that fire earlier in
+     * the lifecycle and do need explicit guards.
+     *
+     * @param SubmissionService $service The shared pipeline.
+     * @return void
+     */
     public function registerHooks(SubmissionService $service): void
     {
         add_action(

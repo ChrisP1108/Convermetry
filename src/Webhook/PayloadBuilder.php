@@ -43,7 +43,7 @@ use Convermetry\Analytics\Reports;
 final class PayloadBuilder
 {
     /** The payload schema version carried by every message. */
-    public const string SCHEMA_VERSION = '1.0';
+    public const SCHEMA_VERSION = '1.0';
 
     /**
      * Builds the payload for one analytics reporting window.
@@ -235,7 +235,7 @@ final class PayloadBuilder
      */
     private static function decodeJson(string $json): array
     {
-        if ($json === '' || !json_validate($json)) {
+        if ($json === '') {
             return [];
         }
 

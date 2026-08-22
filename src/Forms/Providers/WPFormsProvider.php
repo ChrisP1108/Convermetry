@@ -59,6 +59,19 @@ final class WPFormsProvider implements FormProviderInterface
         return $out;
     }
 
+    /**
+     * Spam handling: UNVERIFIED — no guard is installed here yet.
+     *
+     * WPForms runs its anti-spam checks during wpforms_process and returns
+     * early when a submission is flagged, so wpforms_process_complete is
+     * expected never to fire for spam — making a status check here dead code.
+     * That behaviour is version-dependent (notably around the "store spam
+     * entries" option) and could not be confirmed against a live WPForms
+     * install when this was written, so it is recorded rather than assumed.
+     *
+     * @param SubmissionService $service The shared pipeline.
+     * @return void
+     */
     public function registerHooks(SubmissionService $service): void
     {
         add_action(

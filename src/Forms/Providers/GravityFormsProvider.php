@@ -86,6 +86,15 @@ final class GravityFormsProvider implements FormProviderInterface
             return;
         }
 
+        // gform_after_submission also fires for entries Gravity Forms has
+        // flagged as spam. Without this guard every spam submission would be
+        // recorded as a lead, counted as a conversion, and delivered to every
+        // configured endpoint. Read as a plain array key rather than via
+        // rgar() so the provider keeps no hard dependency on GF's helpers.
+        if ((string) ($entry['status'] ?? '') === 'spam') {
+            return;
+        }
+
         $fields = [];
 
         foreach ((array) ($form['fields'] ?? []) as $field) {

@@ -33,10 +33,10 @@ use Convermetry\Settings\Options;
 final class AnalyticsPage
 {
     /** Menu slug for the top-level page. */
-    public const string MENU_SLUG = 'convermetry';
+    public const MENU_SLUG = 'convermetry';
 
     /** @var int[] Periods (in days) selectable in the dashboard filter. */
-    private const array PERIODS = [7, 30, 90];
+    private const PERIODS = [7, 30, 90];
 
     /**
      * Registers the admin menu and asset hooks.

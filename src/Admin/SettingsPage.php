@@ -26,10 +26,10 @@ use Convermetry\Webhook\WebsiteInfoBuilder;
 final class SettingsPage
 {
     /** Menu slug for the settings submenu page. */
-    public const string MENU_SLUG = 'convermetry-settings';
+    public const MENU_SLUG = 'convermetry-settings';
 
     /** Settings API option group. */
-    private const string OPTION_GROUP = 'cvm_settings_group';
+    private const OPTION_GROUP = 'cvm_settings_group';
 
     /**
      * Registers menu and settings hooks.

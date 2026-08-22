@@ -24,7 +24,7 @@ use Convermetry\Webhook\DeliveryLog;
 final class Http
 {
     /** HTTP timeout for webhook requests, in seconds. */
-    public const int TIMEOUT = 15;
+    public const TIMEOUT = 15;
 
     /**
      * POSTs a pre-serialized JSON body to one endpoint.

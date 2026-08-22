@@ -76,6 +76,26 @@ final class FluentFormsProvider implements FormProviderInterface
         return $out;
     }
 
+    /**
+     * Spam handling: UNRESOLVED — no guard is installed here yet.
+     *
+     * fluentform/submission_inserted fires once the row exists, so whether a
+     * spam submission can reach this pipeline depends on when Fluent Forms
+     * assigns the entry's 'spam' status: at insert (in which case reading the
+     * status here is sufficient) or afterwards (in which case an inline read
+     * cannot see it, and a later hook or a deferred check before queuing is
+     * required instead). Resolving that needs a live Fluent Forms install,
+     * which was not available when this was written.
+     *
+     * Deliberately left unguarded rather than shipping a status read that may
+     * silently never match: a check that looks correct but does nothing is
+     * worse than a recorded gap. Until this is settled, spam entries may be
+     * recorded and delivered. See also the same open question in
+     * {@see WPFormsProvider::registerHooks()}.
+     *
+     * @param SubmissionService $service The shared pipeline.
+     * @return void
+     */
     public function registerHooks(SubmissionService $service): void
     {
         $handler = function (mixed $entryId, mixed $formData, mixed $form) use ($service): void {

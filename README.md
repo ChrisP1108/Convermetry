@@ -22,9 +22,9 @@ Was the lead successfully delivered to external systems?
 
 Convermetry works standalone — full analytics dashboard, form integrations, and webhook delivery inside one WordPress install — and is architected so a future Convermetry SaaS can receive `analytics_report` and `form_submission` messages from many installations, keyed by a shared, versioned payload schema.
 
-- **Version:** 0.1.0
+- **Version:** 0.2.0
 - **Requires WordPress:** 6.3+
-- **Requires PHP:** 8.3+
+- **Requires PHP:** 8.1+
 - **License:** GPL-2.0-or-later
 - **Text domain / slug:** `convermetry` · **REST namespace:** `convermetry/v1` · **PHP namespace:** `Convermetry\`
 
@@ -50,6 +50,9 @@ Convermetry works standalone — full analytics dashboard, form integrations, an
 16. [Privacy](#privacy)
 17. [Database tables](#database-tables)
 18. [Uninstall behavior](#uninstall-behavior)
+19. [Feature migration matrix](#feature-migration-matrix)
+20. [Folder structure](#folder-structure)
+21. [Development & tests](#development--tests)
 
 ---
 
@@ -57,7 +60,7 @@ Convermetry works standalone — full analytics dashboard, form integrations, an
 
 | Requirement | Minimum |
 |---|---|
-| PHP | 8.3 |
+| PHP | 8.1 |
 | WordPress | 6.3 |
 | Form plugins | Optional — feature-detected (see [Supported form providers](#supported-form-providers)) |
 
@@ -294,7 +297,7 @@ Every outbound message shares one versioned envelope:
 {
     "schema_version": "1.0",
     "source": "convermetry",
-    "plugin_version": "0.1.0",
+    "plugin_version": "0.2.0",
     "message_type": "analytics_report | form_submission",
     "website_info": { },
     "generated_at": "2026-08-22T14:00:00+00:00",
@@ -320,7 +323,7 @@ Every outbound message shares one versioned envelope:
 {
     "schema_version": "1.0",
     "source": "convermetry",
-    "plugin_version": "0.1.0",
+    "plugin_version": "0.2.0",
     "message_type": "analytics_report",
     "website_info": {
         "name": "Example Financial", "url": "https://example.com", "domain": "example.com",
@@ -399,7 +402,7 @@ Every outbound message shares one versioned envelope:
 {
     "schema_version": "1.0",
     "source": "convermetry",
-    "plugin_version": "0.1.0",
+    "plugin_version": "0.2.0",
     "message_type": "form_submission",
     "website_info": {
         "name": "Example Financial", "url": "https://example.com", "domain": "example.com",
@@ -461,7 +464,7 @@ $expected = 'sha256=' . hash_hmac('sha256', $rawBody, $secret);
 if (!hash_equals($expected, $_SERVER['HTTP_X_CONVERMETRY_SIGNATURE'] ?? '')) { http_response_code(401); exit; }
 ```
 
-Signatures are computed at send time over the frozen bytes, so retries re-sign the identical body; rotating a secret mid-retry simply signs the same bytes with the new key.
+Signatures are computed at send time over the frozen bytes, so retries re-sign the identical body; rotating a secret mid-retry simply signs the same bytes with the new key. See [Retries & idempotency](#retries--idempotency) for why the signature header is deliberately not frozen.
 
 ## Retries & idempotency
 
@@ -471,7 +474,19 @@ Both message types share the retry schedule (filterable via `convermetry_retry_s
 Initial delivery → 5 minutes → 30 minutes → 2 hours → 6 hours → 16 hours   (~24.6 h total)
 ```
 
-**Frozen requests.** On the first delivery attempt the final URL (all query-parameter layers merged), the headers, and the serialized JSON body are frozen. Every retry replays those exact bytes under the same `delivery_id`/`Idempotency-Key` — retention cleanup, settings changes, or plugin updates between attempts can never mutate a frozen retry. A payload that fails to JSON-encode (e.g. a filter introduced an unencodable value) is treated as a *failed attempt* entering the normal chain; an empty body is never sent, and the payload is never rebuilt without the filter.
+**Frozen requests.** On the first delivery attempt the final URL (all query-parameter layers merged), the configured headers, and the serialized JSON body are frozen. Every retry replays those exact bytes under the same `delivery_id`/`Idempotency-Key` — retention cleanup, settings changes, or plugin updates between attempts can never mutate a frozen retry.
+
+**Three headers are regenerated per attempt rather than frozen**, a deliberate deviation from strict byte-for-byte header freezing:
+
+| Header | Why it is not frozen |
+|---|---|
+| `Idempotency-Key` | Equal to the frozen `delivery_id`, so it is stable in practice — regenerating it cannot change its value. |
+| `User-Agent` | Reflects the running plugin version. |
+| `X-Convermetry-Signature` | Recomputed over the frozen bytes with the endpoint's **current** secret. |
+
+Freezing the signature would make secret rotation destructive: a receiver validates against its current secret, so every remaining attempt in an in-flight chain would fail authentication until the chain was abandoned. Re-signing identical bytes means rotation costs nothing and requires no receiver-side grace window. The body a receiver verifies is byte-identical across attempts either way.
+
+The signing secret is resolved by the endpoint's **permanent id**, captured when the delivery was frozen — not by its URL. Editing an endpoint's URL mid-chain therefore keeps signing with that endpoint's own secret. If the endpoint has been deleted, no signature header is sent at all, rather than one made with the shared secret that a receiver could not distinguish from a forgery. A payload that fails to JSON-encode (e.g. a filter introduced an unencodable value) is treated as a *failed attempt* entering the normal chain; an empty body is never sent, and the payload is never rebuilt without the filter.
 
 **Analytics reports** — per-endpoint retry chains via single-event crons. An exhausted chain (or one whose cron could not be scheduled — detected as *orphaned*) keeps its frozen delivery; the next scheduled dispatch re-sends it under the original `delivery_id` first, and only after acknowledgment does the endpoint's marker advance — exactly to the frozen window's end — so consecutive deliveries never overlap. Every retry-state mutation happens under the dispatch mutex. Deactivating the plugin *suspends* chains (frozen deliveries resume after reactivation under their original ids); frozen deliveries older than the retention window expire, and each pending retry has a **Discard** action on the Webhooks page.
 
@@ -563,13 +578,62 @@ All tables are created via `dbDelta()` with versioned schema options; migrations
 
 **Deleting the plugin** (Plugins screen) runs `uninstall.php`: drops all four tables, deletes every option, transient, rate-limit counter row, and scheduled cron event. On **multisite**, the cleanup runs per site across the whole network. No trace remains.
 
+## Feature migration matrix
+
+Convermetry replaces two predecessor plugins. This maps each predecessor capability onto where it
+now lives, and calls out the places where behaviour deliberately changed rather than carried over.
+
+> Verify the left-hand column against your actual installed versions before relying on this for a
+> production migration — it reflects the capabilities Convermetry implements, not an audit of the
+> legacy codebases.
+
+### SitePulse (analytics) → Convermetry
+
+| Predecessor capability | Now | Notes |
+|---|---|---|
+| Pageview / click / hover / scroll tracking | **Convermetry → Settings**, per-event toggles | `assets/js/tracker.js`; same event types |
+| Campaign & referrer attribution | **Campaign & channel attribution** | One shared engine (`Tracking/Channels`) for dashboard *and* payloads |
+| Analytics dashboard & reports | **Convermetry → Analytics** | Shared query layer (`Analytics/Reports`) |
+| Data retention / cleanup | **Settings → retention**, daily cron | Bounded chunked deletes; multisite-aware uninstall |
+| Logged-in exclusion, DNT/GPC | **Settings → privacy** | DNT/GPC off by default; logged-in exclusion on |
+| — | **Scheduled `analytics_report` webhooks** | New: per-endpoint windows, retries, idempotency |
+
+### Forms Webhook Integrator (form delivery) → Convermetry
+
+| Predecessor capability | Now | Notes |
+|---|---|---|
+| Per-form webhook configuration | **Convermetry → Forms** | Same per-form model; see identity change below |
+| Per-form headers & query parameters | **Forms page**, merged by `RequestFactory` | Four-layer precedence: global → page → form → runtime |
+| Custom/external form ID | **Forms → Custom/External Form ID** | Frozen into the payload *and* the Activity Log `form_id` column |
+| Form exclusions | **Forms → Excluded** | Configuration is preserved while excluded |
+| Elementor form settings keyed by **form name** | **Keyed by widget id**, name kept as fallback | **Behaviour change** — see below |
+| Synchronous delivery with visible errors | **Settings → failure mode** (`background` \| `show_error`) | `show_error` is Elementor-only; it is the one provider API exposing that channel |
+| — | **Durable queue, retries, idempotency** | New: delivery survives outages; at-least-once with `delivery_id` dedup |
+| — | **Session → submission correlation** | New: every lead carries its analytics session and campaign |
+
+### Behaviour changes to know about when migrating
+
+| Change | Why | What to do |
+|---|---|---|
+| Elementor per-form settings move from form **name** to **widget id** | Two widgets sharing a name previously collapsed into one configuration | Nothing required. Existing name-keyed settings keep working; saving a form migrates it. The legacy entry is retained, not deleted, so queued deliveries frozen before the save still resolve correctly |
+| `X-Convermetry-Signature` is re-signed per attempt, not frozen | Freezing it would make rotating a secret fail every in-flight retry | Nothing — verify against the raw body as documented |
+| Activity Log redacts credential-like fields in **request** payloads | They were previously stored and exported in the clear | A one-time background migration redacts existing rows on the daily cleanup cron |
+| Delivery Log API `form_id` filters the real form id | It previously filtered the form *name* | Rows predating the column are backfilled from the stored payload |
+| Delivery Log API `after`/`before` are true UTC day bounds | `before` was ignored; `after` matched a whole month | An invalid date now returns `400` instead of being silently dropped |
+
 ## Folder structure
 
 ```text
 convermetry/
-├── convermetry.php              # Plugin header, PHP 8.3 guard, bootstrap, activation, helpers
+├── convermetry.php              # Plugin header, PHP 8.1 guard, bootstrap, activation, helpers
 ├── uninstall.php                # Complete cleanup on plugin deletion (multisite-aware)
 ├── README.md
+├── composer.json                # Dev-only: PHPUnit + Brain Monkey, platform pinned to PHP 8.1
+├── phpunit.xml                  # Unit suite config
+├── .distignore                  # Development artifacts excluded from the release ZIP
+├── bin/build-zip.sh             # Builds the distributable ZIP (verifies no dev artifacts leak)
+├── .github/workflows/ci.yml     # Suite on PHP 8.1/8.2/8.3 + release-ZIP cleanliness gate
+├── tests/                       # Unit tests (no WordPress install required)
 ├── assets/
 │   ├── css/admin.css            # Shared admin styles (cards, toggles, logs, forms, builders)
 │   ├── css/dashboard.css        # Analytics dashboard + print styles
@@ -593,3 +657,72 @@ convermetry/
     └── Webhook/                 # WebsiteInfoBuilder, PayloadBuilder, RequestFactory,
                                  # AnalyticsDispatcher, FormDeliveryQueue, DeliveryLog
 ```
+
+## Development & tests
+
+The plugin has **no runtime Composer dependencies** — `src/Autoloader.php` is a minimal PSR-4
+autoloader, and the shipped ZIP contains no `vendor/`. Composer is used only for test tooling.
+
+Building the distributable ZIP needs nothing beyond a clone:
+
+```bash
+bin/build-zip.sh        # writes build/convermetry-<version>.zip
+```
+
+It stages only git-tracked files, drops everything listed in `.distignore`, and **fails rather than
+producing an archive** if a development artifact reaches the staging directory.
+
+### Running the suite
+
+```bash
+composer install        # PHPUnit + Brain Monkey (dev only)
+composer test           # unit suite
+```
+
+`composer.json` pins `config.platform.php` to `8.1.0`, so the suite resolves the dependency versions
+an actual 8.1 host would get rather than whatever the developer's PHP happens to be. Verified green
+on PHP 8.2 and 8.5: 51 tests, 93 assertions.
+
+### Continuous integration
+
+`.github/workflows/ci.yml` runs on every push and pull request:
+
+| Job | Gate |
+|---|---|
+| **Tests** | `php -l` over every file, then the suite, on PHP **8.1, 8.2, and 8.3** |
+| **Runtime floor** | Greps for typed class constants, `json_validate()`, `readonly class`, and `mb_str_pad()` — constructs that parse on a maintainer's newer local PHP but break an 8.1 host |
+| **Release ZIP** | Builds the archive and fails if `tests/`, `vendor/`, `bin/`, `.github/`, `composer.*`, or `phpunit.xml` appear in it, or if a runtime file is missing. Uploads the ZIP as a build artifact |
+
+The 8.1 matrix leg is the one that matters. Newer runtimes parse 8.2/8.3-only syntax happily, so a
+suite that only ever runs on the developer's PHP cannot prove the declared floor.
+
+### What the unit suite covers
+
+| Area | Anchored regression |
+|---|---|
+| Redaction | `X-API-Key` stored in the clear; `author` wrongly redacted by a bare `auth` pattern |
+| Merge precedence | Four-layer global → page → form → runtime override order |
+| Frozen retry | Rotating a secret must re-sign identical bytes, not strand the chain |
+| Endpoint identity | Editing a URL reset the delivery window, pruned the retry chain, and orphaned its cron |
+| Elementor identity | Same-named widgets sharing one configuration; legacy settings orphaned by the switch |
+| Date bounds | `before` ignored, `after` matching a whole month, `2026-99-99` accepted |
+| **Provider hooks** | Gravity Forms spam entries recorded as leads |
+
+Provider tests invoke the closures each provider passes to `add_action()`, which is the same path
+WordPress takes — calling `SubmissionService` directly would never execute the providers' private
+handlers, so the spam guards inside them would go untested. They also pin the hook *names*, because
+the spam reasoning is per-hook: Contact Form 7 needs no guard only because `wpcf7_mail_sent` fires
+after mail was sent. Moving it to a pre-send hook would silently invalidate that.
+
+### What it deliberately does not cover
+
+Brain Monkey stubs WordPress functions; it does not run WordPress. These need a live install and stay
+on the manual checklist:
+
+- `dbDelta()` schema migrations against a populated pre-upgrade database
+- Whether Fluent Forms and WPForms can deliver a spam-flagged submission to their chosen hooks at
+  all — **unresolved**, and recorded in those providers' `registerHooks()` docblocks. The suite pins
+  which hook each uses, but cannot answer what that hook receives
+- WP-Cron scheduling and retry timing
+- REST authentication and rate limiting
+- End-to-end delivery against a real receiver

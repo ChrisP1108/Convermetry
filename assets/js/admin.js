@@ -197,7 +197,12 @@
                 title.textContent = 'Endpoint ' + (idx + 1);
             }
 
-            [['url', '.cvm-webhook-url-input'], ['label', '.cvm-webhook-label-input'], ['secret', '.cvm-webhook-secret-input']]
+            // The hidden id must be reindexed alongside the visible fields.
+            // Miss it and removing a block leaves each surviving endpoint's id
+            // under its OLD index: the save then sees a URL with no id (and
+            // mints a fresh one, orphaning that endpoint's delivery window and
+            // retry chain) plus an id with no URL, which is dropped.
+            [['id', '.cvm-webhook-id-input'], ['url', '.cvm-webhook-url-input'], ['label', '.cvm-webhook-label-input'], ['secret', '.cvm-webhook-secret-input']]
                 .forEach(function (pair) {
                     var input = block.querySelector(pair[1]);
                     if (input) {
@@ -279,6 +284,19 @@
 
         container.querySelectorAll('.cvm-remove-webhook-btn').forEach(function (btn) {
             btn.addEventListener('click', function () {
+                // Saving after this removal permanently discards the
+                // endpoint's queued leads, so confirm when there are any.
+                var pending = parseInt(btn.dataset.pending || '0', 10);
+                if (pending > 0) {
+                    var message = 'This endpoint has ' + pending + ' queued delivery' +
+                        (pending === 1 ? '' : 'ies') +
+                        ' still waiting to be sent.\n\nRemoving it and saving will discard ' +
+                        (pending === 1 ? 'it' : 'them') + ' permanently. Continue?';
+                    if (!window.confirm(message)) {
+                        return;
+                    }
+                }
+
                 var block = btn.closest('.cvm-webhook-block');
                 if (block) {
                     block.remove();

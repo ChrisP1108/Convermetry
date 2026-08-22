@@ -480,7 +480,7 @@ final class Reports
      * SQL predicate marking a row as campaign-tagged: any of the six utm
      * fields is set.
      */
-    private const string TAGGED_SQL = "(utm_source <> '' OR utm_medium <> '' OR utm_campaign <> ''
+    private const TAGGED_SQL = "(utm_source <> '' OR utm_medium <> '' OR utm_campaign <> ''
         OR utm_id <> '' OR utm_term <> '' OR utm_content <> '')";
 
     /**
