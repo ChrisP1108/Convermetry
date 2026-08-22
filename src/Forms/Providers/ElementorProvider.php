@@ -1,0 +1,187 @@
+<?php
+declare(strict_types=1);
+
+namespace Convermetry\Forms\Providers;
+
+if (!defined('ABSPATH')) exit;
+
+use Convermetry\Forms\FormProviderInterface;
+use Convermetry\Forms\SubmissionService;
+use Convermetry\Settings\Options;
+
+/**
+ * Elementor Pro form integration.
+ *
+ * Hooks elementor_pro/forms/new_record — Elementor Pro's server-side hook
+ * that fires after a submission passed validation and was processed — and
+ * feeds the record into the shared submission pipeline.
+ *
+ * Identity: per-form settings are keyed by the form NAME (the identity the
+ * legacy Forms Webhook Integrator used, stable across widget copies), while
+ * the Elementor widget id travels in payloads as native_form_id.
+ *
+ * Failure modes: in the default 'background' mode the visitor always sees
+ * the normal success state and failed webhook deliveries retry in the
+ * background. In 'show_error' mode delivery runs synchronously and a
+ * failure is surfaced on the form via Elementor's AJAX handler — the one
+ * provider whose API exposes that error channel.
+ *
+ * Form discovery walks _elementor_data post meta directly rather than using
+ * WP_Query: get_posts() with post_type 'any' only searches PUBLIC post
+ * types, silently excluding private ones such as elementor_library — where
+ * template-based forms live.
+ */
+final class ElementorProvider implements FormProviderInterface
+{
+    public function getKey(): string
+    {
+        return 'elementor';
+    }
+
+    public function getLabel(): string
+    {
+        return 'Elementor Pro';
+    }
+
+    public function isAvailable(): bool
+    {
+        return defined('ELEMENTOR_PRO_VERSION') || class_exists('\ElementorPro\Plugin');
+    }
+
+    /**
+     * Discovers every Elementor form widget on the site by name.
+     *
+     * @return array<int, array{native_id: string, name: string}>
+     */
+    public function getForms(): array
+    {
+        global $wpdb;
+
+        $names = [];
+
+        /** @var string[] $postIds */
+        $postIds = $wpdb->get_col($wpdb->prepare(
+            "SELECT DISTINCT post_id FROM {$wpdb->postmeta} WHERE meta_key = %s",
+            '_elementor_data'
+        ));
+
+        foreach ((array) $postIds as $postId) {
+            $rawData = get_post_meta((int) $postId, '_elementor_data', true);
+
+            if (empty($rawData) || !is_string($rawData)) {
+                continue;
+            }
+
+            $elements = json_decode($rawData, true);
+            if (!is_array($elements)) {
+                continue;
+            }
+
+            $this->extractFormNames($elements, $names);
+        }
+
+        return array_map(
+            static fn(string $name): array => ['native_id' => $name, 'name' => $name],
+            array_values(array_unique($names))
+        );
+    }
+
+    public function registerHooks(SubmissionService $service): void
+    {
+        add_action(
+            'elementor_pro/forms/new_record',
+            function (mixed $record, mixed $handler) use ($service): void {
+                $this->handleSubmission($record, $handler, $service);
+            },
+            10,
+            2
+        );
+    }
+
+    /**
+     * Parses an Elementor form record and forwards it to the pipeline.
+     *
+     * @param mixed             $record  Elementor_Form_Record instance (typed mixed —
+     *                                   Elementor Pro's classes are not loadable at parse time).
+     * @param mixed             $handler Ajax_Handler instance used to surface errors in 'show_error' mode.
+     * @param SubmissionService $service The shared pipeline.
+     * @return void
+     */
+    private function handleSubmission(mixed $record, mixed $handler, SubmissionService $service): void
+    {
+        if (!is_object($record) || !method_exists($record, 'get_form_settings') || !method_exists($record, 'get')) {
+            return;
+        }
+
+        $formName = (string) $record->get_form_settings('form_name');
+        if ($formName === '') {
+            return;
+        }
+
+        $widgetId = (string) $record->get_form_settings('id');
+
+        $rawFields = $record->get('fields');
+        $fields    = [];
+
+        if (is_array($rawFields)) {
+            foreach ($rawFields as $id => $field) {
+                $fields[(string) $id] = is_array($field) ? ($field['value'] ?? '') : $field;
+            }
+        }
+
+        $sync = Options::formFailureMode() === 'show_error';
+
+        $result = $service->record(
+            provider: $this->getKey(),
+            nativeId: $widgetId,
+            formName: $formName,
+            fields: $fields,
+            sync: $sync,
+            identity: $formName
+        );
+
+        // Only the synchronous mode surfaces failures to the visitor —
+        // and only genuine dispatch failures, never "form is excluded"
+        // (nothing was supposed to happen) or background-queue results.
+        if (
+            $sync
+            && !$result->ok
+            && $result->failedDeliveries !== []
+            && is_object($handler)
+            && method_exists($handler, 'add_error_message')
+        ) {
+            $handler->add_error_message('There was an issue submitting the form data through the webhook.');
+            if (property_exists($handler, 'is_success')) {
+                $handler->is_success = false;
+            }
+        }
+    }
+
+    /**
+     * Recursively walks Elementor element trees to find form widget names.
+     *
+     * @param array<int|string, mixed> $elements Element tree.
+     * @param string[]                 $names    Collected form names (by reference).
+     * @return void
+     */
+    private function extractFormNames(array $elements, array &$names): void
+    {
+        foreach ($elements as $element) {
+            if (!is_array($element)) {
+                continue;
+            }
+
+            if (
+                ($element['widgetType'] ?? null) === 'form'
+                && is_string($element['settings']['form_name'] ?? null)
+                && $element['settings']['form_name'] !== ''
+            ) {
+                $names[] = $element['settings']['form_name'];
+            }
+
+            if (!empty($element['elements']) && is_array($element['elements'])) {
+                $this->extractFormNames($element['elements'], $names);
+            }
+        }
+    }
+}

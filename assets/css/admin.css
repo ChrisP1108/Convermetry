@@ -1,0 +1,947 @@
+/**
+ * Convermetry — admin styles.
+ *
+ * Shared by the dashboard and settings pages. Uses core wp-admin colors
+ * (#2271b1 links/accent, #dcdcde borders, #646970 muted text) so the plugin
+ * screens feel native.
+ */
+
+.cvm-wrap {
+    max-width: 1200px;
+}
+
+/* Summary cards ------------------------------------------------------- */
+
+.cvm-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+    gap: 16px;
+    margin: 20px 0;
+}
+
+.cvm-card {
+    background: #fff;
+    border: 1px solid #dcdcde;
+    border-radius: 8px;
+    padding: 20px;
+    box-shadow: 0 1px 1px rgba(0, 0, 0, 0.04);
+}
+
+/* Webhook Status toggle card + Webhook Settings repeater (settings page),
+   shared card + toggle layout --------------------------------------------- */
+
+.cvm-toggle-card {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    flex-wrap: wrap;
+}
+
+.cvm-toggle-card .cvm-card-title {
+    margin-bottom: 0;
+    border-bottom: none;
+    padding-bottom: 0;
+    margin-right: 20px;
+    flex-shrink: 0;
+}
+
+.cvm-toggle-card p.description {
+    flex-basis: 100%;
+    margin: 8px 0 0;
+}
+
+.cvm-webhook-block {
+    background: #f6f7f7;
+    border: 1px solid #dcdcde;
+    border-radius: 4px;
+    padding: 14px 16px;
+    margin-bottom: 12px;
+}
+
+.cvm-webhook-block-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 10px;
+}
+
+.cvm-webhook-block-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: #1d2327;
+}
+
+.cvm-remove-webhook-btn {
+    color: #d63638 !important;
+    border-color: #d63638 !important;
+    padding: 1px 10px !important;
+    height: 24px;
+    font-size: 12px;
+    line-height: 22px;
+}
+
+.cvm-remove-webhook-btn:hover {
+    background: #d63638 !important;
+    color: #fff !important;
+}
+
+.cvm-webhook-url-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.cvm-webhook-url-input,
+.cvm-webhook-label-input {
+    flex: 1;
+    min-width: 220px;
+    max-width: 420px;
+}
+
+/* About page — card-per-section layout ported from the Forms Webhook
+   Integrator plugin's About page ------------------------------------------ */
+
+.cvm-about h2 {
+    margin-top: 32px;
+}
+
+.cvm-about-lead {
+    font-size: 14px;
+    max-width: 780px;
+}
+
+.cvm-about-meta {
+    color: #646970;
+    margin-bottom: 8px;
+}
+
+.cvm-about-features .cvm-card h3 {
+    margin: 0 0 8px;
+}
+
+.cvm-about-features .cvm-card p {
+    margin: 0;
+    color: #50575e;
+}
+
+.cvm-about-intro p {
+    font-size: 14px;
+    line-height: 1.7;
+    margin-bottom: 12px;
+}
+
+.cvm-about-requirements {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 24px;
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.cvm-about-requirements li {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: #3c434a;
+}
+
+.cvm-about-label {
+    display: inline-block;
+    background: #f0f0f1;
+    border: 1px solid #c3c4c7;
+    border-radius: 3px;
+    padding: 1px 8px;
+    font-size: 11px;
+    font-weight: 600;
+    color: #1d2327;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.cvm-about-table {
+    width: 100%;
+    max-width: 900px;
+    border-collapse: collapse;
+    font-size: 13px;
+    margin-top: 4px;
+}
+
+.cvm-about-table th {
+    background: #f6f7f7;
+    border: 1px solid #dcdcde;
+    padding: 8px 12px;
+    text-align: left;
+    font-weight: 600;
+    color: #1d2327;
+}
+
+.cvm-about-table td {
+    border: 1px solid #dcdcde;
+    padding: 8px 12px;
+    vertical-align: top;
+    color: #3c434a;
+    line-height: 1.6;
+}
+
+.cvm-about-table tr:nth-child(even) td {
+    background: #fafafa;
+}
+
+.cvm-about-table td:first-child,
+.cvm-about-table th:first-child {
+    width: 220px;
+    white-space: nowrap;
+}
+
+.cvm-about-list {
+    margin: 0;
+    padding-left: 20px;
+}
+
+.cvm-about-list li {
+    font-size: 13px;
+    color: #3c434a;
+    line-height: 1.7;
+    margin-bottom: 6px;
+}
+
+.cvm-about-code {
+    background: #1d2327;
+    color: #e2e4e7;
+    border-radius: 4px;
+    padding: 14px 18px;
+    font-family: Consolas, Monaco, "Courier New", monospace;
+    font-size: 12.5px;
+    line-height: 1.65;
+    overflow-x: auto;
+    margin: 12px 0;
+    white-space: pre;
+    max-width: 900px;
+}
+
+.cvm-about-code code {
+    background: transparent;
+    padding: 0;
+    color: inherit;
+}
+
+.cvm-about-note {
+    background: #f0f6fc;
+    border-left: 4px solid #2271b1;
+    border-radius: 0 4px 4px 0;
+    padding: 10px 14px;
+    font-size: 13px;
+    color: #3c434a;
+    line-height: 1.6;
+    margin: 14px 0;
+}
+
+.cvm-about-subheading {
+    font-size: 13px;
+    font-weight: 600;
+    color: #1d2327;
+    margin: 20px 0 4px;
+}
+
+/* Delivery Log — webhook label badge ------------------------------------- */
+
+.cvm-log-webhook-label {
+    display: inline-block;
+    padding: 1px 8px;
+    background: #e8f0fb;
+    border: 1px solid #b3c8f0;
+    border-radius: 3px;
+    color: #2271b1;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}
+
+/* ==========================================================================
+   Activity Log page — accordion log layout
+   plugin's analytics page so both screens share one look.
+   ========================================================================== */
+
+/* ── Card ─────────────────────────────────────────────────────────────────── */
+
+.cvm-delivery-wrap .cvm-card {
+    border-color: #c3c4c7;
+    border-radius: 4px;
+    padding: 20px 24px;
+    margin-bottom: 20px;
+}
+
+.cvm-card-title {
+    margin-top: 0;
+    margin-bottom: 16px;
+    font-size: 14px;
+    font-weight: 600;
+    color: #1d2327;
+    border-bottom: 1px solid #f0f0f1;
+    padding-bottom: 12px;
+}
+
+.cvm-api-key-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.cvm-api-key-row code {
+    word-break: break-all;
+}
+
+/* ── Toggle Switch ────────────────────────────────────────────────────────── */
+
+.cvm-toggle-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.cvm-toggle {
+    position: relative;
+    display: inline-block;
+    width: 52px;
+    height: 28px;
+    flex-shrink: 0;
+    cursor: pointer;
+}
+
+.cvm-toggle input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+    position: absolute;
+}
+
+.cvm-toggle-slider {
+    position: absolute;
+    inset: 0;
+    background-color: #c3c4c7;
+    border-radius: 28px;
+    transition: background-color 0.25s ease;
+}
+
+.cvm-toggle-slider::before {
+    content: '';
+    position: absolute;
+    width: 20px;
+    height: 20px;
+    left: 4px;
+    top: 4px;
+    background-color: #fff;
+    border-radius: 50%;
+    transition: transform 0.25s ease;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+.cvm-toggle input:checked + .cvm-toggle-slider {
+    background-color: #2271b1;
+}
+
+.cvm-toggle input:checked + .cvm-toggle-slider::before {
+    transform: translateX(24px);
+}
+
+.cvm-toggle input:focus-visible + .cvm-toggle-slider {
+    outline: 2px solid #2271b1;
+    outline-offset: 2px;
+}
+
+.cvm-toggle-label {
+    font-weight: 600;
+    font-size: 13px;
+    color: #1d2327;
+    min-width: 52px;
+}
+
+/* ── Toolbar ──────────────────────────────────────────────────────────────── */
+
+.cvm-retention-notice {
+    margin-bottom: 16px !important;
+}
+
+.cvm-delivery-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
+    margin-bottom: 20px;
+}
+
+.cvm-delivery-toolbar .cvm-clear-form {
+    margin: 0;
+}
+
+.cvm-export-buttons {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.cvm-btn-danger {
+    color: #d63638 !important;
+    border-color: #d63638 !important;
+}
+
+.cvm-btn-danger:hover {
+    background: #d63638 !important;
+    color: #fff !important;
+}
+
+/* ── Accordion ────────────────────────────────────────────────────────────── */
+
+.cvm-accordion {
+    background: #fff;
+    border: 1px solid #c3c4c7;
+    border-radius: 4px;
+    margin-bottom: 20px;
+    box-shadow: 0 1px 1px rgba(0, 0, 0, 0.04);
+    overflow: hidden;
+}
+
+.cvm-accordion-header {
+    width: 100%;
+    background: #f6f7f7;
+    border: none;
+    border-bottom: 1px solid #c3c4c7;
+    padding: 14px 20px;
+    text-align: left;
+    font-size: 14px;
+    font-weight: 600;
+    color: #1d2327;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    transition: background-color 0.15s ease;
+}
+
+.cvm-accordion-header:hover {
+    background: #ececec;
+}
+
+.cvm-accordion-header[aria-expanded="true"] {
+    background: #fff;
+}
+
+.cvm-accordion-title {
+    flex: 1;
+}
+
+.cvm-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 26px;
+    height: 22px;
+    padding: 0 7px;
+    background: #2271b1;
+    color: #fff;
+    border-radius: 11px;
+    font-size: 12px;
+    font-weight: 700;
+    flex-shrink: 0;
+}
+
+.cvm-badge-error {
+    background: #d63638;
+}
+
+.cvm-accordion-arrow {
+    font-size: 10px;
+    color: #757575;
+    flex-shrink: 0;
+    transition: transform 0.2s ease;
+}
+
+.cvm-accordion-header[aria-expanded="true"] .cvm-accordion-arrow {
+    transform: rotate(180deg);
+}
+
+.cvm-accordion-body {
+    padding: 16px 20px;
+}
+
+/* ── Log Entries ──────────────────────────────────────────────────────────── */
+
+.cvm-log-list {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.cvm-log-item {
+    border: 1px solid #dcdcde;
+    border-left-width: 4px;
+    border-radius: 4px;
+    padding: 12px 14px;
+    margin-bottom: 10px;
+    font-size: 13px;
+    line-height: 1.5;
+}
+
+.cvm-log-error {
+    border-left-color: #d63638;
+    background: #fff8f8;
+}
+
+.cvm-log-success {
+    border-left-color: #00a32a;
+    background: #f7fef7;
+}
+
+.cvm-log-meta {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 8px;
+    flex-wrap: wrap;
+}
+
+.cvm-log-time {
+    color: #757575;
+    font-size: 12px;
+    flex-shrink: 0;
+}
+
+.cvm-log-kind-label {
+    display: inline-block;
+    padding: 1px 8px;
+    background: #e8f0fb;
+    border: 1px solid #b3c8f0;
+    border-radius: 3px;
+    color: #2271b1;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}
+
+.cvm-log-status {
+    padding: 2px 8px;
+    border-radius: 3px;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    flex-shrink: 0;
+}
+
+.cvm-log-status.error {
+    background: #d63638;
+    color: #fff;
+}
+
+.cvm-log-status.success {
+    background: #00a32a;
+    color: #fff;
+}
+
+.cvm-log-delete-btn {
+    margin-left: auto;
+    flex-shrink: 0;
+    padding: 1px 8px !important;
+    height: 22px;
+    font-size: 12px;
+    line-height: 20px;
+    color: #d63638 !important;
+    border-color: #d63638 !important;
+}
+
+.cvm-log-delete-btn:hover {
+    background: #d63638 !important;
+    color: #fff !important;
+}
+
+.cvm-log-url {
+    margin-bottom: 6px;
+    word-break: break-all;
+}
+
+.cvm-log-url code {
+    font-size: 12px;
+    background: #f0f0f1;
+    padding: 1px 5px;
+    border-radius: 2px;
+}
+
+.cvm-log-error-msg {
+    color: #d63638;
+    margin-bottom: 8px;
+    font-weight: 500;
+}
+
+.cvm-log-data,
+.cvm-log-response {
+    margin-bottom: 6px;
+}
+
+.cvm-log-data pre,
+.cvm-log-response pre {
+    background: #f6f7f7;
+    border: 1px solid #dcdcde;
+    border-radius: 3px;
+    padding: 8px 10px;
+    margin: 4px 0 0;
+    overflow-x: auto;
+    font-size: 12px;
+    max-height: 160px;
+    overflow-y: auto;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+.cvm-empty-msg {
+    color: #757575;
+    font-style: italic;
+    padding: 6px 0;
+    font-size: 13px;
+}
+
+/* ── Accordion Controls (filters + per-page) ──────────────────────────────── */
+
+.cvm-acc-controls {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+    padding: 10px 0 14px;
+    border-bottom: 1px solid #f0f0f1;
+    margin-bottom: 14px;
+}
+
+.cvm-acc-filters {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.cvm-acc-search {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.cvm-search-input {
+    font-size: 13px;
+    padding: 4px 8px;
+    border: 1px solid #c3c4c7;
+    border-radius: 3px;
+    background: #fff;
+    color: #1d2327;
+    width: 200px;
+}
+
+.cvm-search-input:focus {
+    border-color: #2271b1;
+    outline: none;
+    box-shadow: 0 0 0 1px #2271b1;
+}
+
+.cvm-search-clear {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    padding: 0;
+    border: 1px solid #c3c4c7;
+    border-radius: 3px;
+    background: #fff;
+    color: #50575e;
+    font-size: 12px;
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.cvm-search-clear:hover {
+    background: #f0f0f1;
+    border-color: #a0a0a8;
+    color: #1d2327;
+}
+
+.cvm-acc-filters select,
+.cvm-acc-perpage select {
+    font-size: 13px;
+    padding: 4px 6px;
+    border: 1px solid #c3c4c7;
+    border-radius: 3px;
+    background: #fff;
+    color: #1d2327;
+    cursor: pointer;
+}
+
+.cvm-acc-perpage label {
+    font-size: 13px;
+    color: #50575e;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    white-space: nowrap;
+}
+
+/* ── Pagination ───────────────────────────────────────────────────────────── */
+
+.cvm-pagination {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 10px;
+    padding: 14px 0 4px;
+    border-top: 1px solid #f0f0f1;
+    margin-top: 10px;
+}
+
+.cvm-page-info {
+    font-size: 13px;
+    color: #50575e;
+}
+
+.cvm-page-buttons {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-wrap: wrap;
+}
+
+.cvm-page-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 30px;
+    height: 28px;
+    padding: 0 8px;
+    border: 1px solid #c3c4c7;
+    border-radius: 3px;
+    background: #fff;
+    color: #1d2327;
+    font-size: 13px;
+    cursor: pointer;
+    line-height: 1;
+    transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.cvm-page-btn:hover {
+    background: #f0f0f1;
+    border-color: #a0a0a8;
+}
+
+.cvm-page-btn-active {
+    background: #2271b1;
+    border-color: #2271b1;
+    color: #fff;
+    font-weight: 700;
+    pointer-events: none;
+}
+
+.cvm-page-ellipsis {
+    font-size: 13px;
+    color: #757575;
+    padding: 0 4px;
+    line-height: 28px;
+}
+
+/* ── Convermetry additions: endpoint delivery types & tests ─────────── */
+
+.cvm-webhook-field {
+    margin-top: 8px;
+}
+
+.cvm-webhook-types {
+    margin-top: 10px;
+    border: none;
+    padding: 0;
+}
+
+.cvm-webhook-types label {
+    margin-right: 16px;
+}
+
+.cvm-endpoint-tests {
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px dashed #dcdcde;
+}
+
+.cvm-test-result {
+    margin-left: 10px;
+    font-size: 12px;
+}
+
+.cvm-test-ok {
+    color: #00751a;
+}
+
+.cvm-test-fail {
+    color: #b32d2e;
+}
+
+/* ── Key/value builders (global & per-form headers/params) ──────────── */
+
+.cvm-kv-builder {
+    margin: 8px 0 16px;
+}
+
+.cvm-kv-row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    margin-bottom: 6px;
+    flex-wrap: wrap;
+}
+
+.cvm-kv-row .cvm-kv-key {
+    max-width: 220px;
+}
+
+.cvm-kv-row .cvm-kv-value {
+    max-width: 320px;
+}
+
+/* ── Forms page: provider cards, filters, form blocks ───────────────── */
+
+.cvm-provider-cards {
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+}
+
+.cvm-provider-card {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    align-items: flex-start;
+}
+
+.cvm-provider-status {
+    display: inline-block;
+    padding: 2px 10px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.cvm-provider-status.is-active {
+    background: #d5f3dd;
+    color: #00751a;
+}
+
+.cvm-provider-status.is-unavailable {
+    background: #f0f0f1;
+    color: #646970;
+}
+
+.cvm-form-filters {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    flex-wrap: wrap;
+    margin: 16px 0 12px;
+}
+
+.cvm-form-filters input[type="search"] {
+    min-width: 260px;
+}
+
+.cvm-form-filter-summary {
+    color: #646970;
+    font-size: 12px;
+}
+
+.cvm-form-block {
+    background: #fff;
+    border: 1px solid #dcdcde;
+    border-radius: 8px;
+    margin-bottom: 10px;
+}
+
+.cvm-form-block-summary {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    cursor: pointer;
+    list-style: none;
+}
+
+.cvm-form-block-summary::-webkit-details-marker {
+    display: none;
+}
+
+.cvm-form-block-summary::before {
+    content: "\25B8";
+    color: #646970;
+    transition: transform 0.15s ease;
+}
+
+.cvm-form-block[open] > .cvm-form-block-summary::before {
+    transform: rotate(90deg);
+}
+
+.cvm-form-block-name {
+    font-weight: 600;
+    flex: 1;
+}
+
+.cvm-form-block-provider {
+    color: #646970;
+    font-size: 12px;
+}
+
+.cvm-form-state-badge {
+    display: inline-block;
+    padding: 2px 10px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.cvm-form-state-badge.is-included {
+    background: #d5f3dd;
+    color: #00751a;
+}
+
+.cvm-form-state-badge.is-excluded {
+    background: #fcf0f1;
+    color: #b32d2e;
+}
+
+.cvm-form-block-body {
+    padding: 4px 16px 16px;
+    border-top: 1px solid #f0f0f1;
+}
+
+.cvm-form-block-body h4 {
+    margin: 16px 0 4px;
+}
+
+/* ── Activity Log: request headers details ──────────────────────────── */
+
+.cvm-log-headers {
+    margin: 8px 0;
+    font-size: 12px;
+}
+
+.cvm-log-headers summary {
+    cursor: pointer;
+    color: #2271b1;
+}
+
+.cvm-log-headers pre {
+    background: #f6f7f7;
+    border: 1px solid #dcdcde;
+    border-radius: 4px;
+    padding: 10px;
+    overflow-x: auto;
+    max-height: 200px;
+}

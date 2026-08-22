@@ -1,0 +1,713 @@
+/**
+ * Convermetry — analytics dashboard styles.
+ *
+ * Loaded only on the main Convermetry dashboard screen (the shared admin.css
+ * carries the styles common to all plugin pages). Everything here is scoped
+ * to .cvm-dash, and the print block turns the page into a clean report for
+ * the browser's Print / Save as PDF flow.
+ */
+
+/* ==========================================================================
+   Analytics dashboard. Everything below in this block is scoped to
+   .cvm-dash so the Settings, About, and Delivery Log screens are unaffected.
+   ========================================================================== */
+
+/* ── Period selector ──────────────────────────────────────────────────────── */
+
+.cvm-dash .cvm-period {
+    margin: 16px 0 4px;
+}
+
+.cvm-dash .cvm-period-group {
+    display: inline-flex;
+    border: 1px solid #2271b1;
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.cvm-dash .cvm-period-btn {
+    display: inline-flex;
+    align-items: center;
+    min-height: 32px;
+    padding: 0 14px;
+    background: #fff;
+    color: #2271b1;
+    text-decoration: none;
+    font-size: 13px;
+    line-height: 1;
+    border-right: 1px solid #2271b1;
+}
+
+.cvm-dash .cvm-period-btn:last-child {
+    border-right: none;
+}
+
+.cvm-dash .cvm-period-btn:hover {
+    background: #f0f6fc;
+    color: #135e96;
+}
+
+.cvm-dash .cvm-period-btn:focus-visible {
+    outline: 2px solid #043959;
+    outline-offset: -2px;
+    box-shadow: none;
+}
+
+.cvm-dash .cvm-period-btn.is-active {
+    background: #2271b1;
+    color: #fff;
+    font-weight: 600;
+}
+
+.cvm-dash .cvm-period-range {
+    margin: 8px 0 0;
+    color: #646970;
+}
+
+/* ── Overview: summary cards ──────────────────────────────────────────────── */
+
+.cvm-dash .cvm-overview h2 {
+    margin: 24px 0 4px;
+}
+
+.cvm-dash .cvm-cards {
+    align-items: stretch;
+}
+
+.cvm-dash .cvm-card {
+    display: flex;
+    flex-direction: column;
+}
+
+.cvm-dash .cvm-card-value {
+    font-size: 32px;
+    font-weight: 600;
+    line-height: 1.15;
+    color: #1d2327;
+    font-variant-numeric: tabular-nums;
+}
+
+.cvm-dash .cvm-card-label {
+    margin-top: 6px;
+    font-size: 13px;
+    font-weight: 600;
+    color: #3c434a;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+}
+
+.cvm-dash .cvm-card-desc {
+    margin-top: 6px;
+    font-size: 12px;
+    line-height: 1.5;
+    color: #646970;
+}
+
+/* ── Overview: daily page-view chart ──────────────────────────────────────── */
+
+.cvm-dash .cvm-chart-frame {
+    background: #fff;
+    border: 1px solid #dcdcde;
+    border-radius: 8px;
+    padding: 16px 20px 12px;
+    margin-top: 16px;
+}
+
+.cvm-dash .cvm-chart-frame h3 {
+    margin: 0 0 8px;
+}
+
+.cvm-dash .cvm-chart-summary {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 20px;
+    margin: 0 0 14px;
+    color: #646970;
+    font-size: 13px;
+}
+
+.cvm-dash .cvm-chart-summary strong {
+    color: #1d2327;
+    font-variant-numeric: tabular-nums;
+}
+
+.cvm-dash .cvm-chart-key {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.cvm-dash .cvm-chart-key-swatch {
+    width: 14px;
+    height: 14px;
+    border-radius: 2px;
+    background: repeating-linear-gradient(45deg, #2271b1 0 3px, #a7c7e7 3px 6px);
+}
+
+.cvm-dash .cvm-chart-scroll {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+.cvm-dash .cvm-chart-layout {
+    display: flex;
+    gap: 8px;
+}
+
+/* Keep wide charts usable: every day keeps at least a 14px interaction width
+   and the wrapper above scrolls horizontally instead of squeezing many
+   targets into the visible viewport. A density bucket (rather than a class
+   per exact day count) scales to any effective day count a site's retention
+   setting can clamp the selected period down to, not just 7/30/90 — the
+   PHP side supplies --cvm-chart-min-width; this is just the floor/fallback. */
+.cvm-dash .cvm-chart-layout--wide {
+    min-width: var(--cvm-chart-min-width, 640px);
+}
+
+.cvm-dash .cvm-chart-layout--wide .cvm-chart-col {
+    min-width: 14px;
+}
+
+/* The Y-axis stays pinned while the plot scrolls horizontally. */
+.cvm-dash .cvm-chart-yaxis {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    height: 200px;
+    text-align: right;
+    font-size: 11px;
+    color: #646970;
+    font-variant-numeric: tabular-nums;
+    flex-shrink: 0;
+    position: sticky;
+    left: 0;
+    z-index: 2;
+    background: #fff;
+    padding-right: 6px;
+}
+
+.cvm-dash .cvm-chart-yaxis span:first-child {
+    transform: translateY(-50%);
+}
+
+.cvm-dash .cvm-chart-yaxis span:last-child {
+    transform: translateY(50%);
+}
+
+.cvm-dash .cvm-chart-main {
+    flex: 1;
+    min-width: 0;
+}
+
+.cvm-dash .cvm-chart-plot {
+    position: relative;
+    height: 200px;
+    border-bottom: 1px solid #8c8f94;
+    background-image: linear-gradient(#e5e5e5, #e5e5e5), linear-gradient(#e5e5e5, #e5e5e5);
+    background-size: 100% 1px, 100% 1px;
+    background-position: 0 0, 0 50%;
+    background-repeat: no-repeat;
+}
+
+.cvm-dash .cvm-chart-cols {
+    display: flex;
+    align-items: flex-end;
+    height: 100%;
+    gap: 2px;
+}
+
+.cvm-dash .cvm-chart-layout--90 .cvm-chart-cols {
+    gap: 1px;
+}
+
+.cvm-dash .cvm-chart-col {
+    position: relative;
+    flex: 1 1 0;
+    min-width: 4px;
+    height: 100%;
+    display: flex;
+    align-items: flex-end;
+    margin: 0;
+    padding: 0;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    appearance: none;
+}
+
+.cvm-dash .cvm-chart-col:focus-visible {
+    outline: 2px solid #043959;
+    outline-offset: 1px;
+}
+
+.cvm-dash .cvm-chart-bar {
+    display: block;
+    width: 100%;
+    height: var(--cvm-h, 0%);
+    background: #2271b1;
+    border-radius: 2px 2px 0 0;
+    transition: background-color 0.15s ease-in-out;
+}
+
+.cvm-dash .cvm-chart-col:hover .cvm-chart-bar,
+.cvm-dash .cvm-chart-col:focus-visible .cvm-chart-bar {
+    background: #135e96;
+}
+
+/* The current, still-collecting day is patterned, not just re-colored. */
+.cvm-dash .cvm-chart-col.is-today .cvm-chart-bar {
+    background: repeating-linear-gradient(45deg, #2271b1 0 4px, #a7c7e7 4px 8px);
+}
+
+.cvm-dash .cvm-chart-col.is-today:hover .cvm-chart-bar,
+.cvm-dash .cvm-chart-col.is-today:focus-visible .cvm-chart-bar {
+    background: repeating-linear-gradient(45deg, #135e96 0 4px, #7ba7cc 4px 8px);
+}
+
+/* A tick on the baseline marks today even when its (still zero-height) bar
+   has nothing to show yet — the data bar itself stays truly zero. */
+.cvm-dash .cvm-chart-col.is-today::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: -4px;
+    height: 4px;
+    border-radius: 1px;
+    background: repeating-linear-gradient(45deg, #2271b1 0 3px, #a7c7e7 3px 6px);
+}
+
+.cvm-dash .cvm-chart-xaxis {
+    position: relative;
+    height: 20px;
+    margin-top: 4px;
+    font-size: 11px;
+    color: #646970;
+}
+
+.cvm-dash .cvm-chart-xlabel {
+    position: absolute;
+    left: var(--cvm-x, 0%);
+    transform: translateX(-50%);
+    white-space: nowrap;
+}
+
+/* The first and last labels hug their edges instead of being half-clipped. */
+.cvm-dash .cvm-chart-xlabel:first-child {
+    transform: translateX(0);
+}
+
+.cvm-dash .cvm-chart-xlabel:last-child {
+    transform: translateX(-100%);
+}
+
+.cvm-dash .cvm-chart-tip {
+    position: absolute;
+    top: 6px;
+    transform: translateX(-50%);
+    background: #1d2327;
+    color: #fff;
+    border-radius: 4px;
+    padding: 6px 10px;
+    font-size: 12px;
+    line-height: 1.45;
+    pointer-events: none;
+    white-space: nowrap;
+    z-index: 10;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+}
+
+.cvm-dash .cvm-chart-tip-date {
+    display: block;
+    font-weight: 600;
+}
+
+.cvm-dash .cvm-chart-tip-count {
+    display: block;
+    font-variant-numeric: tabular-nums;
+}
+
+.cvm-dash .cvm-chart-data {
+    margin-top: 12px;
+}
+
+.cvm-dash .cvm-chart-data > summary {
+    display: inline-block;
+    cursor: pointer;
+    color: #2271b1;
+    font-size: 13px;
+    padding: 4px 2px;
+}
+
+.cvm-dash .cvm-chart-data > summary:hover {
+    color: #135e96;
+}
+
+.cvm-dash .cvm-chart-data > summary:focus-visible {
+    outline: 2px solid #043959;
+    outline-offset: 1px;
+}
+
+.cvm-dash .cvm-chart-data-table {
+    max-width: 420px;
+    margin-top: 8px;
+}
+
+/* ── Collapsible report sections ──────────────────────────────────────────── */
+
+/* Revealed by dashboard.js; keep hidden even though the class sets flex. */
+.cvm-dash .cvm-panel-toolbar[hidden] {
+    display: none;
+}
+
+.cvm-dash .cvm-panel-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 24px 0 -8px;
+}
+
+.cvm-dash .cvm-print-btn {
+    margin-left: auto;
+}
+
+.cvm-dash .cvm-panel {
+    background: #fff;
+    border: 1px solid #c3c4c7;
+    border-radius: 4px;
+    margin-top: 20px;
+    box-shadow: 0 1px 1px rgba(0, 0, 0, 0.04);
+}
+
+.cvm-dash .cvm-panel-summary {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 20px;
+    cursor: pointer;
+    list-style: none;
+}
+
+.cvm-dash .cvm-panel-summary::-webkit-details-marker {
+    display: none;
+}
+
+.cvm-dash .cvm-panel-summary h2 {
+    flex: 1;
+    margin: 0;
+    font-size: 15px;
+    font-weight: 600;
+    color: #1d2327;
+}
+
+.cvm-dash .cvm-panel-summary:hover {
+    background: #f6f7f7;
+}
+
+.cvm-dash .cvm-panel-summary:focus-visible {
+    outline: 2px solid #043959;
+    outline-offset: -2px;
+}
+
+.cvm-dash .cvm-panel-arrow {
+    font-size: 10px;
+    color: #757575;
+    transition: transform 0.2s ease;
+}
+
+.cvm-dash .cvm-panel[open] > .cvm-panel-summary {
+    border-bottom: 1px solid #f0f0f1;
+}
+
+.cvm-dash .cvm-panel[open] > .cvm-panel-summary .cvm-panel-arrow {
+    transform: rotate(180deg);
+}
+
+.cvm-dash .cvm-panel-body {
+    padding: 4px 20px 20px;
+}
+
+.cvm-dash .cvm-panel-desc {
+    margin: 10px 0 0;
+    color: #646970;
+}
+
+/* ── Report tables ────────────────────────────────────────────────────────── */
+
+.cvm-dash .cvm-tables {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0 24px;
+}
+
+.cvm-dash .cvm-report {
+    margin-top: 20px;
+    min-width: 0;
+}
+
+.cvm-dash .cvm-report--wide {
+    grid-column: 1 / -1;
+}
+
+.cvm-dash .cvm-report h3 {
+    margin: 0 0 4px;
+    font-size: 14px;
+}
+
+.cvm-dash .cvm-report-desc {
+    margin: 0 0 8px;
+    color: #646970;
+    font-size: 12px;
+}
+
+.cvm-dash .cvm-table-scroll {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+.cvm-dash .cvm-table-scroll table {
+    font-variant-numeric: tabular-nums;
+}
+
+/* Many-column tables (Campaigns, Campaign Terms & Content) keep readable
+   column widths; the scroll container above takes over when space runs out. */
+.cvm-dash .cvm-report--wide table {
+    min-width: 720px;
+}
+
+.cvm-dash th.cvm-num,
+.cvm-dash td.cvm-num {
+    text-align: right;
+    white-space: nowrap;
+}
+
+.cvm-dash .cvm-table-scroll td {
+    word-break: break-word;
+    overflow-wrap: anywhere;
+}
+
+.cvm-dash .cvm-url-sub {
+    display: block;
+    font-size: 11px;
+    color: #646970;
+}
+
+/* Every new-tab link gets the same visible indicator, on-site or off. */
+.cvm-dash .cvm-newtab {
+    color: #646970;
+    font-size: 11px;
+    margin-left: 3px;
+    text-decoration: none;
+    display: inline-block;
+}
+
+/* ── Responsive ───────────────────────────────────────────────────────────── */
+
+@media screen and (max-width: 1100px) {
+    .cvm-dash .cvm-tables {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}
+
+@media screen and (max-width: 782px) {
+    .cvm-dash .cvm-period-btn {
+        min-height: 40px;
+        padding: 0 16px;
+    }
+
+    /* Equal-width segments that fill the row instead of overflowing it. */
+    .cvm-dash .cvm-period-group {
+        display: flex;
+        width: 100%;
+        max-width: 420px;
+    }
+
+    .cvm-dash .cvm-period-btn {
+        flex: 1 1 0;
+        justify-content: center;
+        padding: 0 8px;
+    }
+
+    .cvm-dash .cvm-card-value {
+        font-size: 26px;
+    }
+
+    .cvm-dash .cvm-panel-summary {
+        padding: 14px 16px;
+    }
+
+    .cvm-dash .cvm-panel-body {
+        padding: 4px 16px 16px;
+    }
+}
+
+@media screen and (max-width: 480px) {
+    .cvm-dash .cvm-cards {
+        grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+        gap: 12px;
+    }
+
+    .cvm-dash .cvm-card {
+        padding: 14px;
+    }
+
+    .cvm-dash .cvm-chart-frame {
+        padding: 12px;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .cvm-dash .cvm-chart-bar,
+    .cvm-dash .cvm-panel-arrow {
+        transition: none;
+    }
+}
+
+/* ── Print / Save as PDF ──────────────────────────────────────────────────── */
+
+/* Report metadata line (site, range, generated-at): print only. */
+.cvm-print-meta {
+    display: none;
+}
+
+@media print {
+    /* Landscape suits the wide Campaigns tables; override in the dialog if
+       portrait is preferred. */
+    @page {
+        size: landscape;
+        margin: 12mm;
+    }
+
+    /* Hide wp-admin chrome and screen-only controls. The period *controls*
+       go, but .cvm-period itself stays: it carries the print-only report
+       metadata line. The rate-limit warning also stays — it tells the PDF
+       reader the numbers may undercount. */
+    #adminmenumain,
+    #adminmenuback,
+    #adminmenuwrap,
+    #wpadminbar,
+    #wpfooter,
+    #screen-meta,
+    #screen-meta-links,
+    .cvm-dash .notice:not(.cvm-rate-limit-notice),
+    .cvm-dash .cvm-period-group,
+    .cvm-dash .cvm-period-range,
+    .cvm-dash .cvm-panel-toolbar,
+    .cvm-dash .cvm-chart-tip,
+    .cvm-dash .cvm-panel-arrow,
+    .cvm-dash .cvm-newtab {
+        display: none !important;
+    }
+
+    /* Data-quality warning, print-friendly: bordered, no tinted background. */
+    .cvm-dash .notice.cvm-rate-limit-notice {
+        background: #fff;
+        border: 1px solid #dba617;
+        border-left-width: 4px;
+        box-shadow: none;
+        margin: 8px 0 12px;
+        padding: 8px 12px;
+    }
+
+    #wpcontent,
+    #wpbody-content {
+        margin-left: 0 !important;
+        padding-left: 0 !important;
+    }
+
+    html.wp-toolbar {
+        padding-top: 0 !important;
+    }
+
+    .cvm-print-meta {
+        display: block;
+        margin: 4px 0 12px;
+        font-size: 12px;
+        color: #1d2327;
+    }
+
+    /* Panels print as plain, always-visible sections (dashboard.js expands
+       them before printing; without JavaScript, closed panels stay closed). */
+    .cvm-dash .cvm-panel {
+        border: none;
+        box-shadow: none;
+        margin-top: 16px;
+    }
+
+    .cvm-dash .cvm-panel-summary {
+        padding: 0 0 4px;
+        cursor: default;
+    }
+
+    .cvm-dash .cvm-panel-summary:hover {
+        background: transparent;
+    }
+
+    .cvm-dash .cvm-panel-body {
+        padding: 0;
+    }
+
+    /* No scroll containers on paper — content flows to the page width. */
+    .cvm-dash .cvm-table-scroll,
+    .cvm-dash .cvm-chart-scroll {
+        overflow: visible;
+    }
+
+    .cvm-dash .cvm-report--wide table {
+        min-width: 0;
+    }
+
+    .cvm-dash .cvm-chart-layout--30,
+    .cvm-dash .cvm-chart-layout--90 {
+        min-width: 0;
+    }
+
+    .cvm-dash .cvm-chart-layout--30 .cvm-chart-col,
+    .cvm-dash .cvm-chart-layout--90 .cvm-chart-col {
+        min-width: 1px;
+    }
+
+    /* Pagination: keep headings with their content, keep rows and cards
+       whole, and repeat table headers on every page. */
+    .cvm-dash h2,
+    .cvm-dash h3 {
+        break-after: avoid;
+        page-break-after: avoid;
+    }
+
+    .cvm-dash tr,
+    .cvm-dash .cvm-card {
+        break-inside: avoid;
+        page-break-inside: avoid;
+    }
+
+    .cvm-dash thead {
+        display: table-header-group;
+    }
+
+    .cvm-dash .cvm-chart-scroll {
+        break-inside: avoid;
+        page-break-inside: avoid;
+    }
+
+    /* Chart colors and the today markers must survive on paper. */
+    .cvm-dash .cvm-chart-bar,
+    .cvm-dash .cvm-chart-key-swatch,
+    .cvm-dash .cvm-chart-col.is-today::after {
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+    }
+
+    /* A printed page can't follow a link or announce "opens in a new tab":
+       print each destination next to its link text instead. */
+    .cvm-dash .cvm-report a[href^="http"]::after {
+        content: " (" attr(href) ")";
+        font-size: 9px;
+        color: #646970;
+        word-break: break-all;
+    }
+
+    .cvm-dash .cvm-url-sub {
+        display: none;
+    }
+}

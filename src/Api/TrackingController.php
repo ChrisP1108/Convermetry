@@ -1,0 +1,623 @@
+<?php
+declare(strict_types=1);
+
+namespace Convermetry\Api;
+
+if (!defined('ABSPATH')) exit;
+
+use Convermetry\Database\DatabaseManager;
+use Convermetry\Settings\Options;
+
+/**
+ * Public REST endpoint that receives batched events from the frontend tracker.
+ *
+ * Route: POST /wp-json/convermetry/v1/track
+ * Body:  {"batch_id": "b3f2a9c1b8e0d", "events": [{"type": "pageview", ...}, ...]}
+ *
+ * The endpoint is intentionally unauthenticated — anonymous visitors are the
+ * whole point — so it defends itself instead:
+ *  - request bodies over a size cap are rejected before JSON parsing,
+ *  - an Origin (or Referer) header naming a foreign host is rejected,
+ *  - requests from empty or known-bot user agents are silently ignored,
+ *  - only whitelisted event types with tracking enabled are accepted,
+ *  - every event's page_url must belong to this site's host and is
+ *    canonicalized to scheme://host/path (campaign parameters are extracted
+ *    into dedicated utm_* fields; all other query data is discarded),
+ *  - click/form target URLs are stripped of query strings and fragments,
+ *  - every field must be scalar and is sanitized and truncated before storage,
+ *  - batches are capped per request, and rate limits are charged per *event*
+ *    (not per request), both per-IP and site-wide (see 'convermetry_rate_limits').
+ *
+ * Delivery from the tracker is at-least-once: a batch whose response is lost
+ * is replayed by a later flush. The batch_id the tracker sends makes replays
+ * idempotent — rows are stored under a unique (batch_id, event ordinal) index
+ * and a replayed batch's rows are skipped instead of inflating every count.
+ * When the INSERT itself fails (e.g. the database is briefly unavailable) the
+ * endpoint answers 503 so the tracker keeps the batch persisted and retries,
+ * rather than acknowledging data that was never stored.
+ *
+ * The visitor's IP address is used only as a transient rate-limit key (hashed)
+ * and is never stored with the analytics data.
+ */
+final class TrackingController
+{
+    /** REST namespace for all plugin routes. */
+    private const string ROUTE_NAMESPACE = 'convermetry/v1';
+
+    /** Maximum events accepted in a single request. */
+    private const int MAX_EVENTS_PER_REQUEST = 25;
+
+    /** Maximum request body size in bytes (64 KB). */
+    private const int MAX_BODY_BYTES = 65536;
+
+    /** Default maximum events accepted per IP per rate-limit window. */
+    private const int RATE_LIMIT_MAX = 300;
+
+    /** Default maximum events accepted site-wide per rate-limit window. */
+    private const int RATE_LIMIT_GLOBAL_MAX = 3000;
+
+    /** Rate-limit window length in seconds. */
+    private const int RATE_LIMIT_WINDOW = 60;
+
+    /** Object-cache group for rate-limit counters. */
+    private const string CACHE_GROUP = 'cvm_rate_limit';
+
+    /** Transient flagging that the site-wide rate limit was hit (read by the dashboard). */
+    public const string RATE_LIMITED_FLAG = 'cvm_rate_limited_at';
+
+    /** @var string[] Campaign parameters extracted from attributed events into dedicated columns. */
+    private const array CAMPAIGN_PARAMS = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_id', 'utm_term', 'utm_content'];
+
+    /**
+     * @var string[] Event types that carry campaign attribution fields — all
+     *      of them: clicks, form attempts, hovers, and scroll milestones carry
+     *      the session's attribution snapshot too, so intermediate funnel
+     *      steps can be segmented by campaign.
+     */
+    private const array ATTRIBUTED_TYPES = ['pageview', 'click', 'form_submit', 'form_success', 'hover', 'scroll_depth'];
+
+    /**
+     * Registers the rest_api_init hook.
+     *
+     * @return void
+     */
+    public static function init(): void
+    {
+        add_action('rest_api_init', [self::class, 'registerRoutes']);
+    }
+
+    /**
+     * Registers the /track collection route.
+     *
+     * @return void
+     */
+    public static function registerRoutes(): void
+    {
+        register_rest_route(self::ROUTE_NAMESPACE, '/track', [
+            'methods'             => \WP_REST_Server::CREATABLE,
+            'callback'            => [self::class, 'handleTrack'],
+            'permission_callback' => '__return_true',
+        ]);
+    }
+
+    /**
+     * Validates, sanitizes, and stores a batch of tracked events.
+     *
+     * @param \WP_REST_Request $request The incoming request.
+     * @return \WP_REST_Response 202 with {"stored": n}, 400 on a malformed
+     *                           body, 403 on a foreign Origin/Referer, 413 on
+     *                           an oversized body, 429 when rate-limited, or
+     *                           503 when the events could not be stored (the
+     *                           tracker keeps the batch and retries).
+     */
+    public static function handleTrack(\WP_REST_Request $request): \WP_REST_Response
+    {
+        if (strlen((string) $request->get_body()) > self::MAX_BODY_BYTES) {
+            return new \WP_REST_Response(['error' => 'payload_too_large'], 413);
+        }
+
+        if (self::isForeignRequest($request)) {
+            return new \WP_REST_Response(['error' => 'foreign_origin'], 403);
+        }
+
+        // Belt-and-braces: the tracker script is never enqueued for logged-in
+        // users when exclusion is on, but drop any stray authenticated batch too.
+        if (Options::excludeLoggedIn() && is_user_logged_in()) {
+            return new \WP_REST_Response(['stored' => 0], 202);
+        }
+
+        // The tracker never starts for DNT/GPC visitors when the option is on;
+        // enforcing it here too covers senders that bypass the tracker.
+        if (Options::respectDnt() && self::sendsPrivacySignal($request)) {
+            return new \WP_REST_Response(['stored' => 0], 202);
+        }
+
+        // Crawlers that execute JS would otherwise pollute every metric.
+        // Accept-and-discard so bots see nothing worth probing.
+        if (self::isBot()) {
+            return new \WP_REST_Response(['stored' => 0], 202);
+        }
+
+        $body   = $request->get_json_params();
+        $events = is_array($body) && isset($body['events']) ? $body['events'] : null;
+
+        if (!is_array($events) || $events === []) {
+            return new \WP_REST_Response(['error' => 'invalid_payload'], 400);
+        }
+
+        $events = array_slice($events, 0, self::MAX_EVENTS_PER_REQUEST);
+
+        if (!self::chargeRateLimit(count($events))) {
+            // Tell the tracker how long to wait rather than leaving it to
+            // guess — this is the one piece of pacing only the server knows.
+            return new \WP_REST_Response(['error' => 'rate_limited'], 429, ['Retry-After' => '60']);
+        }
+
+        // The tracker's batch id makes replayed batches idempotent (see the
+        // class docblock). A missing or malformed id falls back to null —
+        // those inserts are not deduplicated.
+        $batchId = null;
+        if (isset($body['batch_id']) && is_string($body['batch_id'])
+            && preg_match('~^[A-Za-z0-9_\-]{8,40}$~', $body['batch_id'])
+        ) {
+            $batchId = $body['batch_id'];
+        }
+
+        $device = wp_is_mobile() ? 'mobile' : 'desktop';
+        $batch  = [];
+
+        foreach ($events as $index => $event) {
+            $sanitized = self::sanitizeEvent($event, $device);
+            if ($sanitized !== null) {
+                // 'seq' is the event's position in the ORIGINAL batch — the
+                // stable half of the (batch_id, seq) dedup key, unaffected by
+                // how many neighboring events sanitization drops.
+                $sanitized['seq'] = (int) $index;
+                $batch[]          = $sanitized;
+            }
+        }
+
+        // One multi-row INSERT instead of one query per event.
+        $stored = DatabaseManager::insertEvents($batch, $batchId);
+
+        // A failed INSERT must not be acknowledged: a 2xx would make the
+        // tracker discard the batch permanently, silently losing analytics
+        // during a transient database outage. 503 keeps the batch persisted
+        // client-side; the batch id deduplicates the eventual replay.
+        if ($stored === false) {
+            return new \WP_REST_Response(['error' => 'storage_unavailable'], 503);
+        }
+
+        return new \WP_REST_Response(['stored' => $stored], 202);
+    }
+
+    /**
+     * Whether the request carries a Do Not Track or Global Privacy Control
+     * header. Only consulted when the site owner enabled the privacy-signal
+     * option — DNT/GPC is honored as an opt-out, not treated as consent.
+     *
+     * @param \WP_REST_Request $request The incoming request.
+     * @return bool
+     */
+    private static function sendsPrivacySignal(\WP_REST_Request $request): bool
+    {
+        return $request->get_header('dnt') === '1'
+            || $request->get_header('sec_gpc') === '1'
+            || $request->get_header('sec-gpc') === '1';
+    }
+
+    /**
+     * Validates a single raw event from the request body.
+     *
+     * @param mixed  $event  Raw event entry from the JSON body.
+     * @param string $device Device bucket derived from the request's user agent.
+     * @return array{type: string, data: array<string, string|bool>}|null Null when the
+     *         event is malformed, of an unknown or disabled type, or claims a
+     *         page_url that does not belong to this site.
+     */
+    private static function sanitizeEvent(mixed $event, string $device): ?array
+    {
+        if (!is_array($event)) {
+            return null;
+        }
+
+        $type = sanitize_key(self::scalarString($event['type'] ?? ''));
+
+        if (!in_array($type, Options::EVENT_TYPES, true) || !Options::isTypeEnabled($type)) {
+            return null;
+        }
+
+        $pageUrl = self::normalizePageUrl(self::scalarString($event['page_url'] ?? ''));
+        if ($pageUrl === '') {
+            return null;
+        }
+
+        // A confirmed conversion without a usable conversion id would break
+        // the dedup guarantee downstream. The tracker always generates one
+        // ('c' + 16 hex chars), so a form_success without a valid, bounded
+        // id is rejected outright.
+        if ($type === 'form_success'
+            && !preg_match('~^[A-Za-z0-9_.:\-]{8,100}$~', self::scalarString($event['event_value'] ?? ''))
+        ) {
+            return null;
+        }
+
+        $data = [
+            'page_url'      => $pageUrl,
+            'page_title'    => self::scalarString($event['page_title'] ?? ''),
+            'element_tag'   => self::scalarString($event['element_tag'] ?? ''),
+            'element_label' => self::scalarString($event['element_label'] ?? ''),
+            'target_url'    => self::normalizeTargetUrl(self::scalarString($event['target_url'] ?? '')),
+            'event_value'   => self::scalarString($event['event_value'] ?? ''),
+            'referrer'      => self::normalizeReferrer(self::scalarString($event['referrer'] ?? '')),
+            'session_id'    => self::scalarString($event['session_id'] ?? ''),
+            'device'        => $device,
+        ];
+
+        // Campaign attribution rides on every tracker event. Only the
+        // ad-click identifier's TYPE is accepted — the value itself is never
+        // sent or stored. session_referrer is the referrer the session
+        // ENTERED through; session_direct is the explicit "verified Direct"
+        // marker. Neither is stored as its own column — they feed channel
+        // classification only.
+        if (in_array($type, self::ATTRIBUTED_TYPES, true)) {
+            foreach (self::CAMPAIGN_PARAMS as $param) {
+                $data[$param] = self::campaignValue(self::scalarString($event[$param] ?? ''));
+            }
+            $data['click_id_type']    = sanitize_key(self::scalarString($event['click_id_type'] ?? ''));
+            $data['session_referrer'] = self::normalizeReferrer(self::scalarString($event['session_referrer'] ?? ''));
+            $data['session_direct']   = self::scalarString($event['session_direct'] ?? '') === '1';
+        }
+
+        return ['type' => $type, 'data' => $data];
+    }
+
+    /**
+     * Filters one campaign (utm_*) value before storage.
+     *
+     * Campaign values are meant to be labels like "spring-sale", but nothing
+     * stops a mailer from interpolating the recipient's address into a UTM
+     * parameter — that would be PII, so any value containing an email-like
+     * "@" is dropped rather than stored.
+     *
+     * @param string $value Raw campaign parameter value.
+     * @return string The value, or '' when it looks like it contains an email.
+     */
+    private static function campaignValue(string $value): string
+    {
+        return str_contains($value, '@') ? '' : $value;
+    }
+
+    /**
+     * Returns a scalar value as a string, and anything else as ''.
+     *
+     * @param mixed $value Raw value from the request body.
+     * @return string
+     */
+    private static function scalarString(mixed $value): string
+    {
+        return is_scalar($value) ? (string) $value : '';
+    }
+
+    /**
+     * Normalizes a tracked page URL: the scheme must be http(s), the host
+     * must belong to this site, and the URL is canonicalized to
+     * scheme://host/path — the entire query string is discarded, so tokens
+     * and PII never reach the database and one page is never fragmented
+     * across many report rows. A port survives only when it matches one this
+     * site actually runs on.
+     *
+     * @param string $url Raw page URL from the event.
+     * @return string Canonical URL, or '' when the URL is invalid or foreign.
+     */
+    private static function normalizePageUrl(string $url): string
+    {
+        $parts = wp_parse_url($url);
+        if (!is_array($parts) || empty($parts['host'])) {
+            return '';
+        }
+
+        $scheme = strtolower((string) ($parts['scheme'] ?? ''));
+        if ($scheme !== 'http' && $scheme !== 'https') {
+            return '';
+        }
+
+        if (!in_array(strtolower((string) $parts['host']), Options::allowedHosts(), true)) {
+            return '';
+        }
+
+        $port = isset($parts['port']) && in_array((int) $parts['port'], self::sitePorts(), true)
+            ? ':' . (int) $parts['port']
+            : '';
+
+        return $scheme . '://' . $parts['host'] . $port . ($parts['path'] ?? '/');
+    }
+
+    /**
+     * The non-default ports this site itself is served on (from home_url()
+     * and site_url()). Usually empty; non-empty on e.g. local dev setups.
+     *
+     * @return int[]
+     */
+    private static function sitePorts(): array
+    {
+        static $ports = null;
+
+        if ($ports === null) {
+            $ports = array_values(array_filter(array_map(
+                static fn(string $url): int => (int) wp_parse_url($url, PHP_URL_PORT),
+                [home_url(), site_url()]
+            )));
+        }
+
+        return $ports;
+    }
+
+    /**
+     * Normalizes a click/form destination URL.
+     *
+     * mailto: and tel: destinations are kept whole (the address *is* the
+     * destination); every other scheme except http(s) is dropped, and
+     * http(s) and relative URLs lose their query string and fragment — link
+     * and form-action URLs can carry reset tokens, emails, or order ids that
+     * must never be stored.
+     *
+     * @param string $url Raw destination from the event.
+     * @return string Normalized destination, or '' when empty or unsafe.
+     */
+    private static function normalizeTargetUrl(string $url): string
+    {
+        if ($url === '') {
+            return '';
+        }
+
+        if (preg_match('~^(mailto|tel):~i', $url)) {
+            return $url;
+        }
+
+        // Any other explicit scheme that isn't http(s) — javascript:, data:,
+        // ftp:, custom app schemes — is dropped rather than stored.
+        if (preg_match('~^([a-z][a-z0-9+.\-]*):~i', $url, $m) && !in_array(strtolower($m[1]), ['http', 'https'], true)) {
+            return '';
+        }
+
+        $parts = wp_parse_url($url);
+        if (is_array($parts) && !empty($parts['host'])) {
+            return strtolower((string) ($parts['scheme'] ?? 'https')) . '://' . $parts['host']
+                . (isset($parts['port']) ? ':' . (int) $parts['port'] : '')
+                . ($parts['path'] ?? '/');
+        }
+
+        // Relative URL (e.g. a form action of "/contact") — keep the path only.
+        return (string) preg_replace('~[?#].*$~', '', $url);
+    }
+
+    /**
+     * Normalizes a referrer URL to scheme://host/path — query strings and
+     * fragments can carry search terms, emails, or tokens, so they are never
+     * stored. Any host is allowed (external referrers are the interesting
+     * ones), but the scheme must be http(s).
+     *
+     * @param string $url Raw referrer from the event.
+     * @return string Normalized referrer, or '' when unparsable.
+     */
+    private static function normalizeReferrer(string $url): string
+    {
+        if ($url === '') {
+            return '';
+        }
+
+        $parts = wp_parse_url($url);
+        if (!is_array($parts) || empty($parts['host'])) {
+            return '';
+        }
+
+        $scheme = strtolower((string) ($parts['scheme'] ?? ''));
+        if ($scheme !== 'http' && $scheme !== 'https') {
+            return '';
+        }
+
+        return $scheme . '://' . $parts['host'] . ($parts['path'] ?? '/');
+    }
+
+    /**
+     * Whether the request carries an Origin (or, failing that, Referer)
+     * header naming a foreign host.
+     *
+     * Browsers always send Origin with the tracker's POSTs, so a mismatch is
+     * a strong foreign signal. Requests with neither header (e.g. some
+     * privacy tools) are allowed through — the per-event host check and rate
+     * limits still apply.
+     *
+     * @param \WP_REST_Request $request The incoming request.
+     * @return bool True when the request should be rejected.
+     */
+    private static function isForeignRequest(\WP_REST_Request $request): bool
+    {
+        foreach (['origin', 'referer'] as $header) {
+            $value = (string) $request->get_header($header);
+            if ($value === '') {
+                continue;
+            }
+
+            $host = strtolower((string) wp_parse_url($value, PHP_URL_HOST));
+
+            return $host === '' || !in_array($host, Options::allowedHosts(), true);
+        }
+
+        return false;
+    }
+
+    /**
+     * Whether the request's user agent is empty or a known crawler.
+     *
+     * @return bool
+     */
+    private static function isBot(): bool
+    {
+        $ua = isset($_SERVER['HTTP_USER_AGENT'])
+            ? sanitize_text_field(wp_unslash($_SERVER['HTTP_USER_AGENT']))
+            : '';
+
+        if ($ua === '') {
+            return true;
+        }
+
+        return (bool) preg_match('~bot|crawl|spider|slurp|preview|headless|curl|wget|python-requests~i', $ua);
+    }
+
+    /**
+     * Charges $events against both the per-IP and the site-wide rate limit.
+     *
+     * Charging by event count (not request count) closes the gap where a
+     * sender packs the maximum batch into every request; the site-wide
+     * bucket bounds distributed floods and, with it, table growth. Tune both
+     * limits via the 'convermetry_rate_limits' filter, and put edge/WAF
+     * protection in front of very-high-traffic sites.
+     *
+     * @param int $events Number of events in this request.
+     * @return bool True when the request is within both limits.
+     */
+    private static function chargeRateLimit(int $events): bool
+    {
+        $limits = self::rateLimits();
+        $ip     = self::clientIp();
+
+        // Per-IP first, and reject WITHOUT touching the site-wide bucket:
+        // charging the global budget for already-rejected requests would let
+        // a single flooding IP burn through the entire site-wide allowance
+        // and block legitimate visitors for the rest of the window.
+        if ($ip !== '' && !self::chargeBucket('cvm_rl_' . md5($ip), $events, $limits['per_ip'])) {
+            return false;
+        }
+
+        $siteAllowed = self::chargeBucket('cvm_rl_site', $events, $limits['site_wide']);
+
+        // Hitting the site-wide cap means legitimate events may be dropped —
+        // surface that on the dashboard instead of failing silently.
+        if (!$siteAllowed && get_transient(self::RATE_LIMITED_FLAG) === false) {
+            set_transient(self::RATE_LIMITED_FLAG, time(), DAY_IN_SECONDS);
+        }
+
+        return $siteAllowed;
+    }
+
+    /**
+     * Returns the effective rate limits (events per minute).
+     *
+     * @return array{per_ip: int, site_wide: int}
+     */
+    private static function rateLimits(): array
+    {
+        $defaults = [
+            'per_ip'    => self::RATE_LIMIT_MAX,
+            'site_wide' => self::RATE_LIMIT_GLOBAL_MAX,
+        ];
+
+        /**
+         * Filters the ingestion rate limits, in events per minute.
+         *
+         * @param array{per_ip: int, site_wide: int} $defaults The default limits.
+         */
+        $limits = apply_filters('convermetry_rate_limits', $defaults);
+        $limits = is_array($limits) ? $limits : $defaults;
+
+        return [
+            'per_ip'    => max(1, (int) ($limits['per_ip'] ?? $defaults['per_ip'])),
+            'site_wide' => max(1, (int) ($limits['site_wide'] ?? $defaults['site_wide'])),
+        ];
+    }
+
+    /**
+     * Adds $events to one rolling counter and reports whether it is under $max.
+     *
+     * Uses an atomic object-cache increment when a persistent object cache is
+     * available; otherwise — and whenever the cache increment fails — an
+     * atomic single-statement counter in the options table
+     * (INSERT … ON DUPLICATE KEY UPDATE, so concurrent requests can never all
+     * read one stale count and be accepted together). The row stores
+     * "window|count" and resets itself whenever the minute-window rolls over;
+     * rows are purged by the daily cleanup cron and on uninstall.
+     *
+     * @param string $key    Counter key.
+     * @param int    $events Amount to charge.
+     * @param int    $max    Maximum events per window.
+     * @return bool True when the counter (including this charge) is within $max.
+     */
+    private static function chargeBucket(string $key, int $events, int $max): bool
+    {
+        if (wp_using_ext_object_cache()) {
+            wp_cache_add($key, 0, self::CACHE_GROUP, self::RATE_LIMIT_WINDOW);
+            $count = wp_cache_incr($key, $events, self::CACHE_GROUP);
+
+            if ($count !== false) {
+                return $count <= $max;
+            }
+            // The increment failed (key evicted between add and incr, or the
+            // cache backend errored). Fail CLOSED into the database counter
+            // below rather than waving the request through — a flaky cache
+            // must not silently disable the rate limit.
+        }
+
+        global $wpdb;
+
+        $window = (string) intdiv(time(), self::RATE_LIMIT_WINDOW);
+
+        // Atomic: the IF() either increments the current window's count or
+        // resets the row for a new window, all inside one statement. These
+        // rows are written directly (never through get_option/update_option)
+        // so they bypass — and can never pollute — WordPress's option caches.
+        $wpdb->query($wpdb->prepare(
+            "INSERT INTO {$wpdb->options} (option_name, option_value, autoload)
+             VALUES (%s, %s, 'off')
+             ON DUPLICATE KEY UPDATE option_value = IF(
+                 SUBSTRING_INDEX(option_value, '|', 1) = %s,
+                 CONCAT(%s, '|', CAST(SUBSTRING_INDEX(option_value, '|', -1) AS UNSIGNED) + %d),
+                 VALUES(option_value)
+             )",
+            $key,
+            $window . '|' . $events,
+            $window,
+            $window,
+            $events
+        ));
+
+        $value = (string) $wpdb->get_var($wpdb->prepare(
+            "SELECT option_value FROM {$wpdb->options} WHERE option_name = %s",
+            $key
+        ));
+
+        // The read runs after the increment, so under heavy concurrency it
+        // may see later charges too — the count is >= this request's true
+        // position, which can only over-reject at the margin, never let the
+        // stored volume exceed the cap.
+        $parts = explode('|', $value);
+        $count = (count($parts) === 2 && $parts[0] === $window) ? (int) $parts[1] : $events;
+
+        return $count <= $max;
+    }
+
+    /**
+     * The client IP used for rate limiting.
+     *
+     * REMOTE_ADDR is the only value that cannot be spoofed by the sender, but
+     * behind a reverse proxy it is the proxy's address, which would make all
+     * visitors share one bucket. Sites that trust a proxy header can map it
+     * via the 'convermetry_client_ip' filter.
+     *
+     * @return string
+     */
+    private static function clientIp(): string
+    {
+        $ip = isset($_SERVER['REMOTE_ADDR'])
+            ? sanitize_text_field(wp_unslash($_SERVER['REMOTE_ADDR']))
+            : '';
+
+        /**
+         * Filters the client IP used as the rate-limit key.
+         *
+         * @param string $ip The REMOTE_ADDR value.
+         */
+        return (string) apply_filters('convermetry_client_ip', $ip);
+    }
+}
