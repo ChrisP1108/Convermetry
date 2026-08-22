@@ -25,7 +25,8 @@ use Convermetry\Settings\Options;
  *                     correlation fields reached the server.
  *
  * submission_data holds the visitor's sanitized field values (PII) and
- * context holds the frozen analytics context captured at submission time.
+ * context holds the frozen analytics context captured at submission time, and
+ * ip_address the submitter's address when that capture is enabled in Settings.
  * Rows age out with the same retention window as analytics events.
  */
 final class FormSubmissions
@@ -37,7 +38,7 @@ final class FormSubmissions
     private const string DB_VERSION_OPTION = 'cvm_submissions_db_version';
 
     /** Current schema version; bump when the CREATE TABLE below changes. */
-    private const string DB_VERSION = '1.0.0';
+    private const string DB_VERSION = '1.1.0';
 
     /** Rows deleted per statement during retention cleanup. */
     private const int CLEANUP_CHUNK = 2000;
@@ -85,6 +86,7 @@ final class FormSubmissions
             native_form_id VARCHAR(191) NOT NULL DEFAULT '',
             form_id VARCHAR(191) NOT NULL DEFAULT '',
             page_url VARCHAR(255) NOT NULL DEFAULT '',
+            ip_address VARCHAR(45) NOT NULL DEFAULT '',
             page_query LONGTEXT NULL,
             submission_data LONGTEXT NULL,
             context LONGTEXT NULL,
@@ -103,7 +105,8 @@ final class FormSubmissions
         $expected = [
             'id', 'submission_id', 'conversion_id', 'session_id', 'provider',
             'form_key', 'form_name', 'native_form_id', 'form_id', 'page_url',
-            'page_query', 'submission_data', 'context', 'runtime', 'created_at',
+            'ip_address', 'page_query', 'submission_data', 'context', 'runtime',
+            'created_at',
         ];
         if (
             DatabaseManager::tableHasColumns($table, $expected)
@@ -145,6 +148,7 @@ final class FormSubmissions
      *     native_form_id: string,
      *     form_id: string,
      *     page_url: string,
+     *     ip_address: string,
      *     page_query: array<string, string>,
      *     submission_data: array<string, mixed>,
      *     context: array<string, mixed>,
@@ -160,8 +164,8 @@ final class FormSubmissions
         $inserted = $wpdb->query($wpdb->prepare(
             'INSERT IGNORE INTO ' . self::tableName()
             . ' (submission_id, conversion_id, session_id, provider, form_key, form_name,'
-            . ' native_form_id, form_id, page_url, page_query, submission_data, context, runtime, created_at)'
-            . ' VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)',
+            . ' native_form_id, form_id, page_url, ip_address, page_query, submission_data, context, runtime, created_at)'
+            . ' VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)',
             $submission['submission_id'],
             $submission['conversion_id'],
             $submission['session_id'],
@@ -171,6 +175,7 @@ final class FormSubmissions
             $submission['native_form_id'],
             $submission['form_id'],
             $submission['page_url'],
+            (string) ($submission['ip_address'] ?? ''),
             (string) wp_json_encode($submission['page_query']),
             (string) wp_json_encode($submission['submission_data']),
             (string) wp_json_encode($submission['context']),

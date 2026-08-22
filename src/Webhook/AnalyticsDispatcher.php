@@ -69,7 +69,7 @@ use Convermetry\Support\Http;
  *  delivery IDs. A run that cannot get the lock simply yields.
  *
  * Every delivery attempt — scheduled, retry, or test — is recorded in the
- * {@see DeliveryLog} (Activity Log) with the exact payload sent and the
+ * {@see DeliveryLog} (Activity Log) with a redacted copy of the payload and the
  * response received.
  */
 final class AnalyticsDispatcher

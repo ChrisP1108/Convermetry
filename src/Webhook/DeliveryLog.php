@@ -13,11 +13,17 @@ use Convermetry\Settings\Options;
  * a custom table.
  *
  * One row = one delivery attempt — scheduled analytics report, immediate
- * form submission, retry, or test — storing the exact JSON payload that was
- * sent and the response the endpoint returned, so the Activity Log admin
- * page and the read-only deliveries REST API can show precisely what left
- * the site and what came back. Both bodies are capped at 64 KB so a
- * misbehaving endpoint cannot balloon the table.
+ * form submission, retry, or test — storing the JSON payload that was sent
+ * and the response the endpoint returned, so the Activity Log admin page and
+ * the read-only deliveries REST API can show what left the site and what
+ * came back.
+ *
+ * Stored bodies are a REDACTED REPRESENTATION of the request, not a
+ * byte-exact copy: sensitive-key values are replaced (see below), form
+ * submission_data can be dropped by a setting, and both bodies are capped at
+ * 64 KB so a misbehaving endpoint cannot balloon the table. A stored body
+ * therefore cannot be used to re-verify the delivery's HMAC signature — that
+ * signature was computed over the bytes actually sent.
  *
  * Activity types are stored as NORMALIZED columns — message_type
  * ('analytics_report' / 'form_submission') and kind ('scheduled' /
@@ -228,7 +234,7 @@ final class DeliveryLog
             'form_name'       => mb_substr((string) ($entry['form_name'] ?? ''), 0, 191),
             'request_url'     => (string) ($entry['request_url'] ?? ($entry['endpoint_url'] ?? '')),
             'request_headers' => (string) wp_json_encode(self::redactHeaders((array) ($entry['request_headers'] ?? []))),
-            'request_data'    => self::capBody($requestData),
+            'request_data'    => self::capBody(self::redactSensitiveJson($requestData)),
             'response_code'   => $code,
             'response_data'   => self::capBody(self::redactSensitiveJson($responseBody)),
             'created_at'      => gmdate('Y-m-d H:i:s'),
@@ -255,9 +261,9 @@ final class DeliveryLog
     }
 
     /**
-     * Replaces a form-submission payload's submission_data with a
-     * placeholder before storage, when the admin has disabled storing lead
-     * data in the Activity Log.
+     * Replaces a form-submission payload's submission_data — and the
+     * submitter's ip_address — with a placeholder before storage, when the
+     * admin has disabled storing lead data in the Activity Log.
      *
      * @param string $requestData JSON request payload.
      * @return string
@@ -275,6 +281,12 @@ final class DeliveryLog
 
         if (isset($decoded['form_submission']) && is_array($decoded['form_submission'])) {
             $decoded['form_submission']['submission_data'] = '[NOT STORED — disabled in Settings]';
+
+            // The submitter's IP is lead PII in the same sense the field
+            // values are, so it follows the same switch.
+            if (array_key_exists('ip_address', $decoded['form_submission'])) {
+                $decoded['form_submission']['ip_address'] = '[NOT STORED — disabled in Settings]';
+            }
         }
 
         return (string) wp_json_encode($decoded);

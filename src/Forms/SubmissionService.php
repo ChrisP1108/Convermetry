@@ -8,7 +8,9 @@ if (!defined('ABSPATH')) exit;
 use Convermetry\Database\DatabaseManager;
 use Convermetry\Database\FormSubmissions;
 use Convermetry\Settings\Options;
+use Convermetry\Support\ClientIp;
 use Convermetry\Support\Http;
+use Convermetry\Support\PrivacySignal;
 use Convermetry\Tracking\Correlation;
 use Convermetry\Webhook\DeliveryLog;
 use Convermetry\Webhook\FormDeliveryQueue;
@@ -101,6 +103,14 @@ final class SubmissionService
 
         $context = $correlation->toAnalyticsContext($device);
 
+        // Captured here, in the visitor's own request. Delivery (and every
+        // retry) runs later in a background worker where REMOTE_ADDR belongs
+        // to cron, not the submitter — so the address is resolved once and
+        // persisted rather than looked up at send time. forStorage() applies
+        // the privacy gates: the submission is still recorded and delivered
+        // for a DNT/GPC visitor, it just carries no address.
+        $ipAddress = ClientIp::forStorage();
+
         $rowId = FormSubmissions::insert([
             'submission_id'   => $submissionId,
             'conversion_id'   => $correlation->conversionId,
@@ -111,6 +121,7 @@ final class SubmissionService
             'native_form_id'  => $nativeId,
             'form_id'         => FormSettings::effectiveFormId($formKey, $nativeId),
             'page_url'        => $page['url'],
+            'ip_address'      => $ipAddress,
             'page_query'      => $page['query'],
             'submission_data' => $submissionData,
             'context'         => $context,
@@ -361,7 +372,7 @@ final class SubmissionService
      */
     private function requestSendsPrivacySignal(): bool
     {
-        return ($_SERVER['HTTP_DNT'] ?? '') === '1' || ($_SERVER['HTTP_SEC_GPC'] ?? '') === '1';
+        return PrivacySignal::fromCurrentRequest();
     }
 
     /**

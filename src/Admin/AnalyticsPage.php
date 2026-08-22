@@ -1180,13 +1180,14 @@ final class AnalyticsPage
                     self::cellText((string) ($attribution['channel'] ?? '')),
                     self::cellText($campaign),
                     self::cellLink((string) ($row['page_url'] ?? '')),
+                    self::cellText((string) ($row['ip_address'] ?? '')),
                     '<code>' . esc_html((string) ($row['conversion_id'] ?? '')) . '</code>',
                 ];
             }
 
             self::renderReportTable(
                 'Recent Conversions',
-                'The latest confirmed conversions in this period (up to 15 shown), deduplicated by conversion id. "Frontend" rows were detected by the tracker only; provider rows were confirmed server-side.',
+                'The latest confirmed conversions in this period (up to 15 shown), deduplicated by conversion id. "Frontend" rows were detected by the tracker only; provider rows were confirmed server-side. IP is blank when IP storage is off in Settings, or for a visitor whose Do Not Track / Global Privacy Control signal is honored.',
                 [
                     ['label' => 'When (UTC)'],
                     ['label' => 'Form'],
@@ -1194,6 +1195,7 @@ final class AnalyticsPage
                     ['label' => 'Channel'],
                     ['label' => 'Campaign'],
                     ['label' => 'Page'],
+                    ['label' => 'IP'],
                     ['label' => 'Conversion ID'],
                 ],
                 $cells,

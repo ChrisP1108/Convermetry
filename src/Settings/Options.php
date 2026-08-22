@@ -55,6 +55,7 @@ final class Options
             'retention_days'      => 90,
             'hover_dwell_ms'      => 800,
             'log_submission_data' => true,
+            'store_ip_address'    => true,
             'client_first_name'   => '',
             'client_last_name'    => '',
             'client_id'           => '',
@@ -174,6 +175,33 @@ final class Options
     public static function logSubmissionData(): bool
     {
         return !empty(self::all()['log_submission_data']);
+    }
+
+    /**
+     * Whether visitor IP addresses are captured at all — one switch covering
+     * both write paths:
+     *
+     *  - analytics events (every tracked page view, click, hover, scroll
+     *    milestone and conversion), stored in the events table's ip_address
+     *    column and surfaced in analytics reports; and
+     *  - server-confirmed form submissions, stored on the submission row and
+     *    sent as form_submission.ip_address in webhook payloads.
+     *
+     * On by default. Turning it off stops new rows from recording an address
+     * (the column is simply left empty); rows already stored are unchanged
+     * and age out with the retention window.
+     *
+     * Gated again by Do Not Track: when the site honors DNT/GPC and the
+     * request carries one, no address is stored on either path — including a
+     * form submission, which is still recorded and delivered but with an
+     * empty ip_address. Both paths resolve through ClientIp::forStorage(),
+     * which owns that policy.
+     *
+     * @return bool
+     */
+    public static function storeIpAddress(): bool
+    {
+        return !empty(self::all()['store_ip_address']);
     }
 
     /**

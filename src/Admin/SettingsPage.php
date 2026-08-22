@@ -96,6 +96,7 @@ final class SettingsPage
         $out['retention_days']      = min(365, max(7, (int) ($input['retention_days'] ?? 90)));
         $out['hover_dwell_ms']      = min(10000, max(200, (int) ($input['hover_dwell_ms'] ?? 800)));
         $out['log_submission_data'] = !empty($input['log_submission_data']);
+        $out['store_ip_address']    = !empty($input['store_ip_address']);
 
         $out['client_first_name'] = mb_substr(sanitize_text_field((string) ($input['client_first_name'] ?? '')), 0, 190);
         $out['client_last_name']  = mb_substr(sanitize_text_field((string) ($input['client_last_name'] ?? '')), 0, 190);
@@ -233,6 +234,24 @@ final class SettingsPage
         echo '<p class="description">Visitors whose browser sends these signals are not tracked at all — no analytics '
             . 'events are recorded and no analytics context accompanies their form submissions. Enabling this typically '
             . 'reduces recorded traffic. Note DNT/GPC is an opt-out signal, not a consent mechanism.</p>';
+        echo '</td></tr>';
+
+        echo '<tr><th scope="row">IP addresses</th><td>';
+        echo '<label><input type="checkbox" name="' . esc_attr(Options::OPTION_KEY . '[store_ip_address]') . '" value="1" '
+            . checked(!empty($settings['store_ip_address']), true, false) . '> Store visitor IP addresses</label>';
+        echo '<p class="description">On by default. Records the visitor\'s IP with <strong>every analytics event</strong> '
+            . '(page views, clicks, hovers, scroll milestones, conversions) and with <strong>every server-confirmed form '
+            . 'submission</strong> — surfaced in analytics reports and sent as <code>form_submission.ip_address</code> in '
+            . 'webhook payloads. Useful for fraud checks, spam review, and CRM deduplication. Turning this off leaves the '
+            . 'address empty on new rows; rows already stored are unchanged and age out with the retention window. '
+            . 'No IP is ever sent to a geolocation service. Behind a proxy or CDN, map the real address with the '
+            . '<code>convermetry_client_ip</code> filter.</p>';
+        echo '<p class="description"><strong>Privacy note:</strong> in the EU/UK an IP address is personal data. '
+            . 'Storing it for general visitor activity — not just leads someone actively submitted — usually needs to be '
+            . 'disclosed in your privacy policy and to rest on a lawful basis. When <em>Honor Do Not Track / Global '
+            . 'Privacy Control</em> is enabled above, a visitor sending either signal gets no stored IP on either path — '
+            . 'their analytics events are not recorded at all, and a form they submit is still delivered but carries an '
+            . 'empty address.</p>';
         echo '</td></tr>';
 
         echo '<tr><th scope="row"><label for="cvm-hover-dwell">Hover dwell time (ms)</label></th><td>';

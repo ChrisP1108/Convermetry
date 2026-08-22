@@ -26,6 +26,12 @@ use Convermetry\Analytics\Reports;
  * followed by the message-type-specific body ('period' + 'analytics' for
  * reports; 'form_submission' + 'analytics_context' for submissions).
  *
+ * 'form_submission.ip_address' carries the submitter's IP as captured at
+ * submission time — never re-resolved at delivery time, which runs in a
+ * different request with no visitor behind it. It is an empty string when the
+ * Settings toggle is off, when no address could be determined, or for a
+ * submission stored before the field existed.
+ *
  * Identifier semantics (documented once, here, for both message types):
  *
  *  - submission_id — identifies the form submission itself; identical in
@@ -129,6 +135,7 @@ final class PayloadBuilder
                 'form_name'       => (string) ($submission['form_name'] ?? ''),
                 'form_id'         => (string) ($submission['form_id'] ?? ''),
                 'native_form_id'  => (string) ($submission['native_form_id'] ?? ''),
+                'ip_address'      => (string) ($submission['ip_address'] ?? ''),
                 'submission_data' => $data,
             ],
             'analytics_context' => $context !== [] ? $context : self::emptyContext(),
@@ -156,6 +163,8 @@ final class PayloadBuilder
             'form_id'         => 'convermetry-test',
             'native_form_id'  => 'test',
             'page_url'        => home_url('/'),
+            // RFC 5737 documentation range — never a real visitor address.
+            'ip_address'      => '203.0.113.42',
             'page_query'      => (string) wp_json_encode(['utm_source' => 'convermetry-test']),
             'submission_data' => (string) wp_json_encode([
                 'name'    => 'Test Person',

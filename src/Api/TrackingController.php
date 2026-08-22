@@ -7,6 +7,7 @@ if (!defined('ABSPATH')) exit;
 
 use Convermetry\Database\DatabaseManager;
 use Convermetry\Settings\Options;
+use Convermetry\Support\ClientIp;
 
 /**
  * Public REST endpoint that receives batched events from the frontend tracker.
@@ -36,8 +37,12 @@ use Convermetry\Settings\Options;
  * endpoint answers 503 so the tracker keeps the batch persisted and retries,
  * rather than acknowledging data that was never stored.
  *
- * The visitor's IP address is used only as a transient rate-limit key (hashed)
- * and is never stored with the analytics data.
+ * The visitor's IP reaches this endpoint twice over, for two unrelated
+ * purposes: hashed into a transient rate-limit key here, and — when IP
+ * storage is enabled in Settings — written to each event row by
+ * DatabaseManager. Both resolve it through Support\ClientIp, which runs
+ * 'convermetry_client_ip' once per request and memoizes the result, so the
+ * bucket key and the stored address are always the same value.
  */
 final class TrackingController
 {
@@ -600,24 +605,16 @@ final class TrackingController
     /**
      * The client IP used for rate limiting.
      *
-     * REMOTE_ADDR is the only value that cannot be spoofed by the sender, but
-     * behind a reverse proxy it is the proxy's address, which would make all
-     * visitors share one bucket. Sites that trust a proxy header can map it
-     * via the 'convermetry_client_ip' filter.
+     * Delegates to the shared resolver, which filters, validates, and
+     * memoizes once per request — so the rate-limit bucket and the IP stored
+     * on event rows are literally the same value, even if
+     * 'convermetry_client_ip' is stateful. An unresolvable address yields '',
+     * and the caller then charges only the site-wide bucket.
      *
      * @return string
      */
     private static function clientIp(): string
     {
-        $ip = isset($_SERVER['REMOTE_ADDR'])
-            ? sanitize_text_field(wp_unslash($_SERVER['REMOTE_ADDR']))
-            : '';
-
-        /**
-         * Filters the client IP used as the rate-limit key.
-         *
-         * @param string $ip The REMOTE_ADDR value.
-         */
-        return (string) apply_filters('convermetry_client_ip', $ip);
+        return ClientIp::get();
     }
 }

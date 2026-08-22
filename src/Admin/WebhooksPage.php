@@ -498,7 +498,7 @@ final class WebhooksPage
         $logUrl = add_query_arg(['page' => ActivityLogPage::MENU_SLUG], self_admin_url('admin.php'));
         echo '<h2>Activity Log</h2>';
         echo '<p>Every delivery attempt — analytics report or form submission, scheduled, immediate, retry, or test — is '
-            . 'recorded with its exact payload and response on the <a href="' . esc_url($logUrl) . '">Activity Log</a> page.</p>';
+            . 'recorded with its payload and response (sensitive values redacted) on the <a href="' . esc_url($logUrl) . '">Activity Log</a> page.</p>';
 
         echo '</div>';
     }

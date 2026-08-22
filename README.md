@@ -74,7 +74,7 @@ Convermetry
     Analytics      — the reporting dashboard (top-level default)
     Forms          — provider status, discovered forms, per-form configuration
     Webhooks       — endpoints, delivery types, signing, schedule, request customization
-    Activity Log   — every delivery attempt with exact payload and response
+    Activity Log   — every delivery attempt with its (redacted) payload and response
     Settings       — website/client identity, tracking toggles, privacy, retention
     About          — this documentation inside wp-admin
 ```
@@ -118,9 +118,16 @@ Shows each supported provider as **Active** or **Unavailable**, automatically di
 
 Endpoints, delivery types, signing, schedule, backfill, failure mode, global headers/query parameters, per-endpoint tests, pending retries, and the pending form-delivery queue — see [Webhooks](#webhooks) below.
 
+Each endpoint independently chooses its **Delivery Types**, so it can receive **Analytics Reports only**, **Form Submissions only**, or **both**:
+
+- **Analytics Reports** (`analytics_report`) — scheduled, aggregated reports covering a time window, not one webhook per tracked event. See [Analytics report payload](#analytics-report-payload).
+- **Form Submissions** (`form_submission`) — one individual, server-confirmed lead, delivered immediately. See [Form submission payload](#form-submission-payload).
+
+For an analytics-only endpoint, check **Analytics Reports** and leave **Form Submissions** unchecked. Note what that does and does not mean: no **submitted form field values** are sent, but analytics reports still describe individual conversions in `conversions.recent[]` — conversion id, form name and ids, provider, and the visitor's IP when IP storage is on. Each endpoint block has separate **Send analytics test** and **Send form test** buttons, and both message types appear in the Activity Log, distinguishable by `message_type`.
+
 ### Activity Log / Settings / About
 
-See [Activity Log](#activity-log); Settings holds the website/client identity (`website_info`), tracking toggles, privacy signals, hover dwell, retention, and the Activity Log lead-data privacy switch.
+See [Activity Log](#activity-log); Settings holds the website/client identity (`website_info`), tracking toggles, privacy signals, the **IP addresses** switch (on by default, covering analytics events and form submissions — see [Privacy](#privacy)), hover dwell, retention, and the Activity Log lead-data privacy switch.
 
 ## Analytics tracking
 
@@ -132,7 +139,7 @@ A single dependency-free script (`assets/js/tracker.js`) is enqueued deferred on
 
 **Delivery reliability** — batches flush every 5 seconds, at 20 events, and on page exit via `navigator.sendBeacon`. Every batch is persisted to a bounded `sessionStorage` store *before* it is sent (in-memory fallback when unavailable) and removed only on server acknowledgment (2xx, or a 4xx other than 429). Failed sends back off exponentially with jitter; a 429 pauses the whole tab and honors `Retry-After`. Fetch-delivered batches are **at-least-once** and replays are **idempotent**: rows are stored under a unique `(batch_id, event ordinal)` key, so a replayed batch never inflates counts. Fresh page-exit beacon hand-offs are best-effort; a batch that already survived a failed send stays persisted through a beacon hand-off.
 
-**Endpoint defenses** — whitelisted, currently-enabled event types only; tracked page URLs must be `http(s)` on this site's host and are canonicalized to scheme+host+path; foreign `Origin`/`Referer` rejected; bots and empty user agents ignored; DNT/GPC enforced server-side when enabled; request bodies and batch sizes capped; scalar-only field values, sanitized and truncated; rate limits charged **per event** — 300/IP/minute plus 3,000/minute site-wide (`convermetry_rate_limits` filter) — via atomic object-cache counters, falling back (and failing **closed**) to an atomic single-statement database counter. The per-IP check runs first so a flooding IP never consumes the site-wide budget. A dashboard warning appears for 24 hours after the site-wide cap is hit. IPs are used only as hashed, short-lived rate-limit keys and are never stored.
+**Endpoint defenses** — whitelisted, currently-enabled event types only; tracked page URLs must be `http(s)` on this site's host and are canonicalized to scheme+host+path; foreign `Origin`/`Referer` rejected; bots and empty user agents ignored; DNT/GPC enforced server-side when enabled; request bodies and batch sizes capped; scalar-only field values, sanitized and truncated; rate limits charged **per event** — 300/IP/minute plus 3,000/minute site-wide (`convermetry_rate_limits` filter) — via atomic object-cache counters, falling back (and failing **closed**) to an atomic single-statement database counter. The per-IP check runs first so a flooding IP never consumes the site-wide budget. A dashboard warning appears for 24 hours after the site-wide cap is hit. The rate-limit key itself is a hashed, short-lived derivative of the IP; the address is separately stored on each event row when IP storage is enabled (see [Privacy](#privacy)).
 
 **Tracked events** (each individually toggleable): `pageview`, `click`, `form_submit` (attempts), `form_success` (confirmed conversions), `hover` (configurable dwell, opt-in via `data-cvm-hover`), `scroll_depth` (50/100%). Custom server-side events via `cvm_track_event()`.
 
@@ -252,15 +259,20 @@ Configure any number of endpoints under **Convermetry → Webhooks**. Each endpo
 | Signing Secret | Optional per-endpoint HMAC key; overrides the shared secret for this endpoint only |
 | **Delivery Types** | **Analytics Reports** and/or **Form Submissions** checkboxes |
 
-So one install can feed, for example:
+The two delivery types are independent: an endpoint may receive **Analytics Reports only**, **Form Submissions only**, or **both**. Checking **Analytics Reports** while leaving **Form Submissions** unchecked produces an analytics-only endpoint that never receives **submitted form field values** — though its reports still describe individual conversions in `conversions.recent[]` (conversion id, form name and ids, provider, and the visitor's IP when IP storage is on). The reverse produces a leads-only endpoint that never receives reports. So one install can feed, for example:
 
 ```text
 Convermetry SaaS            Analytics ✓   Form Submissions ✓
-HubSpot Middleware          Analytics ✗   Form Submissions ✓
-Reporting Data Warehouse    Analytics ✓   Form Submissions ✗
+HubSpot Middleware          Analytics ✗   Form Submissions ✓   (leads only)
+Reporting Data Warehouse    Analytics ✓   Form Submissions ✗   (analytics only)
 ```
 
-**Analytics reports** are sent hourly, twice daily, daily, or weekly. Delivery windows are tracked **per endpoint** (each payload covers the time since that endpoint's last successful delivery); gaps longer than one interval — downtime, a paused status toggle, or an enabled **history backfill** for new endpoints — are delivered as consecutive, non-overlapping, interval-sized windows (up to 10 per run). Conversion delivery is **lossless**: a window holding more than 100 individual conversions is split into consecutive deliveries rather than truncated. Each site's schedule is anchored at a stable random offset within the interval so fleets sharing one endpoint never stampede it, and dispatch runs under a site-wide mutex (MySQL named lock, with a token/lease option-row fallback) so overlapping cron executions can never build overlapping windows. Each `top_*` list holds up to 200 rows (`convermetry_webhook_report_limit`).
+| Delivery type | `message_type` | What one message is | Cadence | Payload |
+|---|---|---|---|---|
+| Analytics Reports | `analytics_report` | An **aggregated** report for one time window | Scheduled — hourly, twice daily, daily, or weekly | [Analytics report payload](#analytics-report-payload) |
+| Form Submissions | `form_submission` | **One** server-confirmed lead | Immediate, in the background | [Form submission payload](#form-submission-payload) |
+
+**Analytics reports** aggregate a whole reporting window into one message — they are never one webhook per page view, click, or conversion — and are sent hourly, twice daily, daily, or weekly (a single site-wide schedule). Window boundaries are **UTC**, with `period.start` inclusive and `period.end` exclusive. Delivery windows are tracked **per endpoint** (each payload covers the time since that endpoint's last successful delivery); gaps longer than one interval — downtime, a paused status toggle, or an enabled **history backfill** for new endpoints — are delivered as consecutive, non-overlapping, interval-sized windows (up to 10 per run). Conversion delivery is **lossless**: a window holding more than 100 individual conversions is split into consecutive deliveries rather than truncated. Each site's schedule is anchored at a stable random offset within the interval so fleets sharing one endpoint never stampede it, and dispatch runs under a site-wide mutex (MySQL named lock, with a token/lease option-row fallback) so overlapping cron executions can never build overlapping windows. Each `top_*` list holds up to 200 rows (`convermetry_webhook_report_limit`).
 
 **Form submissions** are delivered immediately in the background from a database-backed queue — one row per submission × endpoint (see [Retries & idempotency](#retries--idempotency)).
 
@@ -279,7 +291,7 @@ Global URL parameters → Page URL parameters → Per-form URL parameters → Ru
 
 Headers: `Content-Type` → global → per-form → runtime, with `User-Agent`, `Idempotency-Key`, and `X-Convermetry-Signature` added at send time.
 
-**Per-endpoint tests** — every endpoint block has **Send analytics test** and **Send form test** buttons. Test payloads carry `"test": true` and clearly marked sample data, never touch delivery markers or real submissions, are never retried, and appear in the Activity Log with kind `test`.
+**Per-endpoint tests** — every endpoint block has **Send analytics test** and **Send form test** buttons. Test payloads carry `"test": true` and clearly marked sample data, never touch delivery markers or real submissions, are never retried, and appear in the Activity Log with kind `test`. An analytics test reports on the **last 7 days** and does **not** advance the endpoint's last-sent marker, so testing never creates a gap in scheduled reporting; a form test builds a sample submission and never reads real lead data.
 
 All requests go through one transport: `wp_safe_remote_post()` (URL re-validated at request time — SSRF protection even if DNS changed after saving), redirects disabled, response downloads capped at 64 KB at the transport layer, 15-second timeout.
 
@@ -294,6 +306,8 @@ All requests go through one transport: `wp_safe_remote_post()` (URL re-validated
 Supporting identifiers: `batch_id` + event ordinal make tracker ingestion idempotent; `session_id` groups one visit.
 
 ## Payload schemas
+
+These are the **outbound** messages Convermetry POSTs to your configured webhook endpoints. They are distinct from the inbound browser tracking API (`POST /wp-json/convermetry/v1/track`), which only accepts events from this site's own tracker into the local database — it never forwards anything to a webhook receiver. Everything a receiver gets is produced later, by the two outbound paths: scheduled [Analytics Reports](#analytics-report-payload) and immediate [Form Submissions](#form-submission-payload).
 
 Every outbound message shares one versioned envelope:
 
@@ -322,6 +336,8 @@ Every outbound message shares one versioned envelope:
 ```
 
 ### Analytics report payload
+
+`message_type: analytics_report` — the canonical full example. An Analytics Report is an **aggregated summary of a time window**, produced on a schedule; it is never one webhook per tracked event. Endpoints opt into it independently of form submissions, so this may be the only message type an endpoint ever receives.
 
 ```json
 {
@@ -377,6 +393,7 @@ Every outbound message shares one versioned envelope:
                     "page_url": "https://example.com/contact",
                     "referrer": "https://example.com/services",
                     "device": "desktop",
+                    "ip_address": "203.0.113.42",
                     "session_id": "9f2c…",
                     "occurred_at": "2026-08-22 09:14:02",
                     "server_confirmed": true,
@@ -398,9 +415,23 @@ Every outbound message shares one versioned envelope:
 }
 ```
 
-`analytics.conversions.recent` lists **every** conversion in the delivery window (lossless — oversized windows split), each with the attribution snapshot taken when it occurred, plus the provider/form/submission identity when server-confirmed. The dashboard and this payload use the **same query layer**, so their numbers cannot disagree.
+**Reading this payload:**
+
+- **`period` is the UTC window the report covers** — `start` inclusive, `end` exclusive. Both boundaries, and `generated_at`, derive from the window end rather than the wall-clock time an attempt runs, so a retry re-sends a byte-identical body.
+- **Delivery windows are tracked per endpoint.** Each payload covers the time since *that* endpoint's last successful delivery, so adding, pausing, or backfilling one endpoint never shifts another's windows. The *frequency* (hourly / twice daily / daily / weekly) is a single site-wide setting.
+- **The dashboard and this payload share the same reporting query layer** (`Reports::buildSummary()`), so the admin screens and a webhook receiver cannot disagree about the same window.
+- **`conversions.total`** is the count of distinct conversions in the window, **deduplicated by conversion id** — the frontend `form_success` event and the server-confirmed record share one id and can never double-count.
+- **`conversions.server_confirmed`** is the number of stored server-confirmed submission records in the window. It is normally lower than `total`: a conversion the tracker saw but no provider hook confirmed counts in `total` only.
+- **`conversions.recent[].ip_address`** is the visitor's IP — taken from the server-confirmed submission record when there is one (captured in the form POST the provider confirmed), otherwise from the analytics `form_success` event. Empty when IP storage is disabled in Settings.
+- **`conversions.recent`** holds the **individual conversion records** for the window — each with the attribution snapshot taken when it occurred, plus provider/form/submission identity when `server_confirmed` is `true`. Every other section is aggregate reporting data.
+- **Conversion delivery is lossless on the scheduled path:** a window holding more than 100 individual conversions is split into consecutive deliveries rather than truncated. (`recent` itself is capped at 500 entries; scheduled windows are bounded well below that, but a *test* send — which uses a fixed 7-day window with no such bounding — can reach the cap on a busy site.)
+- Each `top_*` list holds up to 200 rows (`convermetry_webhook_report_limit`), deliberately deeper than the dashboard's top 10.
+
+**Test analytics payloads** (**Send analytics test** on the Webhooks page) cover the **last 7 days**, carry `"test": true`, get a fresh random `delivery_id`, are **never retried**, and **do not advance the endpoint's last-sent marker** — so testing an endpoint never creates a gap in its scheduled reporting.
 
 ### Form submission payload
+
+`message_type: form_submission` — the canonical full example. Where an Analytics Report carries reporting data for a window, a Form Submission carries **one lead's own data plus the analytics context correlated to it**. Endpoints opt into it independently of analytics reports.
 
 ```json
 {
@@ -426,6 +457,7 @@ Every outbound message shares one versioned envelope:
         "form_name": "Contact Form",
         "form_id": "contact-form-01",
         "native_form_id": "7ac3d1f",
+        "ip_address": "203.0.113.42",
         "submission_data": {
             "name": "John Doe",
             "email": "john@example.com",
@@ -450,6 +482,8 @@ Every outbound message shares one versioned envelope:
     }
 }
 ```
+
+`ip_address` is the submitter's IP, captured during the visitor's own request and frozen with the row — delivery and retries run later in a background worker where `REMOTE_ADDR` belongs to cron, so it is never re-resolved at send time. The key is **always present**; it is an empty string when the Settings toggle is off, when no valid address could be determined (CLI/cron, an unusual proxy setup), or for a submission stored before the field existed. Values are validated as real IPv4/IPv6 addresses, so a malformed `REMOTE_ADDR` or a comma-joined forwarding chain stores nothing rather than junk.
 
 `generated_at` is the submission's creation time — identical across endpoints and retries. The session-summary fields (`pageview_count`, `session_started_at`, `recent_pages`) are enriched in the background worker via two small indexed queries, never during the visitor's request, and frozen with the payload. Submissions without correlation data carry the same `analytics_context` keys with empty values. There is **no** `client_location_data` and no external geolocation call — a `geo` block can be added later as an ingestion-side enrichment without schema changes.
 
@@ -478,7 +512,9 @@ Both message types share the retry schedule (filterable via `convermetry_retry_s
 Initial delivery → 5 minutes → 30 minutes → 2 hours → 6 hours → 16 hours   (~24.6 h total)
 ```
 
-**Frozen requests.** On the first delivery attempt the final URL (all query-parameter layers merged), the headers, and the serialized JSON body are frozen. Every retry replays those exact bytes under the same `delivery_id`/`Idempotency-Key` — retention cleanup, settings changes, or plugin updates between attempts can never mutate a frozen retry. A payload that fails to JSON-encode (e.g. a filter introduced an unencodable value) is treated as a *failed attempt* entering the normal chain; an empty body is never sent, and the payload is never rebuilt without the filter.
+**Frozen requests.** On the first delivery attempt the final URL (all query-parameter layers merged), the **configured** headers (global + per-form + runtime), and the serialized JSON body are frozen. Every retry replays that exact body and URL under the same `delivery_id` — retention cleanup, settings changes, or plugin updates between attempts can never mutate them.
+
+Three headers are *not* frozen; they are regenerated on each attempt from the frozen body: `Idempotency-Key` (always the same `delivery_id`), `User-Agent` (carries the plugin version, so it changes if the site updates mid-chain), and `X-Convermetry-Signature` (computed with the secret **current at send time**, so rotating a secret changes a retry's signature — intentionally, so a rotated key still verifies). A payload that fails to JSON-encode (e.g. a filter introduced an unencodable value) is treated as a *failed attempt* entering the normal chain; an empty body is never sent, and the payload is never rebuilt without the filter.
 
 **Analytics reports** — per-endpoint retry chains via single-event crons. An exhausted chain (or one whose cron could not be scheduled — detected as *orphaned*) keeps its frozen delivery; the next scheduled dispatch re-sends it under the original `delivery_id` first, and only after acknowledgment does the endpoint's marker advance — exactly to the frozen window's end — so consecutive deliveries never overlap. Every retry-state mutation happens under the dispatch mutex. Deactivating the plugin *suspends* chains (frozen deliveries resume after reactivation under their original ids); frozen deliveries older than the retention window expire, and each pending retry has a **Discard** action on the Webhooks page.
 
@@ -488,7 +524,9 @@ Initial delivery → 5 minutes → 30 minutes → 2 hours → 6 hours → 16 hou
 
 ## Activity Log
 
-**Convermetry → Activity Log** records every delivery attempt — analytics report or form submission; scheduled, immediate, retry, or test — as normalized columns (`message_type`, `kind`, `attempt`; never parsed from display labels), with: timestamp, endpoint URL + label, delivery/submission/conversion ids, form provider and name, HTTP status, final request URL, request headers (credential values redacted), the **exact JSON payload sent**, the response body, and transport errors.
+**Convermetry → Activity Log** records every delivery attempt — analytics report or form submission; scheduled, immediate, retry, or test — as normalized columns (`message_type`, `kind`, `attempt`; never parsed from display labels), with: timestamp, endpoint URL + label, delivery/submission/conversion ids, form provider and name, HTTP status, final request URL, request headers (credential values redacted), the **JSON payload sent**, the response body, and transport errors.
+
+Stored bodies are a **redacted representation of the request, not a byte-exact copy**: values under sensitive-looking keys (`password`, `token`, `secret`, `api_key`, …) are replaced with `[REDACTED]` in both request and response before storage, form `submission_data` is replaced entirely when *Store form submission data in the Activity Log* is off, and both bodies are capped at 64 KB. A stored body therefore will **not** reproduce the original `X-Convermetry-Signature` — verify signatures against what your endpoint received, never against a log copy.
 
 Two paginated accordions (Successful / Failed) offer year/month, message-type, endpoint, provider, and form filters, debounced payload search, a per-page selector (5–100), and per-entry delete. The toolbar provides **Clear All Logs** and **CSV/JSON export** — both stream in keyset-paginated chunks, so even huge logs export in bounded memory. Entries share the analytics retention window.
 
@@ -529,7 +567,7 @@ Pagination metadata returns in `X-WP-Total`, `X-WP-TotalPages`, and `X-CVM-Page`
 | `convermetry_webhook_payload` | filter | Modify any outbound payload before it is frozen/encoded. `(array $payload, string $messageType, array $meta)` — `$meta` is `['start','end']` for reports, `['submission_id']` for submissions |
 | `convermetry_webhook_report_limit` | filter | Max rows per `top_*` list in analytics payloads (default 200) |
 | `convermetry_allowed_hosts` | filter | Hostnames accepted in tracked URLs / Origin checks, treated as internal in referrer reports |
-| `convermetry_client_ip` | filter | Map the client IP used for rate limiting (reverse proxies) |
+| `convermetry_client_ip` | filter | Map the client IP used for tracking rate limits **and** the IP stored on analytics events and form submissions (reverse proxies / CDNs) |
 | `convermetry_rate_limits` | filter | `['per_ip' => 300, 'site_wide' => 3000]` events/minute |
 | `convermetry_source_aliases` | filter | Extend/override the utm_source alias map |
 | `convermetry_channel` | filter | Override the marketing channel assigned at ingestion. `(string $channel, array $row, string $type)` |
@@ -547,7 +585,13 @@ Helper functions: `convermetry_submit_form()` (result-aware submission) and `cvm
 - **No cookies.** Session ids live in `localStorage` and rotate after 30 minutes of inactivity.
 - Tracked URLs are canonicalized to scheme + host + path — **no query strings are ever stored**. Referrers and click/form destinations are likewise stripped (whole `mailto:`/`tel:` destinations are kept — the address *is* the destination; strip via `convermetry_tracked_event` if unacceptable).
 - Campaign values are stored after sanitization, except values containing `@` (dropped as likely emails) — never put personal data in UTM parameters. Ad-click identifiers store only the parameter **name**; the value never leaves the browser.
-- **No IP addresses or user agents are stored** — the IP is only a hashed, short-lived rate-limit key (`convermetry_client_ip` for proxies). **No external geolocation service is ever contacted** — the legacy synchronous ipapi.co lookup was deliberately removed; a form submission never waits on any third party.
+- **Visitor IP addresses are stored by default**, on both write paths: every analytics event (page views, clicks, hovers, scroll milestones, conversions) and every server-confirmed form submission. Turn it off with **Settings → Privacy → IP addresses**; new rows then record an empty value while existing rows are untouched and age out with retention. User agents are never stored on either path.
+  - **In the EU/UK an IP address is personal data.** Retaining it for general visitor activity — not only for leads someone actively submitted — normally has to be disclosed in your privacy policy and rest on a lawful basis. Consider whether your consent tooling should gate the tracker.
+  - Addresses come from `REMOTE_ADDR` and are validated as real IPv4/IPv6 — remap behind a proxy or CDN with `convermetry_client_ip`.
+  - To **anonymize rather than disable**, use `convermetry_tracked_event` to rewrite `ip_address` (e.g. zero the last octet) before the row is written; it runs on every analytics row.
+  - When the site honors **Do Not Track / Global Privacy Control** and a visitor sends one, **no IP is stored on either path**. For analytics that visitor produces no rows at all; a form they submit is still recorded and delivered — they actively submitted it — but its `ip_address` is empty. Both paths go through one gate (`ClientIp::forStorage()`), so the setting, the signal, and this documentation cannot drift apart.
+  - The Activity Log stores a redacted copy of each delivery's request payload, so IPs appear there too: the form payload's copy is replaced when *Store form submission data in the Activity Log* is off, but an **analytics report's** `conversions.recent[].ip_address` is logged regardless. Log rows age out with the same retention window, and `convermetry_delivery_log_row` can redact anything further.
+- **No external geolocation service is ever contacted** — the legacy synchronous ipapi.co lookup was deliberately removed; a form submission never waits on any third party, and a stored IP is never sent anywhere except your own webhook endpoints.
 - Optional **Do Not Track / Global Privacy Control** handling (off by default), enforced in the tracker, at the REST endpoint, and in the server-side conversion recorder. DNT/GPC is an opt-out signal, not a consent mechanism — gate the tracker with your consent tool if your jurisdiction requires consent.
 - Logged-in users are excluded from tracking by default.
 - Form `submission_data` is first-party lead data the visitor actively submitted; it is stored for delivery/retry and ages out with retention. The Activity Log's copy can be disabled in Settings, and `convermetry_delivery_log_row` supports field-level redaction.
@@ -557,10 +601,10 @@ Helper functions: `convermetry_submit_form()` (result-aware submission) and `cvm
 
 | Table | Purpose |
 |---|---|
-| `{$prefix}cvm_events` | One row per visitor interaction (analytics engine). Unique `(batch_id, batch_seq)` makes tracker replays idempotent; indexed by type/date, type/session/date, date, and page URL. `form_success` rows carry the `conversion_id` in `event_value`. |
-| `{$prefix}cvm_form_submissions` | One row per server-confirmed submission: `submission_id` (unique), `conversion_id` (unique — the dedup point), session id, provider/form identity, page URL + query, sanitized `submission_data`, frozen `analytics_context`, runtime overrides. |
+| `{$prefix}cvm_events` | One row per visitor interaction (analytics engine). Unique `(batch_id, batch_seq)` makes tracker replays idempotent; indexed by type/date, type/session/date, date, and page URL. `form_success` rows carry the `conversion_id` in `event_value`. Stores the visitor `ip_address` unless disabled in Settings. |
+| `{$prefix}cvm_form_submissions` | One row per server-confirmed submission: `submission_id` (unique), `conversion_id` (unique — the dedup point), session id, provider/form identity, page URL + query, submitter `ip_address` (empty when disabled in Settings), sanitized `submission_data`, frozen `analytics_context`, runtime overrides. |
 | `{$prefix}cvm_delivery_queue` | The background form-delivery queue: one row per submission × endpoint with status, attempt, next-attempt time, claim token, and the frozen URL/headers/body. Rows are deleted on acknowledgment or abandonment. |
-| `{$prefix}cvm_webhook_deliveries` | The Activity Log: one row per delivery attempt with normalized `message_type`/`kind`/`attempt` columns, identifiers, redacted headers, exact payload, and response. |
+| `{$prefix}cvm_webhook_deliveries` | The Activity Log: one row per delivery attempt with normalized `message_type`/`kind`/`attempt` columns, identifiers, redacted headers, redacted request/response bodies (64 KB cap each). |
 
 All tables are created via `dbDelta()` with versioned schema options; migrations are **verified** (columns and critical indexes checked) before their version is recorded, so a failed/partial migration retries on the next load. Large retry state never lives in autoloaded options — the analytics retry-state and last-sent options are stored with `autoload = no`, and form payloads live in the queue table.
 
@@ -593,7 +637,8 @@ convermetry/
     ├── Database/                # DatabaseManager (events), FormSubmissions
     ├── Forms/                   # FormProviderInterface, FormProviderRegistry, FormSettings,
     │   │                        # SubmissionService, SubmissionResult
-    │   └── Providers/           # Elementor, GravityForms, WPForms, ContactForm7, FluentForms
+    │   └── Providers/           # Elementor, GravityForms, WPForms, ContactForm7,
+    │                             # FluentForms, NinjaForms, FormidableForms
     ├── Settings/                # Options (typed settings access)
     ├── Support/                 # Http (the single safe outbound transport)
     ├── Tracking/                # Channels (the one attribution engine), Correlation, ScriptLoader

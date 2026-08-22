@@ -6,6 +6,7 @@ namespace Convermetry\Database;
 if (!defined('ABSPATH')) exit;
 
 use Convermetry\Settings\Options;
+use Convermetry\Support\ClientIp;
 use Convermetry\Tracking\Channels;
 
 /**
@@ -37,7 +38,7 @@ final class DatabaseManager
     private const string DB_VERSION_OPTION = 'cvm_db_version';
 
     /** Current schema version; bump when the CREATE TABLE below changes. */
-    private const string DB_VERSION = '1.0.0';
+    private const string DB_VERSION = '1.1.0';
 
     /**
      * Returns the fully-prefixed events table name.
@@ -88,6 +89,7 @@ final class DatabaseManager
             utm_content VARCHAR(191) NOT NULL DEFAULT '',
             click_id_type VARCHAR(20) NOT NULL DEFAULT '',
             channel VARCHAR(24) NOT NULL DEFAULT '',
+            ip_address VARCHAR(45) NOT NULL DEFAULT '',
             batch_id VARCHAR(40) DEFAULT NULL,
             batch_seq SMALLINT UNSIGNED NOT NULL DEFAULT 0,
             created_at DATETIME NOT NULL,
@@ -185,7 +187,7 @@ final class DatabaseManager
         'event_type', 'page_url', 'page_title', 'element_tag', 'element_label',
         'target_url', 'event_value', 'referrer', 'session_id', 'device',
         'utm_source', 'utm_medium', 'utm_campaign', 'utm_id', 'utm_term',
-        'utm_content', 'click_id_type', 'channel', 'created_at',
+        'utm_content', 'click_id_type', 'channel', 'ip_address', 'created_at',
     ];
 
     /** Rows deleted per statement during retention cleanup. */
@@ -285,9 +287,16 @@ final class DatabaseManager
     {
         global $wpdb;
 
+        // Resolved once for the whole batch: every event in one request comes
+        // from the same visitor, and the 'convermetry_client_ip' filter should
+        // not run per row. forStorage() applies the privacy gates (setting
+        // off, or an honored DNT/GPC signal) and yields '' when it must not
+        // be stored.
+        $ip = ClientIp::forStorage();
+
         $rows = [];
         foreach ($events as $index => $event) {
-            $row = self::sanitizeRow((string) ($event['type'] ?? ''), (array) ($event['data'] ?? []));
+            $row = self::sanitizeRow((string) ($event['type'] ?? ''), (array) ($event['data'] ?? []), $ip);
             if ($row !== null) {
                 // The ordinal comes from the event's position in the ORIGINAL
                 // request, not the surviving-row index — a settings change
@@ -353,9 +362,11 @@ final class DatabaseManager
      *
      * @param string               $type Event type key (e.g. "pageview", "click").
      * @param array<string, mixed> $data Event context; see the column list in createTable().
+     * @param string               $ip   The visitor's IP for this request, or '' when IP
+     *                                   storage is off or none could be resolved.
      * @return array<string, string>|null The row, or null when invalid or dropped.
      */
-    private static function sanitizeRow(string $type, array $data): ?array
+    private static function sanitizeRow(string $type, array $data, string $ip = ''): ?array
     {
         $type = sanitize_key($type);
         if ($type === '' || strlen($type) > 20) {
@@ -393,6 +404,10 @@ final class DatabaseManager
             'utm_content'   => self::truncate(sanitize_text_field((string) ($data['utm_content'] ?? '')), 191),
             'click_id_type' => sanitize_key((string) ($data['click_id_type'] ?? '')),
             'channel'       => self::truncate(sanitize_text_field((string) ($data['channel'] ?? '')), 24),
+            // Resolved by the caller once per request. Set here, before the
+            // 'convermetry_tracked_event' filter runs, so a site can anonymize
+            // or clear it exactly like any other column.
+            'ip_address'    => self::truncate($ip, 45),
             'created_at'    => gmdate('Y-m-d H:i:s'),
         ];
 

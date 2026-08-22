@@ -843,7 +843,7 @@ final class Reports
      * with the attribution snapshot taken when it occurred — self-contained
      * records ready for a CRM or automation platform. When a conversion has
      * a matching server-confirmed form submission, its provider, form ids,
-     * and submission_id are merged in.
+     * submission_id, and stored IP address are merged in.
      *
      * @param string $start UTC datetime (inclusive).
      * @param string $end   UTC datetime (exclusive).
@@ -858,7 +858,7 @@ final class Reports
         $rows = self::queryRows($wpdb->prepare(
             "SELECT event_value, element_label, page_url, referrer, device, channel,
                     utm_source, utm_medium, utm_campaign, utm_id, utm_term, utm_content,
-                    click_id_type, created_at, session_id
+                    click_id_type, created_at, session_id, ip_address
              FROM {$table}
              WHERE event_type = 'form_success'
                AND created_at >= %s AND created_at < %s
@@ -884,6 +884,7 @@ final class Reports
                 'page_url'      => (string) $row['page_url'],
                 'referrer'      => (string) $row['referrer'],
                 'device'        => (string) $row['device'],
+                'ip_address'    => (string) ($row['ip_address'] ?? ''),
                 'session_id'    => (string) $row['session_id'],
                 'occurred_at'   => (string) $row['created_at'],
                 'attribution'   => [
@@ -908,7 +909,7 @@ final class Reports
             $subTable     = FormSubmissions::tableName();
 
             $subs = self::queryRows($wpdb->prepare(
-                "SELECT conversion_id, submission_id, provider, form_name, form_id, native_form_id
+                "SELECT conversion_id, submission_id, provider, form_name, form_id, native_form_id, ip_address
                  FROM {$subTable}
                  WHERE conversion_id IN ({$placeholders})",
                 $ids
@@ -928,6 +929,13 @@ final class Reports
                     $out[$i]['form']           = (string) $sub['form_name'] !== '' ? (string) $sub['form_name'] : $conversion['form'];
                     $out[$i]['form_id']        = (string) $sub['form_id'];
                     $out[$i]['native_form_id'] = (string) $sub['native_form_id'];
+
+                    // The submission row's address was captured in the form
+                    // POST the provider confirmed; prefer it over the
+                    // analytics event's when both exist.
+                    if ((string) $sub['ip_address'] !== '') {
+                        $out[$i]['ip_address'] = (string) $sub['ip_address'];
+                    }
                 }
             }
         }
