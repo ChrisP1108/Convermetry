@@ -8,15 +8,18 @@ if (!defined('ABSPATH')) exit;
 use Convermetry\Forms\Providers\ContactForm7Provider;
 use Convermetry\Forms\Providers\ElementorProvider;
 use Convermetry\Forms\Providers\FluentFormsProvider;
+use Convermetry\Forms\Providers\FormidableFormsProvider;
 use Convermetry\Forms\Providers\GravityFormsProvider;
+use Convermetry\Forms\Providers\NinjaFormsProvider;
 use Convermetry\Forms\Providers\WPFormsProvider;
 
 /**
  * Central registry of every form-provider integration.
  *
  * Built-in providers (Elementor Pro, Gravity Forms, WPForms, Contact Form 7,
- * Fluent Forms) are instantiated here; third-party code adds its own
- * adapters via the 'convermetry_form_providers' filter:
+ * Fluent Forms, Ninja Forms, Formidable Forms) are instantiated here;
+ * third-party code adds its own adapters via the
+ * 'convermetry_form_providers' filter:
  *
  *     add_filter('convermetry_form_providers', function (array $providers) {
  *         $providers[] = new My_Provider(); // implements FormProviderInterface
@@ -59,6 +62,8 @@ final class FormProviderRegistry
             new WPFormsProvider(),
             new ContactForm7Provider(),
             new FluentFormsProvider(),
+            new NinjaFormsProvider(),
+            new FormidableFormsProvider(),
         ];
 
         /**

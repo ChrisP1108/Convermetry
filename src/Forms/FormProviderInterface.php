@@ -58,6 +58,17 @@ interface FormProviderInterface
      * Registers the provider's server-side submission hooks. Only called
      * when {@see isAvailable()} is true.
      *
+     * By convention every built-in provider registers thin closures here and
+     * does the real work in a private handleSubmission() method that ends in
+     * a single {@see SubmissionService::record()} call. That method is
+     * deliberately NOT part of this contract: each provider receives its own
+     * plugin's hook arguments, so the signatures genuinely differ (Contact
+     * Form 7 takes one, Gravity Forms two, Fluent Forms three, plus the
+     * shared service), and no caller outside the provider ever invokes it.
+     * Declaring it here would force one incompatible signature on every
+     * implementation and promote an internal detail to public API. Follow the
+     * convention; do not try to unify it.
+     *
      * @param SubmissionService $service The pipeline confirmed submissions feed into.
      * @return void
      */

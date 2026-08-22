@@ -173,8 +173,15 @@ Providers are feature-detected — nothing loads or breaks when a plugin is abse
 | WPForms | `wpforms()` | `wpforms_process_complete` | Form id |
 | Contact Form 7 | `WPCF7_ContactForm` | `wpcf7_mail_sent` | Form post id |
 | Fluent Forms | `FLUENTFORM` / `wpFluentForm()` | `fluentform/submission_inserted` (+ legacy alias, double-fire-guarded) | Form id |
+| Ninja Forms | `Ninja_Forms()` | `ninja_forms_after_submission` | Form id |
+| Formidable Forms | `FrmForm` / `FrmEntry` / `FrmField` | `frm_after_create_entry` (priority 30) | Form id |
 
-Elementor discovery walks `_elementor_data` post meta directly (public queries miss private post types such as `elementor_library`). Gravity Forms uses `GFAPI::get_forms()`; WPForms lists the `wpforms` post type; CF7 uses `WPCF7_ContactForm::find()`.
+Elementor discovery walks `_elementor_data` post meta directly (public queries miss private post types such as `elementor_library`). Gravity Forms uses `GFAPI::get_forms()`; WPForms lists the `wpforms` post type; CF7 uses `WPCF7_ContactForm::find()`; Ninja Forms uses `Ninja_Forms()->form()->get_forms()`; Formidable uses `FrmForm::get_published_forms()`.
+
+Two providers filter events the hook alone would over-report:
+
+- **Ninja Forms** skips admin form previews, which run the full submission pipeline (`settings.is_preview`), and normalizes the `<id>_<instance>` form id that multi-instance renders submit.
+- **Formidable Forms** skips repeater/embedded child entries, which fire the same hook as the parent (`is_child`), and saved drafts, which create an entry before the real submission (`is_draft`). It registers at priority 30 so Formidable's own form actions (which run at 20) have settled first.
 
 **Delivery behavior for supported forms** (the default, `background` failure mode):
 
