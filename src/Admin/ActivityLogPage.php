@@ -618,11 +618,16 @@ final class ActivityLogPage
 
         fwrite($output, "\xEF\xBB\xBF");
 
+        // escape: '' is required, not cosmetic. Leaving it at the default
+        // emits a deprecation notice on PHP 8.4+ — and this function streams
+        // straight to the browser, so that notice lands INSIDE the downloaded
+        // file and corrupts it. '' is also the RFC 4180 behaviour PHP 9 will
+        // default to, and the only correct choice for a spreadsheet export.
         fputcsv($output, [
             'ID', 'Date/Time (UTC)', 'Success', 'Message Type', 'Kind', 'Attempt',
             'Endpoint', 'Endpoint Label', 'Delivery ID', 'Submission ID', 'Conversion ID',
             'Form Provider', 'Form Name', 'Response Code', 'Request URL', 'Payload', 'Response',
-        ]);
+        ], escape: '');
 
         $beforeId = PHP_INT_MAX;
 
@@ -650,7 +655,7 @@ final class ActivityLogPage
                     self::escapeCsvCell((string) ($entry['request_url'] ?? '')),
                     self::escapeCsvCell((string) ($entry['request_data'] ?? '')),
                     self::escapeCsvCell((string) ($entry['response_data'] ?? '')),
-                ]);
+                ], escape: '');
             }
         } while (count($logs) === self::EXPORT_CHUNK);
 

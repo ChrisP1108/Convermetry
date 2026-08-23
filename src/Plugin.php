@@ -10,6 +10,7 @@ use Convermetry\Admin\ActivityLogPage;
 use Convermetry\Admin\AnalyticsPage;
 use Convermetry\Admin\FormsPage;
 use Convermetry\Admin\SettingsPage;
+use Convermetry\Admin\SubmissionsPage;
 use Convermetry\Admin\WebhooksPage;
 use Convermetry\Api\DeliveryLogController;
 use Convermetry\Api\TrackingController;
@@ -37,7 +38,8 @@ use Convermetry\Webhook\FormDeliveryQueue;
  *  - FormProviderRegistry — form-plugin integrations (feature-detected)
  *  - SubmissionService    — the pipeline every confirmed submission flows through
  *  - DeliveryLogController — read-only deliveries REST API
- *  - Admin pages          — Analytics, Forms, Webhooks, Activity Log, Settings, About
+ *  - Admin pages          — Analytics, Submissions, Forms, Webhooks,
+ *                           Activity Log, Settings, About
  *
  * Static subsystems expose an init() that registers their own hooks; the
  * instance-based form layer (registry + service) is held here so the public
@@ -133,13 +135,19 @@ final class Plugin
         add_action('cvm_cleanup_old_events', [DatabaseManager::class, 'cleanupOldEvents']);
         add_action('cvm_cleanup_old_events', [DeliveryLog::class, 'purgeOld']);
         add_action('cvm_cleanup_old_events', [FormSubmissions::class, 'purgeOld']);
+        // Finishes the schema-1.2.0 channel/utm_campaign backfill a chunk at a
+        // time; a no-op once every row is populated.
+        add_action('cvm_cleanup_old_events', [FormSubmissions::class, 'backfillDerivedColumns']);
         add_action('cvm_cleanup_old_events', [FormDeliveryQueue::class, 'ensureWorkerScheduled']);
         add_action(DatabaseManager::CLEANUP_CATCHUP_HOOK, [DatabaseManager::class, 'cleanupOldEventsCatchUp']);
 
         $this->ensureCronScheduled();
 
         if (is_admin()) {
+            // Submenu order follows registration order — Submissions sits
+            // directly under Analytics.
             AnalyticsPage::init();
+            SubmissionsPage::init();
             FormsPage::init($this->formRegistry);
             WebhooksPage::init();
             ActivityLogPage::init();

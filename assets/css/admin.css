@@ -959,3 +959,334 @@
     overflow-x: auto;
     max-height: 200px;
 }
+
+/* ── Submissions page ─────────────────────────────────────────────────────── */
+
+.cvm-submissions-intro {
+    max-width: 780px;
+    margin: 8px 0 16px;
+}
+
+/* The list carries the page's card chrome itself: unlike the Activity Log,
+   these rows are not nested inside a page-level accordion. */
+.cvm-submissions-wrap .cvm-acc-controls {
+    background: #fff;
+    border: 1px solid #c3c4c7;
+    border-bottom: none;
+    border-radius: 4px 4px 0 0;
+    padding: 12px 16px;
+    margin-bottom: 0;
+}
+
+.cvm-submission-list {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    background: #fff;
+    border: 1px solid #c3c4c7;
+    border-radius: 0 0 4px 4px;
+    box-shadow: 0 1px 1px rgba(0, 0, 0, 0.04);
+    overflow: hidden;
+}
+
+.cvm-submission-list > .cvm-empty-msg {
+    padding: 20px 16px;
+}
+
+.cvm-submission-item + .cvm-submission-item {
+    border-top: 1px solid #f0f0f1;
+}
+
+/* ── Collapsed row ────────────────────────────────────────────────────────── */
+
+.cvm-submission-summary {
+    width: 100%;
+    display: grid;
+    grid-template-columns: 130px minmax(140px, 1.4fr) minmax(110px, 1fr) minmax(90px, 1fr) 110px 110px 150px 14px;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    background: #fff;
+    border: none;
+    border-left: 3px solid transparent;
+    text-align: left;
+    font-size: 13px;
+    color: #1d2327;
+    cursor: pointer;
+    transition: background-color 0.15s ease;
+}
+
+.cvm-submission-summary:hover {
+    background: #f6f7f7;
+}
+
+.cvm-submission-summary[aria-expanded="true"] {
+    background: #f6f7f7;
+    border-left-color: #2271b1;
+}
+
+.cvm-submission-summary:focus-visible {
+    outline: 2px solid #2271b1;
+    outline-offset: -2px;
+}
+
+.cvm-sub-col {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.cvm-sub-date {
+    color: #50575e;
+    font-size: 12px;
+}
+
+.cvm-sub-lead {
+    font-weight: 600;
+}
+
+.cvm-sub-provider {
+    display: block;
+    color: #757575;
+    font-size: 11px;
+    text-transform: capitalize;
+}
+
+.cvm-sub-page,
+.cvm-sub-channel,
+.cvm-sub-campaign {
+    color: #50575e;
+    font-size: 12px;
+}
+
+.cvm-sub-status {
+    overflow: visible;
+    white-space: normal;
+}
+
+/* ── Delivery status chip ─────────────────────────────────────────────────── */
+
+.cvm-status-chip {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 1.6;
+    white-space: nowrap;
+}
+
+.cvm-status-delivered {
+    background: #edfaef;
+    color: #0a7c2f;
+    border: 1px solid #b7e4c1;
+}
+
+.cvm-status-partial {
+    background: #fcf6e6;
+    color: #8a6116;
+    border: 1px solid #eadcb4;
+}
+
+.cvm-status-failed {
+    background: #fcf0f1;
+    color: #b32d2e;
+    border: 1px solid #f0c2c3;
+}
+
+.cvm-status-pending {
+    background: #f0f6fc;
+    color: #1c5d99;
+    border: 1px solid #c5d9ea;
+}
+
+/* Neutral by design: no webhook configured is a normal state, not an error. */
+.cvm-status-not_sent {
+    background: #f6f7f7;
+    color: #757575;
+    border: 1px solid #dcdcde;
+}
+
+/* ── Expanded detail ──────────────────────────────────────────────────────── */
+
+.cvm-submission-detail {
+    border-top: 1px solid #f0f0f1;
+    background: #fbfbfc;
+}
+
+.cvm-detail-inner {
+    padding: 16px 16px 20px 19px;
+}
+
+.cvm-detail-actions {
+    display: flex;
+    justify-content: flex-end;
+    margin-bottom: 4px;
+}
+
+.cvm-detail-block {
+    margin-top: 16px;
+}
+
+.cvm-detail-block:first-of-type {
+    margin-top: 0;
+}
+
+.cvm-detail-block h4 {
+    margin: 0 0 8px;
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #757575;
+}
+
+.cvm-detail-grid {
+    display: grid;
+    grid-template-columns: minmax(120px, max-content) 1fr;
+    gap: 4px 16px;
+    margin: 0;
+    font-size: 13px;
+}
+
+.cvm-detail-grid dt {
+    color: #50575e;
+}
+
+.cvm-detail-grid dd {
+    margin: 0;
+    color: #1d2327;
+    overflow-wrap: anywhere;
+}
+
+/* ── Submitted fields ─────────────────────────────────────────────────────── */
+
+.cvm-field-table-wrap {
+    overflow-x: auto;
+    border: 1px solid #dcdcde;
+    border-radius: 4px;
+    background: #fff;
+}
+
+.cvm-field-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+}
+
+.cvm-field-table tr + tr {
+    border-top: 1px solid #f0f0f1;
+}
+
+.cvm-field-table th {
+    width: 30%;
+    min-width: 140px;
+    padding: 8px 12px;
+    text-align: left;
+    font-weight: 600;
+    color: #50575e;
+    vertical-align: top;
+    overflow-wrap: anywhere;
+}
+
+.cvm-field-table td {
+    padding: 8px 12px;
+    color: #1d2327;
+    vertical-align: top;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
+/* ── Visitor journey ──────────────────────────────────────────────────────── */
+
+.cvm-journey {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    font-size: 13px;
+}
+
+.cvm-journey li {
+    position: relative;
+    padding: 3px 0 3px 18px;
+    color: #50575e;
+    overflow-wrap: anywhere;
+}
+
+.cvm-journey li::before {
+    content: "↓";
+    position: absolute;
+    left: 0;
+    color: #a7aaad;
+}
+
+.cvm-journey li:first-child::before {
+    content: "•";
+}
+
+.cvm-journey-end {
+    font-weight: 600;
+    color: #0a7c2f !important;
+}
+
+/* ── Per-endpoint delivery results ────────────────────────────────────────── */
+
+.cvm-delivery-list {
+    margin: 0 0 8px;
+    padding: 0;
+    list-style: none;
+    font-size: 13px;
+}
+
+.cvm-delivery-row {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    padding: 4px 0;
+}
+
+.cvm-delivery-mark {
+    flex-shrink: 0;
+    font-weight: 700;
+}
+
+.cvm-delivery-mark.ok {
+    color: #0a7c2f;
+}
+
+.cvm-delivery-mark.fail {
+    color: #b32d2e;
+}
+
+.cvm-delivery-name {
+    flex: 1;
+    overflow-wrap: anywhere;
+}
+
+.cvm-delivery-result {
+    color: #50575e;
+    white-space: nowrap;
+}
+
+.cvm-delivery-loglink {
+    margin: 8px 0 0;
+    font-size: 12px;
+    color: #757575;
+}
+
+/* ── Narrow screens: the grid columns stop fitting well before mobile ─────── */
+
+@media screen and (max-width: 1100px) {
+    .cvm-submission-summary {
+        grid-template-columns: 1fr 1fr;
+        gap: 4px 12px;
+    }
+
+    .cvm-submission-summary .cvm-accordion-arrow {
+        display: none;
+    }
+
+    .cvm-sub-col {
+        white-space: normal;
+    }
+}

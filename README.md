@@ -22,7 +22,7 @@ Was the lead successfully delivered to external systems?
 
 Convermetry works standalone — full analytics dashboard, form integrations, and webhook delivery inside one WordPress install — and is architected so a future Convermetry SaaS can receive `analytics_report` and `form_submission` messages from many installations, keyed by a shared, versioned payload schema.
 
-- **Version:** 0.2.0
+- **Version:** 0.3.0
 - **Requires WordPress:** 6.3+
 - **Requires PHP:** 8.3+
 - **License:** GPL-2.0-or-later
@@ -34,22 +34,23 @@ Convermetry works standalone — full analytics dashboard, form integrations, an
 
 1. [Requirements & installation](#requirements--installation)
 2. [Admin pages](#admin-pages)
-3. [Analytics tracking](#analytics-tracking)
-4. [Campaign & channel attribution](#campaign--channel-attribution)
-5. [Session → submission → conversion correlation](#session--submission--conversion-correlation)
-6. [Supported form providers](#supported-form-providers)
-7. [Custom form integration API](#custom-form-integration-api)
-8. [Webhooks](#webhooks)
-9. [The three identifiers](#the-three-identifiers-submission_id--conversion_id--delivery_id)
-10. [Payload schemas](#payload-schemas)
-11. [HMAC signatures](#hmac-signatures)
-12. [Retries & idempotency](#retries--idempotency)
-13. [Activity Log](#activity-log)
-14. [REST APIs](#rest-apis)
-15. [Developer hooks](#developer-hooks)
-16. [Privacy](#privacy)
-17. [Database tables](#database-tables)
-18. [Uninstall behavior](#uninstall-behavior)
+3. [Submissions](#submissions)
+4. [Analytics tracking](#analytics-tracking)
+5. [Campaign & channel attribution](#campaign--channel-attribution)
+6. [Session → submission → conversion correlation](#session--submission--conversion-correlation)
+7. [Supported form providers](#supported-form-providers)
+8. [Custom form integration API](#custom-form-integration-api)
+9. [Webhooks](#webhooks)
+10. [The three identifiers](#the-three-identifiers-submission_id--conversion_id--delivery_id)
+11. [Payload schemas](#payload-schemas)
+12. [HMAC signatures](#hmac-signatures)
+13. [Retries & idempotency](#retries--idempotency)
+14. [Activity Log](#activity-log)
+15. [REST APIs](#rest-apis)
+16. [Developer hooks](#developer-hooks)
+17. [Privacy](#privacy)
+18. [Database tables](#database-tables)
+19. [Uninstall behavior](#uninstall-behavior)
 
 ---
 
@@ -72,12 +73,25 @@ Activation never fatals when no third-party form plugin is installed — every p
 ```text
 Convermetry
     Analytics      — the reporting dashboard (top-level default)
+    Submissions    — every server-confirmed lead, with its attribution and answers
     Forms          — provider status, discovered forms, per-form configuration
     Webhooks       — endpoints, delivery types, signing, schedule, request customization
     Activity Log   — every delivery attempt with its (redacted) payload and response
     Settings       — website/client identity, tracking toggles, privacy, retention
     About          — this documentation inside wp-admin
 ```
+
+**Submissions** and **Activity Log** answer different questions and are easy to
+confuse:
+
+| | Submissions | Activity Log |
+|---|---|---|
+| One row is | one form submission | one delivery *attempt* |
+| Exists without webhooks | **yes** | no |
+| Shows | the lead, its attribution, its answers | the payload sent and the response returned |
+| Cleared by | Clear All Submissions | Clear All Logs |
+
+Clearing one never touches the other.
 
 ### Analytics
 
@@ -100,6 +114,10 @@ The three form metrics are deliberately distinct:
 - **Form Submit Attempts** — frontend `submit` events; success unconfirmed.
 - **Confirmed Conversions** — unique conversions deduplicated by `conversion_id` across both detection paths.
 - **Server-Confirmed Submissions** — submissions a form plugin's own server-side success hook confirmed. When a provider integration is available, this server-side signal is authoritative.
+
+### Submissions
+
+See [Submissions](#submissions) below.
 
 ### Forms
 
@@ -128,6 +146,82 @@ For an analytics-only endpoint, check **Analytics Reports** and leave **Form Sub
 ### Activity Log / Settings / About
 
 See [Activity Log](#activity-log); Settings holds the website/client identity (`website_info`), tracking toggles, privacy signals, the **IP addresses** switch (on by default, covering analytics events and form submissions — see [Privacy](#privacy)), hover dwell, retention, and the Activity Log lead-data privacy switch.
+
+## Submissions
+
+**Convermetry → Submissions** lists every form submission the plugin confirmed server-side, joined to the analytics session that produced it. It reads the `cvm_form_submissions` table directly, so it is a complete record of the site's leads **whether or not any webhook endpoint is configured** — webhook delivery is something that happens *to* a submission, not the reason one exists.
+
+### The list
+
+Rows are newest-first and paginated (5/10/25/50/100 per page), loaded over the `cvm_get_submissions` AJAX action:
+
+| Column | Source |
+|---|---|
+| Date | `created_at` (UTC) |
+| Visitor / Lead | Derived from the visitor's own answers — an assembled name and/or email address, falling back to a phone number, then `(no contact details)` |
+| Form | `form_name`, with the provider beneath it |
+| Page | Path of the page the form was submitted from |
+| Source | The classified marketing `channel` |
+| Campaign | `utm_campaign` |
+| Status | Webhook delivery state (below) |
+
+### Delivery status
+
+Delivery state is derived at read time from the delivery log and the pending queue — never stored on the submission, so retries can never leave it stale:
+
+| Chip | Meaning |
+|---|---|
+| **Delivered** | Every endpoint this submission was sent to acknowledged it |
+| **Partial (1/2)** | Some endpoints acknowledged, others did not |
+| **Failed** | Every attempt against every endpoint failed and the retry chain is spent |
+| **Queued** | Still in the delivery queue, possibly mid-retry |
+| **Not sent** | Nothing was ever queued or sent |
+
+**"Not sent" is a neutral state, not an error.** With no form webhook endpoint configured, every submission reads *Not sent — no form webhook*, and the page says so explicitly. Recording, attribution, and analytics correlation all work independently of delivery.
+
+A submission is judged against the endpoints it was **actually attempted against**, never the endpoints configured right now — adding a third endpoint today does not retroactively downgrade last month's successful two-endpoint delivery to *Partial*.
+
+### Filters & search
+
+All filters combine, and each dropdown hides itself until it has more than one value to offer:
+
+- **Year** and **Month**
+- **Provider** and **Form**
+- **Channel** and **Campaign**
+- **Delivery state** — any of the five above
+
+Search is debounced (300 ms) and matches the submitted field values, the form name, the page URL, and — exactly — a pasted `submission_id` or `conversion_id`.
+
+### The detail panel
+
+Expanding a row loads its detail over `cvm_get_submission_detail` (once per row, then cached client-side):
+
+- **Form** — provider, form name, form id, native form id, conversion page, timestamp, `submission_id`, `conversion_id`.
+- **Analytics & attribution** — channel, the full UTM set, ad-click type, entrance referrer, landing page, device, session id, session start, pageviews, and the visitor's IP when IP storage is on. When the tracker's correlation fields never reached the server (JavaScript blocked, tracking off, a privacy signal honored, a server-to-server submission) the panel says so rather than showing blanks.
+- **Visitor journey** — the session's recent pages in order, ending at the submission.
+- **Submitted fields** — every field name and the value the visitor entered.
+- **Page query parameters** — when the submitting URL carried any.
+- **Webhook delivery** — per-endpoint ✓/✕/⏳ with the response code, and a link into the Activity Log for the full payload and response.
+
+The session summary behind *Visitor journey* is normally computed when a webhook delivery freezes its payload. On a site with no endpoints that never happens, so the detail handler computes it lazily on first expand and persists the result — at most one extra query per submission, ever.
+
+### CSV export
+
+Two buttons, both streaming in keyset-paginated chunks so memory stays bounded on any table size:
+
+- **Export Current Filters** — exactly the rows on screen; the link is rewritten as filters change, and the server re-sanitizes the query string through the same code path the list uses.
+- **Export All To CSV** — every stored submission.
+
+Field sets differ from form to form, so there is no honest column-per-field header. The fixed columns carry identity, attribution, and delivery state — Date, Submission ID, Conversion ID, Session ID, Provider, Form Name, Form ID, Native Form ID, Conversion Page, Channel, UTM Source/Medium/Campaign/Term/Content, Ad Click Type, Entrance Referrer, Landing Page, Device, IP Address, Delivery Status — and the visitor's own answers travel in a final **Submission Data (JSON)** column. Cells beginning `=`, `+`, `-`, or `@` are tab-prefixed so spreadsheets treat them as text rather than formulas.
+
+### Deleting
+
+Submissions hold the information visitors typed into your forms. Two ways to remove it:
+
+- **Delete Submission** — inside an expanded row, for a single record (e.g. an erasure request).
+- **Clear All Submissions** — the toolbar button, nonce-protected and confirmed.
+
+Both are permanent. Neither touches Activity Log entries: a delivery attempt is a separate record of something the site did, and clearing leads must not silently erase the outbound audit trail. Submissions also age out automatically with the shared retention window under **Settings**.
 
 ## Analytics tracking
 
@@ -315,7 +409,7 @@ Every outbound message shares one versioned envelope:
 {
     "schema_version": "1.0",
     "source": "convermetry",
-    "plugin_version": "0.2.0",
+    "plugin_version": "0.3.0",
     "message_type": "analytics_report | form_submission",
     "website_info": { },
     "generated_at": "2026-08-22T14:00:00+00:00",
@@ -343,7 +437,7 @@ Every outbound message shares one versioned envelope:
 {
     "schema_version": "1.0",
     "source": "convermetry",
-    "plugin_version": "0.2.0",
+    "plugin_version": "0.3.0",
     "message_type": "analytics_report",
     "website_info": {
         "name": "Example Financial", "url": "https://example.com", "domain": "example.com",
@@ -437,7 +531,7 @@ Every outbound message shares one versioned envelope:
 {
     "schema_version": "1.0",
     "source": "convermetry",
-    "plugin_version": "0.2.0",
+    "plugin_version": "0.3.0",
     "message_type": "form_submission",
     "website_info": {
         "name": "Example Financial", "url": "https://example.com", "domain": "example.com",
@@ -602,11 +696,11 @@ Helper functions: `convermetry_submit_form()` (result-aware submission) and `cvm
 | Table | Purpose |
 |---|---|
 | `{$prefix}cvm_events` | One row per visitor interaction (analytics engine). Unique `(batch_id, batch_seq)` makes tracker replays idempotent; indexed by type/date, type/session/date, date, and page URL. `form_success` rows carry the `conversion_id` in `event_value`. Stores the visitor `ip_address` unless disabled in Settings. |
-| `{$prefix}cvm_form_submissions` | One row per server-confirmed submission: `submission_id` (unique), `conversion_id` (unique — the dedup point), session id, provider/form identity, page URL + query, submitter `ip_address` (empty when disabled in Settings), sanitized `submission_data`, frozen `analytics_context`, runtime overrides. |
+| `{$prefix}cvm_form_submissions` | One row per server-confirmed submission: `submission_id` (unique), `conversion_id` (unique — the dedup point), session id, provider/form identity, page URL + query, submitter `ip_address` (empty when disabled in Settings), sanitized `submission_data`, frozen `analytics_context`, runtime overrides, plus the indexed `channel` and `utm_campaign` columns the Submissions page filters on. |
 | `{$prefix}cvm_delivery_queue` | The background form-delivery queue: one row per submission × endpoint with status, attempt, next-attempt time, claim token, and the frozen URL/headers/body. Rows are deleted on acknowledgment or abandonment. |
 | `{$prefix}cvm_webhook_deliveries` | The Activity Log: one row per delivery attempt with normalized `message_type`/`kind`/`attempt` columns, identifiers, redacted headers, redacted request/response bodies (64 KB cap each). |
 
-All tables are created via `dbDelta()` with versioned schema options; migrations are **verified** (columns and critical indexes checked) before their version is recorded, so a failed/partial migration retries on the next load. Large retry state never lives in autoloaded options — the analytics retry-state and last-sent options are stored with `autoload = no`, and form payloads live in the queue table.
+All tables are created via `dbDelta()` with versioned schema options; migrations are **verified** (columns and critical indexes checked) before their version is recorded, so a failed/partial migration retries on the next load. `channel` and `utm_campaign` are denormalized copies of two values that also live inside the frozen `analytics_context` — promoted to indexed columns so the Submissions page can filter and build dropdowns without decoding every row's JSON. Rows predating schema 1.2.0 have them backfilled 500 at a time by the daily cleanup cron; an un-backfilled row is exactly one whose `channel IS NULL`, so the backfill needs no progress option and terminates on its own. Large retry state never lives in autoloaded options — the analytics retry-state and last-sent options are stored with `autoload = no`, and form payloads live in the queue table.
 
 ## Uninstall behavior
 
@@ -627,11 +721,13 @@ convermetry/
 │   ├── js/admin.js              # Webhooks/Forms pages (repeater, builders, tests, filtering)
 │   ├── js/dashboard.js          # Chart navigation/tooltips, panel state, print prep
 │   ├── js/activity-log.js       # Activity Log accordions, filters, pagination, API card
+│   ├── js/submissions.js        # Submissions list, filters, pagination, lazy detail panels
 │   └── js/tracker.js            # Frontend tracker + form correlation
 └── src/
     ├── Autoloader.php           # Minimal PSR-4 autoloader (no Composer)
     ├── Plugin.php               # Composition root
-    ├── Admin/                   # AnalyticsPage, FormsPage, WebhooksPage, ActivityLogPage, SettingsPage, AboutPage
+    ├── Admin/                   # AnalyticsPage, SubmissionsPage, FormsPage, WebhooksPage,
+    │                             # ActivityLogPage, SettingsPage, AboutPage
     ├── Analytics/               # Reports (shared query layer), ReportQueryException
     ├── Api/                     # TrackingController, DeliveryLogController
     ├── Database/                # DatabaseManager (events), FormSubmissions

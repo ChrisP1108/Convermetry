@@ -122,6 +122,10 @@ final class SubmissionService
             'form_id'         => FormSettings::effectiveFormId($formKey, $nativeId),
             'page_url'        => $page['url'],
             'ip_address'      => $ipAddress,
+            // Denormalized copies of two context values, so the Submissions
+            // page can filter on them without decoding every row's JSON.
+            'channel'         => (string) ($context['channel'] ?? ''),
+            'utm_campaign'    => (string) ($context['attribution']['utm_campaign'] ?? ''),
             'page_query'      => $page['query'],
             'submission_data' => $submissionData,
             'context'         => $context,
