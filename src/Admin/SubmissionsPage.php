@@ -7,7 +7,6 @@ if (!defined('ABSPATH')) exit;
 
 use Convermetry\Database\FormSubmissions;
 use Convermetry\Settings\Options;
-use Convermetry\Webhook\DeliveryLog;
 use Convermetry\Webhook\FormDeliveryQueue;
 
 /**
@@ -204,12 +203,21 @@ final class SubmissionsPage
 
         $filters = self::filtersFromRequest($_POST);
 
+        $total      = FormSubmissions::getCount($filters);
+        $totalPages = max(1, (int) ceil($total / $perPage));
+
+        // Clamp before querying. A page can fall off the end for several
+        // reasons — the last row on it was just deleted, a filter narrowed the
+        // set, retention pruned it, a bookmarked page number went stale — and
+        // an unclamped request answers with an empty list plus a nonsensical
+        // "Showing 11-10 of 10" and no way back. Fixing it here covers every
+        // cause at once; the client syncs to the currentPage it gets back.
+        $page = min($page, $totalPages);
+
         $rows  = FormSubmissions::getPaginated($page, $perPage, $filters);
-        $total = FormSubmissions::getCount($filters);
         $dates = FormSubmissions::getDistinctDates($filters);
 
-        $statuses      = self::deliveryStatuses($rows);
-        $endpointCount = self::formEndpointCount();
+        $statuses = self::deliveryStatuses($rows);
 
         $html = '';
         foreach ($rows as $row) {
@@ -217,17 +225,17 @@ final class SubmissionsPage
         }
 
         wp_send_json_success([
-            'html'          => $html,
-            'total'         => $total,
-            'totalPages'    => max(1, (int) ceil($total / $perPage)),
-            'currentPage'   => $page,
-            'years'         => $dates['years'],
-            'months'        => $dates['months'],
-            'providers'     => FormSubmissions::getDistinctValues('provider'),
-            'formNames'     => FormSubmissions::getDistinctValues('form_name'),
-            'channels'      => FormSubmissions::getDistinctValues('channel'),
-            'campaigns'     => FormSubmissions::getDistinctValues('utm_campaign'),
-            'endpointCount' => $endpointCount,
+            'html'        => $html,
+            'total'       => $total,
+            'totalPages'  => $totalPages,
+            'currentPage' => $page,
+            'years'       => $dates['years'],
+            'months'      => $dates['months'],
+            'providers'   => FormSubmissions::getDistinctValues('provider'),
+            'formNames'   => FormSubmissions::getDistinctValues('form_name'),
+            'channels'    => FormSubmissions::getDistinctValues('channel'),
+            'campaigns'   => FormSubmissions::getDistinctValues('utm_campaign'),
+            'posture'     => self::webhookPosture(),
         ]);
     }
 
@@ -338,165 +346,109 @@ final class SubmissionsPage
     // ── Delivery status ──────────────────────────────────────────────────────
 
     /**
-     * Number of endpoints currently configured to receive form submissions,
-     * or 0 when webhooks are paused entirely.
+     * How webhook delivery is currently configured, for wording only.
      *
-     * @return int
+     * 'paused' and 'none' both mean nothing will be delivered, but they are
+     * different situations and telling a user with three configured endpoints
+     * that they have "no form webhook" is simply wrong.
+     *
+     * @return string 'active', 'paused', or 'none'.
      */
-    private static function formEndpointCount(): int
+    private static function webhookPosture(): string
     {
-        return Options::webhooksActive() ? count(Options::formEndpoints()) : 0;
+        if (Options::formEndpoints() === []) {
+            return 'none';
+        }
+
+        return Options::webhooksActive() ? 'active' : 'paused';
     }
 
     /**
-     * Resolves the delivery status of every submission in one page of rows.
+     * Reads the recorded delivery status of every submission in a page of rows.
      *
-     * Two queries for the whole page rather than two per row: the delivery
-     * log and the queue are both indexed by submission_id, so the page's ids
-     * go in as a single IN list and the results are grouped in PHP.
+     * No queries at all now: the state and its per-endpoint detail are stored
+     * on the submission itself by {@see FormSubmissions::refreshDeliveryState()}.
+     * This used to run two cross-table queries and re-derive the answer from
+     * the Activity Log, which meant clearing the log rewrote history.
      *
      * @param array<int, array<string, mixed>> $rows Submission rows.
      * @return array<string, array<string, mixed>> Status arrays keyed by submission_id.
      */
     private static function deliveryStatuses(array $rows): array
     {
-        global $wpdb;
-
-        $ids = array_values(array_filter(array_map(
-            static fn(array $row): string => (string) ($row['submission_id'] ?? ''),
-            $rows
-        ), static fn(string $id): bool => $id !== ''));
-
-        if ($ids === []) {
-            return [];
-        }
-
-        $placeholders = implode(', ', array_fill(0, count($ids), '%s'));
-        $endpointCount = self::formEndpointCount();
-
-        $logRows = $wpdb->get_results($wpdb->prepare(
-            'SELECT submission_id, endpoint_url, MAX(success) AS ok, MAX(attempt) AS attempt,'
-            . ' MAX(response_code) AS code'
-            . ' FROM ' . DeliveryLog::tableName()
-            . " WHERE message_type = 'form_submission' AND submission_id IN ({$placeholders})"
-            . ' GROUP BY submission_id, endpoint_url',
-            $ids
-        ), ARRAY_A);
-
-        $queueRows = $wpdb->get_results($wpdb->prepare(
-            'SELECT submission_id, endpoint_url, status, attempt, next_attempt_at'
-            . ' FROM ' . FormDeliveryQueue::tableName()
-            . " WHERE submission_id IN ({$placeholders})",
-            $ids
-        ), ARRAY_A);
-
-        $byId = array_fill_keys($ids, ['log' => [], 'queue' => []]);
-
-        foreach ((is_array($logRows) ? $logRows : []) as $row) {
-            $byId[(string) $row['submission_id']]['log'][] = $row;
-        }
-        foreach ((is_array($queueRows) ? $queueRows : []) as $row) {
-            $byId[(string) $row['submission_id']]['queue'][] = $row;
-        }
-
         $out = [];
-        foreach ($byId as $id => $group) {
-            $out[$id] = self::deliveryStatus($group['log'], $group['queue'], $endpointCount);
+
+        foreach ($rows as $row) {
+            $submissionId = (string) ($row['submission_id'] ?? '');
+            if ($submissionId === '') {
+                continue;
+            }
+
+            $out[$submissionId] = self::deliveryStatus($row);
         }
 
         return $out;
     }
 
     /**
-     * Classifies one submission's delivery state from its log and queue rows.
+     * The display status for one submission row.
      *
-     * Pure — no database, no WordPress state — so the classification rules can
-     * be unit-tested directly.
-     *
-     * A submission is judged against the endpoints it was ACTUALLY attempted
-     * against, never against the endpoints configured right now: adding a
-     * third endpoint today must not retroactively downgrade last month's
-     * successful two-endpoint delivery to "partial". The current endpoint
-     * count is used only to word the "not sent" case, which is the ordinary
-     * state for a site using the plugin without webhooks and must never read
-     * as a failure.
-     *
-     * @param array<int, array<string, mixed>> $logRows       One row per (submission, endpoint), with ok/attempt/code.
-     * @param array<int, array<string, mixed>> $queueRows     Undelivered queue rows for this submission.
-     * @param int                              $endpointCount Endpoints currently configured for form delivery.
+     * @param array<string, mixed> $row Submission row.
      * @return array{state: string, label: string, endpoints: array<int, array<string, mixed>>}
      */
-    private static function deliveryStatus(array $logRows, array $queueRows, int $endpointCount): array
+    private static function deliveryStatus(array $row): array
     {
-        $endpoints = [];
+        $endpoints = self::decodeJson((string) ($row['delivery_json'] ?? ''));
+        $endpoints = array_values(array_filter($endpoints, 'is_array'));
 
-        foreach ($logRows as $row) {
-            $url = (string) ($row['endpoint_url'] ?? '');
-            $endpoints[$url] = [
-                'url'     => $url,
-                'label'   => Options::endpointLabel($url),
-                'ok'      => (int) ($row['ok'] ?? 0) === 1,
-                'attempt' => (int) ($row['attempt'] ?? 0),
-                'code'    => (int) ($row['code'] ?? 0),
-                'queued'  => false,
-            ];
+        $state = (string) ($row['delivery_state'] ?? '');
+
+        // A row whose state has not been recorded yet (pre-1.3.0, awaiting
+        // backfill) is classified from whatever detail it does carry, so the
+        // list stays correct while the migration drains.
+        if (!in_array($state, FormSubmissions::DELIVERY_STATES, true)) {
+            $state = FormSubmissions::classifyDelivery($endpoints);
         }
 
-        // A queue row outranks any log row for the same endpoint: the delivery
-        // is still in flight, so its last failed attempt is not the outcome.
-        foreach ($queueRows as $row) {
-            $url = (string) ($row['endpoint_url'] ?? '');
-            $endpoints[$url] = [
-                'url'     => $url,
-                'label'   => Options::endpointLabel($url),
-                'ok'      => false,
-                'attempt' => (int) ($row['attempt'] ?? 0),
-                'code'    => 0,
-                'queued'  => true,
-                'next'    => (string) ($row['next_attempt_at'] ?? ''),
-            ];
+        return [
+            'state'     => $state,
+            'label'     => self::statusLabel($state, $endpoints),
+            'endpoints' => $endpoints,
+        ];
+    }
+
+    /**
+     * Human wording for a delivery state.
+     *
+     * @param array<int, array<string, mixed>> $endpoints Per-endpoint outcomes.
+     * @return string
+     */
+    private static function statusLabel(string $state, array $endpoints): string
+    {
+        $count = count($endpoints);
+
+        if ($state === 'pending') {
+            $attempts = array_map(static fn(array $e): int => (int) ($e['attempt'] ?? 0), $endpoints);
+            $attempt  = $attempts === [] ? 0 : max($attempts);
+
+            return $attempt > 0 ? sprintf('Queued · retry %d', $attempt) : 'Queued';
         }
 
-        $endpoints = array_values($endpoints);
-
-        if ($queueRows !== []) {
-            $attempt = max(array_map(static fn(array $r): int => (int) ($r['attempt'] ?? 0), $queueRows));
-
-            return [
-                'state'     => 'pending',
-                'label'     => $attempt > 0 ? sprintf('Queued · retry %d', $attempt) : 'Queued',
-                'endpoints' => $endpoints,
-            ];
+        if ($state === 'not_sent') {
+            return match (self::webhookPosture()) {
+                'none'   => 'Not sent — no form webhook',
+                'paused' => 'Not sent — webhooks paused',
+                default  => 'Not sent',
+            };
         }
 
-        if ($logRows === []) {
-            return [
-                'state'     => 'not_sent',
-                'label'     => $endpointCount === 0 ? 'Not sent — no form webhook' : 'Not sent',
-                'endpoints' => [],
-            ];
-        }
+        $ok = count(array_filter($endpoints, static fn(array $e): bool => !empty($e['ok'])));
 
-        $attempted = count($logRows);
-        $ok        = count(array_filter($endpoints, static fn(array $e): bool => $e['ok']));
-
-        if ($ok === $attempted) {
-            return [
-                'state'     => 'delivered',
-                'label'     => $attempted > 1 ? sprintf('Delivered (%d)', $attempted) : 'Delivered',
-                'endpoints' => $endpoints,
-            ];
-        }
-
-        if ($ok > 0) {
-            return [
-                'state'     => 'partial',
-                'label'     => sprintf('Partial (%d/%d)', $ok, $attempted),
-                'endpoints' => $endpoints,
-            ];
-        }
-
-        return ['state' => 'failed', 'label' => 'Failed', 'endpoints' => $endpoints];
+        return match ($state) {
+            'delivered' => $count > 1 ? sprintf('Delivered (%d)', $count) : 'Delivered',
+            'partial'   => sprintf('Partial (%d/%d)', $ok, $count),
+            default     => 'Failed',
+        };
     }
 
     // ── Rendering ────────────────────────────────────────────────────────────
@@ -513,9 +465,17 @@ final class SubmissionsPage
             return;
         }
 
-        $cleared       = isset($_GET['cvm_cleared']) && $_GET['cvm_cleared'] === '1';
-        $total         = FormSubmissions::getCount();
-        $endpointCount = self::formEndpointCount();
+        $cleared = isset($_GET['cvm_cleared']) && $_GET['cvm_cleared'] === '1';
+        $total   = FormSubmissions::getCount();
+        $posture = self::webhookPosture();
+
+        // Nudge the derived-column migration along. Sites whose WP-Cron never
+        // fires would otherwise show blank attribution and a broken status
+        // filter indefinitely; the pass is bounded by its own time budget and
+        // is a no-op once every row is populated.
+        if (FormSubmissions::needsBackfill()) {
+            FormSubmissions::backfillDerivedColumns();
+        }
 
         ?>
         <div class="wrap cvm-wrap cvm-submissions-wrap">
@@ -531,7 +491,7 @@ final class SubmissionsPage
                 configured — expand a row to see the form, its attribution, and the visitor's answers.
             </p>
 
-            <?php if ($endpointCount === 0): ?>
+            <?php if ($posture === 'none'): ?>
                 <div class="notice notice-info inline cvm-retention-notice">
                     <p>
                         No webhook endpoint is currently set to receive form submissions, so every row
@@ -539,6 +499,15 @@ final class SubmissionsPage
                         attribution work independently of delivery. Add an endpoint under
                         <a href="<?php echo esc_url(add_query_arg(['page' => WebhooksPage::MENU_SLUG], self_admin_url('admin.php'))); ?>">Webhooks</a>
                         to forward leads onward.
+                    </p>
+                </div>
+            <?php elseif ($posture === 'paused'): ?>
+                <div class="notice notice-info inline cvm-retention-notice">
+                    <p>
+                        Webhook delivery is currently <strong>paused</strong>, so new submissions are
+                        recorded here but not forwarded. Resume it under
+                        <a href="<?php echo esc_url(add_query_arg(['page' => WebhooksPage::MENU_SLUG], self_admin_url('admin.php'))); ?>">Webhooks</a>;
+                        queued deliveries are kept, not discarded.
                     </p>
                 </div>
             <?php endif; ?>
@@ -619,6 +588,13 @@ final class SubmissionsPage
                 class="cvm-submission-summary"
                 aria-expanded="false"
                 aria-controls="<?php echo esc_attr($bodyId); ?>"
+                aria-label="<?php echo esc_attr(sprintf(
+                    'Submission from %s via %s on %s — %s. Expand for details.',
+                    $lead,
+                    $formName !== '' ? $formName : 'an unnamed form',
+                    self::formatDate($created),
+                    $stateLabel
+                )); ?>"
             >
                 <span class="cvm-sub-col cvm-sub-date"><?php echo esc_html(self::formatDate($created)); ?></span>
                 <span class="cvm-sub-col cvm-sub-lead"><?php echo esc_html($lead); ?></span>
@@ -794,15 +770,20 @@ final class SubmissionsPage
         ob_start();
 
         if ($state === 'not_sent') {
-            $configured = self::formEndpointCount() > 0;
             ?>
             <p class="cvm-empty-msg">
-                <?php if ($configured): ?>
-                    No delivery has been attempted for this submission yet.
-                <?php else: ?>
-                    Not sent — no webhook endpoint is configured to receive form submissions.
-                    The submission is still fully recorded here.
-                <?php endif; ?>
+                <?php switch (self::webhookPosture()):
+                    case 'none': ?>
+                        Not sent — no webhook endpoint is configured to receive form submissions.
+                        The submission is still fully recorded here.
+                        <?php break;
+                    case 'paused': ?>
+                        Not sent — webhook delivery is currently paused. The submission is
+                        fully recorded here and will not be delivered until delivery is resumed.
+                        <?php break;
+                    default: ?>
+                        No delivery has been attempted for this submission yet.
+                <?php endswitch; ?>
             </p>
             <?php
             return (string) ob_get_clean();

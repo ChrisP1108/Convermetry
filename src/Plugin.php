@@ -135,9 +135,12 @@ final class Plugin
         add_action('cvm_cleanup_old_events', [DatabaseManager::class, 'cleanupOldEvents']);
         add_action('cvm_cleanup_old_events', [DeliveryLog::class, 'purgeOld']);
         add_action('cvm_cleanup_old_events', [FormSubmissions::class, 'purgeOld']);
-        // Finishes the schema-1.2.0 channel/utm_campaign backfill a chunk at a
-        // time; a no-op once every row is populated.
+        // Finishes the derived-column backfill (channel/utm_campaign from
+        // 1.2.0, delivery_state from 1.3.0); a no-op once every row is
+        // populated. The catch-up hook drains large tables sooner than the
+        // daily run would, re-arming itself while work remains.
         add_action('cvm_cleanup_old_events', [FormSubmissions::class, 'backfillDerivedColumns']);
+        add_action(FormSubmissions::BACKFILL_CATCHUP_HOOK, [FormSubmissions::class, 'backfillCatchUp']);
         add_action('cvm_cleanup_old_events', [FormDeliveryQueue::class, 'ensureWorkerScheduled']);
         add_action(DatabaseManager::CLEANUP_CATCHUP_HOOK, [DatabaseManager::class, 'cleanupOldEventsCatchUp']);
 

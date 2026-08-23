@@ -67,6 +67,7 @@ function cvm_uninstall_current_site(): void
     // queue-worker runs.
     wp_clear_scheduled_hook('cvm_cleanup_old_events');
     wp_clear_scheduled_hook('cvm_cleanup_old_events_catchup');
+    wp_clear_scheduled_hook('cvm_submissions_backfill_catchup');
     wp_clear_scheduled_hook('cvm_dispatch_webhooks');
     wp_clear_scheduled_hook('cvm_process_form_queue');
     wp_unschedule_hook('cvm_retry_webhook');

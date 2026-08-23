@@ -214,6 +214,10 @@ final class FormDeliveryQueue
         }
 
         if ($queued > 0) {
+            // The submission now reads "Queued" in the admin list, immediately,
+            // rather than "Not sent" until the worker's first attempt lands.
+            FormSubmissions::refreshDeliveryState($submissionId);
+
             self::scheduleWorker(time() + 1);
 
             // Fire WP-Cron in the background right now (non-blocking loopback
@@ -323,13 +327,23 @@ final class FormDeliveryQueue
         $submissionId = (string) $row['submission_id'];
         $attempt      = (int) $row['attempt'] + 1;
 
-        $submission = FormSubmissions::get((int) $row['submission_row'])
-            ?? FormSubmissions::getBySubmissionId($submissionId);
+        // Resolved by submission_id ONLY — never by the numeric submission_row.
+        // submission_id is globally unique and never reused; row ids are reused
+        // the moment TRUNCATE resets AUTO_INCREMENT, and a numeric-first lookup
+        // would then bind this queue row to an unrelated new submission and
+        // deliver that visitor's lead under this row's delivery_id.
+        $submission = FormSubmissions::getBySubmissionId($submissionId);
 
-        // The submission row is gone (aged out past retention, or the plugin
-        // data was manually cleared) and nothing was frozen yet — there is
-        // nothing left to deliver.
-        if ($submission === null && empty($row['frozen_body'])) {
+        // The submission is gone — aged out past retention, or deleted by an
+        // admin. Stop, whether or not a payload was already frozen.
+        //
+        // This deliberately overrides the frozen-request guarantee that governs
+        // every other case. A frozen body is a verbatim copy of the visitor's
+        // field values, so replaying it after an erasure would keep sending
+        // exactly the data the admin just deleted. Retention windows (30 days
+        // and up) dwarf the retry chain (under a day), so in practice this only
+        // ever fires for a deliberate deletion.
+        if ($submission === null) {
             $wpdb->delete($table, ['id' => $rowId], ['%d']);
             return;
         }
@@ -338,9 +352,10 @@ final class FormDeliveryQueue
         $frozenUrl     = (string) ($row['frozen_url'] ?? '');
         $frozenHeaders = [];
 
-        if ($frozenBody === '' && $submission !== null) {
+        if ($frozenBody === '') {
             // First attempt: build and freeze the exact request this row
             // will (re-)send until it is acknowledged or abandoned.
+            // ($submission is non-null: the guard above returned otherwise.)
             if (!isset($payloadCache[$submissionId])) {
                 $submission                  = self::enrichContext($submission);
                 $payloadCache[$submissionId] = PayloadBuilder::formSubmission($submission);
@@ -364,7 +379,7 @@ final class FormDeliveryQueue
                 self::logAttempt($row, $submission, $attempt, $endpointUrl, [], '', [
                     'ok' => false, 'code' => 0, 'message' => 'Payload could not be JSON-encoded', 'body' => '',
                 ]);
-                self::rescheduleOrAbandon($rowId, $attempt);
+                self::rescheduleOrAbandon($rowId, $attempt, $submissionId);
                 return;
             }
 
@@ -400,10 +415,15 @@ final class FormDeliveryQueue
 
         if ($result['ok']) {
             $wpdb->delete($table, ['id' => $rowId], ['%d']);
+
+            // Recorded only after the queue row is gone: while it still exists
+            // the submission is legitimately "pending", and refreshing any
+            // earlier would freeze that state in over the success.
+            FormSubmissions::refreshDeliveryState($submissionId);
             return;
         }
 
-        self::rescheduleOrAbandon($rowId, $attempt);
+        self::rescheduleOrAbandon($rowId, $attempt, $submissionId);
     }
 
     /**
@@ -492,11 +512,12 @@ final class FormDeliveryQueue
      * schedule, or abandons the delivery once every attempt is spent (each
      * attempt is already in the Activity Log, so nothing is silently lost).
      *
-     * @param int $rowId   Queue row id.
-     * @param int $attempt The attempt number that just failed (1-based).
+     * @param int    $rowId        Queue row id.
+     * @param int    $attempt      The attempt number that just failed (1-based).
+     * @param string $submissionId The submission whose recorded delivery state to refresh.
      * @return void
      */
-    private static function rescheduleOrAbandon(int $rowId, int $attempt): void
+    private static function rescheduleOrAbandon(int $rowId, int $attempt, string $submissionId = ''): void
     {
         global $wpdb;
 
@@ -506,6 +527,10 @@ final class FormDeliveryQueue
         // Attempt 1 is the initial send; delays[0] gates attempt 2, etc.
         if ($attempt > count($delays)) {
             $wpdb->delete($table, ['id' => $rowId], ['%d']);
+
+            // The retry chain is spent and the queue row is gone, so the
+            // submission settles out of "pending" into its final verdict.
+            FormSubmissions::refreshDeliveryState($submissionId);
             return;
         }
 
@@ -518,6 +543,9 @@ final class FormDeliveryQueue
             ['%s', '%s', '%d', '%s'],
             ['%d']
         );
+
+        // Still pending, but the attempt counter the chip shows has moved.
+        FormSubmissions::refreshDeliveryState($submissionId);
     }
 
     /**

@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Convermetry
  * Description: Visitor analytics, campaign attribution, and server-confirmed form conversion tracking with reliable webhook delivery. Connects every lead to its analytics session, traffic source, and campaign, and delivers analytics reports and form submissions to any number of webhook endpoints with signing, retries, and idempotency.
- * Version:     0.3.0
+ * Version:     0.3.1
  * Requires at least: 6.3
  * Requires PHP: 8.3
  * Author:      Chris Paschall
@@ -39,7 +39,7 @@ if (version_compare(PHP_VERSION, '8.3', '<')) {
  */
 } else {
 
-    define('CVM_VERSION', '0.3.0');
+    define('CVM_VERSION', '0.3.1');
     define('CVM_PLUGIN_FILE', __FILE__);
     define('CVM_PLUGIN_DIR', plugin_dir_path(__FILE__));
     define('CVM_PLUGIN_URL', plugin_dir_url(__FILE__));
@@ -91,6 +91,7 @@ if (version_compare(PHP_VERSION, '8.3', '<')) {
     register_deactivation_hook(__FILE__, static function (): void {
         wp_clear_scheduled_hook('cvm_cleanup_old_events');
         wp_clear_scheduled_hook(Convermetry\Database\DatabaseManager::CLEANUP_CATCHUP_HOOK);
+        wp_clear_scheduled_hook(Convermetry\Database\FormSubmissions::BACKFILL_CATCHUP_HOOK);
         wp_clear_scheduled_hook(Convermetry\Webhook\AnalyticsDispatcher::CRON_HOOK);
         wp_clear_scheduled_hook(Convermetry\Webhook\FormDeliveryQueue::WORKER_HOOK);
         Convermetry\Webhook\AnalyticsDispatcher::suspendAllRetries();

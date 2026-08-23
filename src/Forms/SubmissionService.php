@@ -318,6 +318,10 @@ final class SubmissionService
             }
         }
 
+        // Every endpoint has been attempted and nothing is queued, so this
+        // records the synchronous path's final verdict on the submission row.
+        FormSubmissions::refreshDeliveryState($submissionId);
+
         return new SubmissionResult(
             ok: $overallOk,
             submissionId: $submissionId,

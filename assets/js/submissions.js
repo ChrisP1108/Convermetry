@@ -51,6 +51,18 @@
         controls.innerHTML = buildControlsHtml();
         root.appendChild(controls);
 
+        // Column headings for sighted users. Hidden from assistive tech: this
+        // is a list, not a table, so a floating header row would be read as
+        // stray text — each row's button carries its own full aria-label.
+        const heading = document.createElement('div');
+        heading.className = 'cvm-submission-heading';
+        heading.setAttribute('aria-hidden', 'true');
+        heading.innerHTML =
+            '<span>Date</span><span>Visitor / Lead</span><span>Form</span>' +
+            '<span>Page</span><span>Source</span><span>Campaign</span>' +
+            '<span>Delivery</span><span></span>';
+        root.appendChild(heading);
+
         const list = document.createElement('ul');
         list.className = 'cvm-submission-list';
         root.appendChild(list);
@@ -149,15 +161,38 @@
                     if (resp.success) {
                         fetchSubmissions();
                     } else {
-                        btn.disabled    = false;
-                        btn.textContent = 'Delete Submission';
+                        failDelete(btn, (resp.data && resp.data.message) || 'The submission could not be deleted.');
                     }
                 })
                 .catch(function () {
-                    btn.disabled    = false;
-                    btn.textContent = 'Delete Submission';
+                    failDelete(btn, 'The submission could not be deleted.');
                 });
         });
+
+        /**
+         * Restores a delete button and says why it failed. Silently re-enabling
+         * it looked identical to "nothing happened", which is the worst thing a
+         * destructive action can do.
+         *
+         * @param {HTMLElement} btn
+         * @param {string}      message
+         */
+        function failDelete(btn, message) {
+            btn.disabled    = false;
+            btn.textContent = 'Delete Submission';
+
+            const actions = btn.parentElement;
+            if (!actions) return;
+
+            let note = actions.querySelector('.cvm-delete-error');
+            if (!note) {
+                note = document.createElement('span');
+                note.className = 'cvm-delete-error';
+                note.setAttribute('role', 'alert');
+                actions.insertBefore(note, btn);
+            }
+            note.textContent = message;
+        }
 
         /**
          * Fetches one submission's detail panel, once per row.
@@ -258,6 +293,15 @@
                     }
                     const data = resp.data;
 
+                    // The server clamps the requested page into range, so
+                    // adopt what it actually answered with — otherwise a page
+                    // that fell off the end (last row deleted, filter
+                    // narrowed) would stay in state and every later request
+                    // would re-ask for it.
+                    if (typeof data.currentPage === 'number') {
+                        state.page = data.currentPage;
+                    }
+
                     if (!initialized) {
                         updateDateOptions(controls, data.years || [], data.months || []);
                         initialized = true;
@@ -350,7 +394,24 @@
             select.appendChild(opt);
         });
 
-        select.parentElement.style.display = values.length > 1 ? '' : 'none';
+        // A selected value can disappear from the list — the last row carrying
+        // it was just deleted, say. Dropping it would silently reset the
+        // control to "All" while the filter was still being applied, so the
+        // list looked unfiltered but wasn't. Keep it selectable so the control
+        // tells the truth and the user can clear it.
+        if (currentVal !== '' && values.indexOf(currentVal) === -1) {
+            const orphan = document.createElement('option');
+            orphan.value       = currentVal;
+            orphan.textContent = currentVal;
+            orphan.selected    = true;
+            select.appendChild(orphan);
+        }
+
+        // Shown as soon as there is anything to filter by. Blank values are
+        // already excluded server-side, so a single campaign among a hundred
+        // uncampaigned leads is a genuinely useful filter.
+        const usable = values.length > 0 || currentVal !== '';
+        select.parentElement.style.display = usable ? '' : 'none';
     }
 
     /**

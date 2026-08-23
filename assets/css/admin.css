@@ -93,11 +93,8 @@
     flex-wrap: wrap;
 }
 
-.cvm-webhook-url-input,
-.cvm-webhook-label-input {
-    flex: 1;
-    min-width: 220px;
-    max-width: 420px;
+.cvm-webhook-block input:not([type='checkbox']) {
+    width: min(420px, 100%);
 }
 
 /* About page — card-per-section layout ported from the Forms Webhook
@@ -463,7 +460,8 @@
     transition: transform 0.2s ease;
 }
 
-.cvm-accordion-header[aria-expanded="true"] .cvm-accordion-arrow {
+.cvm-accordion-header[aria-expanded="true"] .cvm-accordion-arrow,
+.cvm-submission-summary[aria-expanded="true"] .cvm-accordion-arrow {
     transform: rotate(180deg);
 }
 
@@ -622,7 +620,7 @@
 
 .cvm-acc-filters {
     display: flex;
-    align-items: center;
+    align-items: stretch;
     gap: 8px;
     flex-wrap: wrap;
 }
@@ -631,6 +629,10 @@
     display: flex;
     align-items: center;
     gap: 4px;
+}
+
+.cvm-acc-search .cvm-search-input {
+    align-self: stretch;
 }
 
 .cvm-search-input {
@@ -985,6 +987,7 @@
     background: #fff;
     border: 1px solid #c3c4c7;
     border-radius: 0 0 4px 4px;
+    border-top: none;
     box-shadow: 0 1px 1px rgba(0, 0, 0, 0.04);
     overflow: hidden;
 }
@@ -999,10 +1002,34 @@
 
 /* ── Collapsed row ────────────────────────────────────────────────────────── */
 
+.cvm-submission-heading,
 .cvm-submission-summary {
-    width: 100%;
     display: grid;
     grid-template-columns: 130px minmax(140px, 1.4fr) minmax(110px, 1fr) minmax(90px, 1fr) 110px 110px 150px 14px;
+}
+
+.cvm-submission-heading {
+    align-items: center;
+    gap: 12px;
+    padding: 8px 16px 8px 19px;
+    background: #f6f7f7;
+    border: 1px solid #c3c4c7;
+    border-bottom: none;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #757575;
+}
+
+.cvm-submission-heading span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.cvm-submission-summary {
+    width: 100%;
     align-items: center;
     gap: 12px;
     padding: 12px 16px;
@@ -1288,5 +1315,22 @@
 
     .cvm-sub-col {
         white-space: normal;
+    }
+}
+
+/* Delete failure notice inside an expanded row. */
+
+.cvm-delete-error {
+    margin-right: 10px;
+    color: #b32d2e;
+    font-size: 12px;
+    align-self: center;
+}
+
+/* The heading row's columns stop matching the rows once they collapse. */
+
+@media screen and (max-width: 1100px) {
+    .cvm-submission-heading {
+        display: none;
     }
 }

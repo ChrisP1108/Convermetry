@@ -6,7 +6,6 @@ namespace Convermetry\Tests\Unit;
 
 use Brain\Monkey;
 use Brain\Monkey\Functions;
-use Convermetry\Admin\SubmissionsPage;
 use Convermetry\Database\FormSubmissions;
 use PHPUnit\Framework\TestCase;
 use ReflectionMethod;
@@ -15,8 +14,8 @@ use ReflectionMethod;
  * Delivery-state classification and derived-column extraction for the
  * Submissions page.
  *
- * The states these rules produce are what an admin reads off the list, so the
- * two that matter most are the ones that are easy to get subtly wrong:
+ * The states these rules produce are what an admin reads off the list, and the
+ * ones that are easy to get subtly wrong:
  *
  *  - "not sent" must stay NEUTRAL. On a site with no webhook endpoint — the
  *    free-plugin default — every submission lands here, and classifying that
@@ -25,6 +24,10 @@ use ReflectionMethod;
  *    against, never the endpoints configured right now. Adding a third
  *    endpoint today must not retroactively downgrade last month's successful
  *    two-endpoint delivery to "partial".
+ *  - The LAST attempt against an endpoint is that endpoint's verdict. The
+ *    original implementation took MAX(success) and MAX(response_code) as
+ *    independent aggregates, so a 500 followed by a successful 200 retry read
+ *    as "Delivered (500)".
  */
 final class SubmissionStatusTest extends TestCase
 {
@@ -32,10 +35,6 @@ final class SubmissionStatusTest extends TestCase
     {
         parent::setUp();
         Monkey\setUp();
-
-        // Endpoint labels are cosmetic here; no endpoints are configured, so
-        // Options::endpointLabel() resolves to '' for every URL.
-        Functions\when('get_option')->justReturn([]);
         Functions\when('apply_filters')->returnArg(2);
     }
 
@@ -46,25 +45,48 @@ final class SubmissionStatusTest extends TestCase
     }
 
     /**
-     * @param array<int, array<string, mixed>> $logRows
+     * Builds the per-endpoint outcomes and classifies them, exactly as
+     * FormSubmissions::refreshDeliveryState() does after a real delivery.
+     *
+     * @param array<int, array<string, mixed>> $logRows   Oldest first.
      * @param array<int, array<string, mixed>> $queueRows
-     * @return array<string, mixed>
+     * @return array{state: string, endpoints: list<array<string, mixed>>}
      */
-    private function classify(array $logRows, array $queueRows, int $endpointCount): array
+    private function classify(array $logRows, array $queueRows): array
     {
-        $method = new ReflectionMethod(SubmissionsPage::class, 'deliveryStatus');
+        $endpoints = FormSubmissions::buildEndpointOutcomes($logRows, $queueRows);
 
-        return (array) $method->invoke(null, $logRows, $queueRows, $endpointCount);
+        return ['state' => FormSubmissions::classifyDelivery($endpoints), 'endpoints' => $endpoints];
     }
 
     /**
-     * @param string $endpoint
-     * @param int    $ok
+     * One delivery-log row as stored: success is 0/1, not a boolean.
+     *
      * @return array<string, mixed>
      */
-    private function logRow(string $endpoint, int $ok, int $code = 200): array
+    private function logRow(string $endpoint, int $success, int $code = 200, int $attempt = 1): array
     {
-        return ['endpoint_url' => $endpoint, 'ok' => $ok, 'attempt' => 1, 'code' => $code];
+        return [
+            'endpoint_url'   => $endpoint,
+            'endpoint_label' => '',
+            'success'        => $success,
+            'response_code'  => $code,
+            'attempt'        => $attempt,
+            'created_at'     => '2026-08-23 10:00:00',
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function queueRow(string $endpoint, int $attempt = 0): array
+    {
+        return [
+            'endpoint_url'    => $endpoint,
+            'status'          => 'pending',
+            'attempt'         => $attempt,
+            'next_attempt_at' => '2026-08-23 10:05:00',
+        ];
     }
 
     // ── not_sent ─────────────────────────────────────────────────────────────
@@ -73,36 +95,22 @@ final class SubmissionStatusTest extends TestCase
      * The free-plugin default: submissions are recorded, nothing is delivered,
      * and that is not a failure.
      */
-    public function testNoEndpointsAndNoAttemptsIsNotSentNeverFailed(): void
+    public function testNothingAttemptedIsNotSentNeverFailed(): void
     {
-        $status = $this->classify([], [], 0);
+        $status = $this->classify([], []);
 
         self::assertSame('not_sent', $status['state']);
         self::assertNotSame('failed', $status['state']);
-        self::assertStringContainsString('no form webhook', $status['label']);
         self::assertSame([], $status['endpoints']);
-    }
-
-    /**
-     * Endpoints exist but this submission has not been attempted yet — still
-     * "not sent", but without the "no webhook configured" explanation.
-     */
-    public function testConfiguredEndpointsWithNoAttemptsOmitsTheNoWebhookWording(): void
-    {
-        $status = $this->classify([], [], 2);
-
-        self::assertSame('not_sent', $status['state']);
-        self::assertStringNotContainsString('no form webhook', $status['label']);
     }
 
     // ── delivered / partial / failed ─────────────────────────────────────────
 
     public function testSingleSuccessfulEndpointIsDelivered(): void
     {
-        $status = $this->classify([$this->logRow('https://a.example/hook', 1)], [], 1);
+        $status = $this->classify([$this->logRow('https://a.example/hook', 1)], []);
 
         self::assertSame('delivered', $status['state']);
-        self::assertSame('Delivered', $status['label']);
         self::assertCount(1, $status['endpoints']);
         self::assertTrue($status['endpoints'][0]['ok']);
     }
@@ -112,10 +120,9 @@ final class SubmissionStatusTest extends TestCase
         $status = $this->classify([
             $this->logRow('https://a.example/hook', 1),
             $this->logRow('https://b.example/hook', 0, 500),
-        ], [], 2);
+        ], []);
 
         self::assertSame('partial', $status['state']);
-        self::assertSame('Partial (1/2)', $status['label']);
     }
 
     public function testEveryEndpointFailedWithNothingQueuedIsFailed(): void
@@ -123,78 +130,91 @@ final class SubmissionStatusTest extends TestCase
         $status = $this->classify([
             $this->logRow('https://a.example/hook', 0, 500),
             $this->logRow('https://b.example/hook', 0, 0),
-        ], [], 2);
+        ], []);
 
         self::assertSame('failed', $status['state']);
-        self::assertSame('Failed', $status['label']);
     }
 
     /**
-     * The regression this rule exists to prevent: a submission delivered
-     * successfully to the two endpoints that existed at the time must keep
-     * reading "Delivered" after a third endpoint is added.
+     * A submission delivered successfully to the two endpoints that existed at
+     * the time must keep reading "delivered" after a third is added — the
+     * classifier is deliberately given no knowledge of current configuration.
      */
     public function testAddingAnEndpointLaterDoesNotDowngradeAnOldDelivery(): void
     {
-        $logRows = [
+        $status = $this->classify([
             $this->logRow('https://a.example/hook', 1),
             $this->logRow('https://b.example/hook', 1),
-        ];
-
-        // Three endpoints are configured today; only two were ever attempted.
-        $status = $this->classify($logRows, [], 3);
+        ], []);
 
         self::assertSame('delivered', $status['state']);
-        self::assertSame('Delivered (2)', $status['label']);
+        self::assertCount(2, $status['endpoints']);
+    }
+
+    // ── Latest attempt wins (the "Delivered (500)" regression) ───────────────
+
+    /**
+     * The exact sequence that used to render "Delivered (500)": a failed 500
+     * and a successful 200 retry were max-ed into a success paired with the
+     * failure's status code.
+     */
+    public function testSuccessfulRetryReplacesTheEarlierFailureAndItsCode(): void
+    {
+        $status = $this->classify([
+            $this->logRow('https://a.example/hook', 0, 500, 1),
+            $this->logRow('https://a.example/hook', 1, 200, 2),
+        ], []);
+
+        self::assertSame('delivered', $status['state']);
+        self::assertCount(1, $status['endpoints'], 'retries collapse into one entry per endpoint');
+        self::assertTrue($status['endpoints'][0]['ok']);
+        self::assertSame(200, $status['endpoints'][0]['code'], 'the code must come from the winning attempt');
+        self::assertSame(2, $status['endpoints'][0]['attempt']);
+    }
+
+    /**
+     * The mirror case: a later failure must not be masked by an earlier
+     * success, or a broken endpoint would read as delivered forever.
+     */
+    public function testLaterFailureOverridesAnEarlierSuccess(): void
+    {
+        $status = $this->classify([
+            $this->logRow('https://a.example/hook', 1, 200, 1),
+            $this->logRow('https://a.example/hook', 0, 503, 2),
+        ], []);
+
+        self::assertSame('failed', $status['state']);
+        self::assertSame(503, $status['endpoints'][0]['code']);
     }
 
     // ── pending ──────────────────────────────────────────────────────────────
 
     /**
      * A queue row means the delivery is still in flight, so an earlier failed
-     * attempt is not yet the outcome.
+     * attempt is not yet the verdict.
      */
     public function testQueuedDeliveryOutranksItsOwnFailedAttempts(): void
     {
         $status = $this->classify(
             [$this->logRow('https://a.example/hook', 0, 500)],
-            [['endpoint_url' => 'https://a.example/hook', 'status' => 'pending', 'attempt' => 2, 'next_attempt_at' => '2026-08-23 10:00:00']],
-            1
+            [$this->queueRow('https://a.example/hook', 2)]
         );
 
         self::assertSame('pending', $status['state']);
-        self::assertSame('Queued · retry 2', $status['label']);
         self::assertCount(1, $status['endpoints']);
         self::assertTrue($status['endpoints'][0]['queued']);
         self::assertFalse($status['endpoints'][0]['ok']);
     }
 
     /**
-     * A submission queued but never attempted reports no retry count.
-     */
-    public function testFreshlyQueuedDeliveryHasNoRetryCount(): void
-    {
-        $status = $this->classify(
-            [],
-            [['endpoint_url' => 'https://a.example/hook', 'status' => 'pending', 'attempt' => 0]],
-            1
-        );
-
-        self::assertSame('pending', $status['state']);
-        self::assertSame('Queued', $status['label']);
-    }
-
-    /**
-     * One endpoint acknowledged, a second is still retrying: the submission is
-     * pending overall, and the detail panel still shows the endpoint that
-     * succeeded as succeeded.
+     * One endpoint acknowledged, a second still retrying: pending overall,
+     * while the detail panel still shows the endpoint that succeeded.
      */
     public function testPendingWinsOverallButPerEndpointResultsAreKept(): void
     {
         $status = $this->classify(
             [$this->logRow('https://a.example/hook', 1)],
-            [['endpoint_url' => 'https://b.example/hook', 'status' => 'pending', 'attempt' => 1]],
-            2
+            [$this->queueRow('https://b.example/hook', 1)]
         );
 
         self::assertSame('pending', $status['state']);
@@ -203,6 +223,40 @@ final class SubmissionStatusTest extends TestCase
         $byUrl = array_column($status['endpoints'], null, 'url');
         self::assertTrue($byUrl['https://a.example/hook']['ok']);
         self::assertTrue($byUrl['https://b.example/hook']['queued']);
+    }
+
+    // ── Unicode search terms ─────────────────────────────────────────────────
+
+    private function escapedTerm(string $term): ?string
+    {
+        $method = new ReflectionMethod(FormSubmissions::class, 'jsonEscapedTerm');
+
+        /** @var string|null $result */
+        $result = $method->invoke(null, $term);
+
+        return $result;
+    }
+
+    /**
+     * Rows written before the encoder switched to JSON_UNESCAPED_UNICODE hold
+     * "José" as "José", so the search has to look for that spelling too.
+     */
+    public function testNonAsciiSearchTermGetsItsEscapedSpelling(): void
+    {
+        // Single-quoted: these are the literal backslash-u sequences PHP's
+        // default JSON encoder wrote into the column, not the characters.
+        self::assertSame('Jos\\u00e9', $this->escapedTerm('José'));
+        self::assertSame('\\u00d1u\\u00f1ez', $this->escapedTerm('Ñuñez'));
+    }
+
+    /**
+     * An ASCII term needs no second LIKE — returning one would double the
+     * search cost of every ordinary query for nothing.
+     */
+    public function testAsciiSearchTermNeedsNoSecondForm(): void
+    {
+        self::assertNull($this->escapedTerm('jane@example.com'));
+        self::assertNull($this->escapedTerm('Consultation Request'));
     }
 
     // ── Derived columns ──────────────────────────────────────────────────────
