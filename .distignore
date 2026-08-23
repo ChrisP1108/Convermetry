@@ -1,0 +1,16 @@
+# Development artifacts excluded from the distributable plugin ZIP.
+# Consumed by bin/build-zip.sh. Never ship anything listed here: the plugin
+# runs with no Composer dependencies at runtime, so vendor/ is dev-only.
+.git
+.github
+.gitignore
+.distignore
+.phpunit.cache
+build
+tests
+vendor
+composer.json
+composer.lock
+phpunit.xml
+bin
+.DS_Store

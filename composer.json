@@ -1,0 +1,33 @@
+{
+    "name": "convermetry/convermetry",
+    "description": "Visitor analytics, campaign attribution, and server-confirmed form conversion tracking with reliable webhook delivery.",
+    "type": "wordpress-plugin",
+    "license": "GPL-2.0-or-later",
+    "require": {
+        "php": ">=8.3"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^10.5",
+        "brain/monkey": "^2.6"
+    },
+    "config": {
+        "platform": {
+            "php": "8.3.0"
+        },
+        "sort-packages": true
+    },
+    "autoload": {
+        "psr-4": {
+            "Convermetry\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Convermetry\\Tests\\": "tests/"
+        }
+    },
+    "scripts": {
+        "test": "phpunit --display-skipped",
+        "lint": "find src tests convermetry.php uninstall.php -name '*.php' -print0 | xargs -0 -n1 php -l"
+    }
+}

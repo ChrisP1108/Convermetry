@@ -1,1 +1,12 @@
-/vendor
+# The test toolchain IS tracked here — `tests/`, `composer.json`, `composer.lock`,
+# and `phpunit.xml` are version-controlled so the suite is reviewable, runnable,
+# and reproducible from a clone. They never reach the distributed plugin:
+# `.distignore` and `bin/build-zip.sh` strip them from the release ZIP, and the
+# build fails if one leaks. Only generated/installed artifacts are ignored.
+#
+# vendor/ is dev-only: the plugin declares no runtime Composer dependencies and
+# loads its own src/Autoloader.php, never vendor/autoload.php.
+/vendor/
+/.phpunit.cache/
+/build/
+.DS_Store

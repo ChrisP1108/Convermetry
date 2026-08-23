@@ -1,0 +1,119 @@
+name: CI
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Tests (PHP ${{ matrix.php }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # 8.3 is the declared floor and the one that actually matters: newer
+        # runtimes happily parse syntax an 8.3 host would reject. The newer
+        # versions catch deprecations before a host upgrade does.
+        php: ['8.3', '8.4', '8.5']
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          coverage: none
+          tools: composer:v2
+
+      - name: Install dependencies
+        run: composer install --no-interaction --no-progress
+
+      - name: Syntax check every PHP file
+        run: |
+          find src tests convermetry.php uninstall.php -name '*.php' -print0 \
+            | xargs -0 -n1 -P4 php -l
+
+      - name: Unit suite
+        run: composer test
+
+  runtime-floor:
+    name: No syntax or functions above the PHP 8.3 floor
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up PHP 8.3
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          coverage: none
+
+      # `php -l` on 8.3 (in the matrix above) already rejects 8.4+/8.5+ *syntax*.
+      # It cannot see calls to functions that simply do not exist on 8.3 — those
+      # parse fine and fail at runtime — so grep for them explicitly. Typed class
+      # constants and json_validate() are 8.3 features the plugin uses freely and
+      # are deliberately NOT listed here.
+      - name: Reject PHP 8.4+/8.5+ constructs
+        run: |
+          set -e
+          fail=0
+          check() {
+            if grep -rnE "$1" --include='*.php' src/ tests/ convermetry.php uninstall.php; then
+              echo "::error::Found $2, which does not run on PHP 8.3"
+              fail=1
+            fi
+          }
+          check "\b(array_find|array_find_key|array_any|array_all)\s*\(" "8.4 array functions"
+          check "\bmb_(trim|ltrim|rtrim)\s*\(" "mb_trim()/mb_ltrim()/mb_rtrim() (8.4+)"
+          check "\b(public|private|protected) [a-zA-Z?\\\\|]+ \\\$[a-zA-Z_]+ \{ *(get|set)\b" "property hooks (8.4+)"
+          check "\b(public|private|protected) (private|protected)\(set\)" "asymmetric visibility (8.4+)"
+          check "\b(array_first|array_last)\s*\(" "8.5 array functions"
+          check "\|>" "the pipe operator (8.5+)"
+          exit $fail
+
+  package:
+    name: Release ZIP is clean
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Build the distributable ZIP
+        run: bash bin/build-zip.sh
+
+      # The build script already fails on a contaminated staging directory and
+      # on a version mismatch; this asserts the same thing against the finished
+      # archive, so a future change to the script cannot quietly start shipping
+      # dev files.
+      - name: Assert no development artifacts were shipped
+        run: |
+          set -e
+          ZIP="$(find build -name '*.zip' -print -quit)"
+          if [ -z "$ZIP" ]; then
+            echo "::error::No ZIP was produced"; exit 1
+          fi
+          echo "Inspecting $ZIP"
+          unzip -l "$ZIP"
+          if unzip -l "$ZIP" | grep -E '(^|/)(\.git|tests|vendor|bin|\.github)/|composer\.(json|lock)|phpunit\.xml|\.distignore|\.gitignore'; then
+            echo "::error::Development artifacts leaked into the release ZIP"
+            exit 1
+          fi
+          for required in convermetry.php uninstall.php README.md; do
+            unzip -l "$ZIP" | grep -q "convermetry/$required" || {
+              echo "::error::Release ZIP is missing $required"; exit 1; }
+          done
+          echo "Release ZIP is clean."
+
+      - name: Upload the built plugin
+        uses: actions/upload-artifact@v4
+        with:
+          name: convermetry-plugin
+          path: build/*.zip
+          if-no-files-found: error
