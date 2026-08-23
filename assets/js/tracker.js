@@ -98,7 +98,7 @@
 (function () {
     'use strict';
 
-    var config = window.ConvermetryConfig;
+    const config = window.ConvermetryConfig;
     if (!config || !config.endpoint || !config.events) {
         return;
     }
@@ -112,13 +112,13 @@
         return;
     }
 
-    var MAX_BATCH = config.maxBatch || 20;
-    var MAX_QUEUE = 100;
-    var FLUSH_INTERVAL = config.flushIntervalMs || 5000;
-    var HOVER_DWELL = config.hoverDwellMs || 800;
-    var SESSION_IDLE_MS = 30 * 60 * 1000;
-    var INTERACTIVE = 'a, button, input[type="button"], input[type="submit"], [role="button"]';
-    var PENDING_KEY = 'cvm_pending';
+    const MAX_BATCH = config.maxBatch || 20;
+    const MAX_QUEUE = 100;
+    const FLUSH_INTERVAL = config.flushIntervalMs || 5000;
+    const HOVER_DWELL = config.hoverDwellMs || 800;
+    const SESSION_IDLE_MS = 30 * 60 * 1000;
+    const INTERACTIVE = 'a, button, input[type="button"], input[type="submit"], [role="button"]';
+    const PENDING_KEY = 'cvm_pending';
 
     // Retry/backoff timing — internal reliability constants, not exposed as
     // site-owner settings. RETRY_BASE_MS matches the normal flush cadence (a
@@ -127,19 +127,19 @@
     // (see scheduleBackoff()) spreads retries across tabs/sites instead of a
     // synchronized thundering herd when a shared server-side condition (a
     // brief outage) affects many visitors at once.
-    var RETRY_BASE_MS = 5000;
-    var RETRY_BASE_MS_429 = 30000;
-    var RETRY_MAX_MS = 5 * 60 * 1000;
+    const RETRY_BASE_MS = 5000;
+    const RETRY_BASE_MS_429 = 30000;
+    const RETRY_MAX_MS = 5 * 60 * 1000;
 
     /** utm parameter names captured from a tagged landing URL. */
-    var UTM_KEYS = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_id', 'utm_term', 'utm_content'];
+    const UTM_KEYS = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_id', 'utm_term', 'utm_content'];
 
     /** Ad-click identifier parameters → the [source, medium] they imply when
      *  the URL carries no utm tags. Only the parameter NAME is ever sent
      *  (click_id_type); the value is a cross-site advertising identifier and
      *  never leaves the browser. fbclid implies no medium — Facebook adds it
      *  to organic shares too, so paid cannot be assumed. */
-    var CLICK_IDS = {
+    const CLICK_IDS = {
         gclid:     ['google', 'cpc'],
         gbraid:    ['google', 'cpc'],
         wbraid:    ['google', 'cpc'],
@@ -151,33 +151,33 @@
     };
 
     /** Every field a stored campaign (and a conversion's snapshot) may carry. */
-    var CAMPAIGN_KEYS = UTM_KEYS.concat(['click_id_type']);
+    const CAMPAIGN_KEYS = UTM_KEYS.concat(['click_id_type']);
 
-    var queue = [];
-    var PAGE_URL = location.origin + location.pathname;
-    var REFERRER = normalizedReferrer();
-    var CAMPAIGN = readCampaign();
+    const queue = [];
+    const PAGE_URL = location.origin + location.pathname;
+    const REFERRER = normalizedReferrer();
+    const CAMPAIGN = readCampaign();
 
     /** True when this page load entered the site from outside: no referrer
      *  (direct / stripped) or a referrer on another origin. */
-    var IS_ENTRANCE = REFERRER === '' ||
+    const IS_ENTRANCE = REFERRER === '' ||
         (REFERRER !== location.origin && REFERRER.indexOf(location.origin + '/') !== 0);
 
     /* ------------------------------------------------------------------ *
      *  Session identity — 30-minute inactivity window, cookie-free
      * ------------------------------------------------------------------ */
 
-    var sessionStore = pickStore();
-    var memorySession = null;
+    const sessionStore = pickStore();
+    let memorySession = null;
 
     /** Returns the first usable storage, preferring localStorage so the
      *  session spans tabs; sessionStorage keeps it per-tab; null falls back
      *  to an in-memory id for this page view only. */
     function pickStore() {
-        var candidates = ['localStorage', 'sessionStorage'];
-        for (var i = 0; i < candidates.length; i++) {
+        const candidates = ['localStorage', 'sessionStorage'];
+        for (let i = 0; i < candidates.length; i++) {
             try {
-                var store = window[candidates[i]];
+                const store = window[candidates[i]];
                 store.setItem('cvm_probe', '1');
                 store.removeItem('cvm_probe');
                 return store;
@@ -194,14 +194,14 @@
      * session extends as long as events keep occurring.
      */
     function sessionId() {
-        var now = Date.now();
-        var id = null;
+        const now = Date.now();
+        let id = null;
 
         if (sessionStore) {
             try {
-                var raw = sessionStore.getItem('cvm_session');
+                const raw = sessionStore.getItem('cvm_session');
                 if (raw) {
-                    var parts = raw.split('.');
+                    const parts = raw.split('.');
                     if (parts.length === 2 && now - parseInt(parts[1], 10) < SESSION_IDLE_MS) {
                         id = parts[0];
                     }
@@ -242,15 +242,15 @@
      * inherit whatever the session currently carries.
      */
     function sessionAcquisition(id) {
-        var tagged = false;
-        for (var i = 0; i < CAMPAIGN_KEYS.length; i++) {
+        let tagged = false;
+        for (let i = 0; i < CAMPAIGN_KEYS.length; i++) {
             if (CAMPAIGN[CAMPAIGN_KEYS[i]]) {
                 tagged = true;
                 break;
             }
         }
 
-        var stored = null;
+        let stored = null;
         if (sessionStore) {
             try {
                 stored = JSON.parse(sessionStore.getItem('cvm_campaign'));
@@ -262,7 +262,7 @@
             stored = null;
         }
 
-        var record;
+        let record;
         // 'l' is the landing page of the session's CURRENT attribution: the
         // page a tagged landing (or external re-entry) arrived on. Inherited
         // untouched across internal navigation, refreshed with the
@@ -290,11 +290,11 @@
 
     /** Generates a random lowercase hex string of the given length. */
     function randomHex(length) {
-        var out = '';
+        let out = '';
         if (window.crypto && window.crypto.getRandomValues) {
-            var bytes = new Uint8Array(length / 2);
+            const bytes = new Uint8Array(length / 2);
             window.crypto.getRandomValues(bytes);
-            for (var i = 0; i < bytes.length; i++) {
+            for (let i = 0; i < bytes.length; i++) {
                 out += ('0' + bytes[i].toString(16)).slice(-2);
             }
         } else {
@@ -313,16 +313,16 @@
      *  to pageview and conversion events (the tracked URL itself carries no
      *  query data). */
     function readCampaign() {
-        var out = {};
+        const out = {};
         try {
-            var params = new URLSearchParams(location.search);
-            for (var i = 0; i < UTM_KEYS.length; i++) {
-                var value = params.get(UTM_KEYS[i]);
+            const params = new URLSearchParams(location.search);
+            for (let i = 0; i < UTM_KEYS.length; i++) {
+                const value = params.get(UTM_KEYS[i]);
                 if (value) {
                     out[UTM_KEYS[i]] = value.slice(0, 190);
                 }
             }
-            for (var key in CLICK_IDS) {
+            for (const key in CLICK_IDS) {
                 if (CLICK_IDS.hasOwnProperty(key) && params.get(key)) {
                     out.click_id_type = key;
                     if (!out.utm_source) {
@@ -344,7 +344,7 @@
      *  once per session id so the landing URL's tags (or entrance referrer)
      *  are written into the session exactly once, then kept as a fallback
      *  for when storage becomes unreadable mid-page. */
-    var appliedAcquisition = { id: null, record: { c: {}, r: '' } };
+    let appliedAcquisition = { id: null, record: { c: {}, r: '' } };
 
     /**
      * The session's current acquisition record. The first event for a given
@@ -360,7 +360,7 @@
             return appliedAcquisition.record;
         }
 
-        var stored = null;
+        let stored = null;
         if (sessionStore) {
             try {
                 stored = JSON.parse(sessionStore.getItem('cvm_campaign'));
@@ -379,11 +379,11 @@
      *  (track() adds page context to the object it is given, so the stored
      *  record itself must never be passed in). */
     function campaignSnapshot() {
-        var record = currentAcquisition(sessionId());
+        const record = currentAcquisition(sessionId());
 
-        var campaign = record.c || {};
-        var out = {};
-        for (var i = 0; i < CAMPAIGN_KEYS.length; i++) {
+        const campaign = record.c || {};
+        const out = {};
+        for (let i = 0; i < CAMPAIGN_KEYS.length; i++) {
             if (campaign[CAMPAIGN_KEYS[i]]) {
                 out[CAMPAIGN_KEYS[i]] = campaign[CAMPAIGN_KEYS[i]];
             }
@@ -406,7 +406,7 @@
             return '';
         }
         try {
-            var ref = new URL(document.referrer);
+            const ref = new URL(document.referrer);
             return ref.origin + ref.pathname;
         } catch (e) {
             return '';
@@ -457,9 +457,9 @@
             return;
         }
 
-        var event = data || {};
-        var attribution = campaignSnapshot();
-        for (var key in attribution) {
+        const event = data || {};
+        const attribution = campaignSnapshot();
+        for (const key in attribution) {
             if (attribution.hasOwnProperty(key) && !event[key]) {
                 event[key] = attribution[key];
             }
@@ -498,7 +498,7 @@
      * only half-applied; one root means one write settles all of it. */
 
     /** sessionStorage when usable, else null (in-memory root instead). */
-    var pendingStore = (function () {
+    let pendingStore = (function () {
         try {
             window.sessionStorage.setItem('cvm_probe', '1');
             window.sessionStorage.removeItem('cvm_probe');
@@ -510,7 +510,7 @@
 
     /** In-memory root, used when sessionStorage is unusable — the same shape
      *  as the persisted root so both paths share one implementation. */
-    var memoryRoot = { version: 1, globalNotBefore: 0, batches: {} };
+    let memoryRoot = { version: 1, globalNotBefore: 0, batches: {} };
 
     /**
      * Reads the single serialized root. Migrates the pre-existing bare
@@ -525,7 +525,7 @@
             return memoryRoot;
         }
         try {
-            var raw = JSON.parse(pendingStore.getItem(PENDING_KEY));
+            const raw = JSON.parse(pendingStore.getItem(PENDING_KEY));
             if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
                 return { version: 1, globalNotBefore: 0, batches: {} };
             }
@@ -533,8 +533,8 @@
                 return raw;
             }
 
-            var batches = {};
-            for (var id in raw) {
+            const batches = {};
+            for (const id in raw) {
                 if (Object.prototype.hasOwnProperty.call(raw, id) && Array.isArray(raw[id])) {
                     batches[id] = { events: raw[id], attempts: 0, notBefore: 0 };
                 }
@@ -574,21 +574,21 @@
      *  only for genuinely fresh batches — see sendBatch()), and dropping
      *  oldest batches when the total stashed events would exceed MAX_QUEUE. */
     function stashBatch(id, events) {
-        var root = readStore();
-        var existing = root.batches[id];
+        const root = readStore();
+        const existing = root.batches[id];
         root.batches[id] = {
             events: events,
             attempts: existing ? existing.attempts : 0,
             notBefore: existing ? existing.notBefore : 0
         };
 
-        var ids = Object.keys(root.batches);
-        var total = 0;
-        for (var i = 0; i < ids.length; i++) {
+        const ids = Object.keys(root.batches);
+        let total = 0;
+        for (let i = 0; i < ids.length; i++) {
             total += root.batches[ids[i]].events.length;
         }
         while (total > MAX_QUEUE && ids.length > 1) {
-            var oldest = ids.shift();
+            const oldest = ids.shift();
             total -= root.batches[oldest].events.length;
             delete root.batches[oldest];
         }
@@ -599,7 +599,7 @@
     /** Removes one acknowledged batch — events and retry metadata together,
      *  and only that batch — from the store. */
     function unstashBatch(id) {
-        var root = readStore();
+        const root = readStore();
         if (root.batches[id]) {
             delete root.batches[id];
             writeStore(root);
@@ -611,12 +611,12 @@
      *  window. Pure read; never writes, so merely checking eligibility never
      *  triggers a re-serialization of the whole store. */
     function isPaused(id, root) {
-        var r = root || readStore();
-        var now = Date.now();
+        const r = root || readStore();
+        const now = Date.now();
         if ((r.globalNotBefore || 0) > now) {
             return true;
         }
-        var entry = r.batches[id];
+        const entry = r.batches[id];
         return !!(entry && entry.notBefore > now);
     }
 
@@ -628,20 +628,20 @@
      *  the client-guessed exponential value — the server is the one place
      *  that actually knows how long its own limit window is. */
     function scheduleBackoff(id, is429, retryAfterSeconds) {
-        var root = readStore();
-        var entry = root.batches[id];
+        const root = readStore();
+        const entry = root.batches[id];
         if (!entry) {
             return; // Already removed elsewhere (e.g. a permanent 4xx raced this) — nothing to back off.
         }
 
-        var attempts = (entry.attempts || 0) + 1;
-        var notBefore;
+        const attempts = (entry.attempts || 0) + 1;
+        let notBefore;
 
         if (is429 && typeof retryAfterSeconds === 'number' && retryAfterSeconds > 0) {
             notBefore = Date.now() + Math.min(RETRY_MAX_MS, retryAfterSeconds * 1000);
         } else {
-            var base = is429 ? RETRY_BASE_MS_429 : RETRY_BASE_MS;
-            var cap = Math.min(RETRY_MAX_MS, base * Math.pow(2, attempts - 1));
+            const base = is429 ? RETRY_BASE_MS_429 : RETRY_BASE_MS;
+            const cap = Math.min(RETRY_MAX_MS, base * Math.pow(2, attempts - 1));
             notBefore = Date.now() + Math.random() * cap;
         }
 
@@ -656,7 +656,7 @@
     }
 
     /** Batch ids in flight right now, so a slow retry isn't sent twice. */
-    var inFlight = {};
+    const inFlight = {};
 
     /** Batch ids known to have survived a failed or unacknowledged send —
      *  either they failed retryably on THIS page (network error, 5xx, 429,
@@ -667,7 +667,7 @@
      *  the server's batch-id dedup absorbs the resend if the beacon did
      *  land. Fresh exit batches keep best-effort hand-off semantics so
      *  ordinary navigation doesn't replay every batch. */
-    var retryPending = {};
+    const retryPending = {};
 
     /**
      * Sends one batch under its id.
@@ -716,15 +716,15 @@
      * request-level measurement before changing it.
      */
     function sendBatch(id, events, mode) {
-        var root = readStore();
-        var alreadyPersisted = !!root.batches[id];
+        let root = readStore();
+        const alreadyPersisted = !!root.batches[id];
 
         if (!alreadyPersisted) {
             stashBatch(id, events);
             root = readStore();
         }
 
-        var bypassGate = !alreadyPersisted && mode === 'lifecycle-exit';
+        const bypassGate = !alreadyPersisted && mode === 'lifecycle-exit';
 
         if (!bypassGate && isPaused(id, root)) {
             return; // Gated — already durably persisted above if this was fresh; a later flush retries it.
@@ -741,10 +741,10 @@
 
         inFlight[id] = true;
 
-        var body = JSON.stringify({ batch_id: id, events: events });
+        const body = JSON.stringify({ batch_id: id, events: events });
 
         if ((mode === 'lifecycle-exit' || mode === 'navigation-interaction') && navigator.sendBeacon) {
-            var accepted = false;
+            let accepted = false;
             try {
                 accepted = navigator.sendBeacon(
                     config.endpoint,
@@ -775,10 +775,10 @@
                     unstashBatch(id); // Acknowledged, or unfixable by retry.
                     delete retryPending[id];
                 } else {
-                    var is429 = response.status === 429;
-                    var retryAfter = null;
+                    const is429 = response.status === 429;
+                    let retryAfter = null;
                     if (is429 && response.headers && response.headers.get) {
-                        var parsed = parseInt(response.headers.get('Retry-After'), 10);
+                        const parsed = parseInt(response.headers.get('Retry-After'), 10);
                         retryAfter = isNaN(parsed) ? null : parsed;
                     }
                     scheduleBackoff(id, is429, retryAfter); // 5xx/429 — retryable failure.
@@ -803,8 +803,8 @@
      * previous page in this tab.
      */
     function flush(mode) {
-        var root = readStore();
-        for (var id in root.batches) {
+        const root = readStore();
+        for (const id in root.batches) {
             if (Object.prototype.hasOwnProperty.call(root.batches, id) && !inFlight[id]) {
                 // Anything still in the store at resend time was never
                 // acknowledged — mark it so an exit-time beacon hand-off
@@ -837,7 +837,7 @@
      * ------------------------------------------------------------------ */
 
     document.addEventListener('click', function (e) {
-        var el = e.target && e.target.closest ? e.target.closest(INTERACTIVE) : null;
+        const el = e.target && e.target.closest ? e.target.closest(INTERACTIVE) : null;
         if (!el || inAdminBar(el)) {
             return;
         }
@@ -863,25 +863,25 @@
      *  delivering it.
      * ------------------------------------------------------------------ */
 
-    var FIELD_CONVERSION = 'cvm_conversion_id';
-    var FIELD_SESSION = 'cvm_session_id';
-    var FIELD_CONTEXT = 'cvm_context';
+    const FIELD_CONVERSION = 'cvm_conversion_id';
+    const FIELD_SESSION = 'cvm_session_id';
+    const FIELD_CONTEXT = 'cvm_context';
 
     /** Conversion token per form ELEMENT for the current submission attempt,
      *  so the provider's success event reuses the exact token the server
      *  received — one conversion id across both detection paths. */
-    var formTokens = (typeof WeakMap === 'function') ? new WeakMap() : null;
+    const formTokens = (typeof WeakMap === 'function') ? new WeakMap() : null;
 
     /** Gravity Forms tokens keyed by numeric form id — its confirmation
      *  event only reports the form id, and (with AJAX enabled) the original
      *  form element is replaced by the confirmation markup. */
-    var gfTokens = {};
+    const gfTokens = {};
 
     /** Creates or updates one hidden input on a form. */
     function setHiddenField(form, name, value) {
-        var input = null;
+        let input = null;
         try {
-            var candidates = form.querySelectorAll('input[name="' + name + '"]');
+            const candidates = form.querySelectorAll('input[name="' + name + '"]');
             input = candidates.length ? candidates[0] : null;
         } catch (e) {
             input = null;
@@ -898,11 +898,11 @@
 
     /** The compact attribution snapshot serialized into cvm_context. */
     function correlationContext() {
-        var record = currentAcquisition(sessionId());
-        var campaign = record.c || {};
-        var out = {};
+        const record = currentAcquisition(sessionId());
+        const campaign = record.c || {};
+        const out = {};
 
-        for (var i = 0; i < CAMPAIGN_KEYS.length; i++) {
+        for (let i = 0; i < CAMPAIGN_KEYS.length; i++) {
             if (campaign[CAMPAIGN_KEYS[i]]) {
                 out[CAMPAIGN_KEYS[i]] = campaign[CAMPAIGN_KEYS[i]];
             }
@@ -930,8 +930,8 @@
             return null;
         }
 
-        var existing = formTokens ? formTokens.get(form) : null;
-        var token = (!fresh && existing) ? existing : ('c' + randomHex(16));
+        const existing = formTokens ? formTokens.get(form) : null;
+        const token = (!fresh && existing) ? existing : ('c' + randomHex(16));
         if (formTokens) {
             formTokens.set(form, token);
         }
@@ -944,7 +944,7 @@
             // JSON serialization failed — the token and session still travel.
         }
 
-        var gfMatch = /^gform_(\d+)$/.exec(form.id || '');
+        const gfMatch = /^gform_(\d+)$/.exec(form.id || '');
         if (gfMatch) {
             gfTokens[gfMatch[1]] = token;
         }
@@ -956,8 +956,8 @@
      *  non-AJAX submissions (and plugins that serialize early) carry them
      *  even if the submit-capture refresh never runs. */
     function seedCorrelationFields() {
-        var forms = document.querySelectorAll('form');
-        for (var i = 0; i < forms.length; i++) {
+        const forms = document.querySelectorAll('form');
+        for (let i = 0; i < forms.length; i++) {
             if (!inAdminBar(forms[i])) {
                 ensureCorrelationFields(forms[i], false);
             }
@@ -978,7 +978,7 @@
      * ------------------------------------------------------------------ */
 
     document.addEventListener('submit', function (e) {
-        var form = e.target;
+        const form = e.target;
         if (!form || form.tagName !== 'FORM' || inAdminBar(form)) {
             return;
         }
@@ -1021,7 +1021,7 @@
         // event could be tied back to its form — the server-side provider
         // hook records the conversion under the same id, so the two paths
         // deduplicate into one conversion everywhere.
-        var valid = typeof token === 'string' && /^[A-Za-z0-9_.:\-]{8,100}$/.test(token);
+        const valid = typeof token === 'string' && /^[A-Za-z0-9_.:\-]{8,100}$/.test(token);
 
         track('form_success', {
             element_tag: 'form',
@@ -1044,9 +1044,9 @@
     // Contact Form 7 — native DOM event, fired after the server confirms.
     // The event target is the .wpcf7 wrapper; the form sits inside it.
     document.addEventListener('wpcf7mailsent', function (e) {
-        var id = e.detail && e.detail.contactFormId;
-        var wrapper = e.target;
-        var form = null;
+        const id = e.detail && e.detail.contactFormId;
+        const wrapper = e.target;
+        let form = null;
         if (wrapper) {
             form = wrapper.tagName === 'FORM' ? wrapper : (wrapper.querySelector ? wrapper.querySelector('form') : null);
         }
@@ -1069,7 +1069,7 @@
     // can load it AFTER this tracker — so binding is retried at DOM-ready,
     // window load, a couple of timed fallbacks, AND on every native form
     // submit (above), rather than being checked only within a fixed window.
-    var jQueryBound = false;
+    let jQueryBound = false;
 
     function bindJQueryFormEvents() {
         if (jQueryBound || !window.jQuery) {
@@ -1078,12 +1078,12 @@
         jQueryBound = true;
 
         window.jQuery(document).on('submit_success', function (e) {
-            var form = eventForm(e);
+            const form = eventForm(e);
             trackConversion((form && (form.getAttribute('name') || form.id)) || 'elementor-form', tokenFor(form));
         });
 
         window.jQuery(document).on('wpformsAjaxSubmitSuccess', function (e) {
-            var form = eventForm(e);
+            const form = eventForm(e);
             trackConversion((form && (form.getAttribute('name') || form.id)) || 'wpforms', tokenFor(form));
         });
 
@@ -1104,12 +1104,12 @@
      *  Hovers — pointer resting on an element for the dwell threshold
      * ------------------------------------------------------------------ */
 
-    var hoverTracked = (typeof WeakSet === 'function') ? new WeakSet() : null;
-    var hoverTimer = null;
-    var hoverEl = null;
+    const hoverTracked = (typeof WeakSet === 'function') ? new WeakSet() : null;
+    let hoverTimer = null;
+    let hoverEl = null;
 
     document.addEventListener('mouseover', function (e) {
-        var el = e.target && e.target.closest
+        const el = e.target && e.target.closest
             ? e.target.closest(INTERACTIVE + ', [data-cvm-hover]')
             : null;
 
@@ -1147,7 +1147,7 @@
 
         // Only cancel when the pointer truly left the tracked element (not
         // when it moved between the element's own children).
-        var stillInside = e.relatedTarget && hoverEl.contains(e.relatedTarget);
+        const stillInside = e.relatedTarget && hoverEl.contains(e.relatedTarget);
         if (!stillInside && (e.target === hoverEl || hoverEl.contains(e.target))) {
             clearTimeout(hoverTimer);
             hoverEl = null;
@@ -1158,15 +1158,15 @@
      *  Scroll depth — 50/100% milestones, once each per page view
      * ------------------------------------------------------------------ */
 
-    var milestones = [50, 100];
-    var reached = {};
-    var scrollScheduled = false;
+    const milestones = [50, 100];
+    const reached = {};
+    let scrollScheduled = false;
 
     function checkScrollDepth() {
         scrollScheduled = false;
 
-        var doc = document.documentElement;
-        var scrollable = doc.scrollHeight - window.innerHeight;
+        const doc = document.documentElement;
+        const scrollable = doc.scrollHeight - window.innerHeight;
 
         if (scrollable <= 0) {
             // Nothing to scroll — 50% never genuinely happened here, so
@@ -1180,10 +1180,10 @@
             return;
         }
 
-        var percent = Math.round((window.scrollY || doc.scrollTop || 0) / scrollable * 100);
+        const percent = Math.round((window.scrollY || doc.scrollTop || 0) / scrollable * 100);
 
-        for (var i = 0; i < milestones.length; i++) {
-            var mark = milestones[i];
+        for (let i = 0; i < milestones.length; i++) {
+            const mark = milestones[i];
             if (percent >= mark && !reached[mark]) {
                 reached[mark] = true;
                 track('scroll_depth', { event_value: String(mark) });

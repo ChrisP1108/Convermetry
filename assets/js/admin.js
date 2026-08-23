@@ -33,24 +33,24 @@
      * @returns {HTMLElement}
      */
     function buildKvRow(name, index, key, value) {
-        var row = document.createElement('div');
+        const row = document.createElement('div');
         row.className = 'cvm-kv-row';
 
-        var keyInput = document.createElement('input');
+        const keyInput = document.createElement('input');
         keyInput.type = 'text';
         keyInput.className = 'regular-text code cvm-kv-key';
         keyInput.name = name + '[' + index + '][key]';
         keyInput.placeholder = 'Key';
         keyInput.value = key || '';
 
-        var valueInput = document.createElement('input');
+        const valueInput = document.createElement('input');
         valueInput.type = 'text';
         valueInput.className = 'regular-text code cvm-kv-value';
         valueInput.name = name + '[' + index + '][value]';
         valueInput.placeholder = 'Value';
         valueInput.value = value || '';
 
-        var removeBtn = document.createElement('button');
+        const removeBtn = document.createElement('button');
         removeBtn.type = 'button';
         removeBtn.className = 'button cvm-kv-remove';
         removeBtn.textContent = 'Remove';
@@ -74,24 +74,24 @@
             }
             builder.dataset.kvWired = '1';
 
-            var name = builder.dataset.kvName;
-            var rows = builder.querySelector('.cvm-kv-rows');
-            var addBtn = builder.querySelector('.cvm-kv-add');
+            const name = builder.dataset.kvName;
+            const rows = builder.querySelector('.cvm-kv-rows');
+            const addBtn = builder.querySelector('.cvm-kv-add');
             if (!name || !rows || !addBtn) {
                 return;
             }
 
             rows.querySelectorAll('.cvm-kv-remove').forEach(function (btn) {
                 btn.addEventListener('click', function () {
-                    var row = btn.closest('.cvm-kv-row');
+                    const row = btn.closest('.cvm-kv-row');
                     if (row) row.remove();
                 });
             });
 
             addBtn.addEventListener('click', function () {
-                var index = parseInt(builder.dataset.kvNext || String(rows.children.length), 10);
+                const index = parseInt(builder.dataset.kvNext || String(rows.children.length), 10);
                 builder.dataset.kvNext = String(index + 1);
-                var row = buildKvRow(name, index, '', '');
+                const row = buildKvRow(name, index, '', '');
                 rows.appendChild(row);
                 row.querySelector('.cvm-kv-key').focus();
             });
@@ -107,12 +107,12 @@
     }
 
     function updateToggleCard(container) {
-        var toggleCard = document.getElementById('cvm-webhook-toggle-card');
+        const toggleCard = document.getElementById('cvm-webhook-toggle-card');
         if (!toggleCard || !container) {
             return;
         }
 
-        var hasAny = false;
+        let hasAny = false;
         container.querySelectorAll('.cvm-webhook-url-input').forEach(function (inp) {
             if (inp.value.trim() !== '') {
                 hasAny = true;
@@ -120,7 +120,7 @@
         });
 
         toggleCard.style.display = hasAny ? '' : 'none';
-        var checkbox = toggleCard.querySelector('input[type="checkbox"]');
+        const checkbox = toggleCard.querySelector('input[type="checkbox"]');
         if (checkbox) {
             checkbox.disabled = !hasAny;
         }
@@ -133,7 +133,7 @@
      * @returns {HTMLElement}
      */
     function buildEndpointBlock(index) {
-        var block = document.createElement('div');
+        const block = document.createElement('div');
         block.className = 'cvm-webhook-block';
         block.dataset.webhookIndex = index;
 
@@ -172,7 +172,7 @@
             '</div>';
 
         block.querySelector('.cvm-remove-webhook-btn').addEventListener('click', function () {
-            var container = document.getElementById('cvm-webhooks-container');
+            const container = document.getElementById('cvm-webhooks-container');
             block.remove();
             reindexEndpointBlocks(container);
             updateToggleCard(container);
@@ -192,25 +192,25 @@
         container.querySelectorAll('.cvm-webhook-block').forEach(function (block, idx) {
             block.dataset.webhookIndex = idx;
 
-            var title = block.querySelector('.cvm-webhook-block-title');
+            const title = block.querySelector('.cvm-webhook-block-title');
             if (title) {
                 title.textContent = 'Endpoint ' + (idx + 1);
             }
 
             [['url', '.cvm-webhook-url-input'], ['label', '.cvm-webhook-label-input'], ['secret', '.cvm-webhook-secret-input']]
                 .forEach(function (pair) {
-                    var input = block.querySelector(pair[1]);
+                    const input = block.querySelector(pair[1]);
                     if (input) {
                         input.name = 'cvm_webhooks[' + idx + '][' + pair[0] + ']';
                     }
                 });
 
             block.querySelectorAll('.cvm-webhook-types input[type="checkbox"]').forEach(function (checkbox) {
-                var type = checkbox.name.indexOf('[analytics]') !== -1 ? 'analytics' : 'forms';
+                const type = checkbox.name.indexOf('[analytics]') !== -1 ? 'analytics' : 'forms';
                 checkbox.name = 'cvm_webhooks[' + idx + '][' + type + ']';
             });
 
-            var removeBtn = block.querySelector('.cvm-remove-webhook-btn');
+            const removeBtn = block.querySelector('.cvm-remove-webhook-btn');
             if (removeBtn) {
                 removeBtn.style.display = idx === 0 ? 'none' : '';
             }
@@ -219,12 +219,12 @@
 
     /** Wires an endpoint block's test buttons. */
     function wireTestButtons(block) {
-        var result = block.querySelector('.cvm-test-result');
+        const result = block.querySelector('.cvm-test-result');
 
         block.querySelectorAll('.cvm-test-endpoint').forEach(function (btn) {
             btn.addEventListener('click', function () {
-                var urlInput = block.querySelector('.cvm-webhook-url-input');
-                var url = urlInput ? urlInput.value.trim() : '';
+                const urlInput = block.querySelector('.cvm-webhook-url-input');
+                const url = urlInput ? urlInput.value.trim() : '';
 
                 if (!url) {
                     if (result) result.textContent = 'Enter an endpoint URL first.';
@@ -234,7 +234,7 @@
                 btn.disabled = true;
                 if (result) result.textContent = 'Sending…';
 
-                var fd = new FormData();
+                const fd = new FormData();
                 fd.append('action', 'cvm_test_webhook');
                 fd.append('nonce', cfg('testNonce'));
                 fd.append('url', url);
@@ -246,7 +246,7 @@
                         btn.disabled = false;
                         if (!result) return;
                         if (resp.success) {
-                            var d = resp.data || {};
+                            const d = resp.data || {};
                             result.textContent = (d.ok ? '✓ ' : '✗ ') + (d.message || '') + (d.code ? ' (HTTP ' + d.code + ')' : '');
                             result.className = 'cvm-test-result ' + (d.ok ? 'cvm-test-ok' : 'cvm-test-fail');
                         } else {
@@ -266,7 +266,7 @@
     }
 
     function initWebhooksPage() {
-        var container = document.getElementById('cvm-webhooks-container');
+        const container = document.getElementById('cvm-webhooks-container');
         if (!container) {
             return;
         }
@@ -279,7 +279,7 @@
 
         container.querySelectorAll('.cvm-remove-webhook-btn').forEach(function (btn) {
             btn.addEventListener('click', function () {
-                var block = btn.closest('.cvm-webhook-block');
+                const block = btn.closest('.cvm-webhook-block');
                 if (block) {
                     block.remove();
                 }
@@ -290,18 +290,18 @@
 
         container.querySelectorAll('.cvm-webhook-block').forEach(wireTestButtons);
 
-        var addButton = document.getElementById('cvm-add-webhook');
+        const addButton = document.getElementById('cvm-add-webhook');
         if (addButton) {
             addButton.addEventListener('click', function () {
-                var block = buildEndpointBlock(endpointCount(container));
+                const block = buildEndpointBlock(endpointCount(container));
                 container.appendChild(block);
                 block.querySelector('.cvm-webhook-url-input').focus();
                 updateToggleCard(container);
             });
         }
 
-        var toggle = document.getElementById('cvm_webhook_active');
-        var label  = document.getElementById('cvm-webhook-toggle-label');
+        const toggle = document.getElementById('cvm_webhook_active');
+        const label  = document.getElementById('cvm-webhook-toggle-label');
         if (toggle && label) {
             toggle.addEventListener('change', function () {
                 label.textContent = this.checked ? 'Active' : 'Inactive';
@@ -316,24 +316,24 @@
      * ------------------------------------------------------------------ */
 
     function initFormsPage() {
-        var list = document.getElementById('cvm-forms-list');
+        const list = document.getElementById('cvm-forms-list');
         if (!list) {
             return;
         }
 
-        var search   = document.getElementById('cvm-form-search');
-        var provider = document.getElementById('cvm-form-provider-filter');
-        var state    = document.getElementById('cvm-form-state-filter');
-        var countEl  = document.getElementById('cvm-form-filter-count');
+        const search   = document.getElementById('cvm-form-search');
+        const provider = document.getElementById('cvm-form-provider-filter');
+        const state    = document.getElementById('cvm-form-state-filter');
+        const countEl  = document.getElementById('cvm-form-filter-count');
 
         function applyFilters() {
-            var term = search ? search.value.trim().toLowerCase() : '';
-            var prov = provider ? provider.value : '';
-            var st   = state ? state.value : '';
-            var visible = 0;
+            const term = search ? search.value.trim().toLowerCase() : '';
+            const prov = provider ? provider.value : '';
+            const st   = state ? state.value : '';
+            let visible = 0;
 
             list.querySelectorAll('.cvm-form-block').forEach(function (block) {
-                var matches = true;
+                let matches = true;
 
                 if (prov && block.dataset.provider !== prov) {
                     matches = false;
@@ -345,7 +345,7 @@
                     matches = false;
                 }
                 if (matches && term !== '') {
-                    var haystack = (block.dataset.name + ' ' + block.dataset.formId + ' ' + block.dataset.nativeId).toLowerCase();
+                    const haystack = (block.dataset.name + ' ' + block.dataset.formId + ' ' + block.dataset.nativeId).toLowerCase();
                     if (haystack.indexOf(term) === -1) {
                         matches = false;
                     }
@@ -370,10 +370,10 @@
         // badge and its filterable state immediately.
         list.querySelectorAll('.cvm-form-excluded-toggle').forEach(function (checkbox) {
             checkbox.addEventListener('change', function () {
-                var block = checkbox.closest('.cvm-form-block');
+                const block = checkbox.closest('.cvm-form-block');
                 if (!block) return;
                 block.dataset.excluded = checkbox.checked ? '1' : '0';
-                var badge = block.querySelector('.cvm-form-state-badge');
+                const badge = block.querySelector('.cvm-form-state-badge');
                 if (badge) {
                     badge.textContent = checkbox.checked ? 'Excluded' : 'Included';
                     badge.className = 'cvm-form-state-badge ' + (checkbox.checked ? 'is-excluded' : 'is-included');
@@ -385,7 +385,7 @@
         // Custom form id edits update the filter haystack.
         list.querySelectorAll('.cvm-form-id-input').forEach(function (input) {
             input.addEventListener('input', function () {
-                var block = input.closest('.cvm-form-block');
+                const block = input.closest('.cvm-form-block');
                 if (block) {
                     block.dataset.formId = input.value;
                 }

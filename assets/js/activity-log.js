@@ -20,7 +20,7 @@
      * @returns {string}
      */
     function escapeHtml(text) {
-        var node = document.createElement('span');
+        const node = document.createElement('span');
         node.appendChild(document.createTextNode(String(text)));
         return node.innerHTML;
     }
@@ -34,9 +34,9 @@
     function initAccordions() {
         document.querySelectorAll('.cvm-accordion-header').forEach(function (header) {
             header.addEventListener('click', function () {
-                var isExpanded = header.getAttribute('aria-expanded') === 'true';
-                var bodyId     = header.getAttribute('aria-controls');
-                var body       = bodyId ? document.getElementById(bodyId) : header.nextElementSibling;
+                const isExpanded = header.getAttribute('aria-expanded') === 'true';
+                const bodyId     = header.getAttribute('aria-controls');
+                const body       = bodyId ? document.getElementById(bodyId) : header.nextElementSibling;
 
                 if (!body) return;
 
@@ -57,28 +57,28 @@
      */
     function initLogLists() {
         document.querySelectorAll('.cvm-accordion').forEach(function (accordion) {
-            var header = accordion.querySelector('.cvm-accordion-header');
-            var body   = accordion.querySelector('.cvm-accordion-body');
+            const header = accordion.querySelector('.cvm-accordion-header');
+            const body   = accordion.querySelector('.cvm-accordion-body');
             if (!header || !body) return;
 
-            var status      = body.dataset.status || '';
-            var initialized = false;
-            var dirty       = false;
-            var state       = {
+            const status      = body.dataset.status || '';
+            let initialized = false;
+            let dirty       = false;
+            const state       = {
                 page: 1, perPage: 10, search: '', year: '', month: '',
                 endpoint: '', messageType: '', provider: '', formName: ''
             };
 
-            var controls = document.createElement('div');
+            const controls = document.createElement('div');
             controls.className = 'cvm-acc-controls';
             controls.innerHTML = buildControlsHtml();
             body.appendChild(controls);
 
-            var list = document.createElement('ul');
+            const list = document.createElement('ul');
             list.className = 'cvm-log-list';
             body.appendChild(list);
 
-            var paginationEl = document.createElement('div');
+            const paginationEl = document.createElement('div');
             paginationEl.className = 'cvm-pagination';
             body.appendChild(paginationEl);
 
@@ -106,9 +106,9 @@
             });
             // Debounced: every keystroke would otherwise fire a LIKE query
             // over LONGTEXT payloads.
-            var searchTimer = null;
+            let searchTimer = null;
             controls.querySelector('.cvm-search-input').addEventListener('input', function () {
-                var value = this.value;
+                const value = this.value;
                 clearTimeout(searchTimer);
                 searchTimer = setTimeout(function () {
                     state.search = value; state.page = 1; fetchLogs();
@@ -122,7 +122,7 @@
 
             // ── Fetch on accordion open ───────────────────────────────────────
             header.addEventListener('click', function () {
-                var isOpen = header.getAttribute('aria-expanded') === 'true';
+                const isOpen = header.getAttribute('aria-expanded') === 'true';
                 if (isOpen && (!initialized || dirty)) {
                     fetchLogs();
                 }
@@ -130,10 +130,10 @@
 
             // ── Delete via event delegation ───────────────────────────────────
             list.addEventListener('click', function (e) {
-                var btn = e.target.closest('.cvm-log-delete-btn');
+                const btn = e.target.closest('.cvm-log-delete-btn');
                 if (!btn) return;
-                var li    = btn.closest('.cvm-log-item');
-                var logId = li ? li.dataset.logId : null;
+                const li    = btn.closest('.cvm-log-item');
+                const logId = li ? li.dataset.logId : null;
                 if (!logId) return;
 
                 if (!confirm('Delete this log entry? This cannot be undone.')) return;
@@ -141,7 +141,7 @@
                 btn.disabled    = true;
                 btn.textContent = '…';
 
-                var fd = new FormData();
+                const fd = new FormData();
                 fd.append('action', 'cvm_delete_activity_log');
                 fd.append('nonce', cfg('deleteNonce'));
                 fd.append('log_id', logId);
@@ -150,9 +150,9 @@
                     .then(function (res) { return res.json(); })
                     .then(function (response) {
                         if (response.success) {
-                            var badge = accordion.querySelector('.cvm-accordion-header .cvm-badge');
+                            const badge = accordion.querySelector('.cvm-accordion-header .cvm-badge');
                             if (badge) {
-                                var count = parseInt(badge.textContent, 10);
+                                const count = parseInt(badge.textContent, 10);
                                 if (!isNaN(count) && count > 0) badge.textContent = String(count - 1);
                             }
                             fetchLogs();
@@ -177,15 +177,15 @@
             // Monotonic sequence: concurrent requests (rapid filter changes,
             // slow searches) can resolve out of order, and a stale response
             // must never overwrite a newer one.
-            var fetchSeq = 0;
+            let fetchSeq = 0;
 
             function fetchLogs() {
-                var seq = ++fetchSeq;
+                const seq = ++fetchSeq;
 
                 list.innerHTML         = '<li class="cvm-empty-msg">Loading…</li>';
                 paginationEl.innerHTML = '';
 
-                var fd = new FormData();
+                const fd = new FormData();
                 fd.append('action', 'cvm_get_activity_logs');
                 fd.append('nonce', cfg('logsNonce'));
                 fd.append('page', state.page);
@@ -209,7 +209,7 @@
                             list.innerHTML = '<li class="cvm-empty-msg">Failed to load the delivery log.</li>';
                             return;
                         }
-                        var data = resp.data;
+                        const data = resp.data;
 
                         if (!initialized) {
                             updateFilterOptions(controls, data.years || [], data.months || [], data.endpoints || []);
@@ -252,11 +252,11 @@
      * @param {string[]}    endpoints
      */
     function updateFilterOptions(controls, years, months, endpoints) {
-        var MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June',
+        const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June',
                            'July', 'August', 'September', 'October', 'November', 'December'];
 
-        var yearSelect  = controls.querySelector('.cvm-filter-year');
-        var monthSelect = controls.querySelector('.cvm-filter-month');
+        const yearSelect  = controls.querySelector('.cvm-filter-year');
+        const monthSelect = controls.querySelector('.cvm-filter-month');
 
         yearSelect.innerHTML = '<option value="">All Years</option>';
         years.forEach(function (y) {
@@ -265,7 +265,7 @@
 
         monthSelect.innerHTML = '<option value="">All Months</option>';
         months.forEach(function (m) {
-            var name = MONTH_NAMES[parseInt(m, 10) - 1] || m;
+            const name = MONTH_NAMES[parseInt(m, 10) - 1] || m;
             monthSelect.innerHTML += '<option value="' + escapeHtml(m) + '">' + escapeHtml(name) + '</option>';
         });
 
@@ -280,14 +280,14 @@
      * @param {string[]}    endpoints
      */
     function updateEndpointOptions(controls, endpoints) {
-        var endpointSelect = controls.querySelector('.cvm-filter-endpoint');
+        const endpointSelect = controls.querySelector('.cvm-filter-endpoint');
         if (!endpointSelect) return;
 
-        var currentVal = endpointSelect.value;
+        const currentVal = endpointSelect.value;
 
         endpointSelect.innerHTML = '<option value="">All Endpoints</option>';
         endpoints.forEach(function (url) {
-            var opt = document.createElement('option');
+            const opt = document.createElement('option');
             opt.value       = url;
             opt.textContent = url;
             if (url === currentVal) opt.selected = true;
@@ -307,14 +307,14 @@
      * @param {string}      allLabel
      */
     function updateListOptions(controls, selector, values, allLabel) {
-        var select = controls.querySelector(selector);
+        const select = controls.querySelector(selector);
         if (!select) return;
 
-        var currentVal = select.value;
+        const currentVal = select.value;
 
         select.innerHTML = '<option value="">' + escapeHtml(allLabel) + '</option>';
         values.forEach(function (value) {
-            var opt = document.createElement('option');
+            const opt = document.createElement('option');
             opt.value       = value;
             opt.textContent = value;
             if (value === currentVal) opt.selected = true;
@@ -374,10 +374,10 @@
             return;
         }
 
-        var start = (currentPage - 1) * perPage + 1;
-        var end   = Math.min(currentPage * perPage, totalItems);
+        const start = (currentPage - 1) * perPage + 1;
+        const end   = Math.min(currentPage * perPage, totalItems);
 
-        var html = '<span class="cvm-page-info">Showing ' + start + '–' + end + ' of ' + totalItems + '</span>';
+        let html = '<span class="cvm-page-info">Showing ' + start + '–' + end + ' of ' + totalItems + '</span>';
 
         if (totalPages > 1) {
             html += '<div class="cvm-page-buttons">';
@@ -390,7 +390,7 @@
                 if (p === '...') {
                     html += '<span class="cvm-page-ellipsis">&#8230;</span>';
                 } else {
-                    var activeClass = p === currentPage ? ' cvm-page-btn-active' : '';
+                    const activeClass = p === currentPage ? ' cvm-page-btn-active' : '';
                     html += '<button class="cvm-page-btn' + activeClass + '" data-page="' + p + '" aria-label="Page ' + p + '">' + p + '</button>';
                 }
             });
@@ -425,14 +425,14 @@
             return Array.from({ length: totalPages }, function (_, i) { return i + 1; });
         }
 
-        var pages = [1];
+        const pages = [1];
 
         if (currentPage > 3) pages.push('...');
 
-        var rangeStart = Math.max(2, currentPage - 1);
-        var rangeEnd   = Math.min(totalPages - 1, currentPage + 1);
+        const rangeStart = Math.max(2, currentPage - 1);
+        const rangeEnd   = Math.min(totalPages - 1, currentPage + 1);
 
-        for (var i = rangeStart; i <= rangeEnd; i++) {
+        for (let i = rangeStart; i <= rangeEnd; i++) {
             pages.push(i);
         }
 
@@ -455,11 +455,11 @@
      * load the mask is back and the key is gone for good.
      */
     function initApiCard() {
-        var toggle   = document.getElementById('cvm-delivery-api-toggle');
-        var label    = document.getElementById('cvm-api-toggle-label');
-        var section  = document.getElementById('cvm-api-key-section');
-        var keyValue = document.getElementById('cvm-api-key-value');
-        var copyBtn  = document.querySelector('.cvm-copy-key-btn');
+        const toggle   = document.getElementById('cvm-delivery-api-toggle');
+        const label    = document.getElementById('cvm-api-toggle-label');
+        const section  = document.getElementById('cvm-api-key-section');
+        const keyValue = document.getElementById('cvm-api-key-value');
+        const copyBtn  = document.querySelector('.cvm-copy-key-btn');
 
         if (!toggle) return;
 
@@ -472,10 +472,10 @@
         }
 
         toggle.addEventListener('change', function () {
-            var active = toggle.checked;
+            const active = toggle.checked;
             toggle.disabled = true;
 
-            var fd = new FormData();
+            const fd = new FormData();
             fd.append('action', 'cvm_toggle_delivery_api');
             fd.append('nonce', cfg('apiToggleNonce'));
             fd.append('active', active ? '1' : '0');
@@ -501,12 +501,12 @@
         if (copyBtn && keyValue) {
             copyBtn.addEventListener('click', function () {
                 if (keyValue.hasAttribute('data-masked')) return;
-                var key = keyValue.textContent.trim();
+                const key = keyValue.textContent.trim();
                 if (!key) return;
 
                 if (navigator.clipboard && navigator.clipboard.writeText) {
                     navigator.clipboard.writeText(key).then(function () {
-                        var orig = copyBtn.textContent;
+                        const orig = copyBtn.textContent;
                         copyBtn.textContent = 'Copied!';
                         setTimeout(function () { copyBtn.textContent = orig; }, 2000);
                     }).catch(function () { fallbackCopy(key, copyBtn); });
@@ -516,14 +516,14 @@
             });
         }
 
-        var regenBtn = document.querySelector('.cvm-regen-key-btn');
+        const regenBtn = document.querySelector('.cvm-regen-key-btn');
         if (regenBtn) {
             regenBtn.addEventListener('click', function () {
                 if (!confirm('Regenerate the API key? Any existing integrations using the current key will stop working until updated. The new key is shown only once — copy it right away.')) return;
 
                 regenBtn.disabled = true;
 
-                var fd = new FormData();
+                const fd = new FormData();
                 fd.append('action', 'cvm_regen_delivery_api_key');
                 fd.append('nonce', cfg('apiRegenNonce'));
 
@@ -549,7 +549,7 @@
      * @param {HTMLElement} btn Button whose label is temporarily replaced.
      */
     function fallbackCopy(text, btn) {
-        var ta = document.createElement('textarea');
+        const ta = document.createElement('textarea');
         ta.value = text;
         ta.style.cssText = 'position:fixed;opacity:0;top:0;left:0;';
         document.body.appendChild(ta);
@@ -557,7 +557,7 @@
         ta.select();
         try {
             document.execCommand('copy');
-            var orig = btn.textContent;
+            const orig = btn.textContent;
             btn.textContent = 'Copied!';
             setTimeout(function () { btn.textContent = orig; }, 2000);
         } catch (_) {}
