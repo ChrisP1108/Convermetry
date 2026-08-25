@@ -5,6 +5,7 @@ namespace Convermetry\Database;
 
 if (!defined('ABSPATH')) exit;
 
+use Convermetry\Notifications\NotificationQueue;
 use Convermetry\Settings\Options;
 use Convermetry\Webhook\DeliveryLog;
 use Convermetry\Webhook\FormDeliveryQueue;
@@ -302,6 +303,43 @@ final class FormSubmissions
         );
 
         return is_array($row) ? $row : null;
+    }
+
+    /**
+     * Fetches only the identity columns for one submission.
+     *
+     * The cheap lookup the notification listener needs, running inside the
+     * visitor's own request. It exists so that path never calls
+     * {@see getBySubmissionId()}, which does SELECT * and would drag three
+     * LONGTEXT columns (submission_data, context, runtime) into memory just to
+     * read a form key. Do not "simplify" the caller back to the full fetch.
+     *
+     * @param string $submissionId Submission id.
+     * @return array{id: int, form_key: string, provider: string, form_name: string}|null
+     */
+    public static function getIdentity(string $submissionId): ?array
+    {
+        global $wpdb;
+
+        $row = $wpdb->get_row(
+            $wpdb->prepare(
+                'SELECT id, form_key, provider, form_name FROM ' . self::tableName()
+                . ' WHERE submission_id = %s',
+                $submissionId
+            ),
+            ARRAY_A
+        );
+
+        if (!is_array($row)) {
+            return null;
+        }
+
+        return [
+            'id'        => (int) $row['id'],
+            'form_key'  => (string) $row['form_key'],
+            'provider'  => (string) $row['provider'],
+            'form_name' => (string) $row['form_name'],
+        ];
     }
 
     /**
@@ -797,6 +835,13 @@ final class FormSubmissions
 
         if ($submissionId !== '') {
             $wpdb->delete(FormDeliveryQueue::tableName(), ['submission_id' => $submissionId], ['%s']);
+
+            // Queued email notifications go the same way, and the reasoning is
+            // stronger: a webhook queue row holds a frozen payload, but a
+            // notification row would be rendered from the submission at send
+            // time — so cancelling here is what guarantees an erased lead can
+            // never be mailed. (Deleting cannot recall a message already sent.)
+            NotificationQueue::cancelForSubmission($submissionId);
         }
     }
 
@@ -824,6 +869,10 @@ final class FormSubmissions
         // The queue carries form-submission deliveries only, so every row in
         // it belongs to a submission that no longer exists.
         $wpdb->query('DELETE FROM ' . FormDeliveryQueue::tableName());
+
+        // Same argument for queued notifications: every one of them refers to
+        // a submission that has just been erased.
+        NotificationQueue::cancelAll();
     }
 
     /**
@@ -884,6 +933,13 @@ final class FormSubmissions
         if ($search !== '') {
             // The two id columns match exactly: pasting a submission_id or
             // conversion_id should find that one row, not LIKE-scan for it.
+            //
+            // The submission_data LIKE runs over the raw stored JSON, so it
+            // matches whichever shape the row holds: a pre-2.0 map's keys and
+            // values, or a 2.0 descriptor list's ids, labels, and values. The
+            // structural key names ("id", "label", "value") are also in that
+            // text, which is why a one- or two-character search is noisy — the
+            // UI debounces rather than restricting the term length.
             $like  = '%' . $wpdb->esc_like($search) . '%';
             $clause = 'submission_data LIKE %s OR form_name LIKE %s OR page_url LIKE %s'
                     . ' OR submission_id = %s OR conversion_id = %s';

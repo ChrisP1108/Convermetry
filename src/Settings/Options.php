@@ -5,6 +5,8 @@ namespace Convermetry\Settings;
 
 if (!defined('ABSPATH')) exit;
 
+use Convermetry\Notifications\NotificationSettings;
+
 /**
  * Typed read access to the plugin's settings.
  *
@@ -29,6 +31,15 @@ final class Options
 
     /** The wp_options key holding webhook configuration. */
     public const string WEBHOOK_OPTION_KEY = 'cvm_webhook_settings';
+
+    /**
+     * The wp_options key holding internal email notification configuration.
+     *
+     * Stored NON-AUTOLOADED, like cvm_form_settings: it carries a per-form
+     * rule map that grows with the site, and on the default (disabled) install
+     * it is read at most once per submission rather than on every request.
+     */
+    public const string NOTIFICATION_OPTION_KEY = 'cvm_notification_settings';
 
     /** @var string[] Event types the frontend tracker can record. */
     public const array EVENT_TYPES = ['pageview', 'click', 'form_submit', 'form_success', 'hover', 'scroll_depth'];
@@ -108,6 +119,132 @@ final class Options
         $saved = get_option(self::WEBHOOK_OPTION_KEY, []);
 
         return array_merge(self::webhookDefaults(), is_array($saved) ? $saved : []);
+    }
+
+    /**
+     * Returns the default value for every notification setting.
+     *
+     * 'enabled' is false and stays false: upgrading a plugin must never start
+     * mailing a site's leads to an inbox nobody chose. Both privacy-sensitive
+     * content toggles ('include_journey', 'include_ip') are likewise off by
+     * default — the journey is the most browsing-history-like data the plugin
+     * holds, and mailing either one is a policy decision, not a convenience.
+     *
+     * @return array<string, mixed>
+     */
+    public static function notificationDefaults(): array
+    {
+        return [
+            'enabled'           => false,
+            'recipients'        => [],
+            'subject'           => 'New {form_name} submission on {site_name}',
+            'scope'             => 'all',
+            'forms'             => [],
+            'include_fields'    => true,
+            'include_analytics' => true,
+            'include_journey'   => false,
+            'include_ip'        => false,
+        ];
+    }
+
+    /**
+     * Returns all notification settings merged over the defaults.
+     *
+     * @return array<string, mixed>
+     */
+    public static function notificationAll(): array
+    {
+        $saved = get_option(self::NOTIFICATION_OPTION_KEY, []);
+
+        return array_merge(self::notificationDefaults(), is_array($saved) ? $saved : []);
+    }
+
+    /**
+     * Whether internal email notifications are switched on at all.
+     *
+     * This is the first and cheapest gate in the submission listener — on a
+     * default install it is the entire cost of the notification subsystem in a
+     * visitor's request.
+     *
+     * @return bool
+     */
+    public static function notificationsEnabled(): bool
+    {
+        return !empty(self::notificationAll()['enabled']);
+    }
+
+    /**
+     * The validated internal recipient addresses.
+     *
+     * Re-validated on READ, not merely on save: an option edited by WP-CLI, a
+     * migration, or a filter must never hand an unvalidated string to
+     * wp_mail(). Recipients are always configured by an administrator and are
+     * never derived from submitted visitor data.
+     *
+     * @return list<string>
+     */
+    public static function notificationRecipients(): array
+    {
+        $saved = self::notificationAll()['recipients'] ?? [];
+
+        return is_array($saved) ? NotificationSettings::sanitizeRecipients($saved) : [];
+    }
+
+    /**
+     * The subject template, including its {token} placeholders.
+     *
+     * @return string
+     */
+    public static function notificationSubjectTemplate(): string
+    {
+        $subject = trim((string) (self::notificationAll()['subject'] ?? ''));
+
+        return $subject !== '' ? $subject : (string) self::notificationDefaults()['subject'];
+    }
+
+    /**
+     * Which forms notify: 'all' (every form except those switched off) or
+     * 'selected' (only forms explicitly switched on).
+     *
+     * @return string
+     */
+    public static function notificationScope(): string
+    {
+        $scope = (string) (self::notificationAll()['scope'] ?? 'all');
+
+        return in_array($scope, NotificationSettings::SCOPES, true) ? $scope : 'all';
+    }
+
+    /**
+     * The stored rule for one form key: 'enabled', 'disabled', or 'inherit'
+     * when no explicit rule was saved.
+     *
+     * @param string $formKey Provider-qualified form key ("gravityforms:7").
+     * @return string
+     */
+    public static function notificationFormRule(string $formKey): string
+    {
+        $forms = self::notificationAll()['forms'] ?? [];
+        $rule  = is_array($forms) ? (string) ($forms[$formKey] ?? '') : '';
+
+        return in_array($rule, NotificationSettings::FORM_RULES, true) ? $rule : 'inherit';
+    }
+
+    /**
+     * The four email content toggles.
+     *
+     * @return array{fields: bool, analytics: bool, journey: bool, ip: bool}
+     */
+    public static function notificationIncludes(): array
+    {
+        $all = self::notificationAll();
+
+        return [
+            'fields'    => !empty($all['include_fields']),
+            'analytics' => !empty($all['include_analytics']),
+            'journey'   => !empty($all['include_journey']),
+            'ip'        => !empty($all['include_ip']),
+        ];
     }
 
     /**

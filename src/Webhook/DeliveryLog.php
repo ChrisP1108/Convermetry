@@ -7,6 +7,7 @@ if (!defined('ABSPATH')) exit;
 
 use Convermetry\Database\DatabaseManager;
 use Convermetry\Settings\Options;
+use Convermetry\Support\SensitiveKeys;
 
 /**
  * Persists and retrieves webhook delivery log entries (the Activity Log) in
@@ -72,21 +73,6 @@ final class DeliveryLog
      * (LONGTEXT), so a slow DELETE is plausible.
      */
     private const int CLEANUP_TIME_BUDGET = 20;
-
-    /**
-     * Substrings of keys whose values are redacted from stored JSON bodies
-     * and stored request headers. Endpoint responses sometimes echo
-     * debugging data or secrets, request headers carry configured
-     * Authorization values, and form payloads can contain credential-like
-     * fields — the log must not become a credential store.
-     *
-     * @var string[]
-     */
-    private const array SENSITIVE_KEY_PATTERNS = [
-        'password', 'passwd', 'pwd', 'secret', 'token', 'api_key', 'apikey',
-        'authorization', 'credential', 'private_key', 'access_token',
-        'refresh_token', 'client_secret',
-    ];
 
     /**
      * Returns the fully-prefixed deliveries table name.
@@ -297,6 +283,10 @@ final class DeliveryLog
      * the exact headers still travel on the wire and in frozen retries, but
      * the log must never hold a configured Authorization value in the clear.
      *
+     * Matching is delegated to {@see SensitiveKeys::matchesHeader()}, which
+     * canonicalizes the name first, so 'X-API-Key', 'x-api-key' and 'X_Api_Key'
+     * are all recognised as the same credential.
+     *
      * @param array<string, string> $headers Request headers as sent.
      * @return array<string, string>
      */
@@ -304,15 +294,9 @@ final class DeliveryLog
     {
         $out = [];
         foreach ($headers as $name => $value) {
-            $lower = strtolower((string) $name);
-            $redact = false;
-            foreach (self::SENSITIVE_KEY_PATTERNS as $pattern) {
-                if (str_contains($lower, $pattern)) {
-                    $redact = true;
-                    break;
-                }
-            }
-            $out[(string) $name] = $redact ? '[REDACTED]' : (string) $value;
+            $out[(string) $name] = SensitiveKeys::matchesHeader((string) $name)
+                ? '[REDACTED]'
+                : (string) $value;
         }
 
         return $out;
@@ -324,8 +308,15 @@ final class DeliveryLog
      * Only well-formed JSON objects/arrays are rewritten — non-JSON bodies
      * are stored as-is (there is no reliable way to find secrets in free
      * text, and mangling the body would hide what the endpoint actually
-     * said). Key matching is case-insensitive substring matching against
-     * {@see self::SENSITIVE_KEY_PATTERNS}, applied recursively.
+     * said). Key matching is delegated to {@see SensitiveKeys::matches()} and
+     * applied recursively.
+     *
+     * Structured submission fields need a second rule. In schema 2.0 a field
+     * travels as {"id": "...", "label": "...", "value": "..."}, so the
+     * sensitive NAME is a value of 'id'/'label' while the secret itself sits
+     * under the generic key 'value'. Key-name matching alone would walk right
+     * past it and store the password in the clear, which is exactly the
+     * regression this method exists to prevent.
      *
      * @param string $body Raw body.
      * @return string The body with sensitive values replaced by [REDACTED].
@@ -350,15 +341,28 @@ final class DeliveryLog
         }
 
         $redact = static function (array $data) use (&$redact): array {
+            // A field descriptor hides the sensitive name in a VALUE, so test
+            // both 'id' and 'label' and mask the sibling 'value'.
+            //
+            // The early return fires ONLY when something was actually
+            // redacted. A descriptor that is not sensitive must keep
+            // recursing: this walker also runs over arbitrary endpoint
+            // RESPONSE bodies, and a response that merely happens to be shaped
+            // like {"id":…,"label":…,"value":{"client_secret":…}} would
+            // otherwise smuggle a nested secret past redaction.
+            if (self::isFieldDescriptor($data)
+                && (SensitiveKeys::matches((string) $data['id'])
+                    || SensitiveKeys::matches((string) $data['label']))
+            ) {
+                $data['value'] = '[REDACTED]';
+
+                return $data;
+            }
+
             foreach ($data as $key => $value) {
-                if (is_string($key)) {
-                    $lower = strtolower($key);
-                    foreach (self::SENSITIVE_KEY_PATTERNS as $pattern) {
-                        if (str_contains($lower, $pattern)) {
-                            $data[$key] = '[REDACTED]';
-                            continue 2;
-                        }
-                    }
+                if (is_string($key) && SensitiveKeys::matches($key)) {
+                    $data[$key] = '[REDACTED]';
+                    continue;
                 }
                 if (is_array($value)) {
                     $data[$key] = $redact($value);
@@ -369,6 +373,26 @@ final class DeliveryLog
         };
 
         return (string) wp_json_encode($redact($decoded));
+    }
+
+    /**
+     * Whether an array is one structured submission field descriptor.
+     *
+     * Deliberately strict: all three keys must be present, 'id' and 'label'
+     * must be scalar (they are the names being tested), and 'value' may be
+     * anything. A looser test would misclassify ordinary endpoint responses
+     * that happen to carry an 'id'.
+     *
+     * @param array<mixed> $data Decoded JSON node.
+     * @return bool
+     */
+    private static function isFieldDescriptor(array $data): bool
+    {
+        return array_key_exists('id', $data)
+            && array_key_exists('label', $data)
+            && array_key_exists('value', $data)
+            && is_scalar($data['id'])
+            && is_scalar($data['label']);
     }
 
     /**

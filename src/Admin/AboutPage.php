@@ -152,6 +152,12 @@ final class AboutPage
             . 'server-confirmed lead, delivered immediately through the background form-delivery queue instead of '
             . 'on a schedule. <strong>Send form test</strong> delivers one on demand.</li>';
         echo '</ul>';
+        echo '<p><strong>Internal email notifications are a third, separate path.</strong> The '
+            . '<strong>Notifications</strong> page emails a chosen internal address when a submission is '
+            . 'recorded, with the same analytics context attached. It has its own master switch, its own '
+            . 'queue, and works with no webhook endpoints at all — and because it is email, a sent '
+            . 'notification is a copy of lead data outside Convermetry\'s retention and deletion controls. '
+            . 'Notification sends do not appear in the Activity Log, which covers webhook deliveries only.</p>';
         echo '<p><strong>For an analytics-only endpoint</strong>, check <strong>Analytics Reports</strong> and '
             . 'leave <strong>Form Submissions</strong> unchecked — no submitted form field values are ever sent to '
             . 'that endpoint. Analytics reports do still describe individual conversions '
@@ -268,8 +274,16 @@ final class AboutPage
             . '<code>ip_address</code> is the submitter\'s address, captured during the visitor\'s own request '
             . 'and frozen with the record; it is always present, and empty when disabled in Settings or when no '
             . 'valid address could be determined.</p>';
+        echo '<p><strong>Schema 2.0:</strong> <code>submission_data</code> is an ordered list of '
+            . '<code>{id, label, value}</code> field descriptors — the provider-native id for automation, '
+            . 'the human label for display, and a string or list of strings for the value. It replaced a '
+            . 'label-keyed object that discarded the field id and silently merged two fields sharing a '
+            . 'label. Submissions recorded before this change keep emitting <strong>schema 1.0</strong> '
+            . 'with their original object, so one submission never arrives in two shapes — '
+            . '<strong>branch on <code>schema_version</code>, never on <code>plugin_version</code></strong>. '
+            . 'Analytics reports are unaffected and remain 1.0.</p>';
         echo '<pre class="cvm-about-code">' . esc_html('{
-    "schema_version": "1.0",
+    "schema_version": "2.0",
     "source": "convermetry",
     "plugin_version": "' . CVM_VERSION . '",
     "message_type": "form_submission",
@@ -287,7 +301,11 @@ final class AboutPage
         "provider": "elementor", "form_name": "Contact Form",
         "form_id": "contact-form-01", "native_form_id": "7ac3d1f",
         "ip_address": "203.0.113.42",
-        "submission_data": { "name": "John Doe", "email": "john@example.com" }
+        "submission_data": [
+            { "id": "name",  "label": "Full name",     "value": "John Doe" },
+            { "id": "email", "label": "Email address", "value": "john@example.com" },
+            { "id": "svc",   "label": "Services",      "value": ["Tax planning", "Retirement"] }
+        ]
     },
     "analytics_context": {
         "session_id": "…", "channel": "Paid Search",
@@ -316,6 +334,10 @@ final class AboutPage
     ['form_name' => 'Booking Widget'], \$fields
 );
 if (!\$result->ok) { /* \$result->msg, \$result->failedDeliveries */ }") . '</pre>';
+        echo '<p><strong>Field shapes:</strong> the <code>[\'email\' =&gt; $email]</code> map above is fully '
+            . 'supported and becomes one field per key (id = label = key). To supply a distinct human label, '
+            . 'pass a list of <code>[\'id\' =&gt; …, \'label\' =&gt; …, \'value\' =&gt; …]</code> descriptors '
+            . 'instead; <code>value</code> may be a string or a list of strings.</p>';
         echo '<p><strong>Server-side custom events:</strong> <code>cvm_track_event(\'purchase\', [...])</code>. '
             . '<strong>Frontend custom conversions:</strong> '
             . '<code>document.dispatchEvent(new CustomEvent(\'convermetry:conversion\', {detail: {name: \'booked\'}}))</code>.</p>';
@@ -324,7 +346,8 @@ if (!\$result->ok) { /* \$result->msg, \$result->failedDeliveries */ }") . '</pr
             . '<code>convermetry_client_ip</code>, <code>convermetry_rate_limits</code>, '
             . '<code>convermetry_source_aliases</code>, <code>convermetry_channel</code>, '
             . '<code>convermetry_delivery_log_row</code>, <code>convermetry_allow_insecure_webhooks</code>, '
-            . '<code>convermetry_form_providers</code>, <code>convermetry_retry_schedule</code>. '
+            . '<code>convermetry_form_providers</code>, <code>convermetry_retry_schedule</code>, '
+            . '<code>convermetry_notification_retry_schedule</code>, <code>convermetry_sensitive_keys</code>. '
             . 'See README.md for full signatures.</p>';
         self::cardEnd();
 

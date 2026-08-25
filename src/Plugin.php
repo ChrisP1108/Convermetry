@@ -9,6 +9,7 @@ use Convermetry\Admin\AboutPage;
 use Convermetry\Admin\ActivityLogPage;
 use Convermetry\Admin\AnalyticsPage;
 use Convermetry\Admin\FormsPage;
+use Convermetry\Admin\NotificationsPage;
 use Convermetry\Admin\SettingsPage;
 use Convermetry\Admin\SubmissionsPage;
 use Convermetry\Admin\WebhooksPage;
@@ -18,6 +19,8 @@ use Convermetry\Database\DatabaseManager;
 use Convermetry\Database\FormSubmissions;
 use Convermetry\Forms\FormProviderRegistry;
 use Convermetry\Forms\SubmissionService;
+use Convermetry\Notifications\NotificationDispatcher;
+use Convermetry\Notifications\NotificationQueue;
 use Convermetry\Tracking\ScriptLoader;
 use Convermetry\Webhook\AnalyticsDispatcher;
 use Convermetry\Webhook\DeliveryLog;
@@ -103,12 +106,20 @@ final class Plugin
         FormSubmissions::maybeUpgrade();
         DeliveryLog::maybeCreateTable();
         FormDeliveryQueue::maybeUpgrade();
+        NotificationQueue::maybeUpgrade();
 
         TrackingController::init();
         ScriptLoader::init();
         AnalyticsDispatcher::init();
         FormDeliveryQueue::init();
+        NotificationQueue::init();
         DeliveryLogController::init();
+
+        // Listens on 'convermetry_submission_recorded', which fires before the
+        // webhook-endpoint check in SubmissionService::record() — so internal
+        // email notifications work on a site with no webhooks configured, and
+        // are governed by their own master toggle.
+        NotificationDispatcher::init();
 
         // Form-provider hooks are feature-detected: providers whose plugin is
         // absent register nothing, so nothing here can fatal without them.
@@ -142,6 +153,8 @@ final class Plugin
         add_action('cvm_cleanup_old_events', [FormSubmissions::class, 'backfillDerivedColumns']);
         add_action(FormSubmissions::BACKFILL_CATCHUP_HOOK, [FormSubmissions::class, 'backfillCatchUp']);
         add_action('cvm_cleanup_old_events', [FormDeliveryQueue::class, 'ensureWorkerScheduled']);
+        add_action('cvm_cleanup_old_events', [NotificationQueue::class, 'ensureWorkerScheduled']);
+        add_action('cvm_cleanup_old_events', [NotificationQueue::class, 'purgeOrphans']);
         add_action(DatabaseManager::CLEANUP_CATCHUP_HOOK, [DatabaseManager::class, 'cleanupOldEventsCatchUp']);
 
         $this->ensureCronScheduled();
@@ -152,6 +165,7 @@ final class Plugin
             AnalyticsPage::init();
             SubmissionsPage::init();
             FormsPage::init($this->formRegistry);
+            NotificationsPage::init($this->formRegistry);
             WebhooksPage::init();
             ActivityLogPage::init();
             SettingsPage::init();

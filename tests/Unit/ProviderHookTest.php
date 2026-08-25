@@ -148,19 +148,46 @@ final class ProviderHookTest extends TestCase
      */
     public function testGravityFormsSpamEntryNeverReachesThePipeline(): void
     {
-        // Fails on main — see plan Phase 1e (finding 3). GravityFormsProvider has
-        // no status check at all, and Gravity Forms runs gform_after_submission
-        // for entries it classifies as spam during processing, so spam becomes a
-        // conversion, a submission row, and an outbound lead. Remove this skip as
-        // part of the fix; the assertion below is already the correct spec.
-        self::markTestSkipped(
-            'Phase 1e (finding 3): GravityFormsProvider does not check $entry["status"], '
-            . 'so spam entries reach the submission pipeline.'
-        );
-
         $this->fireGravityForms(['id' => '7', 'status' => 'spam', '1' => 'spam@example.com']);
 
         self::assertSame([], $this->recorded, 'A spam entry must not enter the submission pipeline');
+    }
+
+    /**
+     * The guard is a deny-list, so it must not be defeated by casing or
+     * padding — Gravity Forms' status values reach us verbatim from the entry.
+     *
+     * @dataProvider spamStatusSpellings
+     */
+    public function testGravityFormsSpamStatusIsMatchedRegardlessOfSpelling(string $status): void
+    {
+        $this->fireGravityForms(['id' => '7', 'status' => $status, '1' => 'spam@example.com']);
+
+        self::assertSame([], $this->recorded);
+    }
+
+    /**
+     * @return array<string, array{string}>
+     */
+    public static function spamStatusSpellings(): array
+    {
+        return [
+            'lowercase' => ['spam'],
+            'uppercase' => ['SPAM'],
+            'mixed'     => ['Spam'],
+            'padded'    => ['  spam  '],
+        ];
+    }
+
+    /**
+     * Only 'spam' is a deny reason. 'trash' is a moderation state the site
+     * owner chose after the fact, and the lead was still genuinely captured.
+     */
+    public function testGravityFormsNonSpamStatusesStillReachThePipeline(): void
+    {
+        $this->fireGravityForms(['id' => '7', 'status' => 'trash', '1' => 'real@example.com']);
+
+        self::assertSame(['gravityforms'], $this->recorded);
     }
 
     public function testGravityFormsValidEntryReachesThePipeline(): void

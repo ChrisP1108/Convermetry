@@ -123,9 +123,19 @@ final class ElementorProvider implements FormProviderInterface
         $rawFields = $record->get('fields');
         $fields    = [];
 
+        // Elementor's record entries look like
+        //   ['id' => ['id' => …, 'type' => …, 'title' => …, 'value' => …], …]
+        // where the outer key is the stable field id and 'title' is the label
+        // the site owner typed. Keep both: the id is what automation matches
+        // on, the title is the only thing that makes an Elementor lead
+        // readable — its ids are opaque ('field_a1b2c3').
         if (is_array($rawFields)) {
             foreach ($rawFields as $id => $field) {
-                $fields[(string) $id] = is_array($field) ? ($field['value'] ?? '') : $field;
+                $fields[] = [
+                    'id'    => (string) $id,
+                    'label' => is_array($field) ? (string) ($field['title'] ?? '') : '',
+                    'value' => is_array($field) ? ($field['value'] ?? '') : $field,
+                ];
             }
         }
 

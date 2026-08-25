@@ -6,6 +6,7 @@ namespace Convermetry\Tests\Unit;
 
 use Brain\Monkey;
 use Brain\Monkey\Functions;
+use Convermetry\Support\SensitiveKeys;
 use Convermetry\Webhook\DeliveryLog;
 use PHPUnit\Framework\TestCase;
 use ReflectionMethod;
@@ -27,6 +28,8 @@ final class RedactionTest extends TestCase
         Functions\when('wp_json_encode')->alias(
             static fn($data, $options = 0, $depth = 512) => json_encode($data, $options, $depth)
         );
+        // SensitiveKeys::patterns() runs the pattern list through a filter.
+        Functions\when('apply_filters')->returnArg(2);
     }
 
     protected function tearDown(): void
@@ -48,13 +51,6 @@ final class RedactionTest extends TestCase
      */
     public function testApiKeyHeaderIsRedactedRegardlessOfSpelling(): void
     {
-        // Fails on main — see plan Phase 1g. Header redaction misses some
-        // spellings of the same key, so a live credential is stored in the clear
-        // in the Delivery Log. Remove this skip as part of the fix.
-        self::markTestSkipped(
-            'Phase 1g: DeliveryLog::redactHeaders() does not match every spelling of an API-key header.'
-        );
-
         $redacted = DeliveryLog::redactHeaders([
             'X-API-Key'           => 'live_secret',
             'x-api-key'           => 'live_secret',
@@ -106,18 +102,93 @@ final class RedactionTest extends TestCase
      */
     public function testHumanReadableFieldLabelsAreMatched(): void
     {
-        // Fails on main — see plan Phase 1g. Space- and hyphen-separated label
-        // forms ("API Key") slip past JSON body redaction, so a secret submitted
-        // under a human-readable field label is logged in the clear.
-        self::markTestSkipped(
-            'Phase 1g: JSON body redaction does not match human-readable field labels such as "API Key".'
-        );
-
         $body = (string) json_encode(['API Key' => 'sk_live', 'api-key' => 'sk_live']);
         $out  = json_decode($this->redactJson($body), true);
 
         self::assertSame('[REDACTED]', $out['API Key']);
         self::assertSame('[REDACTED]', $out['api-key']);
+    }
+
+    /**
+     * Schema 2.0 moves the sensitive NAME into the value of 'id'/'label' while
+     * the secret sits under the generic key 'value'. Key-name matching alone
+     * walks straight past it.
+     */
+    public function testStructuredFieldDescriptorsAreRedactedByIdOrLabel(): void
+    {
+        $body = (string) json_encode([
+            'form_submission' => [
+                'submission_data' => [
+                    ['id' => 'email',    'label' => 'Email address', 'value' => 'a@b.com'],
+                    ['id' => 'password', 'label' => 'Choose a password', 'value' => 'hunter2'],
+                    ['id' => 'field_9',  'label' => 'API Key', 'value' => 'sk_live_abc'],
+                ],
+            ],
+        ]);
+
+        $out    = json_decode($this->redactJson($body), true);
+        $fields = $out['form_submission']['submission_data'];
+
+        self::assertSame('a@b.com', $fields[0]['value'], 'An ordinary field must survive');
+        self::assertSame('[REDACTED]', $fields[1]['value'], 'Matched on the id');
+        self::assertSame('[REDACTED]', $fields[2]['value'], 'Matched on the human label');
+
+        // The descriptor itself stays intact and in order — only the value goes.
+        self::assertSame('password', $fields[1]['id']);
+        self::assertSame('API Key', $fields[2]['label']);
+        self::assertStringNotContainsString('hunter2', $this->redactJson($body));
+        self::assertStringNotContainsString('sk_live_abc', $this->redactJson($body));
+    }
+
+    /**
+     * The descriptor branch must not short-circuit recursion for a descriptor
+     * that was NOT redacted. This walker also runs over arbitrary endpoint
+     * response bodies, and one shaped like a descriptor would otherwise
+     * smuggle a nested secret through.
+     */
+    public function testNonSensitiveDescriptorStillHasNestedSecretsRedacted(): void
+    {
+        $body = (string) json_encode([
+            'id'    => 'record-1',
+            'label' => 'Result',
+            'value' => ['client_secret' => 'shh', 'name' => 'Ada'],
+        ]);
+
+        $out = json_decode($this->redactJson($body), true);
+
+        self::assertSame('[REDACTED]', $out['value']['client_secret']);
+        self::assertSame('Ada', $out['value']['name']);
+    }
+
+    /**
+     * Historical rows still hold the pre-2.0 associative map. Their redaction
+     * must be exactly as it was.
+     */
+    public function testLegacyAssociativeMapRedactionIsUnchanged(): void
+    {
+        $body = (string) json_encode([
+            'form_submission' => [
+                'submission_data' => ['Email' => 'a@b.com', 'password' => 'hunter2'],
+            ],
+        ]);
+
+        $out = json_decode($this->redactJson($body), true);
+
+        self::assertSame('a@b.com', $out['form_submission']['submission_data']['Email']);
+        self::assertSame('[REDACTED]', $out['form_submission']['submission_data']['password']);
+    }
+
+    /**
+     * Moving the pattern list out of DeliveryLog must not quietly disable
+     * redaction: this fails if the shared policy stops being consulted.
+     */
+    public function testRedactionUsesTheSharedPatternList(): void
+    {
+        self::assertTrue(SensitiveKeys::matches('password'));
+
+        $body = (string) json_encode(['client_secret' => 'shh']);
+
+        self::assertSame('[REDACTED]', json_decode($this->redactJson($body), true)['client_secret']);
     }
 
     /**

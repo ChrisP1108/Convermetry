@@ -138,15 +138,24 @@ final class NinjaFormsProvider implements FormProviderInterface
                 continue;
             }
 
+            // Ninja Forms carries the richest per-field metadata of the
+            // bundled providers: a numeric id, a stable developer 'key', and
+            // the visitor-facing 'label'. Prefer the id for automation and
+            // fall back to the key, which is still stable across renames.
+            $fieldId = trim((string) ($field['id'] ?? ''));
+            if ($fieldId === '') {
+                $fieldId = trim((string) ($field['key'] ?? ''));
+            }
+            if ($fieldId === '') {
+                $fieldId = (string) $id;
+            }
+
             $label = trim((string) ($field['label'] ?? ''));
             if ($label === '') {
                 $label = trim((string) ($field['key'] ?? ''));
             }
-            if ($label === '') {
-                $label = 'field_' . $id;
-            }
 
-            $fields[$label] = $field['value'] ?? '';
+            $fields[] = ['id' => $fieldId, 'label' => $label, 'value' => $field['value'] ?? ''];
         }
 
         $title = trim((string) ($settings['title'] ?? ''));

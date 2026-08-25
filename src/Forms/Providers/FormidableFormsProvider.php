@@ -139,15 +139,18 @@ final class FormidableFormsProvider implements FormProviderInterface
                 continue;
             }
 
+            // Formidable's field id is numeric and stable; 'name' is the
+            // visitor-facing label and 'field_key' the developer handle.
             $label = trim((string) ($field->name ?? ''));
             if ($label === '') {
                 $label = trim((string) ($field->field_key ?? ''));
             }
-            if ($label === '') {
-                $label = 'field_' . $field->id;
-            }
 
-            $fields[$label] = $metas[$field->id] ?? '';
+            $fields[] = [
+                'id'    => (string) $field->id,
+                'label' => $label,
+                'value' => $metas[$field->id] ?? '',
+            ];
         }
 
         $formName = trim((string) ($entry->form_name ?? ''));

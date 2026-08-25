@@ -5,8 +5,7 @@ namespace Convermetry\Webhook;
 
 if (!defined('ABSPATH')) exit;
 
-use Convermetry\Analytics\ReportQueryException;
-use Convermetry\Analytics\Reports;
+use Convermetry\Analytics\SubmissionContext;
 use Convermetry\Database\DatabaseManager;
 use Convermetry\Database\FormSubmissions;
 use Convermetry\Settings\Options;
@@ -357,7 +356,7 @@ final class FormDeliveryQueue
             // will (re-)send until it is acknowledged or abandoned.
             // ($submission is non-null: the guard above returned otherwise.)
             if (!isset($payloadCache[$submissionId])) {
-                $submission                  = self::enrichContext($submission);
+                $submission                  = SubmissionContext::enrich($submission);
                 $payloadCache[$submissionId] = PayloadBuilder::formSubmission($submission);
             }
 
@@ -424,43 +423,6 @@ final class FormDeliveryQueue
         }
 
         self::rescheduleOrAbandon($rowId, $attempt, $submissionId);
-    }
-
-    /**
-     * Enriches a submission's analytics context with the lightweight session
-     * summary (pageview count, session start, recent pages) — computed in
-     * the background worker or a synchronous dispatch, and persisted so a
-     * retry (or a second endpoint's freeze in a later pass) sees identical
-     * context even after the underlying events age out.
-     *
-     * @param array<string, mixed> $submission Submission row.
-     * @return array<string, mixed> The submission row, with 'context' enriched.
-     */
-    public static function enrichContext(array $submission): array
-    {
-        $context   = self::decodeJson((string) ($submission['context'] ?? ''));
-        $sessionId = (string) ($submission['session_id'] ?? '');
-
-        if ($sessionId !== '' && !isset($context['pageview_count'])) {
-            try {
-                $context = array_merge($context, Reports::sessionSummary($sessionId));
-                $submission['context'] = (string) wp_json_encode($context);
-
-                global $wpdb;
-                $wpdb->update(
-                    FormSubmissions::tableName(),
-                    ['context' => $submission['context']],
-                    ['id' => (int) $submission['id']],
-                    ['%s'],
-                    ['%d']
-                );
-            } catch (ReportQueryException) {
-                // Enrichment is best-effort: a failed summary query must not
-                // block delivering the lead itself.
-            }
-        }
-
-        return $submission;
     }
 
     /**

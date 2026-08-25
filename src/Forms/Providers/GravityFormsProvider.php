@@ -72,7 +72,7 @@ final class GravityFormsProvider implements FormProviderInterface
     }
 
     /**
-     * Flattens a saved Gravity Forms entry into label → value pairs and
+     * Flattens a saved Gravity Forms entry into field descriptors and
      * forwards it to the pipeline.
      *
      * @param mixed             $entry   The saved entry array.
@@ -86,6 +86,18 @@ final class GravityFormsProvider implements FormProviderInterface
             return;
         }
 
+        // gform_after_submission fires for entries Gravity Forms has already
+        // classified as spam. Nothing downstream may see them: a spam entry
+        // must not become a conversion, must not queue a webhook, and — since
+        // notifications exist — must not be emailed to the site owner.
+        //
+        // This is a deny-list, not an allow-list, on purpose. Entries can
+        // legitimately arrive with no status at all, and treating those as
+        // spam would silently drop real leads.
+        if (strtolower(trim((string) ($entry['status'] ?? ''))) === 'spam') {
+            return;
+        }
+
         $fields = [];
 
         foreach ((array) ($form['fields'] ?? []) as $field) {
@@ -93,10 +105,8 @@ final class GravityFormsProvider implements FormProviderInterface
                 continue;
             }
 
+            $id    = (string) $field->id;
             $label = trim((string) ($field->label ?? ''));
-            if ($label === '') {
-                $label = 'field_' . $field->id;
-            }
 
             // Multi-input fields (name, address, checkboxes) store their
             // values under "id.sub" keys; collect them in order.
@@ -109,11 +119,11 @@ final class GravityFormsProvider implements FormProviderInterface
                         $parts[] = $value;
                     }
                 }
-                $fields[$label] = implode(' ', $parts);
+                $fields[] = ['id' => $id, 'label' => $label, 'value' => implode(' ', $parts)];
                 continue;
             }
 
-            $fields[$label] = (string) ($entry[(string) $field->id] ?? '');
+            $fields[] = ['id' => $id, 'label' => $label, 'value' => (string) ($entry[$id] ?? '')];
         }
 
         $service->record(

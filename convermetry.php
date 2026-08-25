@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Convermetry
  * Description: Visitor analytics, campaign attribution, and server-confirmed form conversion tracking with reliable webhook delivery. Connects every lead to its analytics session, traffic source, and campaign, and delivers analytics reports and form submissions to any number of webhook endpoints with signing, retries, and idempotency.
- * Version:     0.3.1
+ * Version:     0.4.0
  * Requires at least: 6.3
  * Requires PHP: 8.3
  * Author:      Chris Paschall
@@ -39,7 +39,7 @@ if (version_compare(PHP_VERSION, '8.3', '<')) {
  */
 } else {
 
-    define('CVM_VERSION', '0.3.1');
+    define('CVM_VERSION', '0.4.0');
     define('CVM_PLUGIN_FILE', __FILE__);
     define('CVM_PLUGIN_DIR', plugin_dir_path(__FILE__));
     define('CVM_PLUGIN_URL', plugin_dir_url(__FILE__));
@@ -61,6 +61,7 @@ if (version_compare(PHP_VERSION, '8.3', '<')) {
         Convermetry\Database\FormSubmissions::createTable();
         Convermetry\Webhook\DeliveryLog::createTable();
         Convermetry\Webhook\FormDeliveryQueue::createTable();
+        Convermetry\Notifications\NotificationQueue::createTable();
 
         if (!wp_next_scheduled('cvm_cleanup_old_events')) {
             wp_schedule_event(time(), 'daily', 'cvm_cleanup_old_events');
@@ -72,6 +73,7 @@ if (version_compare(PHP_VERSION, '8.3', '<')) {
         // plugin was deactivated — deactivation clears the worker cron but
         // keeps the queue rows, so the first activation re-arms the worker.
         Convermetry\Webhook\FormDeliveryQueue::ensureWorkerScheduled();
+        Convermetry\Notifications\NotificationQueue::ensureWorkerScheduled();
     });
 
     /**
@@ -83,6 +85,10 @@ if (version_compare(PHP_VERSION, '8.3', '<')) {
      *    resumes them under their original delivery IDs.
      *  - Form-submission queue rows stay in the database and are resumed by
      *    the worker that activation re-schedules.
+     *  - Queued email notifications likewise stay in the database. Note that
+     *    they carry a two-hour time-to-live, so a deactivation longer than
+     *    that means those leads are never emailed rather than arriving stale;
+     *    the orphan sweep reaps the rows.
      *
      * All tables and their data are intentionally preserved on deactivation.
      * Data is only removed when rows age past the configured retention
@@ -94,6 +100,7 @@ if (version_compare(PHP_VERSION, '8.3', '<')) {
         wp_clear_scheduled_hook(Convermetry\Database\FormSubmissions::BACKFILL_CATCHUP_HOOK);
         wp_clear_scheduled_hook(Convermetry\Webhook\AnalyticsDispatcher::CRON_HOOK);
         wp_clear_scheduled_hook(Convermetry\Webhook\FormDeliveryQueue::WORKER_HOOK);
+        wp_clear_scheduled_hook(Convermetry\Notifications\NotificationQueue::WORKER_HOOK);
         Convermetry\Webhook\AnalyticsDispatcher::suspendAllRetries();
     });
 

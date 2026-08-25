@@ -26,20 +26,23 @@ function cvm_uninstall_current_site(): void
     global $wpdb;
 
     // Custom tables: analytics events, activity log, form submissions,
-    // and the form-delivery queue.
+    // the form-delivery queue, and the notification queue.
     $wpdb->query("DROP TABLE IF EXISTS {$wpdb->prefix}cvm_events");
     $wpdb->query("DROP TABLE IF EXISTS {$wpdb->prefix}cvm_webhook_deliveries");
     $wpdb->query("DROP TABLE IF EXISTS {$wpdb->prefix}cvm_form_submissions");
     $wpdb->query("DROP TABLE IF EXISTS {$wpdb->prefix}cvm_delivery_queue");
+    $wpdb->query("DROP TABLE IF EXISTS {$wpdb->prefix}cvm_notification_queue");
 
     // Plugin options.
     delete_option('cvm_settings');
     delete_option('cvm_webhook_settings');
     delete_option('cvm_form_settings');
+    delete_option('cvm_notification_settings');
     delete_option('cvm_db_version');
     delete_option('cvm_delivery_db_version');
     delete_option('cvm_submissions_db_version');
     delete_option('cvm_queue_db_version');
+    delete_option('cvm_notification_db_version');
     delete_option('cvm_delivery_api_active');
     delete_option('cvm_delivery_api_key_hash');
     delete_option('cvm_webhook_last_sent');
@@ -70,6 +73,7 @@ function cvm_uninstall_current_site(): void
     wp_clear_scheduled_hook('cvm_submissions_backfill_catchup');
     wp_clear_scheduled_hook('cvm_dispatch_webhooks');
     wp_clear_scheduled_hook('cvm_process_form_queue');
+    wp_clear_scheduled_hook('cvm_process_notifications');
     wp_unschedule_hook('cvm_retry_webhook');
 }
 

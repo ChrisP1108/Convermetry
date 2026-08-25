@@ -105,7 +105,12 @@ final class ContactForm7Provider implements FormProviderInterface
                 continue;
             }
 
-            $fields[$key] = $value;
+            // CF7's posted data is keyed by the form tag's name ('your-email')
+            // and carries no label. A label would mean parsing the form's
+            // markup, which is not a public API and breaks on any custom
+            // template — so the tag name is used as both id and label, and the
+            // normalizer records that fallback honestly.
+            $fields[] = ['id' => $key, 'label' => $key, 'value' => $value];
         }
 
         $service->record(

@@ -396,6 +396,68 @@
     }
 
     /* ------------------------------------------------------------------ *
+     *  Notifications page
+     * ------------------------------------------------------------------ */
+
+    /**
+     * Wires the "Send test email" button.
+     *
+     * The message is built server-side entirely from synthetic data, so this
+     * never causes a real lead to be emailed. Note the wording on success:
+     * wp_mail() accepting a message is not proof it reached an inbox.
+     */
+    function initNotificationsPage() {
+        const btn = document.querySelector('.cvm-test-notification');
+        if (!btn || typeof CVM_NOTIFY === 'undefined') return;
+
+        const input = document.getElementById('cvm-notify-test-address');
+        const result = btn.parentElement
+            ? btn.parentElement.querySelector('.cvm-test-result')
+            : null;
+
+        btn.addEventListener('click', function () {
+            const recipient = input ? input.value.trim() : '';
+
+            if (!recipient) {
+                if (result) {
+                    result.textContent = 'Enter a recipient address first.';
+                    result.className = 'cvm-test-result cvm-test-fail';
+                }
+                return;
+            }
+
+            btn.disabled = true;
+            if (result) {
+                result.textContent = 'Sending…';
+                result.className = 'cvm-test-result';
+            }
+
+            const fd = new FormData();
+            fd.append('action', 'cvm_test_notification');
+            fd.append('nonce', CVM_NOTIFY.testNonce || '');
+            fd.append('recipient', recipient);
+
+            fetch(CVM_NOTIFY.ajaxUrl, { method: 'POST', body: fd })
+                .then(function (res) { return res.json(); })
+                .then(function (resp) {
+                    btn.disabled = false;
+                    if (!result) return;
+                    const d = (resp && resp.data) || {};
+                    const ok = resp && resp.success && d.ok;
+                    result.textContent = (ok ? '✓ ' : '✗ ') + (d.message || 'Test failed.');
+                    result.className = 'cvm-test-result ' + (ok ? 'cvm-test-ok' : 'cvm-test-fail');
+                })
+                .catch(function () {
+                    btn.disabled = false;
+                    if (result) {
+                        result.textContent = '✗ The test request could not be sent.';
+                        result.className = 'cvm-test-result cvm-test-fail';
+                    }
+                });
+        });
+    }
+
+    /* ------------------------------------------------------------------ *
      *  Boot
      * ------------------------------------------------------------------ */
 
@@ -403,6 +465,7 @@
         initKvBuilders(document);
         initWebhooksPage();
         initFormsPage();
+        initNotificationsPage();
     }
 
     if (document.readyState === 'loading') {

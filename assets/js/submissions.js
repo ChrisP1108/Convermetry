@@ -39,8 +39,11 @@
         const root = document.getElementById('cvm-submissions');
         if (!root) return;
 
+        // Seeded from ?cvm_search= so a deep link (a notification email links
+        // here with the submission id) opens that one submission rather than
+        // the full list. Server-sanitized before localization.
         const state = {
-            page: 1, perPage: 10, search: '', year: '', month: '',
+            page: 1, perPage: 10, search: cfg('initialSearch') || '', year: '', month: '',
             provider: '', formName: '', channel: '', campaign: '', status: ''
         };
 
@@ -97,6 +100,12 @@
             state.page = 1;
             fetchSubmissions();
         });
+
+        // Reflect a seeded search in the box, so the filtered view is visibly
+        // filtered and the clear button is discoverable.
+        if (state.search !== '') {
+            controls.querySelector('.cvm-search-input').value = state.search;
+        }
 
         // Debounced: every keystroke would otherwise fire a LIKE query over the
         // LONGTEXT submission_data column.

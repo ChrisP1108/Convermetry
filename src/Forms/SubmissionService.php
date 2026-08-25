@@ -5,6 +5,7 @@ namespace Convermetry\Forms;
 
 if (!defined('ABSPATH')) exit;
 
+use Convermetry\Analytics\SubmissionContext;
 use Convermetry\Database\DatabaseManager;
 use Convermetry\Database\FormSubmissions;
 use Convermetry\Settings\Options;
@@ -51,8 +52,13 @@ final class SubmissionService
      * @param string           $provider       Provider key (e.g. 'elementor', 'custom').
      * @param string           $nativeId       Provider-native form identity.
      * @param string           $formName       Human-readable form name.
-     * @param array<string, mixed> $fields     Raw submitted fields (Convermetry's internal
-     *                                         cvm_* fields may still be present; they are stripped).
+     * @param array<mixed>     $fields         Raw submitted fields, in either accepted shape:
+     *                                         a list of ['id' => …, 'label' => …, 'value' => …]
+     *                                         descriptors (what the bundled providers build), or a
+     *                                         historical 'name' => value map (what third-party
+     *                                         callers still pass). {@see SubmissionFields::normalize()}
+     *                                         canonicalizes both and strips Convermetry's internal
+     *                                         cvm_* fields from either.
      * @param Correlation|null $correlation    Correlation data; null extracts it from the current request.
      * @param bool             $sync           Deliver synchronously and report the real result
      *                                         (no automatic retries) instead of queuing.
@@ -89,7 +95,10 @@ final class SubmissionService
 
         $correlation ??= Correlation::fromCurrentRequest();
 
-        $submissionData = $this->sanitizeFields(Correlation::stripInternalFields($fields));
+        // One normalizer owns the shape, the sanitizing, and the cvm_* strip,
+        // for both the descriptor lists the providers now build and the
+        // historical maps third-party callers still pass.
+        $submissionData = SubmissionFields::normalize($fields);
         $device         = wp_is_mobile() ? 'mobile' : 'desktop';
         $page           = $this->pageInfo($correlation);
 
@@ -194,7 +203,11 @@ final class SubmissionService
      * and the 'convermetry_form_submission' action.
      *
      * @param array<string, mixed>  $formIdentifier ['form_name' => string, 'form_id' => string (optional native id)].
-     * @param array<string, mixed>  $fields         Field names/IDs to raw values.
+     * @param array<mixed>          $fields         Either the long-standing map of field names to raw
+     *                                              values (['email' => 'a@b.com', 'name' => 'Ada']),
+     *                                              which stays fully supported, or the richer list of
+     *                                              ['id' => …, 'label' => …, 'value' => …] descriptors
+     *                                              when the caller can supply a distinct human label.
      * @param array<string, mixed>  $urlQuery       Extra query parameters for this call only.
      * @param array<string, string> $requestHeaders Extra headers for this call only.
      * @param bool                  $sync           True for a result-aware synchronous run.
@@ -245,7 +258,7 @@ final class SubmissionService
             return new SubmissionResult(ok: false, submissionId: $submissionId, conversionId: $conversionId, msg: 'The submission record could not be loaded.');
         }
 
-        $submission = FormDeliveryQueue::enrichContext($submission);
+        $submission = SubmissionContext::enrich($submission);
 
         $payload = PayloadBuilder::formSubmission($submission);
         $runtime = $this->decodeRuntime($submission);
@@ -381,35 +394,6 @@ final class SubmissionService
     private function requestSendsPrivacySignal(): bool
     {
         return PrivacySignal::fromCurrentRequest();
-    }
-
-    /**
-     * Sanitizes submitted field values, preserving array structure for
-     * multi-value fields such as checkbox groups.
-     *
-     * @param array<string, mixed> $fields Raw fields.
-     * @return array<string, mixed>
-     */
-    private function sanitizeFields(array $fields): array
-    {
-        $out = [];
-        foreach ($fields as $key => $value) {
-            $cleanKey = sanitize_text_field((string) $key);
-            if ($cleanKey === '') {
-                continue;
-            }
-
-            if (is_array($value)) {
-                $out[$cleanKey] = array_map(
-                    static fn(mixed $item): string => sanitize_text_field(is_scalar($item) ? (string) $item : ''),
-                    array_values($value)
-                );
-            } else {
-                $out[$cleanKey] = sanitize_text_field(is_scalar($value) ? (string) $value : '');
-            }
-        }
-
-        return $out;
     }
 
     /**

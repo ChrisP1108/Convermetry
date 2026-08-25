@@ -86,18 +86,22 @@ final class WPFormsProvider implements FormProviderInterface
             return;
         }
 
+        // WPForms hands over ['id' => …, 'type' => …, 'name' => …, 'value' => …]
+        // per field. 'name' is the label shown to the visitor; the id is the
+        // stable handle automation should match on, so keep both.
         $flat = [];
         foreach ($fields as $id => $field) {
             if (!is_array($field)) {
                 continue;
             }
 
-            $name = trim((string) ($field['name'] ?? ''));
-            if ($name === '') {
-                $name = 'field_' . $id;
-            }
+            $fieldId = trim((string) ($field['id'] ?? ''));
 
-            $flat[$name] = $field['value'] ?? '';
+            $flat[] = [
+                'id'    => $fieldId !== '' ? $fieldId : (string) $id,
+                'label' => trim((string) ($field['name'] ?? '')),
+                'value' => $field['value'] ?? '',
+            ];
         }
 
         $service->record(

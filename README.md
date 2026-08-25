@@ -22,7 +22,7 @@ Was the lead successfully delivered to external systems?
 
 Convermetry works standalone — full analytics dashboard, form integrations, and webhook delivery inside one WordPress install — and is architected so a future Convermetry SaaS can receive `analytics_report` and `form_submission` messages from many installations, keyed by a shared, versioned payload schema.
 
-- **Version:** 0.3.1
+- **Version:** 0.4.0
 - **Requires WordPress:** 6.3+
 - **Requires PHP:** 8.3+
 - **License:** GPL-2.0-or-later
@@ -40,17 +40,18 @@ Convermetry works standalone — full analytics dashboard, form integrations, an
 6. [Session → submission → conversion correlation](#session--submission--conversion-correlation)
 7. [Supported form providers](#supported-form-providers)
 8. [Custom form integration API](#custom-form-integration-api)
-9. [Webhooks](#webhooks)
-10. [The three identifiers](#the-three-identifiers-submission_id--conversion_id--delivery_id)
-11. [Payload schemas](#payload-schemas)
-12. [HMAC signatures](#hmac-signatures)
-13. [Retries & idempotency](#retries--idempotency)
-14. [Activity Log](#activity-log)
-15. [REST APIs](#rest-apis)
-16. [Developer hooks](#developer-hooks)
-17. [Privacy](#privacy)
-18. [Database tables](#database-tables)
-19. [Uninstall behavior](#uninstall-behavior)
+9. [Notifications](#notifications)
+10. [Webhooks](#webhooks)
+11. [The three identifiers](#the-three-identifiers-submission_id--conversion_id--delivery_id)
+12. [Payload schemas](#payload-schemas)
+13. [HMAC signatures](#hmac-signatures)
+14. [Retries & idempotency](#retries--idempotency)
+15. [Activity Log](#activity-log)
+16. [REST APIs](#rest-apis)
+17. [Developer hooks](#developer-hooks)
+18. [Privacy](#privacy)
+19. [Database tables](#database-tables)
+20. [Uninstall behavior](#uninstall-behavior)
 
 ---
 
@@ -75,6 +76,7 @@ Convermetry
     Analytics      — the reporting dashboard (top-level default)
     Submissions    — every server-confirmed lead, with its attribution and answers
     Forms          — provider status, discovered forms, per-form configuration
+    Notifications  — internal email alerts for new submissions, with analytics context
     Webhooks       — endpoints, delivery types, signing, schedule, request customization
     Activity Log   — every delivery attempt with its (redacted) payload and response
     Settings       — website/client identity, tracking toggles, privacy, retention
@@ -92,6 +94,9 @@ confuse:
 | Cleared by | Clear All Submissions | Clear All Logs |
 
 Clearing one never touches the other.
+
+**Notifications** is independent of both: it has its own master switch, its own
+queue, and works on a site with no webhook endpoints configured.
 
 ### Analytics
 
@@ -309,6 +314,27 @@ do_action('convermetry_form_submission',
 );
 ```
 
+**Two field shapes are accepted.** The `'name' => $value` map above is the
+long-standing form and stays fully supported — each key becomes both the field's
+`id` and its `label`. If you can supply a distinct human label, pass the richer
+descriptor list instead and it travels through to payloads, the Submissions
+page, CSV exports, and notification emails unchanged:
+
+```php
+convermetry_submit_form(
+    ['form_name' => 'Booking Widget', 'form_id' => 'booking-1'],
+    [
+        ['id' => 'email',     'label' => 'Email address',        'value' => $email],
+        ['id' => 'interests', 'label' => 'Services of interest', 'value' => ['Tax planning', 'Retirement']],
+    ]
+);
+```
+
+`value` may be a string or a list of strings — nothing nested. Entries with an
+empty `id` are dropped, `label` falls back to `id` when blank, duplicate labels
+are preserved as separate fields, and `cvm_*` keys are stripped from either
+shape. See [`submission_data`: schema 2.0](#submission_data-schema-20).
+
 Result-aware and synchronous — the caller receives the real outcome and handles failures itself (no automatic retries):
 
 ```php
@@ -345,6 +371,104 @@ document.dispatchEvent(new CustomEvent('convermetry:conversion', {
 ```
 
 Custom **server-side** analytics events: `cvm_track_event('purchase', ['page_url' => ..., 'event_value' => '99.00']);`
+
+## Notifications
+
+**Convermetry → Notifications** sends an internal email when a form submission
+is recorded, enriched with the attribution Convermetry already captured for that
+visitor. It is **off by default** and has its own master switch — it works with
+no webhook endpoints configured, and disabling webhooks does not disable it.
+
+These are **internal** notifications. Convermetry never emails the person who
+submitted the form; visitor autoresponders are out of scope.
+
+### Before you enable it
+
+- **Email creates a copy of lead data outside Convermetry's controls.** Deleting
+  a submission — or letting retention expire it — cancels any notification still
+  queued, and guarantees no queued message can be rendered afterwards, because
+  the queue stores no lead data of its own. It **cannot recall a message already
+  sent**. Those copies live in recipients' mailboxes under whatever retention
+  policy applies there, not yours. If you are relying on Convermetry's retention
+  window for a compliance story, enabling this changes that story.
+- **Your form plugin probably already emails you.** Most do. These are in
+  addition, not a replacement.
+- **"Sent" means handed to your mail system.** Convermetry uses `wp_mail()`, and
+  a `true` return means the local transport *accepted* the message. It is not
+  proof of delivery and says nothing about spam foldering. Nothing in the plugin
+  claims a notification was "delivered" — that word is reserved for webhooks,
+  where a receiver actually returned 2xx.
+- Convermetry stores **no mail credentials** and implements no SMTP transport of
+  its own. Any SMTP plugin you already run keeps working unchanged.
+
+### Settings
+
+| Setting | Default | Notes |
+|---|---|---|
+| Enable notifications | **off** | Master switch. |
+| Recipients | none | One address per line (commas/semicolons also work). Validated, deduplicated case-insensitively, capped at 20. Each recipient gets a **separate message**, so nobody sees the rest of the list. Never derived from submitted data. |
+| Subject | `New {form_name} submission on {site_name}` | See tokens below. |
+| Scope | Every form | *Every form* notifies unless a form is switched off; *Only selected forms* notifies only forms switched on. Per-form rules are **inherit / always / never**. |
+| Submitted fields | on | The visitor's answers, as label/value rows. |
+| Analytics summary | on | Channel, UTM source/medium/campaign, landing page, conversion page, device, pages viewed, session start. |
+| Visitor journey | **off** | The pages this visitor viewed. Browsing history for an identifiable person. |
+| IP address | **off** | Personal data in the EU/UK; only available when IP storage is on in Settings. |
+
+Per-form rules use the same keys as the Forms page (`provider:identity`).
+Elementor forms are keyed by **name**, so renaming an Elementor form resets its
+rule to the scope default.
+
+Subject tokens — a fixed allowlist, substituted literally. There is no
+expression language and no PHP evaluation:
+
+`{site_name}` · `{form_name}` · `{provider}` · `{channel}` · `{submission_id}` ·
+`{form_id}` · `{campaign}` · `{date}`
+
+Anything else is left as literal text. CR/LF and NUL are stripped **after**
+substitution, so a form named `Contact\r\nBcc: …` cannot inject a mail header.
+
+### What is never emailed
+
+Fields whose ID **or** label looks credential-bearing — passwords, tokens, API
+keys, secrets, authorization values — are **omitted entirely**, even with
+*Submitted fields* on. They are not shown as `[REDACTED]`: a placeholder would
+tell every recipient that a secret exists. This uses the same policy as Activity
+Log redaction, so `convermetry_sensitive_keys` extends both at once.
+Convermetry's `cvm_*` correlation fields never appear either.
+
+### Delivery
+
+Notifications are queued, never sent during the visitor's request:
+
+- The submission action enqueues; a WP-Cron worker renders and sends. No
+  `wp_mail()`, payload build, or analytics query happens while the visitor waits.
+- One queue row per **(submission, recipient)**, unique — a double-fired
+  submission cannot produce two emails to one address, and one failing address
+  does not re-mail the others.
+- The queue stores a recipient, a settings snapshot, and scheduling state —
+  **never the rendered email or the lead's answers**. The submission is fetched
+  fresh at send time, which is what makes deletion effective.
+- Settings are **snapshotted when the lead arrives**. Changing them applies to
+  new submissions; anything already queued sends with the settings that were
+  active at the time. Turning the master switch off stops new notifications but
+  does not pause queued ones — the page has an explicit **Discard queued
+  notifications** button for that.
+- Retries are bounded and short: 5 min, 15 min, 1 h, then the row is abandoned
+  and a warning appears in wp-admin. Email has no receiver-side idempotency, so
+  a long retry chain would risk duplicates and deliver stale leads.
+  (`convermetry_notification_retry_schedule` adjusts it.)
+- Every row carries a hard **two-hour time-to-live**. A notification that could
+  not be sent within that window — WP-Cron disabled, the site deactivated — is
+  dropped rather than delivered days late as though it just arrived.
+- Only a short failure reason is retained for diagnostics. The rendered body and
+  the submitted values are never logged. Notification sends do **not** appear in
+  the Activity Log, which covers webhook deliveries only.
+
+**Send test email** builds its message entirely from fabricated data (a
+`Convermetry Test Form`, `test@example.com`, and the RFC 5737 documentation
+address `203.0.113.42`). It never loads a real submission, so testing cannot
+expose a lead.
+
 
 ## Webhooks
 
@@ -411,9 +535,9 @@ Every outbound message shares one versioned envelope:
 
 ```json
 {
-    "schema_version": "1.0",
+    "schema_version": "1.0 | 2.0",
     "source": "convermetry",
-    "plugin_version": "0.3.1",
+    "plugin_version": "0.4.0",
     "message_type": "analytics_report | form_submission",
     "website_info": { },
     "generated_at": "2026-08-22T14:00:00+00:00",
@@ -441,7 +565,7 @@ Every outbound message shares one versioned envelope:
 {
     "schema_version": "1.0",
     "source": "convermetry",
-    "plugin_version": "0.3.1",
+    "plugin_version": "0.4.0",
     "message_type": "analytics_report",
     "website_info": {
         "name": "Example Financial", "url": "https://example.com", "domain": "example.com",
@@ -533,9 +657,9 @@ Every outbound message shares one versioned envelope:
 
 ```json
 {
-    "schema_version": "1.0",
+    "schema_version": "2.0",
     "source": "convermetry",
-    "plugin_version": "0.3.1",
+    "plugin_version": "0.4.0",
     "message_type": "form_submission",
     "website_info": {
         "name": "Example Financial", "url": "https://example.com", "domain": "example.com",
@@ -556,12 +680,13 @@ Every outbound message shares one versioned envelope:
         "form_id": "contact-form-01",
         "native_form_id": "7ac3d1f",
         "ip_address": "203.0.113.42",
-        "submission_data": {
-            "name": "John Doe",
-            "email": "john@example.com",
-            "phone": "555-555-5555",
-            "message": "I would like more information."
-        }
+        "submission_data": [
+            { "id": "1",  "label": "Full name",     "value": "John Doe" },
+            { "id": "3",  "label": "Email address", "value": "john@example.com" },
+            { "id": "4",  "label": "Phone",         "value": "555-555-5555" },
+            { "id": "7",  "label": "Message",       "value": "I would like more information." },
+            { "id": "9",  "label": "Services of interest", "value": ["Tax planning", "Retirement"] }
+        ]
     },
     "analytics_context": {
         "session_id": "9f2c4be1a6d8c3f0…",
@@ -580,6 +705,76 @@ Every outbound message shares one versioned envelope:
     }
 }
 ```
+
+#### `submission_data`: schema 2.0
+
+`submission_data` is an **ordered list of field descriptors**, not an object:
+
+| Key | Type | Notes |
+|---|---|---|
+| `id` | string | The provider-native field ID or key. Stable across renames. Never empty. |
+| `label` | string | The human-readable label captured at submission time. Falls back to `id` when the provider exposes no reliable label. |
+| `value` | string \| string[] | A sanitized string, or a list of sanitized strings for multi-value fields. Never a nested object. |
+
+Why a list. The pre-2.0 format was a `label => value` object, which forced every
+provider to discard either the stable ID (Gravity Forms, WPForms, Ninja Forms
+and Formidable keyed by label) or the human label (Elementor keyed by ID). It
+also **silently merged two fields that shared a label** — two fields both called
+"Name" became one. A list preserves provider order, preserves duplicates, and
+keeps the ID for automation alongside the label for humans. Match on `id`; show
+`label`.
+
+Label availability differs by provider, and Convermetry does not guess:
+
+| Provider | `id` | `label` |
+|---|---|---|
+| Elementor | field ID | the field's title |
+| Gravity Forms | field ID | the field label |
+| WPForms | field ID | the field name |
+| Ninja Forms | field ID (or key) | the field label, else its key |
+| Formidable Forms | field ID | the field name, else its key |
+| Contact Form 7 | posted field name | **same as `id`** — CF7 exposes no reliable label without parsing form markup |
+| Fluent Forms | submitted key | **same as `id`** — labels live in an internal JSON blob, not a public API |
+
+Convermetry's own correlation fields (`cvm_conversion_id`, `cvm_session_id`,
+`cvm_context`) are stripped before storage and never appear here.
+
+#### Migrating from schema 1.0 — branch on `schema_version`
+
+Moving `submission_data` from an object to an array is a breaking wire change,
+so it is versioned. **Both versions travel during the transition**, and the two
+message types version independently:
+
+| Message | `schema_version` |
+|---|---|
+| `analytics_report` | `1.0` — unchanged, reports were not affected |
+| `form_submission`, submission recorded by 0.4.0+ | `2.0` |
+| `form_submission`, submission recorded before 0.4.0 | `1.0`, carrying its original object |
+
+Historical rows are **never** rewritten, in the database or on the wire. A
+submission delivered as `1.0` before the upgrade would otherwise reach a second
+endpoint — or a retry — as `2.0`, so one `submission_id` would arrive in two
+different shapes. A frozen retry can therefore deliver a `1.0` body long after
+the site is running 0.4.0.
+
+That is why receivers must branch on **`schema_version`**, never on
+`plugin_version`:
+
+```php
+$data = $payload['form_submission']['submission_data'];
+
+$fields = $payload['schema_version'] === '1.0'
+    // Legacy object: the key is the label, and the ID is unavailable.
+    ? array_map(
+        static fn($label, $value) => ['id' => $label, 'label' => $label, 'value' => $value],
+        array_keys($data),
+        $data
+    )
+    : $data;
+```
+
+The **Send form test** button on the Webhooks page sends schema `2.0`, so you
+can verify a receiver against the current format before real leads arrive.
 
 `ip_address` is the submitter's IP, captured during the visitor's own request and frozen with the row — delivery and retries run later in a background worker where `REMOTE_ADDR` belongs to cron, so it is never re-resolved at send time. The key is **always present**; it is an empty string when the Settings toggle is off, when no valid address could be determined (CLI/cron, an unusual proxy setup), or for a submission stored before the field existed. Values are validated as real IPv4/IPv6 addresses, so a malformed `REMOTE_ADDR` or a comma-joined forwarding chain stores nothing rather than junk.
 
@@ -672,14 +867,17 @@ Pagination metadata returns in `X-WP-Total`, `X-WP-TotalPages`, and `X-CVM-Page`
 | `convermetry_delivery_log_row` | filter | Redact/modify an Activity Log row before storage; return `false` to skip logging |
 | `convermetry_allow_insecure_webhooks` | filter | Return `true` to allow `http://` endpoints (development only) |
 | `convermetry_form_providers` | filter | Register custom `FormProviderInterface` adapters |
-| `convermetry_retry_schedule` | filter | The retry backoff delays in seconds (both message types) |
+| `convermetry_retry_schedule` | filter | The webhook retry backoff delays in seconds (both message types) |
+| `convermetry_notification_retry_schedule` | filter | The email-notification retry backoff in seconds (default `[300, 900, 3600]`). Deliberately separate from the webhook schedule — a stale lead notification is worse than none, and email has no receiver-side idempotency |
+| `convermetry_sensitive_keys` | filter | Extend the credential-looking field/header names redacted from the Activity Log **and** omitted from notification emails (e.g. add `ssn`). Matched as substrings of a canonical form: lowercase with non-alphanumeric runs collapsed to `_`, so `API Key`, `x-api-key` and `API_KEY` all match `api_key`. Extend it; returning a shorter list weakens both surfaces |
 | `convermetry_form_submission` | action | Submit a custom form (fire-and-forget, background delivery) |
-| `convermetry_submission_recorded` | action | Fires after a submission is recorded, before delivery. `($submissionId, $conversionId, $context)` |
+| `convermetry_submission_recorded` | action | Fires after a submission is recorded, before webhook delivery is considered — so listeners run even with no endpoints configured (this is where notifications are queued). `($submissionId, $conversionId, $context)` |
 
 Helper functions: `convermetry_submit_form()` (result-aware submission) and `cvm_track_event()` (custom server-side analytics event).
 
 ## Privacy
 
+- **Email notifications are opt-in and leave your retention window.** Convermetry → Notifications is off by default. When enabled, each notification is a copy of lead data in a mailbox Convermetry does not control: deleting a submission cancels anything still queued and guarantees no queued message can be rendered afterwards, but it **cannot recall a message already sent**. Retention, deletion, and export controls in this plugin do not reach those copies. The visitor-journey and IP-address toggles are off by default for the same reason, and credential-looking fields are never emailed at all. See [Notifications](#notifications).
 - **No cookies.** Session ids live in `localStorage` and rotate after 30 minutes of inactivity.
 - Tracked URLs are canonicalized to scheme + host + path — **no query strings are ever stored**. Referrers and click/form destinations are likewise stripped (whole `mailto:`/`tel:` destinations are kept — the address *is* the destination; strip via `convermetry_tracked_event` if unacceptable).
 - Campaign values are stored after sanitization, except values containing `@` (dropped as likely emails) — never put personal data in UTM parameters. Ad-click identifiers store only the parameter **name**; the value never leaves the browser.
@@ -702,6 +900,7 @@ Helper functions: `convermetry_submit_form()` (result-aware submission) and `cvm
 | `{$prefix}cvm_events` | One row per visitor interaction (analytics engine). Unique `(batch_id, batch_seq)` makes tracker replays idempotent; indexed by type/date, type/session/date, date, and page URL. `form_success` rows carry the `conversion_id` in `event_value`. Stores the visitor `ip_address` unless disabled in Settings. |
 | `{$prefix}cvm_form_submissions` | One row per server-confirmed submission: `submission_id` (unique), `conversion_id` (unique — the dedup point), session id, provider/form identity, page URL + query, submitter `ip_address` (empty when disabled in Settings), sanitized `submission_data`, frozen `analytics_context`, runtime overrides, plus the indexed `channel` and `utm_campaign` columns the Submissions page filters on, and the recorded `delivery_state` / `delivery_json` webhook outcome. |
 | `{$prefix}cvm_delivery_queue` | The background form-delivery queue: one row per submission × endpoint with status, attempt, next-attempt time, claim token, and the frozen URL/headers/body. Rows are deleted on acknowledgment or abandonment. |
+| `{$prefix}cvm_notification_queue` | The background email-notification queue: one row per submission × recipient with the frozen settings snapshot, status, attempt, next-attempt time, claim token, and last failure reason. Carries **no lead data** — the submission is read at send time. Rows are deleted on send, on abandonment, when the submission is deleted, or when their two-hour TTL expires. |
 | `{$prefix}cvm_webhook_deliveries` | The Activity Log: one row per delivery attempt with normalized `message_type`/`kind`/`attempt` columns, identifiers, redacted headers, redacted request/response bodies (64 KB cap each). |
 
 All tables are created via `dbDelta()` with versioned schema options; migrations are **verified** (columns and critical indexes checked) before their version is recorded, so a failed/partial migration retries on the next load. `channel` and `utm_campaign` are denormalized copies of two values that also live inside the frozen `analytics_context` — promoted to indexed columns so the Submissions page can filter and build dropdowns without decoding every row's JSON. `delivery_state` / `delivery_json` are likewise recorded rather than derived — see [Submissions](#submissions). Rows predating schema 1.2.0/1.3.0 are backfilled in chunks under a wall-clock budget by the daily cleanup cron, by a catch-up event scheduled right after the upgrade, and by the Submissions page itself (so sites whose WP-Cron never fires still finish). An un-backfilled row is exactly one whose `channel` or `delivery_state` `IS NULL`, so the backfill needs no progress option and terminates on its own. Large retry state never lives in autoloaded options — the analytics retry-state and last-sent options are stored with `autoload = no`, and form payloads live in the queue table.
@@ -730,17 +929,21 @@ convermetry/
 └── src/
     ├── Autoloader.php           # Minimal PSR-4 autoloader (no Composer)
     ├── Plugin.php               # Composition root
-    ├── Admin/                   # AnalyticsPage, SubmissionsPage, FormsPage, WebhooksPage,
-    │                             # ActivityLogPage, SettingsPage, AboutPage
-    ├── Analytics/               # Reports (shared query layer), ReportQueryException
+    ├── Admin/                   # AnalyticsPage, SubmissionsPage, FormsPage, NotificationsPage,
+    │                             # WebhooksPage, ActivityLogPage, SettingsPage, AboutPage
+    ├── Analytics/               # Reports (shared query layer), ReportQueryException,
+    │                             # SubmissionContext (shared analytics-context enrichment)
     ├── Api/                     # TrackingController, DeliveryLogController
     ├── Database/                # DatabaseManager (events), FormSubmissions
     ├── Forms/                   # FormProviderInterface, FormProviderRegistry, FormSettings,
-    │   │                        # SubmissionService, SubmissionResult
+    │   │                        # SubmissionService, SubmissionResult, SubmissionFields
     │   └── Providers/           # Elementor, GravityForms, WPForms, ContactForm7,
     │                             # FluentForms, NinjaForms, FormidableForms
+    ├── Notifications/           # NotificationSettings, NotificationDispatcher,
+    │                             # NotificationQueue, EmailBuilder, NotificationMailer
     ├── Settings/                # Options (typed settings access)
-    ├── Support/                 # Http (the single safe outbound transport)
+    ├── Support/                 # Http (the single safe outbound transport),
+    │                             # SensitiveKeys (shared credential-name policy)
     ├── Tracking/                # Channels (the one attribution engine), Correlation, ScriptLoader
     └── Webhook/                 # WebsiteInfoBuilder, PayloadBuilder, RequestFactory,
                                  # AnalyticsDispatcher, FormDeliveryQueue, DeliveryLog

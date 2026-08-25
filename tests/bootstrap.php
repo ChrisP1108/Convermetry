@@ -10,6 +10,25 @@
  * manual/live checklist — is anything that needs a real WordPress runtime:
  * dbDelta() migrations, provider hook lifecycles inside the real form plugins,
  * WP-Cron scheduling, REST authentication, and end-to-end delivery.
+ *
+ * For the notification subsystem specifically, that checklist is:
+ *
+ *  - the cvm_notification_queue migration, including whether dbDelta actually
+ *    created the UNIQUE submission_recipient index (deduplication depends on
+ *    it, and its absence would be silent);
+ *  - the cron worker firing, claiming rows, and re-arming;
+ *  - INSERT IGNORE idempotency under a real unique index;
+ *  - the delete-submission and clear-all cascades, and retention interaction;
+ *  - activation, deactivation, and uninstall (including multisite);
+ *  - whether an email actually arrives, which no code can assert —
+ *    wp_mail() returning true means the local transport accepted the message.
+ *
+ * NotificationLifecycleTest covers the wiring for these behaviorally where a
+ * callback is observable and by source-contract assertions where it is not; it
+ * makes no claim about the SQL itself. There is intentionally no hand-rolled
+ * $wpdb mock anywhere in this suite: a mock would only prove the test author's
+ * model of MySQL, and a green "delete cascade" built on one would make an
+ * unverified erasure guarantee look verified.
  */
 
 declare(strict_types=1);

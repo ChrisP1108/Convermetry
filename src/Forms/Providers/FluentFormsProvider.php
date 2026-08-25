@@ -121,7 +121,12 @@ final class FluentFormsProvider implements FormProviderInterface
                 continue;
             }
 
-            $fields[$key] = $value;
+            // The submitted key ('email', 'names') is the only stable handle
+            // in this hook payload. Labels live in the form's own form_fields
+            // JSON blob, which is an internal storage detail rather than a
+            // supported API — so the key doubles as the label, and the
+            // normalizer records that fallback honestly.
+            $fields[] = ['id' => $key, 'label' => $key, 'value' => $value];
         }
 
         $service->record(

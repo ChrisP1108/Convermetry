@@ -139,25 +139,6 @@ final class Correlation
     }
 
     /**
-     * Strips Convermetry's internal correlation fields from a submission's
-     * field map, so they never appear in submission_data (payloads, logs, or
-     * stored records).
-     *
-     * @param array<string, mixed> $fields Raw submission fields.
-     * @return array<string, mixed>
-     */
-    public static function stripInternalFields(array $fields): array
-    {
-        foreach (array_keys($fields) as $key) {
-            if (is_string($key) && str_starts_with(strtolower($key), 'cvm_')) {
-                unset($fields[$key]);
-            }
-        }
-
-        return $fields;
-    }
-
-    /**
      * The analytics_context block for this correlation, in the exact shape
      * the form-submission payload documents. The channel is classified by
      * the SAME engine as the analytics dashboard ({@see Channels}).

@@ -5,9 +5,10 @@ namespace Convermetry\Admin;
 
 if (!defined('ABSPATH')) exit;
 
+use Convermetry\Analytics\SubmissionContext;
 use Convermetry\Database\FormSubmissions;
+use Convermetry\Forms\SubmissionFields;
 use Convermetry\Settings\Options;
-use Convermetry\Webhook\FormDeliveryQueue;
 
 /**
  * The "Convermetry → Submissions" admin page.
@@ -102,6 +103,14 @@ final class SubmissionsPage
 
         wp_localize_script('cvm-submissions', 'CVM_SUB', [
             'ajaxUrl'      => admin_url('admin-ajax.php'),
+            // Seeds the list's search box from the URL, so a deep link can
+            // open one submission. Notification emails link here with the
+            // submission id, and buildWhereClause() matches submission_id
+            // exactly — without this the link would silently open the full,
+            // unfiltered list, which is worse than no link at all.
+            'initialSearch' => isset($_GET['cvm_search'])
+                ? sanitize_text_field(wp_unslash($_GET['cvm_search']))
+                : '',
             'listNonce'    => wp_create_nonce('cvm_get_submissions'),
             'detailNonce'  => wp_create_nonce('cvm_get_submission_detail'),
             'deleteNonce'  => wp_create_nonce('cvm_delete_submission'),
@@ -258,9 +267,9 @@ final class SubmissionsPage
         // The session summary (pageview count, session start, recent pages)
         // is normally computed when a webhook delivery freezes its payload —
         // which never happens on a site with no endpoints configured. Fill it
-        // in lazily here instead; enrichContext() persists what it computes,
-        // so this runs at most once per submission ever.
-        $row = FormDeliveryQueue::enrichContext($row);
+        // in lazily here instead; SubmissionContext::enrich() persists what it
+        // computes, so this runs at most once per submission ever.
+        $row = SubmissionContext::enrich($row);
 
         $status = self::deliveryStatuses([$row])[(string) ($row['submission_id'] ?? '')] ?? null;
 
@@ -574,7 +583,7 @@ final class SubmissionsPage
         $channel  = (string) ($row['channel'] ?? '');
         $campaign = (string) ($row['utm_campaign'] ?? '');
         $pageUrl  = (string) ($row['page_url'] ?? '');
-        $lead     = self::leadLabel(self::decodeJson((string) ($row['submission_data'] ?? '')));
+        $lead     = self::leadLabel(SubmissionFields::fromStoredJson((string) ($row['submission_data'] ?? '')));
 
         $state      = (string) ($status['state'] ?? 'not_sent');
         $stateLabel = (string) ($status['label'] ?? 'Not sent');
@@ -634,7 +643,9 @@ final class SubmissionsPage
     {
         $context     = self::decodeJson((string) ($row['context'] ?? ''));
         $attribution = is_array($context['attribution'] ?? null) ? $context['attribution'] : [];
-        $fields      = self::decodeJson((string) ($row['submission_data'] ?? ''));
+        // Historical rows still hold the pre-2.0 associative map; the
+        // normalizer reads either shape, so both render identically here.
+        $fields      = SubmissionFields::fromStoredJson((string) ($row['submission_data'] ?? ''));
         $pageQuery   = self::decodeJson((string) ($row['page_query'] ?? ''));
         $landing     = is_array($context['landing_page'] ?? null)
             ? (string) ($context['landing_page']['url'] ?? '')
@@ -722,10 +733,10 @@ final class SubmissionsPage
                     <div class="cvm-field-table-wrap">
                         <table class="cvm-field-table">
                             <tbody>
-                            <?php foreach ($fields as $name => $value): ?>
+                            <?php foreach (SubmissionFields::toDisplayPairs($fields) as $pair): ?>
                                 <tr>
-                                    <th scope="row"><?php echo esc_html((string) $name); ?></th>
-                                    <td><?php echo esc_html(self::flatten($value)); ?></td>
+                                    <th scope="row"><?php echo esc_html($pair['label']); ?></th>
+                                    <td><?php echo esc_html($pair['value']); ?></td>
                                 </tr>
                             <?php endforeach; ?>
                             </tbody>
@@ -864,6 +875,12 @@ final class SubmissionsPage
      * attribution, and delivery state, and the visitor's own answers travel in
      * a final JSON column.
      *
+     * That column is always the canonical descriptor list, normalized on the
+     * way out. Historical rows still hold the pre-2.0 associative map, and
+     * streaming each row's raw column verbatim would produce one file
+     * containing two different JSON shapes — which no downstream importer
+     * could parse without sniffing every row.
+     *
      * Rows are fetched in keyset-paginated chunks and written as they arrive,
      * so memory stays bounded no matter how large the table is.
      *
@@ -939,7 +956,10 @@ final class SubmissionsPage
                     (string) ($context['device'] ?? ''),
                     (string) ($row['ip_address'] ?? ''),
                     (string) ($status['label'] ?? 'Not sent'),
-                    (string) ($row['submission_data'] ?? '{}'),
+                    (string) wp_json_encode(
+                        SubmissionFields::fromStoredJson((string) ($row['submission_data'] ?? '')),
+                        JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
+                    ),
                 ]), escape: '');
             }
         } while (count($rows) === self::EXPORT_CHUNK);
@@ -972,7 +992,14 @@ final class SubmissionsPage
      * Prefers an email address (the field most reliably present and unique),
      * then a name assembled from name-ish fields, then a phone number.
      *
-     * @param array<string, mixed> $fields Decoded submission data.
+     * Each heuristic tests BOTH the field id and its human label, and either
+     * matching is enough. That is what structured fields bought here: a
+     * Gravity Forms field matches on "Email address" while an Elementor field
+     * — whose id is an opaque 'field_a1b2c3' — matches on its title. Under the
+     * old label-keyed map, Elementor leads had nothing to match on at all and
+     * routinely rendered as "(no contact details)".
+     *
+     * @param list<array{id: string, label: string, value: string|list<string>}> $fields Normalized submission fields.
      * @return string
      */
     private static function leadLabel(array $fields): string
@@ -983,31 +1010,42 @@ final class SubmissionsPage
         $last  = '';
         $phone = '';
 
-        foreach ($fields as $key => $value) {
-            $flat = self::flatten($value);
+        foreach ($fields as $field) {
+            $flat = SubmissionFields::flatten($field['value'] ?? '');
             if ($flat === '') {
                 continue;
             }
 
-            $k = strtolower((string) $key);
+            $id    = strtolower((string) ($field['id'] ?? ''));
+            $label = strtolower((string) ($field['label'] ?? ''));
 
-            if ($email === '' && (str_contains($k, 'email') || is_email($flat))) {
+            $matches = static function (string ...$needles) use ($id, $label): bool {
+                foreach ($needles as $needle) {
+                    if (str_contains($id, $needle) || str_contains($label, $needle)) {
+                        return true;
+                    }
+                }
+
+                return false;
+            };
+
+            if ($email === '' && ($matches('email') || is_email($flat))) {
                 $email = $flat;
                 continue;
             }
-            if ($first === '' && (str_contains($k, 'first') || str_contains($k, 'fname'))) {
+            if ($first === '' && $matches('first', 'fname')) {
                 $first = $flat;
                 continue;
             }
-            if ($last === '' && (str_contains($k, 'last') || str_contains($k, 'lname') || str_contains($k, 'surname'))) {
+            if ($last === '' && $matches('last', 'lname', 'surname')) {
                 $last = $flat;
                 continue;
             }
-            if ($name === '' && str_contains($k, 'name')) {
+            if ($name === '' && $matches('name')) {
                 $name = $flat;
                 continue;
             }
-            if ($phone === '' && (str_contains($k, 'phone') || str_contains($k, 'tel') || str_contains($k, 'mobile'))) {
+            if ($phone === '' && $matches('phone', 'tel', 'mobile')) {
                 $phone = $flat;
             }
         }
