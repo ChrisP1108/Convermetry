@@ -42,6 +42,73 @@ jobs:
       - name: Unit suite
         run: composer test
 
+  integration:
+    name: Integration (real MySQL)
+    runs-on: ubuntu-latest
+
+    # The unit suite deliberately has no database, so it cannot catch a query
+    # that is structurally correct and still wrong once a server executes it.
+    # The funnel report is the worked example: its statement is assembled
+    # outside-in, parameters were bound in step order, and every one landed on
+    # the wrong placeholder. Nothing errored — they are all %s — so the query
+    # compared a page URL against a timestamp and reported every funnel as
+    # zero, while a unit test asserting the SQL's structure stayed green.
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: cvm_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -proot"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up PHP 8.3
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: mysqli
+          coverage: none
+          tools: composer:v2
+
+      - name: Install dependencies
+        run: composer install --no-interaction --no-progress
+
+      - name: Integration suite
+        env:
+          CVM_TEST_DB_HOST: 127.0.0.1
+          CVM_TEST_DB_PORT: 3306
+          CVM_TEST_DB_NAME: cvm_test
+          CVM_TEST_DB_USER: root
+          CVM_TEST_DB_PASS: root
+        run: vendor/bin/phpunit -c phpunit.integration.xml
+
+      # The suite skips itself when no database is reachable, which is right for
+      # a laptop and wrong for CI: a broken service container would otherwise
+      # turn every test into a silent pass. Fail if nothing actually ran.
+      - name: Assert the suite actually ran
+        env:
+          CVM_TEST_DB_HOST: 127.0.0.1
+          CVM_TEST_DB_PORT: 3306
+          CVM_TEST_DB_NAME: cvm_test
+          CVM_TEST_DB_USER: root
+          CVM_TEST_DB_PASS: root
+        run: |
+          set -e
+          OUT="$(vendor/bin/phpunit -c phpunit.integration.xml --do-not-cache-result | tail -3)"
+          echo "$OUT"
+          if echo "$OUT" | grep -qE 'Skipped: [0-9]+'; then
+            echo "::error::The integration suite skipped tests — the database was not reachable."
+            exit 1
+          fi
+
   runtime-floor:
     name: No syntax or functions above the PHP 8.3 floor
     runs-on: ubuntu-latest
@@ -101,7 +168,7 @@ jobs:
           fi
           echo "Inspecting $ZIP"
           unzip -l "$ZIP"
-          if unzip -l "$ZIP" | grep -E '(^|/)(\.git|tests|vendor|bin|\.github)/|composer\.(json|lock)|phpunit\.xml|\.distignore|\.gitignore'; then
+          if unzip -l "$ZIP" | grep -E '(^|/)(\.git|tests|vendor|bin|\.github)/|composer\.(json|lock)|phpunit(\.integration)?\.xml|\.distignore|\.gitignore'; then
             echo "::error::Development artifacts leaked into the release ZIP"
             exit 1
           fi

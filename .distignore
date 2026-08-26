@@ -12,5 +12,6 @@ vendor
 composer.json
 composer.lock
 phpunit.xml
+phpunit.integration.xml
 bin
 .DS_Store

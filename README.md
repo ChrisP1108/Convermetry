@@ -55,8 +55,9 @@ Convermetry works standalone — full analytics dashboard, form integrations, an
 21. [Developer hooks](#developer-hooks)
 22. [Privacy](#privacy)
 23. [Database tables](#database-tables)
-24. [Upgrading to 0.5.0](#upgrading-to-050)
-25. [Uninstall behavior](#uninstall-behavior)
+24. [Testing](#testing)
+25. [Upgrading to 0.5.0](#upgrading-to-050)
+26. [Uninstall behavior](#uninstall-behavior)
 
 ---
 
@@ -1202,6 +1203,34 @@ All tables are created via `dbDelta()` with versioned schema options; migrations
 
 **Schema migrations never run inside a visitor's request.** Adding an index is a table rebuild on every engine, and `ADD COLUMN` is only an instant metadata change on MySQL 8.0.12+. `MigrationRunner` therefore runs migrations only in WP-Cron, WP-CLI, or a genuine admin page view, under an option-row lease so only one runs at a time; a frontend request that notices a pending migration schedules it and touches no DDL. While a migration is outstanding the Goals and Funnels screens say so plainly rather than querying a column that does not exist yet. Large retry state never lives in autoloaded options — the analytics retry-state and last-sent options are stored with `autoload = no`, and form payloads live in the queue table.
 
+## Testing
+
+```bash
+composer lint              # php -l over every PHP file
+composer test              # unit suite — pure logic, no WordPress, no database
+composer test:integration  # the real queries against a real MySQL server
+```
+
+The **unit** suite is deliberately database-free. There is no hand-rolled `$wpdb` mock anywhere in it: a mock only ever proves the test author's model of MySQL, and a green "delete cascade" built on one would make an unverified erasure guarantee look verified.
+
+The **integration** suite exists because that boundary has a cost, and 0.5.0 paid it. The funnel report's statement is assembled outside-in, so the last step's placeholders appear first in the finished SQL; parameters were bound in step order and every one landed on the wrong placeholder. Nothing errored — they are all `%s` — so the query compared a page URL against a timestamp, matched nothing, and reported every funnel as zero, while a unit test asserting the SQL's *structure* stayed green. It now runs the generated SQL against a real server.
+
+It skips itself cleanly when no database is reachable, so `composer test` needs no setup. To run it:
+
+```bash
+CVM_TEST_DB_HOST=127.0.0.1 CVM_TEST_DB_NAME=cvm_test \
+CVM_TEST_DB_USER=root CVM_TEST_DB_PASS=root \
+composer test:integration
+```
+
+`CVM_TEST_DB_SOCKET` is also accepted. **The database is truncated between tests — point it at a throwaway, never at a real site's.**
+
+What it covers: the DDL producing exactly the columns and indexes each migration verifies; the UNIQUE constraints genuinely deduplicating under `INSERT IGNORE`; the generated funnel SQL including ordering, cross-table goal steps, and the eight-step cap; the abandonment query's correlated `NOT EXISTS`; per-currency lead grouping; the corrected backfill sentinel; and the lead-history cascade.
+
+What it does not cover: there is no WordPress in it, so `dbDelta`, cron, REST, and the provider hooks stay on the manual checklist.
+
+---
+
 ## Upgrading to 0.5.0
 
 **Nothing you have configured changes, and no existing behaviour is altered.** Upgrade in place; there is no need to deactivate and reactivate.
@@ -1252,6 +1281,9 @@ convermetry/
 ├── convermetry.php              # Plugin header, PHP 8.3 guard, bootstrap, activation, helpers
 ├── uninstall.php                # Complete cleanup on plugin deletion (multisite-aware)
 ├── README.md
+├── tests/
+│   ├── Unit/                    # Pure logic; no WordPress, no database
+│   └── Integration/             # The real queries against a real MySQL server
 ├── assets/
 │   ├── css/admin.css            # Shared admin styles (cards, toggles, logs, forms, builders)
 │   ├── css/dashboard.css        # Analytics dashboard + print styles
