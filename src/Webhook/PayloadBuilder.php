@@ -15,9 +15,9 @@ use Convermetry\Forms\SubmissionFields;
  * and evolve safely:
  *
  *     {
- *         "schema_version": "1.0" | "2.0",
+ *         "schema_version": "1.0" | "1.1" | "2.0",
  *         "source": "convermetry",
- *         "plugin_version": "0.4.0",
+ *         "plugin_version": "0.5.0",
  *         "message_type": "analytics_report" | "form_submission",
  *         "website_info": { ... },
  *         "generated_at": "...",
@@ -27,12 +27,14 @@ use Convermetry\Forms\SubmissionFields;
  * followed by the message-type-specific body ('period' + 'analytics' for
  * reports; 'form_submission' + 'analytics_context' for submissions).
  *
- * THE TWO MESSAGE TYPES VERSION INDEPENDENTLY. Analytics reports are 1.0.
- * Form submissions are 2.0 when the row carries structured fields and 1.0 when
- * it carries the historical map, so both versions legitimately travel during
- * the transition — and a frozen retry can deliver a 1.0 body long after the
- * plugin was upgraded. Receivers must therefore branch on 'schema_version',
- * never on 'plugin_version'.
+ * THE TWO MESSAGE TYPES VERSION INDEPENDENTLY. Analytics reports are 1.1 as of
+ * plugin 0.5.0 (1.0 plus an additive 'analytics.goals' section — every 1.0
+ * field is unchanged). Form submissions are 2.0 when the row carries structured
+ * fields and 1.0 when it carries the historical map, so several versions
+ * legitimately travel at once — and a frozen retry can deliver a 1.0 body long
+ * after the plugin was upgraded. Receivers must therefore branch on
+ * 'schema_version', never on 'plugin_version', and must tolerate unknown keys
+ * being added within a major version.
  *
  * 'form_submission.ip_address' carries the submitter's IP as captured at
  * submission time — never re-resolved at delivery time, which runs in a

@@ -102,6 +102,35 @@ final class AboutPage
             └── server-confirmed form submission → webhook delivery</pre>';
         self::cardEnd();
 
+        self::cardStart('Conversion intelligence');
+        echo '<p>Beyond form submissions, Convermetry measures three further things — each answering a question '
+            . 'the conversion count alone cannot.</p>';
+        echo '<ul class="cvm-about-features">';
+        echo '<li><strong>Goals</strong> count important actions that are not form submissions: a phone number '
+            . 'tapped, a PDF opened, a booking link followed, a pricing page reached. Matching happens on the '
+            . 'server against activity the tracker already reports, so your list of valuable actions is never '
+            . 'published to visitors and a visitor cannot fabricate a conversion by claiming one. Phone and email '
+            . 'goals need no configuration at all. Each goal counts either once per visit or every occurrence, '
+            . 'enforced by a database uniqueness constraint rather than a PHP check.</li>';
+        echo '<li><strong>Funnels</strong> measure the ordered path to a conversion — how many sessions reached '
+            . 'each step and how many were lost between them. Steps must occur in sequence: a session that '
+            . 'reached step three without step two is not counted at step three.</li>';
+        echo '<li><strong>Form engagement</strong> reports views, starts, attempts, successes and abandonment '
+            . 'per form, plus which fields fail validation most often. <strong>No value a visitor typed is ever '
+            . 'recorded</strong> — a validation event carries only the field id, its type, and which browser '
+            . 'validity check failed.</li>';
+        echo '<li><strong>Lead status and value</strong> let you mark a submission qualified, won, lost or spam '
+            . 'and record what it was worth, so campaign reporting can be measured against outcomes rather than '
+            . 'treating every conversion as equal. This is deliberately not a CRM: six statuses, no pipeline '
+            . 'stages, no assignees.</li>';
+        echo '</ul>';
+        echo '<div class="cvm-about-note">Lead status and value are recorded <strong>locally only</strong> in '
+            . 'this version. A form payload is frozen when it is first delivered and scheduled analytics windows '
+            . 'never revisit, so a lead field on either could only ever report &ldquo;new&rdquo; — wrong for every '
+            . 'lead you qualify. Goal completions do travel, in the analytics report payload, because a '
+            . 'completion either happened in the window or it did not.</div>';
+        self::cardEnd();
+
         self::cardStart('The three identifiers');
         echo '<ul class="cvm-about-features">';
         echo '<li><strong>submission_id</strong> — identifies the form submission itself. Identical in every '
@@ -188,7 +217,7 @@ final class AboutPage
         echo '<p>Reporting data for one time window — aggregates plus the individual conversions that '
             . 'occurred in it. No other lead data is included.</p>';
         echo '<pre class="cvm-about-code">' . esc_html('{
-    "schema_version": "1.0",
+    "schema_version": "1.1",
     "source": "convermetry",
     "plugin_version": "' . CVM_VERSION . '",
     "message_type": "analytics_report",
@@ -391,6 +420,17 @@ if (!\$result->ok) { /* \$result->msg, \$result->failedDeliveries */ }") . '</pr
             . 'your own webhook endpoints.</li>';
         echo '<li>Optional Do Not Track / Global Privacy Control handling, enforced in the tracker, at the REST '
             . 'endpoint, and in the server-side conversion recorder.</li>';
+        echo '<li><strong>Form abandonment records no field values.</strong> A validation event is rebuilt on '
+            . 'the server from three whitelisted pieces — the field\'s id, its type, and which browser validity '
+            . 'check failed — and every other key in the request is discarded by construction. Field ids are '
+            . 'character-restricted and truncated, so an implementation that mistakenly sent a typed value would '
+            . 'be stripped to something unrecognizable rather than quietly stored.</li>';
+        echo '<li><strong>Custom event payloads are not storage.</strong> <code>Convermetry.track()</code> sends '
+            . 'the event name and, only where a goal is configured for it, a single numeric value. Nothing else '
+            . 'in that object is transmitted. An event matching no goal is discarded and never stored.</li>';
+        echo '<li>Goal and funnel records carry no submitted field values — only normalized URLs, the attribution '
+            . 'snapshot, and a device bucket. Lead status and value stay on the submission record and its history '
+            . 'table, and are never duplicated into event storage.</li>';
         echo '<li>Everything ages out with the configurable retention window; uninstall removes every table, '
             . 'option, and cron event (on every site of a multisite network).</li>';
         echo '</ul>';

@@ -415,4 +415,84 @@ final class FunnelMathTest extends TestCase
         // that appears to complete every funnel.
         self::assertStringContainsString("e0.session_id <> ''", $built['sql']);
     }
+
+    /**
+     * Bound parameters must line up with the placeholders in the FINAL SQL text.
+     *
+     * Regression origin: the statement is assembled outside-in — each step WRAPS
+     * what came before, and its correlated subquery is written ahead of the
+     * nested FROM — so the LAST step's placeholders appear FIRST in the string
+     * while step 0's appear last. Parameters were appended in step order, so
+     * every one bound to the wrong placeholder.
+     *
+     * Nothing errored. The placeholders are all %s, so the query still ran: it
+     * compared a page URL against a timestamp, matched nothing, and reported
+     * every funnel as zero. Verified against a real database, where step 0's
+     * condition came out as `page = '2026-09-01 00:00:00' AND created_at >= '/b/'`.
+     *
+     * This asserts the ORDER rather than the structure, which is what the
+     * original test checked and why it stayed green through the bug.
+     */
+    public function testParametersBindInTheOrderThePlaceholdersAppear(): void
+    {
+        global $wpdb;
+        $wpdb = new class {
+            public string $prefix = 'wp_';
+            public function esc_like(string $text): string
+            {
+                return $text;
+            }
+        };
+
+        $method = new \ReflectionMethod(FunnelReport::class, 'buildQuery');
+
+        $built = $method->invoke(
+            null,
+            [
+                ['type' => 'page', 'operator' => 'equals', 'value' => '/step-one/'],
+                ['type' => 'page', 'operator' => 'equals', 'value' => '/step-two/'],
+                ['type' => 'form_success', 'value' => 'gravityforms:7'],
+            ],
+            '2026-08-01 00:00:00',
+            '2026-09-01 00:00:00'
+        );
+
+        self::assertNotNull($built);
+
+        // One parameter per placeholder, or the binding is off by construction.
+        self::assertSame(
+            substr_count($built['sql'], '%s') + substr_count($built['sql'], '%d'),
+            count($built['params']),
+            'Placeholder and parameter counts disagree.'
+        );
+
+        // Substituting in order must put each value where its own step's
+        // condition sits, reading the SQL left to right.
+        $expectedOrder = [
+            'form_success',                  // step 3's correlated subquery is outermost
+            'gravityforms:7',
+            '2026-09-02 00:00:00',           // its completion window
+            '/step-two/',                    // step 2
+            '2026-09-02 00:00:00',
+            '/step-one/',                    // step 1 is innermost
+            '2026-08-01 00:00:00',           // …followed by the cohort window
+            '2026-09-01 00:00:00',
+        ];
+
+        self::assertSame($expectedOrder, $built['params']);
+
+        // And the innermost step's pattern must genuinely land next to the page
+        // comparison rather than next to a date.
+        $substituted = '';
+        $index       = 0;
+        foreach (preg_split('~(%[sd])~', $built['sql'], -1, PREG_SPLIT_DELIM_CAPTURE) as $chunk) {
+            $substituted .= ($chunk === '%s' || $chunk === '%d')
+                ? "'" . $built['params'][$index++] . "'"
+                : $chunk;
+        }
+
+        self::assertStringContainsString("TRIM(TRAILING '/' FROM '/step-one/')", $substituted);
+        self::assertStringContainsString("e0.created_at >= '2026-08-01 00:00:00'", $substituted);
+        self::assertStringNotContainsString("e0.created_at >= '/", $substituted, 'A path bound to a date column.');
+    }
 }

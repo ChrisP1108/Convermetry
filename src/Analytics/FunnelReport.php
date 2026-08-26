@@ -144,6 +144,19 @@ final class FunnelReport
              . ' AND e0.created_at >= %s AND e0.created_at < %s'
              . ' GROUP BY e0.session_id';
 
+        // PARAMETER ORDER FOLLOWS THE FINAL SQL TEXT, NOT THE STEP ORDER.
+        //
+        // The statement is assembled outside-in: each iteration WRAPS what came
+        // before, and the new step's correlated subquery is written ahead of the
+        // nested FROM. So in the finished string the LAST step's placeholders
+        // appear FIRST and step 0's appear last. Appending each step's
+        // parameters in step order would therefore bind them to the wrong
+        // placeholders — silently, since they are all %s — and the query would
+        // still run, comparing a page URL against a timestamp and quietly
+        // returning zero for every funnel.
+        //
+        // Each iteration prepends instead. This base is the innermost group and
+        // stays at the end.
         $params = array_merge($first['params'], [$start, $end]);
         $inner  = 't0';
         $sql    = "SELECT t0.session_id, t0.p0 FROM ({$sql}) AS t0";
@@ -180,7 +193,8 @@ final class FunnelReport
             $sql = "SELECT {$inner}.session_id, " . implode(', ', $carried) . ", {$correlated}"
                  . " FROM ({$sql}) AS {$inner}";
 
-            $params = array_merge($params, $compiled['params'], [$completionEnd]);
+            // Prepended, not appended — see the note where $params is seeded.
+            $params = array_merge($compiled['params'], [$completionEnd], $params);
 
             $inner = $outer;
         }

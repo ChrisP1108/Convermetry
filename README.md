@@ -22,7 +22,7 @@ Was the lead successfully delivered to external systems?
 
 Convermetry works standalone — full analytics dashboard, form integrations, and webhook delivery inside one WordPress install — and is architected so a future Convermetry SaaS can receive `analytics_report` and `form_submission` messages from many installations, keyed by a shared, versioned payload schema.
 
-- **Version:** 0.4.0
+- **Version:** 0.5.0
 - **Requires WordPress:** 6.3+
 - **Requires PHP:** 8.3+
 - **License:** GPL-2.0-or-later
@@ -35,23 +35,28 @@ Convermetry works standalone — full analytics dashboard, form integrations, an
 1. [Requirements & installation](#requirements--installation)
 2. [Admin pages](#admin-pages)
 3. [Submissions](#submissions)
-4. [Analytics tracking](#analytics-tracking)
-5. [Campaign & channel attribution](#campaign--channel-attribution)
-6. [Session → submission → conversion correlation](#session--submission--conversion-correlation)
-7. [Supported form providers](#supported-form-providers)
-8. [Custom form integration API](#custom-form-integration-api)
-9. [Notifications](#notifications)
-10. [Webhooks](#webhooks)
-11. [The three identifiers](#the-three-identifiers-submission_id--conversion_id--delivery_id)
-12. [Payload schemas](#payload-schemas)
-13. [HMAC signatures](#hmac-signatures)
-14. [Retries & idempotency](#retries--idempotency)
-15. [Activity Log](#activity-log)
-16. [REST APIs](#rest-apis)
-17. [Developer hooks](#developer-hooks)
-18. [Privacy](#privacy)
-19. [Database tables](#database-tables)
-20. [Uninstall behavior](#uninstall-behavior)
+4. [Goals](#goals)
+5. [Funnels](#funnels)
+6. [Form engagement & abandonment](#form-engagement--abandonment)
+7. [Lead status & value](#lead-status--value)
+8. [Analytics tracking](#analytics-tracking)
+9. [Campaign & channel attribution](#campaign--channel-attribution)
+10. [Session → submission → conversion correlation](#session--submission--conversion-correlation)
+11. [Supported form providers](#supported-form-providers)
+12. [Custom form integration API](#custom-form-integration-api)
+13. [Notifications](#notifications)
+14. [Webhooks](#webhooks)
+15. [The three identifiers](#the-three-identifiers-submission_id--conversion_id--delivery_id)
+16. [Payload schemas](#payload-schemas)
+17. [HMAC signatures](#hmac-signatures)
+18. [Retries & idempotency](#retries--idempotency)
+19. [Activity Log](#activity-log)
+20. [REST APIs](#rest-apis)
+21. [Developer hooks](#developer-hooks)
+22. [Privacy](#privacy)
+23. [Database tables](#database-tables)
+24. [Upgrading to 0.5.0](#upgrading-to-050)
+25. [Uninstall behavior](#uninstall-behavior)
 
 ---
 
@@ -74,8 +79,12 @@ Activation never fatals when no third-party form plugin is installed — every p
 ```text
 Convermetry
     Analytics      — the reporting dashboard (top-level default)
-    Submissions    — every server-confirmed lead, with its attribution and answers
-    Forms          — provider status, discovered forms, per-form configuration
+    Submissions    — every server-confirmed lead, with its attribution, answers,
+                     status and value
+    Goals          — conversions that are not form submissions, and how they perform
+    Funnels        — the ordered path to a conversion, and where visitors drop out
+    Forms          — provider status, discovered forms, per-form configuration,
+                     engagement and abandonment
     Notifications  — internal email alerts for new submissions, with analytics context
     Webhooks       — endpoints, delivery types, signing, schedule, request customization
     Activity Log   — every delivery attempt with its (redacted) payload and response
@@ -231,6 +240,255 @@ Submissions hold the information visitors typed into your forms. Two ways to rem
 Both are permanent, and **both cancel any pending or retrying webhook delivery for the submissions they remove**. That matters: once a delivery has made its first attempt, the queue holds a frozen copy of the payload — the visitor's field values included — and would otherwise keep replaying it on the retry schedule for hours after the lead was "permanently" deleted.
 
 Neither touches Activity Log entries: a delivery attempt is a separate record of something the site did, and erasing a lead must not silently destroy the outbound audit trail. Submissions also age out automatically with the shared retention window under **Settings**; the queue worker likewise stops delivering any submission whose row no longer exists.
+
+## Goals
+
+A **goal** is an important visitor action that is *not* a form submission — a phone number tapped, a PDF opened, a booking link followed, a pricing page reached. Before 0.5.0 these were invisible: a site whose best leads phone rather than fill in a form had nothing to measure.
+
+Goals are managed under **Convermetry → Goals**, where each goal is listed together with its performance for the selected period.
+
+### Form submissions are not goals
+
+A confirmed form submission is a **server-confirmed** conversion: the form plugin's own success hook told Convermetry it happened. A goal completion is a **browser-observed** signal. They are stored in different tables and counted separately, on purpose — folding submissions into goals would quietly downgrade the plugin's most trustworthy number to the standard of its least.
+
+### Matching happens on the server
+
+Goals are matched **server-side**, at ingestion, against data the tracker already sends. The browser is not told what your goals are. Three consequences:
+
+- Your list of valuable actions is competitive information and stays on the server.
+- **Phone and email goals need no configuration at all.** The tracker already reports click destinations and already keeps `tel:` and `mailto:` URLs whole while stripping query strings from everything else — so you pick "on a phone number link" and you are done. No CSS selector required.
+- A visitor cannot manufacture a conversion by claiming one. They can only report the same raw activity any visitor reports; the server decides what it means.
+
+The single exception is a **CSS selector**, which genuinely cannot be evaluated without the DOM. Only those selectors are sent to the tracker, and the goal ids it reports back are re-validated against your enabled selector goals before anything is recorded — so that channel can at most claim a goal that really is an enabled selector goal, and cannot reach a URL or custom-event goal at all.
+
+### Goal types
+
+| Type | Rules | Notes |
+|---|---|---|
+| **Reaching a page** | is exactly / contains / starts with / ends with | Write the path as it appears in the address bar (`/thank-you/`) and it is matched against the URL's path; write a full URL and the whole URL is matched. Trailing slashes are forgiven, and matching is case-insensitive. |
+| **A click** | on a phone number link · on an email link · that leaves this site · where the link contains / is exactly · matching a CSS selector | `tel:` and `mailto:` need no value. A phone tap is deliberately **not** counted as an external link. |
+| **A custom event** | named | Fired from your own code — see below. |
+
+### Counting
+
+Each goal counts either **once per visit** or **every occurrence**:
+
+```text
+Once per session      phone CTA tapped five times   → 1 completion
+Every occurrence      PDF downloaded three times    → 3 completions
+```
+
+Deduplication is enforced by a **UNIQUE database constraint**, not a PHP check, so an at-least-once replay of a tracker batch collides with the original instead of double-counting.
+
+### Custom events
+
+```js
+Convermetry.track('appointment_booked');
+
+// Optionally a numeric value, read only when the matching goal is
+// configured to accept one:
+Convermetry.track('appointment_booked', { value: 250 });
+```
+
+The **name** is the only thing that can match a goal. An event whose name matches no configured goal is **discarded and never stored**, so a typo in your theme's JavaScript costs nothing and cannot fill the events table. Nothing else in the payload is ever stored — only a numeric `value`, and only for a goal set to accept one. This is deliberate: an API that accepted arbitrary properties would become an unaudited route for putting customer data into an analytics table.
+
+The pre-existing `convermetry:conversion` DOM event and the server-side `cvm_track_event()` helper are unchanged.
+
+### Goals depend on the tracking they are built on
+
+A click goal cannot fire if click tracking is switched off in **Settings → Tracking**. Goals deliberately do **not** override those toggles — silently re-enabling tracking you turned off would be the wrong fix — so the Goals screen names the specific setting and links to it.
+
+### Editing a goal
+
+A goal keeps its id forever. Editing its **matching rule** starts a new measurement series (and the reports say the definition changed) so that two different questions are never blended into one line. Renaming a goal, pausing it, or changing what it is worth does **not** reset anything. Removing a goal is a soft delete: its past completions are kept and still appear in reports for earlier periods, still correctly labelled.
+
+Goals start counting **from when you create them**. Completions are not applied retroactively.
+
+---
+
+## Funnels
+
+A **funnel** measures the path to a conversion *in order*: how many sessions reached each step, and how many were lost between them. Managed under **Convermetry → Funnels**.
+
+```text
+Retirement Consultation Funnel
+
+Landing Page          1,242 sessions
+  ↓ 62% continued · 471 lost
+Services                771 sessions
+  ↓ 38% continued · 480 lost
+Form Started            291 sessions
+  ↓ 44% continued · 163 lost
+Submission Attempted    128 sessions
+  ↓ 81% continued · 24 lost
+Confirmed Submission    104 sessions
+
+Overall conversion: 8.37%
+```
+
+Step types: **visited a page**, **completed a goal**, **saw a form**, **started filling a form**, **attempted to submit**, and **submission confirmed by the form plugin**. A form step with no specific form counts any form on the site.
+
+### Ordering is real
+
+Steps must happen **in sequence**. A session that reached step three without step two is not counted at step three. Each step's position is constrained to occur strictly after the previous step's — the naive approach of comparing each step's earliest occurrence gets this wrong in a way that looks right on small data:
+
+```text
+Session did:  B at 09:00,  A at 10:00,  B at 11:00
+A → B funnel: SHOULD succeed (they did A, then B)
+Earliest-occurrence comparison: MIN(B)=09:00 < A, so it reports failure.
+```
+
+Ordering uses the event id rather than the timestamp, because the events table's `created_at` is the moment the row was *inserted* (the tracker sends no client timestamp) — so the two are the same order by construction, and the id is the finer, tie-free version of it. **A consequence worth knowing:** funnel order is *ingestion* order. Within one batch the browser's order is preserved; a batch that failed and was resent from a later page sorts by when it arrived.
+
+Sessions with no session id are excluded — an empty session id is not one visitor, it is every visitor whose session could not be established, and grouping on it would produce one enormous pseudo-session that appears to complete every funnel.
+
+### Cohorts and the completion window
+
+A funnel is a **cohort**: the sessions that reached step 1 during the selected period. Later steps are counted for up to **24 hours past the end of the period**, so a session that entered at 23:55 on the last day is not unfairly cut off — without that, conversion rates would sag at every window edge for reasons unrelated to your site.
+
+Each funnel's result is cached for five minutes, keyed by its definition, so editing a step invalidates the cache automatically.
+
+Funnels are limited to 8 steps and 20 funnels per site.
+
+---
+
+## Form engagement & abandonment
+
+**Convermetry → Forms** now reports the path between a visitor seeing a form and submitting it.
+
+```text
+Contact Form
+
+Views                 1,428      Start Rate         47.8%
+Started                 682      Completion Rate    40.5%
+Attempts                311
+Successful              276
+Abandoned               406
+```
+
+### What each number counts
+
+Mixing units here would make every rate meaningless and the mix would be invisible, so:
+
+| Column | Unit | Evidence |
+|---|---|---|
+| Views | **sessions** in which the form scrolled into view | browser-observed |
+| Started | **sessions** in which someone began filling it in | browser-observed |
+| Attempts | **raw submit presses** — one visitor fighting a validation error produces several, which is the point | browser-observed |
+| Successful | **distinct conversion ids** | **server-confirmed** by the form plugin |
+| Abandoned | **sessions** that started and did not succeed | browser-observed |
+
+A **completion rate above 100% is not an error.** It means confirmed submissions outnumbered observed starts, which happens when visitors submit with JavaScript blocked — the browser-observed columns are undercounting, and clamping the number to 100 would hide the one figure that tells you so.
+
+### Abandonment has a grace period
+
+A form started ninety seconds ago is being filled in, not abandoned. A start counts as abandoned only after **30 minutes** pass with no confirmed submission; anything more recent is shown as *still in progress*. Without that, abandonment would spike towards 100% for the most recent hour of any window and then decay — an artifact that looks exactly like a real problem. The 30 minutes matches the tracker's session idle window: past it the visitor's session has rotated, so a success could no longer be attributed to the same session as the start.
+
+### Friction points — and what is never recorded
+
+Where a form provider uses native browser validation, Convermetry records **which field failed and why**:
+
+```text
+Most common friction points
+
+Field            Type     Problem                                  Errors
+phone            tel      Left empty                                  218
+desired-service  select   Left empty                                  164
+email            email    Wrong format (e.g. not an email address)    131
+```
+
+**No value a visitor typed is ever recorded.** A validation event is rebuilt on the server from exactly three whitelisted pieces — the field's developer-chosen id, its type, and which `ValidityState` flag failed — and everything else in the request is discarded *by construction*. Field identifiers are additionally character-restricted and truncated to 64 characters, so an implementation that mistakenly sent a value would be stripped to something unrecognizable rather than quietly stored.
+
+### Elementor is excluded from form-level engagement
+
+Elementor identifies a form by its **display name** on the server while exposing a **widget id** in the browser, so the two cannot be matched reliably — and an engagement figure attributed to the wrong form is worse than none. Elementor submissions are recorded, attributed, delivered, and reported normally everywhere else in Convermetry. The other six providers are fully supported.
+
+---
+
+## Lead status & value
+
+Stored submissions can now carry an **outcome** and a **monetary value**, so campaign reporting can be measured against what leads were actually worth rather than treating every conversion as equal. Set both on the **Submissions** detail panel; both are filterable in the list.
+
+```text
+Status:  [ Qualified ▼ ]      Lead Value:  [ 12,500.00 ]
+```
+
+| Status | Meaning |
+|---|---|
+| `new` | Not yet assessed — the default for every submission |
+| `qualified` | A real, well-matched lead |
+| `unqualified` | A genuine person who was not a fit |
+| `won` | Converted into business |
+| `lost` | A real lead that did not convert |
+| `spam` | Never a lead at all |
+
+### This is not a CRM
+
+Six statuses, deliberately. There are no assignees, pipeline stages, follow-up dates, or activity notes — every one of those would be a worse version of a tool you already have, and none changes the answer to *"which marketing produced valuable leads?"*.
+
+Two grouping rules carry real weight:
+
+- **`won` counts as qualified.** A lead that converted was self-evidently qualified, and requiring it to pass through `qualified` first would under-report every site that records the final outcome in one step.
+- **Only `spam` leaves the denominator.** An unqualified or lost lead was still a lead your marketing produced. Excluding those would make a channel look better the more poor-quality leads it sent. `spam` is separate from `unqualified` for exactly this reason: merging them would inflate every denominator with bot traffic.
+
+### Value and currency
+
+Values are stored as exact `DECIMAL(13,2)` and handled as decimal **strings** end to end — never as floating point. A lead worth 0.10 recorded ten thousand times totals exactly 1000.00.
+
+Input is forgiving about presentation and strict about value: `$12,500.00`, `12 500`, `€1.234,56` and `1234.56 USD` all parse; `12abc` is **rejected** rather than silently read as 12.
+
+The site currency is set under **Settings → Data** and is **stamped onto each lead** when you first record a value — changing the setting later never rewrites what is already recorded. Reports therefore **group by currency and never sum across codes**: a column adding 100 EUR to 100 USD and showing 200 would be a fabricated number.
+
+### History
+
+Every status or value change is recorded with who made it and when, shown in the submission's detail panel. The change and its history row are written in a single transaction, so a lead can never end up in a state its history disagrees with.
+
+### Lead outcomes do not reach webhooks in 0.5.0
+
+This is a deliberate decision, not an omission. Form submission payloads are **frozen on their first delivery attempt**, and scheduled analytics windows **advance without ever revisiting**. A `lead` block on either could therefore only ever report a lead as `new`/`null` — wrong for every lead anybody ever qualifies, and a field that lies is worse than an absent one.
+
+The `cvm_lead_events` history table exists so that a `lead_status_changed` message can be added once there is a delivery path whose semantics can carry a correction. That is the top item for the next release.
+
+### Reporting
+
+**Analytics → Lead outcomes** breaks leads down by channel, campaign, landing page, and form:
+
+```text
+Channel            Leads  Qualified  Won  Qual. Rate  Attributed Lead Value
+
+Paid Search          211        129   31       61.1%           247,500.00 USD
+Organic Search       180        102   24       56.7%           194,000.00 USD
+Referral              62         39   11       62.9%            83,500.00 USD
+Paid Social          141         37    7       26.2%            42,000.00 USD
+```
+
+- **Lead Qualification Rate** = (qualified + won) ÷ total leads
+- **Lead-to-Win Rate** = won ÷ total leads
+- **Attributed Lead Value** = the total recorded against the cohort
+- **Attributed Revenue** = the same, restricted to leads marked `won`
+
+**Nothing is called ROI or ROAS.** Both are ratios against ad *spend*, Convermetry has no cost data, and a "return" computed without the investment half is not a weaker version of the metric — it is a different number wearing its name.
+
+Leads are counted by **the date the lead arrived**, with status read as it stands now — so these figures move as you qualify leads, which is precisely why they are not shipped in scheduled webhook payloads.
+
+### Time to lead
+
+```text
+Under 5 minutes            41   38.0%
+5–30 minutes               22   20.4%
+30 minutes–24 hours        18   16.7%
+1–7 days                   19   17.6%
+7+ days                     8    7.4%
+
+Paid Search — median      18 min
+Organic Search — median   1.4 days
+```
+
+Measured from the **first page view of the session that converted**. Convermetry keeps **no persistent visitor identity across sessions** and this release does not invent one, so a visitor who researched for a week and returned in a fresh session is measured from that final visit — the narrower truth beats a cross-visit figure derived from an identity that does not exist.
+
+Medians rather than averages: the distribution is heavily right-skewed, and one lead that took three weeks would drag an average past every real experience of your site.
+
+---
 
 ## Analytics tracking
 
@@ -537,7 +795,7 @@ Every outbound message shares one versioned envelope:
 {
     "schema_version": "1.0 | 2.0",
     "source": "convermetry",
-    "plugin_version": "0.4.0",
+    "plugin_version": "0.5.0",
     "message_type": "analytics_report | form_submission",
     "website_info": { },
     "generated_at": "2026-08-22T14:00:00+00:00",
@@ -563,9 +821,9 @@ Every outbound message shares one versioned envelope:
 
 ```json
 {
-    "schema_version": "1.0",
+    "schema_version": "1.1",
     "source": "convermetry",
-    "plugin_version": "0.4.0",
+    "plugin_version": "0.5.0",
     "message_type": "analytics_report",
     "website_info": {
         "name": "Example Financial", "url": "https://example.com", "domain": "example.com",
@@ -632,7 +890,32 @@ Every outbound message shares one versioned envelope:
                 }
             ]
         },
-        "devices": { "desktop": 820, "mobile": 420 }
+        "devices": { "desktop": 820, "mobile": 420 },
+        "goals": {
+            "sessions": 1180,
+            "total": 3,
+            "truncated": false,
+            "goals": [
+                {
+                    "goal_id": "g4f2a9c1b8e0d21f0",
+                    "name": "Phone number tapped",
+                    "completions": 84,
+                    "sessions": 84,
+                    "conversion_rate": 7.12,
+                    "value": "0.00",
+                    "currency": ""
+                },
+                {
+                    "goal_id": "g7c1d6a4b98e73d2",
+                    "name": "Brochure downloaded",
+                    "completions": 51,
+                    "sessions": 39,
+                    "conversion_rate": 3.31,
+                    "value": "1275.00",
+                    "currency": "USD"
+                }
+            ]
+        }
     }
 }
 ```
@@ -648,6 +931,7 @@ Every outbound message shares one versioned envelope:
 - **`conversions.recent`** holds the **individual conversion records** for the window — each with the attribution snapshot taken when it occurred, plus provider/form/submission identity when `server_confirmed` is `true`. Every other section is aggregate reporting data.
 - **Conversion delivery is lossless on the scheduled path:** a window holding more than 100 individual conversions is split into consecutive deliveries rather than truncated. (`recent` itself is capped at 500 entries; scheduled windows are bounded well below that, but a *test* send — which uses a fixed 7-day window with no such bounding — can reach the cap on a busy site.)
 - Each `top_*` list holds up to 200 rows (`convermetry_webhook_report_limit`), deliberately deeper than the dashboard's top 10.
+- **`goals`** (new in schema 1.1) reports [goal](#goals) completions for the window. `goals.sessions` is the denominator every `conversion_rate` uses — sessions in the window, not completions — so a once-per-session goal can never exceed 100%. `completions` counts every recorded completion; `sessions` counts distinct sessions that completed it. `value` is an exact decimal **string**, never a number, and is `"0.00"` when the goal carries no configured value; parse it with a decimal type, not a float. The list is capped at 100 goals ordered by completions, and `truncated` says so explicitly rather than leaving you to infer it from a row count.
 
 **Test analytics payloads** (**Send analytics test** on the Webhooks page) cover the **last 7 days**, carry `"test": true`, get a fresh random `delivery_id`, are **never retried**, and **do not advance the endpoint's last-sent marker** — so testing an endpoint never creates a gap in its scheduled reporting.
 
@@ -659,7 +943,7 @@ Every outbound message shares one versioned envelope:
 {
     "schema_version": "2.0",
     "source": "convermetry",
-    "plugin_version": "0.4.0",
+    "plugin_version": "0.5.0",
     "message_type": "form_submission",
     "website_info": {
         "name": "Example Financial", "url": "https://example.com", "domain": "example.com",
@@ -872,8 +1156,11 @@ Pagination metadata returns in `X-WP-Total`, `X-WP-TotalPages`, and `X-CVM-Page`
 | `convermetry_sensitive_keys` | filter | Extend the credential-looking field/header names redacted from the Activity Log **and** omitted from notification emails (e.g. add `ssn`). Matched as substrings of a canonical form: lowercase with non-alphanumeric runs collapsed to `_`, so `API Key`, `x-api-key` and `API_KEY` all match `api_key`. Extend it; returning a shorter list weakens both surfaces |
 | `convermetry_form_submission` | action | Submit a custom form (fire-and-forget, background delivery) |
 | `convermetry_submission_recorded` | action | Fires after a submission is recorded, before webhook delivery is considered — so listeners run even with no endpoints configured (this is where notifications are queued). `($submissionId, $conversionId, $context)` |
+| `convermetry_goal_completion` | filter | Inspect/modify a [goal](#goals) completion row before it is written. `(array $row, array $goal)` |
+| `convermetry_goal_matched` | action | Fires after a batch of goal completions is stored. `(int $stored, array $rows)` |
+| `convermetry_lead_status_updated` | action | Fires after a [lead's](#lead-status--value) status or value changes. `($submissionId, $toStatus, $fromStatus, ?string $value, string $currency)` |
 
-Helper functions: `convermetry_submit_form()` (result-aware submission) and `cvm_track_event()` (custom server-side analytics event).
+Helper functions: `convermetry_submit_form()` (result-aware submission) and `cvm_track_event()` (custom server-side analytics event). In the browser, `Convermetry.track(name, { value })` reports a [custom event](#custom-events) and the pre-existing `convermetry:conversion` DOM event is unchanged.
 
 ## Privacy
 
@@ -891,25 +1178,72 @@ Helper functions: `convermetry_submit_form()` (result-aware submission) and `cvm
 - Optional **Do Not Track / Global Privacy Control** handling (off by default), enforced in the tracker, at the REST endpoint, and in the server-side conversion recorder. DNT/GPC is an opt-out signal, not a consent mechanism — gate the tracker with your consent tool if your jurisdiction requires consent.
 - Logged-in users are excluded from tracking by default.
 - Form `submission_data` is first-party lead data the visitor actively submitted; it is stored for delivery/retry and ages out with retention. The Activity Log's copy can be disabled in Settings, and `convermetry_delivery_log_row` supports field-level redaction.
+- **Form abandonment records no field values, ever.** A validation event is rebuilt server-side from three whitelisted pieces — the field's developer-chosen id, its type, and which `ValidityState` flag failed — and every other key in the request is discarded by construction rather than by a blocklist. Field ids are character-restricted and truncated to 64 characters, so an implementation that mistakenly sent a typed value would be stripped to something unrecognizable rather than quietly stored. See [Form engagement & abandonment](#form-engagement--abandonment).
+- **Custom event payloads are not storage.** `Convermetry.track('name', {...})` sends only the event name and, when the matching goal is configured for it, a single numeric value. Nothing else in that object is transmitted or stored — an API accepting arbitrary properties would be an unaudited route for putting customer data into an analytics table. An event matching no configured goal is discarded and never stored at all.
+- **Goal and funnel records carry no PII.** They hold only normalized URLs (already stripped of query strings), the attribution snapshot, and a device bucket. No submitted field value can reach them.
+- **Lead status and value stay on the submission record** and its history table. They are never duplicated into event storage, and in 0.5.0 they never leave the site — see [Lead status & value](#lead-status--value).
+- **Goal definitions are not published to visitors.** Matching happens on the server. The one exception is a CSS-selector goal, whose selector must reach the browser to be evaluated; the ids reported back are re-validated server-side before anything is recorded.
+- Goal completions and lead status history age out on the **same retention window** as everything else, and both tables are dropped on uninstall.
 - Everything is deleted after the configurable retention window (7–365 days, default 90) by bounded, chunked cleanup jobs.
 
 ## Database tables
 
 | Table | Purpose |
 |---|---|
-| `{$prefix}cvm_events` | One row per visitor interaction (analytics engine). Unique `(batch_id, batch_seq)` makes tracker replays idempotent; indexed by type/date, type/session/date, date, and page URL. `form_success` rows carry the `conversion_id` in `event_value`. Stores the visitor `ip_address` unless disabled in Settings. |
-| `{$prefix}cvm_form_submissions` | One row per server-confirmed submission: `submission_id` (unique), `conversion_id` (unique — the dedup point), session id, provider/form identity, page URL + query, submitter `ip_address` (empty when disabled in Settings), sanitized `submission_data`, frozen `analytics_context`, runtime overrides, plus the indexed `channel` and `utm_campaign` columns the Submissions page filters on, and the recorded `delivery_state` / `delivery_json` webhook outcome. |
+| `{$prefix}cvm_events` | One row per visitor interaction (analytics engine). Unique `(batch_id, batch_seq)` makes tracker replays idempotent; indexed by type/date, type/session/date, date, page URL, `form_key`/type/date, and session/type/id (the funnel step chain). `form_success` rows carry the `conversion_id` in `event_value`. `form_key` is the form lifecycle's shared dimension across `form_view` → `form_start` → `form_error` → `form_submit` → `form_success`, and is empty on every other type. Stores the visitor `ip_address` unless disabled in Settings. |
+| `{$prefix}cvm_form_submissions` | One row per server-confirmed submission: `submission_id` (unique), `conversion_id` (unique — the dedup point), session id, provider/form identity, page URL + query, submitter `ip_address` (empty when disabled in Settings), sanitized `submission_data`, frozen `analytics_context`, runtime overrides, plus the indexed `channel`, `utm_campaign`, `utm_source`, `utm_medium`, `utm_id` and `landing_page` columns the Submissions page filters on and the lead reports group by, the `lead_status` / `lead_value` / `lead_currency` / `lead_status_at` outcome columns, and the recorded `delivery_state` / `delivery_json` webhook outcome. |
 | `{$prefix}cvm_delivery_queue` | The background form-delivery queue: one row per submission × endpoint with status, attempt, next-attempt time, claim token, and the frozen URL/headers/body. Rows are deleted on acknowledgment or abandonment. |
 | `{$prefix}cvm_notification_queue` | The background email-notification queue: one row per submission × recipient with the frozen settings snapshot, status, attempt, next-attempt time, claim token, and last failure reason. Carries **no lead data** — the submission is read at send time. Rows are deleted on send, on abandonment, when the submission is deleted, or when their two-hour TTL expires. |
 | `{$prefix}cvm_webhook_deliveries` | The Activity Log: one row per delivery attempt with normalized `message_type`/`kind`/`attempt` columns, identifiers, redacted headers, redacted request/response bodies (64 KB cap each). |
+| `{$prefix}cvm_goal_completions` | One row per [goal](#goals) completion. `dedupe_key` carries a UNIQUE index and is the entire deduplication mechanism for both counting behaviours. `source_event_id` is the id of the event that triggered the completion, which is what gives a goal step its position in [funnel](#funnels) ordering. `completion_id` is a stable public identifier. Marketing dimensions (channel, source/medium/campaign/id, landing page, device) are denormalized onto the row so every breakdown needs no join. `value` is `DECIMAL(13,2)`, nullable — `NULL` means "no value configured", which is not the same fact as `0.00`. |
+| `{$prefix}cvm_lead_events` | [Lead](#lead-status--value) status-change history: one row per transition with the previous and new status, the value as at that change, the user who made it, and a stable `lead_event_id`. Rows are cascaded away when the submission is deleted, when all submissions are cleared, and by retention. |
 
-All tables are created via `dbDelta()` with versioned schema options; migrations are **verified** (columns and critical indexes checked) before their version is recorded, so a failed/partial migration retries on the next load. `channel` and `utm_campaign` are denormalized copies of two values that also live inside the frozen `analytics_context` — promoted to indexed columns so the Submissions page can filter and build dropdowns without decoding every row's JSON. `delivery_state` / `delivery_json` are likewise recorded rather than derived — see [Submissions](#submissions). Rows predating schema 1.2.0/1.3.0 are backfilled in chunks under a wall-clock budget by the daily cleanup cron, by a catch-up event scheduled right after the upgrade, and by the Submissions page itself (so sites whose WP-Cron never fires still finish). An un-backfilled row is exactly one whose `channel` or `delivery_state` `IS NULL`, so the backfill needs no progress option and terminates on its own. Large retry state never lives in autoloaded options — the analytics retry-state and last-sent options are stored with `autoload = no`, and form payloads live in the queue table.
+All tables are created via `dbDelta()` with versioned schema options; migrations are **verified** (columns and critical indexes checked) before their version is recorded, so a failed/partial migration retries on the next load. `channel` and `utm_campaign` are denormalized copies of two values that also live inside the frozen `analytics_context` — promoted to indexed columns so the Submissions page can filter and build dropdowns without decoding every row's JSON. `delivery_state` / `delivery_json` are likewise recorded rather than derived — see [Submissions](#submissions). Rows predating schema 1.2.0/1.3.0/1.4.0 are backfilled in chunks under a wall-clock budget by the daily cleanup cron, by a catch-up event scheduled right after the upgrade, and by the Submissions page itself (so sites whose WP-Cron never fires still finish). An un-backfilled row is exactly one whose `channel`, `delivery_state`, or `landing_page` `IS NULL`, so the backfill needs no progress option and terminates on its own. New submissions write every derived column at insert, so only history ever reaches the backfill worker.
+
+**Schema migrations never run inside a visitor's request.** Adding an index is a table rebuild on every engine, and `ADD COLUMN` is only an instant metadata change on MySQL 8.0.12+. `MigrationRunner` therefore runs migrations only in WP-Cron, WP-CLI, or a genuine admin page view, under an option-row lease so only one runs at a time; a frontend request that notices a pending migration schedules it and touches no DDL. While a migration is outstanding the Goals and Funnels screens say so plainly rather than querying a column that does not exist yet. Large retry state never lives in autoloaded options — the analytics retry-state and last-sent options are stored with `autoload = no`, and form payloads live in the queue table.
+
+## Upgrading to 0.5.0
+
+**Nothing you have configured changes, and no existing behaviour is altered.** Upgrade in place; there is no need to deactivate and reactivate.
+
+### What happens on upgrade
+
+Four schema migrations run: two new tables (`cvm_goal_completions`, `cvm_lead_events`), a `form_key` column plus two indexes on the events table, and the lead and attribution columns on the submissions table.
+
+**They do not run inside a visitor's page load.** Adding an index rebuilds the table on every database engine, and the events table is usually the largest one on the site. Migrations therefore run only in WP-Cron, WP-CLI, or a genuine admin page view, one at a time under a lease. Until they finish, the Goals and Funnels screens say *"Preparing"* rather than querying columns that do not exist yet; everything else works normally throughout.
+
+On a large events table expect a **one-time migration cost**. If your site has millions of events, run the upgrade at a quiet hour.
+
+Existing submissions are backfilled with their landing page and full campaign identity in bounded chunks by the daily cleanup cron, a catch-up event scheduled right after the upgrade, and the Submissions page itself. Every existing submission reads as `new` immediately — that comes from the column default, not a backfill.
+
+### Compatibility
+
+| Area | Status |
+|---|---|
+| Existing settings, webhooks, notifications, forms | Unchanged |
+| Historical submissions | Render normally; all show lead status `new` |
+| **Form submission payloads** | **Unchanged — still schema `2.0`** (and `1.0` for pre-2.0 rows). No new fields. |
+| **Analytics report payloads** | **`1.0` → `1.1`.** Purely additive: one new `analytics.goals` section. Every `1.0` field is present, in place, with the same shape — a receiver written against `1.0` keeps working untouched. |
+| Frozen retries in flight | Replay their original bytes under their original `delivery_id`, as always |
+| `cvm_track_event()`, `convermetry_submit_form()`, `convermetry:conversion` | Unchanged |
+
+If your receiver rejects unknown JSON keys, allow additive fields within a major version before upgrading — that is the contract `schema_version` expresses.
+
+### New tracking is on by default
+
+`form_view`, `form_start`, `form_error` and `custom_event` are enabled after upgrade, alongside the existing types, under **Settings → Tracking**.
+
+Note the volume: `form_view` fires once per visible form per page view, so a form in your site footer adds roughly one event per page view. That is also exactly the denominator a start rate needs, so it is a real cost for a real number — but if you do not want abandonment analytics, switch those three off and the cost disappears.
+
+Goal matching adds a small per-event cost on the server and has its own switch under **Settings → Tracking**. With no goals configured it does nothing.
+
+---
 
 ## Uninstall behavior
 
 **Deactivation preserves everything:** tables and data are kept, analytics retry chains are suspended (frozen deliveries resume under their original `delivery_id`s after reactivation), and queued form deliveries wait in the database for the re-armed worker.
 
-**Deleting the plugin** (Plugins screen) runs `uninstall.php`: drops all four tables, deletes every option, transient, rate-limit counter row, and scheduled cron event. On **multisite**, the cleanup runs per site across the whole network. No trace remains.
+**Deleting the plugin** (Plugins screen) runs `uninstall.php`: drops all **seven** tables — including `cvm_goal_completions` and `cvm_lead_events` — and deletes every option (goal and funnel definitions included), transient, rate-limit counter row, and scheduled cron event. On **multisite**, the cleanup runs per site across the whole network. No trace remains.
 
 ## Folder structure
 
@@ -925,25 +1259,35 @@ convermetry/
 │   ├── js/dashboard.js          # Chart navigation/tooltips, panel state, print prep
 │   ├── js/activity-log.js       # Activity Log accordions, filters, pagination, API card
 │   ├── js/submissions.js        # Submissions list, filters, pagination, lazy detail panels
-│   └── js/tracker.js            # Frontend tracker + form correlation
+│   ├── js/goals.js              # Goals editor (rule controls, edit-in-place)
+│   ├── js/funnels.js            # Funnels step editor
+│   └── js/tracker.js            # Frontend tracker, form lifecycle, custom events
 └── src/
     ├── Autoloader.php           # Minimal PSR-4 autoloader (no Composer)
     ├── Plugin.php               # Composition root
-    ├── Admin/                   # AnalyticsPage, SubmissionsPage, FormsPage, NotificationsPage,
-    │                             # WebhooksPage, ActivityLogPage, SettingsPage, AboutPage
-    ├── Analytics/               # Reports (shared query layer), ReportQueryException,
-    │                             # SubmissionContext (shared analytics-context enrichment)
+    ├── Admin/                   # AnalyticsPage, SubmissionsPage, GoalsPage, FunnelsPage,
+    │                             # FormsPage, NotificationsPage, WebhooksPage,
+    │                             # ActivityLogPage, SettingsPage, AboutPage
+    ├── Analytics/               # ReportQuery (shared read path), Reports, GoalReports,
+    │                             # FunnelReport, FormEngagementReport, LeadReports,
+    │                             # ReportQueryException, SubmissionContext
     ├── Api/                     # TrackingController, DeliveryLogController
-    ├── Database/                # DatabaseManager (events), FormSubmissions
+    ├── Database/                # DatabaseManager (events), FormSubmissions, PreparedEvent,
+    │                             # MigrationRunner (keeps DDL out of visitor requests)
     ├── Forms/                   # FormProviderInterface, FormProviderRegistry, FormSettings,
     │   │                        # SubmissionService, SubmissionResult, SubmissionFields
     │   └── Providers/           # Elementor, GravityForms, WPForms, ContactForm7,
     │                             # FluentForms, NinjaForms, FormidableForms
+    ├── Funnels/                 # FunnelSettings, FunnelRepository, StepCompiler
+    ├── Goals/                   # GoalSettings, GoalRepository, GoalMatcher (pure),
+    │                             # GoalRecorder, GoalCompletions
+    ├── Leads/                   # LeadStatus, Money (exact decimals), LeadService, LeadEvents
     ├── Notifications/           # NotificationSettings, NotificationDispatcher,
     │                             # NotificationQueue, EmailBuilder, NotificationMailer
     ├── Settings/                # Options (typed settings access)
     ├── Support/                 # Http (the single safe outbound transport),
-    │                             # SensitiveKeys (shared credential-name policy)
+    │                             # SensitiveKeys (shared credential-name policy),
+    │                             # Url (the one URL-normalization policy)
     ├── Tracking/                # Channels (the one attribution engine), Correlation, ScriptLoader
     └── Webhook/                 # WebsiteInfoBuilder, PayloadBuilder, RequestFactory,
                                  # AnalyticsDispatcher, FormDeliveryQueue, DeliveryLog
