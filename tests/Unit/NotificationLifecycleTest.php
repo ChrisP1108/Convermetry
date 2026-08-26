@@ -332,9 +332,50 @@ final class NotificationLifecycleTest extends TestCase
         );
     }
 
+    /**
+     * The guarantee is unchanged — the queue's schema is upgraded on load, not
+     * only on activation, so a plugin update never leaves it stale. What changed
+     * in 0.5.0 is WHERE that happens: Plugin::init() used to call each table
+     * owner's maybeUpgrade() directly on plugins_loaded, i.e. inside every
+     * anonymous frontend request. MigrationRunner now owns that decision.
+     *
+     * So this asserts the same property through the new mechanism, in two
+     * halves: the runner is booted on load, and this queue is one of the owners
+     * it migrates. Asserting only the first would let someone drop
+     * NotificationQueue from the owner list and still pass.
+     */
     public function testTheSchemaIsUpgradedOnLoad(): void
     {
-        self::assertStringContainsString('NotificationQueue::maybeUpgrade()', $this->source('src/Plugin.php'));
+        self::assertStringContainsString('MigrationRunner::boot()', $this->source('src/Plugin.php'));
+
+        self::assertContains(
+            \Convermetry\Notifications\NotificationQueue::class,
+            \Convermetry\Database\MigrationRunner::owners(),
+            'NotificationQueue is not in the migration runner\'s owner list, so its schema '
+            . 'would never be upgraded on load.'
+        );
+    }
+
+    /**
+     * Schema DDL must never run in a visitor's page load.
+     *
+     * The 0.5.0 migrations add indexes to the events table, which is a locking
+     * rebuild on every engine. If maybeUpgrade() calls ever migrate back into
+     * Plugin::init(), the first anonymous visitor after a plugin update wears
+     * that cost and every concurrent request queues behind them.
+     */
+    public function testTableOwnersAreNotUpgradedDirectlyFromTheCompositionRoot(): void
+    {
+        $source = $this->source('src/Plugin.php');
+
+        foreach (['NotificationQueue', 'DatabaseManager', 'FormSubmissions', 'FormDeliveryQueue'] as $owner) {
+            self::assertStringNotContainsString(
+                $owner . '::maybeUpgrade()',
+                $source,
+                "{$owner}::maybeUpgrade() is called directly from Plugin::init(), which runs on "
+                . 'every frontend request. Schema DDL belongs behind MigrationRunner.'
+            );
+        }
     }
 
     /**

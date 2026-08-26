@@ -28,6 +28,23 @@ use Convermetry\Tracking\Channels;
  * deduplicates by. A conversion recorded by both the frontend tracker and a
  * server-side form provider hook shares one conversion_id, so the two paths
  * can never double-count.
+ *
+ * form_key is the form lifecycle's shared dimension (see FORM_TYPES): one
+ * provider-qualified identity across form_view → form_start → form_error →
+ * form_submit → form_success, so abandonment reporting is a single indexed
+ * GROUP BY rather than a guess at matching display names, and a funnel step can
+ * name one specific form. It is '' on every other event type.
+ *
+ * ORDERING: created_at is the moment the row was INSERTED, not the moment the
+ * interaction happened in the browser — the tracker sends no client timestamp.
+ * created_at order and id order are therefore the same order by construction,
+ * and id is the finer, tie-free version of it (created_at has one-second
+ * resolution, and a whole batch commonly lands inside one second). Anything that
+ * needs to know which of two events came first — funnel step progression above
+ * all — must chain on id. Within one batch, browser order is preserved: the
+ * tracker's array order becomes batch_seq order becomes id order. Across
+ * batches, the order is delivery order, so a batch that failed and was resent
+ * from a later page sorts by when it arrived.
  */
 final class DatabaseManager
 {
@@ -38,7 +55,34 @@ final class DatabaseManager
     private const string DB_VERSION_OPTION = 'cvm_db_version';
 
     /** Current schema version; bump when the CREATE TABLE below changes. */
-    private const string DB_VERSION = '1.1.0';
+    private const string DB_VERSION = '1.2.0';
+
+    /**
+     * Every index {@see createTable()} must verify before stamping the version.
+     *
+     * batch_event carries batch-replay dedup; form_type_date serves every
+     * form-lifecycle report; session_type_id serves the funnel step chain.
+     * dbDelta can add columns while silently skipping an index, and recording
+     * the version anyway would mark that partial migration complete forever.
+     *
+     * Public so a shape test can compare it against the DDL.
+     *
+     * @return string[]
+     */
+    public static function expectedIndexes(): array
+    {
+        return ['batch_event', 'form_type_date', 'session_type_id'];
+    }
+
+    /**
+     * Every column {@see createTable()} must verify before stamping the version.
+     *
+     * @return string[]
+     */
+    public static function expectedColumns(): array
+    {
+        return array_merge(['id'], self::COLUMNS, ['batch_id', 'batch_seq']);
+    }
 
     /**
      * Returns the fully-prefixed events table name.
@@ -89,6 +133,7 @@ final class DatabaseManager
             utm_content VARCHAR(191) NOT NULL DEFAULT '',
             click_id_type VARCHAR(20) NOT NULL DEFAULT '',
             channel VARCHAR(24) NOT NULL DEFAULT '',
+            form_key VARCHAR(191) NOT NULL DEFAULT '',
             ip_address VARCHAR(45) NOT NULL DEFAULT '',
             batch_id VARCHAR(40) DEFAULT NULL,
             batch_seq SMALLINT UNSIGNED NOT NULL DEFAULT 0,
@@ -98,22 +143,28 @@ final class DatabaseManager
             KEY type_date (event_type,created_at),
             KEY type_session_date (event_type,session_id,created_at),
             KEY created_at (created_at),
-            KEY page_url (page_url(191))
+            KEY page_url (page_url(191)),
+            KEY form_type_date (form_key(100),event_type,created_at),
+            KEY session_type_id (session_id,event_type,id)
         ) {$charset};";
 
         dbDelta($sql);
 
         // Only record the schema version once the table verifiably carries
-        // every expected column AND the batch_event unique index — a failed
-        // or partial dbDelta run (out of disk, lost connection, a killed
-        // index build on a large table) must be retried on the next load
-        // instead of being silently marked complete. The index is checked
-        // explicitly because batch-replay dedup lives in the index, not the
-        // columns.
-        if (
-            self::tableHasColumns($table, array_merge(['id'], self::COLUMNS, ['batch_id', 'batch_seq']))
-            && self::tableHasIndex($table, 'batch_event')
-        ) {
+        // every expected column AND every expected index — a failed or partial
+        // dbDelta run (out of disk, lost connection, a killed index build on a
+        // large table) must be retried instead of being silently marked
+        // complete. Indexes are checked explicitly because what lives in them is
+        // not visible in the column list: batch-replay dedup (batch_event), the
+        // form-lifecycle reports (form_type_date), and the funnel step chain
+        // (session_type_id).
+        foreach (self::expectedIndexes() as $index) {
+            if (!self::tableHasIndex($table, $index)) {
+                return;
+            }
+        }
+
+        if (self::tableHasColumns($table, self::expectedColumns())) {
             update_option(self::DB_VERSION_OPTION, self::DB_VERSION);
         }
     }
@@ -169,9 +220,25 @@ final class DatabaseManager
      */
     public static function maybeUpgrade(): void
     {
-        if (get_option(self::DB_VERSION_OPTION) !== self::DB_VERSION) {
+        if (self::needsUpgrade()) {
             self::createTable();
         }
+    }
+
+    /**
+     * Whether the recorded schema version differs from the one this build
+     * ships.
+     *
+     * Read by {@see MigrationRunner}, which decides which request is allowed to
+     * act on the answer — the 1.2.0 migration adds two indexes to what is
+     * usually the largest table on the site, and that must never run inside an
+     * anonymous visitor's page load.
+     *
+     * @return bool
+     */
+    public static function needsUpgrade(): bool
+    {
+        return get_option(self::DB_VERSION_OPTION) !== self::DB_VERSION;
     }
 
     /**
@@ -180,15 +247,30 @@ final class DatabaseManager
      *      type, so clicks, form attempts, hovers, and scroll milestones can
      *      be segmented by channel just like pageviews and conversions.
      */
-    private const array ATTRIBUTED_TYPES = ['pageview', 'click', 'form_submit', 'form_success', 'hover', 'scroll_depth'];
+    private const array ATTRIBUTED_TYPES = [
+        'pageview', 'click', 'form_submit', 'form_success', 'hover', 'scroll_depth',
+        'form_view', 'form_start', 'form_error', 'custom_event',
+    ];
 
     /** @var string[] Insertable columns, in the order bulk inserts serialize them. */
     private const array COLUMNS = [
         'event_type', 'page_url', 'page_title', 'element_tag', 'element_label',
         'target_url', 'event_value', 'referrer', 'session_id', 'device',
         'utm_source', 'utm_medium', 'utm_campaign', 'utm_id', 'utm_term',
-        'utm_content', 'click_id_type', 'channel', 'ip_address', 'created_at',
+        'utm_content', 'click_id_type', 'channel', 'form_key', 'ip_address',
+        'created_at',
     ];
+
+    /**
+     * @var string[] Event types that carry a form identity in the form_key
+     *      column. These are the form lifecycle: seeing a form, starting to fill
+     *      it, failing its validation, attempting a submit, and the confirmed
+     *      success. One indexed dimension across all five is what lets the
+     *      abandonment report be a single GROUP BY instead of a heuristic match
+     *      on display names, and what lets a funnel step target one specific
+     *      form durably.
+     */
+    private const array FORM_TYPES = ['form_view', 'form_start', 'form_error', 'form_submit', 'form_success'];
 
     /** Rows deleted per statement during retention cleanup. */
     private const int CLEANUP_CHUNK = 5000;
@@ -404,6 +486,12 @@ final class DatabaseManager
             'utm_content'   => self::truncate(sanitize_text_field((string) ($data['utm_content'] ?? '')), 191),
             'click_id_type' => sanitize_key((string) ($data['click_id_type'] ?? '')),
             'channel'       => self::truncate(sanitize_text_field((string) ($data['channel'] ?? '')), 24),
+            // Only the form lifecycle carries a form identity. Accepting one on
+            // any other type would let a pageview or a click pollute the
+            // form-engagement reports, which read this column alone.
+            'form_key'      => in_array($type, self::FORM_TYPES, true)
+                ? self::truncate(sanitize_text_field((string) ($data['form_key'] ?? '')), 191)
+                : '',
             // Resolved by the caller once per request. Set here, before the
             // 'convermetry_tracked_event' filter runs, so a site can anonymize
             // or clear it exactly like any other column.

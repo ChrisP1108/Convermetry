@@ -106,7 +106,7 @@ final class SubmissionService
         // write path under the tracker's own conversion token — the frontend
         // form_success event (if it also fires) carries the same id, so
         // every conversion report deduplicates the two into one.
-        $this->recordConversionEvent($provider, $formName, $correlation);
+        $this->recordConversionEvent($provider, $formName, $formKey, $correlation);
 
         $submissionId = 's' . substr(md5(wp_generate_uuid4() . wp_rand()), 0, 20);
 
@@ -131,10 +131,16 @@ final class SubmissionService
             'form_id'         => FormSettings::effectiveFormId($formKey, $nativeId),
             'page_url'        => $page['url'],
             'ip_address'      => $ipAddress,
-            // Denormalized copies of two context values, so the Submissions
-            // page can filter on them without decoding every row's JSON.
+            // Denormalized copies of six context values, so the Submissions page
+            // and the campaign / landing-page lead reports can filter and group
+            // on them without decoding every row's JSON blob. Written here at
+            // insert time, so a new row never needs the backfill worker.
             'channel'         => (string) ($context['channel'] ?? ''),
             'utm_campaign'    => (string) ($context['attribution']['utm_campaign'] ?? ''),
+            'utm_source'      => (string) ($context['attribution']['utm_source'] ?? ''),
+            'utm_medium'      => (string) ($context['attribution']['utm_medium'] ?? ''),
+            'utm_id'          => (string) ($context['attribution']['utm_id'] ?? ''),
+            'landing_page'    => (string) ($context['landing_page']['url'] ?? ''),
             'page_query'      => $page['query'],
             'submission_data' => $submissionData,
             'context'         => $context,
@@ -354,13 +360,24 @@ final class SubmissionService
      * excluded, and privacy signals are honored when the site opted in
      * (webhook delivery is unaffected — those gates govern analytics only).
      *
+     * The event carries form_key as well as the display name. That is what ties
+     * this server-confirmed success back to the browser-observed lifecycle
+     * (form_view → form_start → form_submit) for the same form, so the
+     * abandonment report can compare like with like instead of matching on a
+     * display name two different forms may share.
+     *
      * @param string      $provider    Provider key.
      * @param string      $formName    Form name (becomes element_label).
+     * @param string      $formKey     Provider-qualified form key (becomes form_key).
      * @param Correlation $correlation Correlation data (conversion id, session, attribution).
      * @return void
      */
-    private function recordConversionEvent(string $provider, string $formName, Correlation $correlation): void
-    {
+    private function recordConversionEvent(
+        string $provider,
+        string $formName,
+        string $formKey,
+        Correlation $correlation
+    ): void {
         if (!Options::isTypeEnabled('form_success')) {
             return;
         }
@@ -379,6 +396,7 @@ final class SubmissionService
             'page_url'         => $correlation->pageUrl,
             'element_tag'      => 'form',
             'element_label'    => $formName !== '' ? $formName : $provider,
+            'form_key'         => $formKey,
             'device'           => wp_is_mobile() ? 'mobile' : 'desktop',
             'session_referrer' => $correlation->sessionReferrer,
             'session_direct'   => $correlation->sessionDirect,

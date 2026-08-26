@@ -33,6 +33,23 @@ final class Options
     public const string WEBHOOK_OPTION_KEY = 'cvm_webhook_settings';
 
     /**
+     * The wp_options key holding conversion goal definitions.
+     *
+     * Stored NON-AUTOLOADED. It is read once per ingestion request (and on the
+     * Goals screen), never on an ordinary page load, and it grows with the
+     * number of goals a site defines.
+     */
+    public const string GOALS_OPTION_KEY = 'cvm_goals';
+
+    /**
+     * The wp_options key holding funnel definitions.
+     *
+     * Also NON-AUTOLOADED, and read even less often than goals: funnels are pure
+     * reporting configuration, touched only when a funnel report is rendered.
+     */
+    public const string FUNNELS_OPTION_KEY = 'cvm_funnels';
+
+    /**
      * The wp_options key holding internal email notification configuration.
      *
      * Stored NON-AUTOLOADED, like cvm_form_settings: it carries a per-form
@@ -41,8 +58,28 @@ final class Options
      */
     public const string NOTIFICATION_OPTION_KEY = 'cvm_notification_settings';
 
-    /** @var string[] Event types the frontend tracker can record. */
-    public const array EVENT_TYPES = ['pageview', 'click', 'form_submit', 'form_success', 'hover', 'scroll_depth'];
+    /**
+     * @var string[] Event types the frontend tracker can record.
+     *
+     * EVERY TYPE LISTED HERE IS PUBLICLY POSTABLE. The tracking REST endpoint is
+     * unauthenticated by design — anonymous visitors are the point — and it
+     * accepts any type in this list ({@see \Convermetry\Api\TrackingController}).
+     * So this list is a trust boundary, not just a settings menu: never add a
+     * type that reports something the server is supposed to have DECIDED rather
+     * than observed. Goal completions are the concrete example — they are
+     * derived server-side by {@see \Convermetry\Goals\GoalMatcher} and stored in
+     * their own table precisely so that no caller can manufacture one.
+     *
+     * Adding a type here obliges you to add it in two more places or it will
+     * misbehave silently: {@see self::defaults()} (or it defaults to off) and
+     * the label map in {@see \Convermetry\Admin\SettingsPage::renderTrackingSection()}
+     * (or no checkbox renders, and the next settings save turns it off).
+     * EventTypeRegistrationTest asserts all three agree.
+     */
+    public const array EVENT_TYPES = [
+        'pageview', 'click', 'form_submit', 'form_success', 'hover', 'scroll_depth',
+        'form_view', 'form_start', 'form_error', 'custom_event',
+    ];
 
     /** @var string[] Cron recurrences selectable for analytics webhook dispatch. */
     public const array INTERVALS = ['hourly', 'twicedaily', 'daily', 'weekly'];
@@ -61,12 +98,31 @@ final class Options
             'track_form_success'  => true,
             'track_hover'         => true,
             'track_scroll_depth'  => true,
+            // The form-engagement lifecycle. On by default, like every other
+            // tracking type — analytics that nobody switches on answers nobody's
+            // question. Note the volume: form_view fires once per visible form
+            // per page view, so a form in the site footer adds roughly one event
+            // per page view. That is also exactly the denominator "start rate"
+            // needs, so it is a real cost for a real number, not overhead.
+            'track_form_view'     => true,
+            'track_form_start'    => true,
+            'track_form_error'    => true,
+            // Inert unless site code calls Convermetry.track() AND the name
+            // matches a configured goal — unmatched custom events are discarded
+            // before they are ever stored.
+            'track_custom_event'  => true,
             'exclude_logged_in'   => true,
             'respect_dnt'         => false,
             'retention_days'      => 90,
             'hover_dwell_ms'      => 800,
             'log_submission_data' => true,
             'store_ip_address'    => true,
+            // Goal matching is the one new feature with a per-event ingestion
+            // cost, so it gets an off switch. Funnels deliberately do not have
+            // one: they are pure reporting over events already stored, so there
+            // is nothing for a toggle to save.
+            'goals_enabled'       => true,
+            'lead_currency'       => 'USD',
             'client_first_name'   => '',
             'client_last_name'    => '',
             'client_id'           => '',
@@ -339,6 +395,41 @@ final class Options
     public static function storeIpAddress(): bool
     {
         return !empty(self::all()['store_ip_address']);
+    }
+
+    /**
+     * Whether goal matching runs at all.
+     *
+     * The first and cheapest gate in the ingestion path: when off, no event is
+     * tested against any goal and no completion is ever written. Existing
+     * completions are left alone — switching goals off pauses collection, it
+     * does not erase history.
+     *
+     * @return bool
+     */
+    public static function goalsEnabled(): bool
+    {
+        return !empty(self::all()['goals_enabled']);
+    }
+
+    /**
+     * The site's currency for lead values, as an ISO 4217 code.
+     *
+     * This is the code STAMPED ONTO a submission at the moment a value is first
+     * recorded, not a display preference applied at read time. Changing this
+     * setting therefore never rewrites history: values already recorded keep the
+     * currency they were entered in, and reports group by currency rather than
+     * summing across codes. Summing 100 EUR and 100 USD into "200" would be a
+     * fabricated number, and the one thing worse than no revenue figure is a
+     * confidently wrong one.
+     *
+     * @return string A three-letter uppercase code, or '' when misconfigured.
+     */
+    public static function leadCurrency(): string
+    {
+        $code = strtoupper(trim((string) (self::all()['lead_currency'] ?? '')));
+
+        return preg_match('~^[A-Z]{3}$~', $code) === 1 ? $code : '';
     }
 
     /**

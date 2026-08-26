@@ -17,8 +17,11 @@ use Convermetry\Api\DeliveryLogController;
 use Convermetry\Api\TrackingController;
 use Convermetry\Database\DatabaseManager;
 use Convermetry\Database\FormSubmissions;
+use Convermetry\Database\MigrationRunner;
 use Convermetry\Forms\FormProviderRegistry;
 use Convermetry\Forms\SubmissionService;
+use Convermetry\Goals\GoalCompletions;
+use Convermetry\Leads\LeadEvents;
 use Convermetry\Notifications\NotificationDispatcher;
 use Convermetry\Notifications\NotificationQueue;
 use Convermetry\Tracking\ScriptLoader;
@@ -32,8 +35,11 @@ use Convermetry\Webhook\FormDeliveryQueue;
  * A single instance is created on plugins_loaded (see the main plugin file)
  * and init() wires every subsystem together:
  *
- *  - DatabaseManager / FormSubmissions / DeliveryLog / FormDeliveryQueue —
- *    the four custom tables (creation, upgrades, retention cleanup)
+ *  - MigrationRunner      — decides which request may run schema DDL, and
+ *                           defers it out of visitors' page loads
+ *  - DatabaseManager / FormSubmissions / DeliveryLog / FormDeliveryQueue /
+ *    NotificationQueue / GoalCompletions / LeadEvents — the seven custom
+ *    tables (creation, upgrades, retention cleanup)
  *  - TrackingController   — public REST endpoint that receives tracked events
  *  - ScriptLoader         — enqueues the frontend tracker script with its config
  *  - AnalyticsDispatcher  — scheduled analytics-report webhook delivery
@@ -102,11 +108,14 @@ final class Plugin
      */
     public function init(): void
     {
-        DatabaseManager::maybeUpgrade();
-        FormSubmissions::maybeUpgrade();
-        DeliveryLog::maybeCreateTable();
-        FormDeliveryQueue::maybeUpgrade();
-        NotificationQueue::maybeUpgrade();
+        // Schema migrations used to run right here, on plugins_loaded — which
+        // means they ran inside every anonymous frontend page load. That was
+        // survivable while migrations only added a column; it stopped being
+        // survivable once they started adding indexes to the events table, which
+        // is a locking rebuild on every engine. MigrationRunner owns the
+        // decision about which request may pay that cost, and defers the rest.
+        MigrationRunner::init();
+        MigrationRunner::boot();
 
         TrackingController::init();
         ScriptLoader::init();
@@ -146,6 +155,12 @@ final class Plugin
         add_action('cvm_cleanup_old_events', [DatabaseManager::class, 'cleanupOldEvents']);
         add_action('cvm_cleanup_old_events', [DeliveryLog::class, 'purgeOld']);
         add_action('cvm_cleanup_old_events', [FormSubmissions::class, 'purgeOld']);
+        // Goal completions and lead status history are analytics data and age
+        // out on exactly the same window as everything else — a site owner who
+        // sets 30-day retention must not find two tables quietly keeping
+        // conversion history forever.
+        add_action('cvm_cleanup_old_events', [GoalCompletions::class, 'purgeOld']);
+        add_action('cvm_cleanup_old_events', [LeadEvents::class, 'purgeOld']);
         // Finishes the derived-column backfill (channel/utm_campaign from
         // 1.2.0, delivery_state from 1.3.0); a no-op once every row is
         // populated. The catch-up hook drains large tables sooner than the

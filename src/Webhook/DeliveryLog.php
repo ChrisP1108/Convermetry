@@ -152,9 +152,33 @@ final class DeliveryLog
      */
     public static function maybeCreateTable(): void
     {
-        if (get_option(self::DB_VERSION_OPTION) !== self::DB_VERSION) {
+        if (self::needsUpgrade()) {
             self::createTable();
         }
+    }
+
+    /**
+     * Alias of {@see maybeCreateTable()}, so every table owner presents the
+     * same maybeUpgrade()/needsUpgrade() pair to
+     * {@see \Convermetry\Database\MigrationRunner}. The original name is kept
+     * because it reads better at this class's own call sites and is public API.
+     *
+     * @return void
+     */
+    public static function maybeUpgrade(): void
+    {
+        self::maybeCreateTable();
+    }
+
+    /**
+     * Whether the recorded schema version differs from the one this build
+     * ships.
+     *
+     * @return bool
+     */
+    public static function needsUpgrade(): bool
+    {
+        return get_option(self::DB_VERSION_OPTION) !== self::DB_VERSION;
     }
 
     /**

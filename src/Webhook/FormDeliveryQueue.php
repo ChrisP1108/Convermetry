@@ -134,9 +134,21 @@ final class FormDeliveryQueue
      */
     public static function maybeUpgrade(): void
     {
-        if (get_option(self::DB_VERSION_OPTION) !== self::DB_VERSION) {
+        if (self::needsUpgrade()) {
             self::createTable();
         }
+    }
+
+    /**
+     * Whether the recorded schema version differs from the one this build
+     * ships. Read by {@see \Convermetry\Database\MigrationRunner}, which decides
+     * which request is allowed to act on the answer.
+     *
+     * @return bool
+     */
+    public static function needsUpgrade(): bool
+    {
+        return get_option(self::DB_VERSION_OPTION) !== self::DB_VERSION;
     }
 
     /**

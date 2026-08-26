@@ -8,6 +8,7 @@ if (!defined('ABSPATH')) exit;
 use Convermetry\Database\DatabaseManager;
 use Convermetry\Settings\Options;
 use Convermetry\Support\ClientIp;
+use Convermetry\Support\Url;
 
 /**
  * Public REST endpoint that receives batched events from the frontend tracker.
@@ -79,7 +80,10 @@ final class TrackingController
      *      the session's attribution snapshot too, so intermediate funnel
      *      steps can be segmented by campaign.
      */
-    private const array ATTRIBUTED_TYPES = ['pageview', 'click', 'form_submit', 'form_success', 'hover', 'scroll_depth'];
+    private const array ATTRIBUTED_TYPES = [
+        'pageview', 'click', 'form_submit', 'form_success', 'hover', 'scroll_depth',
+        'form_view', 'form_start', 'form_error', 'custom_event',
+    ];
 
     /**
      * Registers the rest_api_init hook.
@@ -305,124 +309,37 @@ final class TrackingController
     }
 
     /**
-     * Normalizes a tracked page URL: the scheme must be http(s), the host
-     * must belong to this site, and the URL is canonicalized to
-     * scheme://host/path — the entire query string is discarded, so tokens
-     * and PII never reach the database and one page is never fragmented
-     * across many report rows. A port survives only when it matches one this
-     * site actually runs on.
+     * Normalizes a tracked page URL — see {@see Url::pageUrl()}, which owns the
+     * rule so the correlation reader and goal ingestion cannot drift from it.
      *
      * @param string $url Raw page URL from the event.
      * @return string Canonical URL, or '' when the URL is invalid or foreign.
      */
     private static function normalizePageUrl(string $url): string
     {
-        $parts = wp_parse_url($url);
-        if (!is_array($parts) || empty($parts['host'])) {
-            return '';
-        }
-
-        $scheme = strtolower((string) ($parts['scheme'] ?? ''));
-        if ($scheme !== 'http' && $scheme !== 'https') {
-            return '';
-        }
-
-        if (!in_array(strtolower((string) $parts['host']), Options::allowedHosts(), true)) {
-            return '';
-        }
-
-        $port = isset($parts['port']) && in_array((int) $parts['port'], self::sitePorts(), true)
-            ? ':' . (int) $parts['port']
-            : '';
-
-        return $scheme . '://' . $parts['host'] . $port . ($parts['path'] ?? '/');
+        return Url::pageUrl($url);
     }
 
     /**
-     * The non-default ports this site itself is served on (from home_url()
-     * and site_url()). Usually empty; non-empty on e.g. local dev setups.
-     *
-     * @return int[]
-     */
-    private static function sitePorts(): array
-    {
-        static $ports = null;
-
-        if ($ports === null) {
-            $ports = array_values(array_filter(array_map(
-                static fn(string $url): int => (int) wp_parse_url($url, PHP_URL_PORT),
-                [home_url(), site_url()]
-            )));
-        }
-
-        return $ports;
-    }
-
-    /**
-     * Normalizes a click/form destination URL.
-     *
-     * mailto: and tel: destinations are kept whole (the address *is* the
-     * destination); every other scheme except http(s) is dropped, and
-     * http(s) and relative URLs lose their query string and fragment — link
-     * and form-action URLs can carry reset tokens, emails, or order ids that
-     * must never be stored.
+     * Normalizes a click/form destination URL — see {@see Url::targetUrl()}.
      *
      * @param string $url Raw destination from the event.
      * @return string Normalized destination, or '' when empty or unsafe.
      */
     private static function normalizeTargetUrl(string $url): string
     {
-        if ($url === '') {
-            return '';
-        }
-
-        if (preg_match('~^(mailto|tel):~i', $url)) {
-            return $url;
-        }
-
-        // Any other explicit scheme that isn't http(s) — javascript:, data:,
-        // ftp:, custom app schemes — is dropped rather than stored.
-        if (preg_match('~^([a-z][a-z0-9+.\-]*):~i', $url, $m) && !in_array(strtolower($m[1]), ['http', 'https'], true)) {
-            return '';
-        }
-
-        $parts = wp_parse_url($url);
-        if (is_array($parts) && !empty($parts['host'])) {
-            return strtolower((string) ($parts['scheme'] ?? 'https')) . '://' . $parts['host']
-                . (isset($parts['port']) ? ':' . (int) $parts['port'] : '')
-                . ($parts['path'] ?? '/');
-        }
-
-        // Relative URL (e.g. a form action of "/contact") — keep the path only.
-        return (string) preg_replace('~[?#].*$~', '', $url);
+        return Url::targetUrl($url);
     }
 
     /**
-     * Normalizes a referrer URL to scheme://host/path — query strings and
-     * fragments can carry search terms, emails, or tokens, so they are never
-     * stored. Any host is allowed (external referrers are the interesting
-     * ones), but the scheme must be http(s).
+     * Normalizes a referrer URL — see {@see Url::referrer()}.
      *
      * @param string $url Raw referrer from the event.
      * @return string Normalized referrer, or '' when unparsable.
      */
     private static function normalizeReferrer(string $url): string
     {
-        if ($url === '') {
-            return '';
-        }
-
-        $parts = wp_parse_url($url);
-        if (!is_array($parts) || empty($parts['host'])) {
-            return '';
-        }
-
-        $scheme = strtolower((string) ($parts['scheme'] ?? ''));
-        if ($scheme !== 'http' && $scheme !== 'https') {
-            return '';
-        }
-
-        return $scheme . '://' . $parts['host'] . ($parts['path'] ?? '/');
+        return Url::referrer($url);
     }
 
     /**

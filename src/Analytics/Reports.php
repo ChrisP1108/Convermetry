@@ -19,12 +19,11 @@ use Convermetry\Settings\Options;
  * report identical numbers.
  *
  * Every query in this file runs through {@see queryRows()} or
- * {@see queryValue()}, which check $wpdb->last_error immediately after
- * execution and throw {@see ReportQueryException} on failure — $wpdb
- * otherwise turns a failed query into an empty array or null
- * indistinguishable from a legitimate zero, and last_error resets on every
- * subsequent query, so the check has to happen right after each individual
- * call, not once at the end of a longer chain.
+ * {@see queryValue()}, which delegate to {@see ReportQuery} — the shared read
+ * path that checks $wpdb->last_error immediately after execution and throws
+ * {@see ReportQueryException} on failure. $wpdb otherwise turns a failed query
+ * into an empty array or null indistinguishable from a legitimate zero. The
+ * goal, funnel, engagement, and lead reports use the same contract.
  */
 final class Reports
 {
@@ -37,14 +36,7 @@ final class Reports
      */
     private static function queryRows(string $sql): array
     {
-        global $wpdb;
-
-        $rows = $wpdb->get_results($sql, ARRAY_A);
-        if ($wpdb->last_error !== '') {
-            throw new ReportQueryException($wpdb->last_error);
-        }
-
-        return (array) $rows;
+        return ReportQuery::rows($sql);
     }
 
     /**
@@ -56,14 +48,7 @@ final class Reports
      */
     private static function queryValue(string $sql): ?string
     {
-        global $wpdb;
-
-        $value = $wpdb->get_var($sql);
-        if ($wpdb->last_error !== '') {
-            throw new ReportQueryException($wpdb->last_error);
-        }
-
-        return $value;
+        return ReportQuery::value($sql);
     }
 
     /**

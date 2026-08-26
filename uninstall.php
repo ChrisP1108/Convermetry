@@ -3,7 +3,7 @@
  * Convermetry — uninstall cleanup.
  *
  * Runs only when the plugin is deleted from the Plugins screen (never on
- * deactivation). Removes everything the plugin created: all four custom
+ * deactivation). Removes everything the plugin created: all seven custom
  * tables, all options, transients, and any scheduled cron events. On
  * multisite, the per-site cleanup runs for EVERY site — tables, options,
  * and cron events are per-site, so a network-activated uninstall that only
@@ -26,28 +26,36 @@ function cvm_uninstall_current_site(): void
     global $wpdb;
 
     // Custom tables: analytics events, activity log, form submissions,
-    // the form-delivery queue, and the notification queue.
+    // the form-delivery queue, the notification queue, goal completions,
+    // and lead status history.
     $wpdb->query("DROP TABLE IF EXISTS {$wpdb->prefix}cvm_events");
     $wpdb->query("DROP TABLE IF EXISTS {$wpdb->prefix}cvm_webhook_deliveries");
     $wpdb->query("DROP TABLE IF EXISTS {$wpdb->prefix}cvm_form_submissions");
     $wpdb->query("DROP TABLE IF EXISTS {$wpdb->prefix}cvm_delivery_queue");
     $wpdb->query("DROP TABLE IF EXISTS {$wpdb->prefix}cvm_notification_queue");
+    $wpdb->query("DROP TABLE IF EXISTS {$wpdb->prefix}cvm_goal_completions");
+    $wpdb->query("DROP TABLE IF EXISTS {$wpdb->prefix}cvm_lead_events");
 
     // Plugin options.
     delete_option('cvm_settings');
     delete_option('cvm_webhook_settings');
     delete_option('cvm_form_settings');
     delete_option('cvm_notification_settings');
+    delete_option('cvm_goals');
+    delete_option('cvm_funnels');
     delete_option('cvm_db_version');
     delete_option('cvm_delivery_db_version');
     delete_option('cvm_submissions_db_version');
     delete_option('cvm_queue_db_version');
     delete_option('cvm_notification_db_version');
+    delete_option('cvm_goals_db_version');
+    delete_option('cvm_leads_db_version');
     delete_option('cvm_delivery_api_active');
     delete_option('cvm_delivery_api_key_hash');
     delete_option('cvm_webhook_last_sent');
     delete_option('cvm_webhook_retry_state');
     delete_option('cvm_webhook_dispatch_lock');
+    delete_option('cvm_migration_lock');
 
     // Cleanup mutex. Unlike at deactivation, uninstall runs strictly after
     // deactivation has already completed — no plugin code can still be
@@ -70,6 +78,7 @@ function cvm_uninstall_current_site(): void
     // queue-worker runs.
     wp_clear_scheduled_hook('cvm_cleanup_old_events');
     wp_clear_scheduled_hook('cvm_cleanup_old_events_catchup');
+    wp_clear_scheduled_hook('cvm_run_migrations');
     wp_clear_scheduled_hook('cvm_submissions_backfill_catchup');
     wp_clear_scheduled_hook('cvm_dispatch_webhooks');
     wp_clear_scheduled_hook('cvm_process_form_queue');

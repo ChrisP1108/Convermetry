@@ -5,7 +5,7 @@ namespace Convermetry\Tracking;
 
 if (!defined('ABSPATH')) exit;
 
-use Convermetry\Settings\Options;
+use Convermetry\Support\Url;
 
 /**
  * The session ↔ submission correlation data carried by a form request.
@@ -273,9 +273,8 @@ final class Correlation
     }
 
     /**
-     * Normalizes a URL to scheme://host/path — query strings and fragments
-     * are never kept (they can carry tokens or emails). When $sameHost is
-     * true, the host must additionally belong to this site.
+     * Normalizes a URL to scheme://host/path, capped at the storage width —
+     * see {@see Url::boundedUrl()}, which owns the rule.
      *
      * @param mixed $value    Raw URL value.
      * @param bool  $sameHost Require the host to be one of this site's allowed hosts.
@@ -283,25 +282,6 @@ final class Correlation
      */
     private static function normalizeUrl(mixed $value, bool $sameHost): string
     {
-        if (!is_string($value) || $value === '') {
-            return '';
-        }
-
-        $parts = wp_parse_url($value);
-        if (!is_array($parts) || empty($parts['host'])) {
-            return '';
-        }
-
-        $scheme = strtolower((string) ($parts['scheme'] ?? ''));
-        if ($scheme !== 'http' && $scheme !== 'https') {
-            return '';
-        }
-
-        $host = strtolower((string) $parts['host']);
-        if ($sameHost && !in_array($host, Options::allowedHosts(), true)) {
-            return '';
-        }
-
-        return mb_substr($scheme . '://' . $parts['host'] . ($parts['path'] ?? '/'), 0, 255);
+        return Url::boundedUrl($value, $sameHost);
     }
 }

@@ -97,6 +97,8 @@ final class SettingsPage
         $out['hover_dwell_ms']      = min(10000, max(200, (int) ($input['hover_dwell_ms'] ?? 800)));
         $out['log_submission_data'] = !empty($input['log_submission_data']);
         $out['store_ip_address']    = !empty($input['store_ip_address']);
+        $out['goals_enabled']       = !empty($input['goals_enabled']);
+        $out['lead_currency']       = self::sanitizeCurrency($input['lead_currency'] ?? '');
 
         $out['client_first_name'] = mb_substr(sanitize_text_field((string) ($input['client_first_name'] ?? '')), 0, 190);
         $out['client_last_name']  = mb_substr(sanitize_text_field((string) ($input['client_last_name'] ?? '')), 0, 190);
@@ -104,6 +106,28 @@ final class SettingsPage
         $out['website_id']        = mb_substr(sanitize_text_field((string) ($input['website_id'] ?? '')), 0, 190);
 
         return $out;
+    }
+
+    /**
+     * Validates a submitted ISO 4217 currency code.
+     *
+     * Free text rather than a fixed dropdown, because there are ~180 active
+     * codes and hard-coding a list would mean a site using a currency nobody
+     * thought of simply could not record lead values. Anything that is not three
+     * letters falls back to the default rather than being stored — a malformed
+     * code would be stamped onto real submissions and then be impossible to tell
+     * apart from a deliberate one.
+     *
+     * @param mixed $raw Submitted currency code.
+     * @return string A three-letter uppercase code.
+     */
+    private static function sanitizeCurrency(mixed $raw): string
+    {
+        $code = strtoupper(trim(is_scalar($raw) ? (string) $raw : ''));
+
+        return preg_match('~^[A-Z]{3}$~', $code) === 1
+            ? $code
+            : (string) Options::defaults()['lead_currency'];
     }
 
     /**
@@ -199,11 +223,21 @@ final class SettingsPage
      */
     private static function renderTrackingSection(array $settings): void
     {
+        // THIS MAP MUST COVER EVERY Options::EVENT_TYPES ENTRY. sanitize() reads
+        // the checkbox state for each type in that constant, so a type with no
+        // label here renders no checkbox, is absent from the POST, and is
+        // silently switched OFF the next time anyone saves this page — with
+        // nothing on screen to suggest it happened. EventTypeRegistrationTest
+        // fails the build if the two ever drift apart.
         $labels = [
             'pageview'     => 'Page views',
             'click'        => 'Link &amp; button clicks',
+            'form_view'    => 'Form views (a form became visible on screen)',
+            'form_start'   => 'Form starts (a visitor began filling a form in)',
+            'form_error'   => 'Form validation errors (which field failed, never what was typed)',
             'form_submit'  => 'Form submissions (attempts)',
             'form_success' => 'Confirmed form conversions (frontend events and server-confirmed submissions)',
+            'custom_event' => 'Custom events sent by your own code via <code>Convermetry.track()</code>',
             'hover'        => 'Mouse hover activity',
             'scroll_depth' => 'Scroll depth milestones (50/100%)',
         ];
@@ -219,6 +253,16 @@ final class SettingsPage
                 . checked(!empty($settings[$field]), true, false) . '> ' . $label;
             echo '</label>';
         }
+        echo '</td></tr>';
+
+        echo '<tr><th scope="row">Conversion goals</th><td>';
+        echo '<label><input type="checkbox" name="' . esc_attr(Options::OPTION_KEY . '[goals_enabled]') . '" value="1" '
+            . checked(!empty($settings['goals_enabled']), true, false) . '> Match tracked activity against configured goals</label>';
+        echo '<p class="description">Goals turn ordinary activity — a phone number tapped, a PDF opened, a '
+            . 'booking link followed — into counted conversions. Matching runs on the server as events arrive, so '
+            . 'turning this off removes that work entirely. Existing goal completions are kept either way; '
+            . 'switching it off pauses collection rather than erasing history. Manage goals under '
+            . '<strong>Convermetry &rarr; Goals</strong>.</p>';
         echo '</td></tr>';
 
         echo '<tr><th scope="row">Logged-in users</th><td>';
@@ -278,8 +322,19 @@ final class SettingsPage
         echo '<tr><th scope="row"><label for="cvm-retention">Retention period (days)</label></th><td>';
         echo '<input type="number" id="cvm-retention" min="7" max="365" name="'
             . esc_attr(Options::OPTION_KEY . '[retention_days]') . '" value="' . esc_attr((string) $settings['retention_days']) . '" class="small-text">';
-        echo '<p class="description">Analytics events, form submission records, and activity log entries older than this '
-            . 'are deleted by a daily cleanup job. Default is 90 days.</p>';
+        echo '<p class="description">Analytics events, form submission records, goal completions, lead status history, '
+            . 'and activity log entries older than this are deleted by a daily cleanup job. Default is 90 days.</p>';
+        echo '</td></tr>';
+
+        echo '<tr><th scope="row"><label for="cvm-currency">Lead value currency</label></th><td>';
+        echo '<input type="text" id="cvm-currency" maxlength="3" size="5" name="'
+            . esc_attr(Options::OPTION_KEY . '[lead_currency]') . '" value="'
+            . esc_attr((string) ($settings['lead_currency'] ?? '')) . '" class="small-text" '
+            . 'pattern="[A-Za-z]{3}" placeholder="USD">';
+        echo '<p class="description">Three-letter ISO 4217 code (USD, EUR, GBP, AUD&hellip;) used when you record a '
+            . 'value against a lead on the Submissions screen. The code is <strong>saved onto each lead</strong> at the '
+            . 'moment you enter its value, so changing this later never rewrites what is already recorded — and reports '
+            . 'total each currency separately rather than adding different currencies together.</p>';
         echo '</td></tr>';
 
         echo '<tr><th scope="row">Activity Log privacy</th><td>';

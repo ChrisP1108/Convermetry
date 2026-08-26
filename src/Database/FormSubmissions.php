@@ -5,6 +5,7 @@ namespace Convermetry\Database;
 
 if (!defined('ABSPATH')) exit;
 
+use Convermetry\Leads\LeadEvents;
 use Convermetry\Notifications\NotificationQueue;
 use Convermetry\Settings\Options;
 use Convermetry\Webhook\DeliveryLog;
@@ -56,7 +57,7 @@ final class FormSubmissions
     private const string DB_VERSION_OPTION = 'cvm_submissions_db_version';
 
     /** Current schema version; bump when the CREATE TABLE below changes. */
-    private const string DB_VERSION = '1.3.0';
+    private const string DB_VERSION = '1.4.0';
 
     /** Rows deleted per statement during retention cleanup. */
     private const int CLEANUP_CHUNK = 2000;
@@ -78,6 +79,48 @@ final class FormSubmissions
 
     /** Cron hook that drains the derived-column backfill after an upgrade. */
     public const string BACKFILL_CATCHUP_HOOK = 'cvm_submissions_backfill_catchup';
+
+    /**
+     * Every column {@see createTable()} must verify before stamping the version.
+     *
+     * Public so a shape test can compare it against the DDL: adding a column to
+     * one and not the other is the classic failure of this pattern, and it fails
+     * in the silent direction — a name listed here but absent from the DDL means
+     * the version is never stamped, the migration retries forever, and every
+     * feature gated on it stays switched off with no error anywhere.
+     *
+     * @return string[]
+     */
+    public static function expectedColumns(): array
+    {
+        return [
+            'id', 'submission_id', 'conversion_id', 'session_id', 'provider',
+            'form_key', 'form_name', 'native_form_id', 'form_id', 'page_url',
+            'ip_address', 'channel', 'utm_campaign', 'utm_source', 'utm_medium',
+            'utm_id', 'landing_page', 'lead_status', 'lead_value',
+            'lead_currency', 'lead_status_at', 'delivery_state',
+            'delivery_json', 'page_query', 'submission_data', 'context',
+            'runtime', 'created_at',
+        ];
+    }
+
+    /**
+     * Every index {@see createTable()} must verify before stamping the version.
+     *
+     * Every index the admin page FILTERS or GROUPS on has to be verified, not
+     * just the dedup one. dbDelta can add columns while silently skipping an
+     * index; recording the schema version anyway would mark that partial
+     * migration complete and it would never be retried.
+     *
+     * @return string[]
+     */
+    public static function expectedIndexes(): array
+    {
+        return [
+            'conversion_id', 'channel', 'utm_campaign', 'delivery_state',
+            'lead_status_created', 'lead_value', 'landing_page', 'utm_source_medium',
+        ];
+    }
 
     /**
      * Returns the fully-prefixed submissions table name.
@@ -119,6 +162,14 @@ final class FormSubmissions
             ip_address VARCHAR(45) NOT NULL DEFAULT '',
             channel VARCHAR(32) NULL,
             utm_campaign VARCHAR(191) NULL,
+            utm_source VARCHAR(100) NULL,
+            utm_medium VARCHAR(100) NULL,
+            utm_id VARCHAR(100) NULL,
+            landing_page VARCHAR(255) NULL,
+            lead_status VARCHAR(16) NOT NULL DEFAULT 'new',
+            lead_value DECIMAL(13,2) NULL,
+            lead_currency CHAR(3) NOT NULL DEFAULT '',
+            lead_status_at DATETIME NULL,
             delivery_state VARCHAR(16) NULL,
             delivery_json TEXT NULL,
             page_query LONGTEXT NULL,
@@ -134,37 +185,27 @@ final class FormSubmissions
             KEY provider_form (provider,form_key(100)),
             KEY channel (channel),
             KEY utm_campaign (utm_campaign(100)),
-            KEY delivery_state (delivery_state)
+            KEY delivery_state (delivery_state),
+            KEY lead_status_created (lead_status,created_at),
+            KEY lead_value (lead_value),
+            KEY landing_page (landing_page(100)),
+            KEY utm_source_medium (utm_source,utm_medium)
         ) {$charset};";
 
         dbDelta($sql);
 
-        $expected = [
-            'id', 'submission_id', 'conversion_id', 'session_id', 'provider',
-            'form_key', 'form_name', 'native_form_id', 'form_id', 'page_url',
-            'ip_address', 'channel', 'utm_campaign', 'delivery_state',
-            'delivery_json', 'page_query', 'submission_data', 'context',
-            'runtime', 'created_at',
-        ];
-
-        // Every index the admin page FILTERS on has to be verified, not just
-        // the dedup one. dbDelta can add columns while silently skipping an
-        // index; recording the schema version anyway would mark that partial
-        // migration complete and it would never be retried.
-        $indexes = ['conversion_id', 'channel', 'utm_campaign', 'delivery_state'];
-
-        foreach ($indexes as $index) {
+        foreach (self::expectedIndexes() as $index) {
             if (!DatabaseManager::tableHasIndex($table, $index)) {
                 return;
             }
         }
 
-        if (DatabaseManager::tableHasColumns($table, $expected)) {
+        if (DatabaseManager::tableHasColumns($table, self::expectedColumns())) {
             update_option(self::DB_VERSION_OPTION, self::DB_VERSION);
 
-            // Rows written before 1.2.0/1.3.0 have NULL derived columns. Run a
-            // budgeted pass now and schedule a catch-up; the daily cron picks
-            // up anything still left.
+            // Rows written before 1.2.0/1.3.0/1.4.0 have NULL derived columns.
+            // Run a budgeted pass now and schedule a catch-up; the daily cron
+            // picks up anything still left.
             self::backfillDerivedColumns();
             self::scheduleBackfillCatchUp();
         }
@@ -178,9 +219,21 @@ final class FormSubmissions
      */
     public static function maybeUpgrade(): void
     {
-        if (get_option(self::DB_VERSION_OPTION) !== self::DB_VERSION) {
+        if (self::needsUpgrade()) {
             self::createTable();
         }
+    }
+
+    /**
+     * Whether the recorded schema version differs from the one this build
+     * ships. Read by {@see MigrationRunner}, which decides which request is
+     * allowed to act on the answer.
+     *
+     * @return bool
+     */
+    public static function needsUpgrade(): bool
+    {
+        return get_option(self::DB_VERSION_OPTION) !== self::DB_VERSION;
     }
 
     /**
@@ -205,6 +258,10 @@ final class FormSubmissions
      *     ip_address: string,
      *     channel: string,
      *     utm_campaign: string,
+     *     utm_source: string,
+     *     utm_medium: string,
+     *     utm_id: string,
+     *     landing_page: string,
      *     page_query: array<string, string>,
      *     submission_data: array<string, mixed>,
      *     context: array<string, mixed>,
@@ -217,12 +274,18 @@ final class FormSubmissions
     {
         global $wpdb;
 
+        // Every derived column is written HERE, at insert, rather than being
+        // left NULL for the backfill worker to fill in later. A new row must
+        // never enter the backfill queue: the worker exists to drain history
+        // after an upgrade, and a site that creates rows faster than the daily
+        // budgeted pass drains them would never converge.
         $inserted = $wpdb->query($wpdb->prepare(
             'INSERT IGNORE INTO ' . self::tableName()
             . ' (submission_id, conversion_id, session_id, provider, form_key, form_name,'
             . ' native_form_id, form_id, page_url, ip_address, channel, utm_campaign,'
+            . ' utm_source, utm_medium, utm_id, landing_page,'
             . ' page_query, submission_data, context, runtime, created_at)'
-            . ' VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)',
+            . ' VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)',
             $submission['submission_id'],
             $submission['conversion_id'],
             $submission['session_id'],
@@ -235,6 +298,10 @@ final class FormSubmissions
             (string) ($submission['ip_address'] ?? ''),
             mb_substr((string) ($submission['channel'] ?? ''), 0, 32),
             mb_substr((string) ($submission['utm_campaign'] ?? ''), 0, 191),
+            mb_substr((string) ($submission['utm_source'] ?? ''), 0, 100),
+            mb_substr((string) ($submission['utm_medium'] ?? ''), 0, 100),
+            mb_substr((string) ($submission['utm_id'] ?? ''), 0, 100),
+            mb_substr((string) ($submission['landing_page'] ?? ''), 0, 255),
             self::encodeJson($submission['page_query']),
             self::encodeJson($submission['submission_data']),
             self::encodeJson($submission['context']),
@@ -505,12 +572,33 @@ final class FormSubmissions
     }
 
     /**
-     * Populates channel / utm_campaign on rows written before schema 1.2.0.
+     * SQL predicate identifying a row whose derived columns are not yet filled.
      *
-     * Self-terminating with no progress option to track: an un-backfilled row
-     * is exactly one whose channel IS NULL, and every row this touches is
-     * written as a string ('' when the context carries no value), so it can
+     * ONE PLACE, because the backfill loop and {@see needsBackfill()} must agree
+     * exactly — and because this predicate has to be EXTENDED, never reused
+     * as-is, whenever a new derived column is added. That is not a style
+     * preference: 1.4.0 added four attribution columns, and every install that
+     * had already run the 1.2.0 backfill has a non-NULL channel. Had this stayed
+     * "channel IS NULL OR delivery_state IS NULL", those rows would have been
+     * invisible to the worker and their new columns would have stayed NULL
+     * forever — the campaign and landing-page lead reports would simply have
+     * been blank on every existing site, with nothing to indicate why.
+     */
+    private const string BACKFILL_PREDICATE =
+        'channel IS NULL OR delivery_state IS NULL OR landing_page IS NULL';
+
+    /**
+     * Populates the derived columns on rows written before schema 1.2.0 /
+     * 1.3.0 / 1.4.0.
+     *
+     * Self-terminating with no progress option to track: an un-backfilled row is
+     * exactly one matching {@see BACKFILL_PREDICATE}, and every row this touches
+     * is written as a string ('' when the context carries no value), so it can
      * never be selected twice.
+     *
+     * Only HISTORY is drained here. {@see \Convermetry\Forms\SubmissionService}
+     * writes all of these columns at insert time, so a row created by this
+     * version never enters the queue in the first place.
      *
      * Runs as many chunks as fit in a wall-clock budget, mirroring
      * {@see purgeOld()}. A single 500-row pass per day meant ten thousand
@@ -533,8 +621,8 @@ final class FormSubmissions
         do {
             $rows = $wpdb->get_results(
                 $wpdb->prepare(
-                    "SELECT id, submission_id, context, channel, delivery_state FROM {$table}"
-                    . ' WHERE channel IS NULL OR delivery_state IS NULL'
+                    "SELECT id, submission_id, context, channel, landing_page, delivery_state FROM {$table}"
+                    . ' WHERE ' . self::BACKFILL_PREDICATE
                     . ' ORDER BY id DESC LIMIT %d',
                     self::BACKFILL_CHUNK
                 ),
@@ -546,11 +634,18 @@ final class FormSubmissions
             }
 
             foreach ($rows as $row) {
-                // The two halves are filled independently. A row can be missing
-                // one and not the other (it predates only 1.3.0), and rewriting
-                // a column that is already populated would be a pointless write
-                // at best — and would clobber a value some other code path set
-                // at worst.
+                // The three groups are filled independently. A row can be
+                // missing one and not the others (it predates only 1.3.0, or
+                // only 1.4.0), and rewriting a column that is already populated
+                // would be a pointless write at best — and would clobber a value
+                // some other code path set at worst.
+                //
+                // channel and landing_page are tested separately because they
+                // arrived in different versions: an install upgraded at 1.2.0
+                // has a non-NULL channel and a NULL landing_page, and treating
+                // channel as the sentinel for both would skip it forever.
+                $derived = null;
+
                 if ($row['channel'] === null) {
                     $derived = self::deriveColumns((string) ($row['context'] ?? ''));
 
@@ -559,6 +654,23 @@ final class FormSubmissions
                         ['channel' => $derived['channel'], 'utm_campaign' => $derived['utm_campaign']],
                         ['id' => (int) $row['id']],
                         ['%s', '%s'],
+                        ['%d']
+                    );
+                }
+
+                if ($row['landing_page'] === null) {
+                    $derived ??= self::deriveColumns((string) ($row['context'] ?? ''));
+
+                    $wpdb->update(
+                        $table,
+                        [
+                            'landing_page' => $derived['landing_page'],
+                            'utm_source'   => $derived['utm_source'],
+                            'utm_medium'   => $derived['utm_medium'],
+                            'utm_id'       => $derived['utm_id'],
+                        ],
+                        ['id' => (int) $row['id']],
+                        ['%s', '%s', '%s', '%s'],
                         ['%d']
                     );
                 }
@@ -597,7 +709,7 @@ final class FormSubmissions
 
         return (bool) $wpdb->get_var(
             'SELECT 1 FROM ' . self::tableName()
-            . ' WHERE channel IS NULL OR delivery_state IS NULL LIMIT 1'
+            . ' WHERE ' . self::BACKFILL_PREDICATE . ' LIMIT 1'
         );
     }
 
@@ -635,12 +747,24 @@ final class FormSubmissions
      * Pure: no database, no WordPress state — the backfill's decision logic
      * kept separate from its SQL so it can be unit-tested directly.
      *
+     * EVERY value returned here is a string, never null — the backfill selects
+     * rows by NULL-ness, so returning null for a context that simply carries no
+     * value would leave the row selectable forever and the backfill would never
+     * terminate.
+     *
      * @param string $contextJson The row's stored context column.
-     * @return array{channel: string, utm_campaign: string}
+     * @return array{channel: string, utm_campaign: string, utm_source: string, utm_medium: string, utm_id: string, landing_page: string}
      */
     private static function deriveColumns(string $contextJson): array
     {
-        $empty = ['channel' => '', 'utm_campaign' => ''];
+        $empty = [
+            'channel'      => '',
+            'utm_campaign' => '',
+            'utm_source'   => '',
+            'utm_medium'   => '',
+            'utm_id'       => '',
+            'landing_page' => '',
+        ];
 
         if ($contextJson === '' || !json_validate($contextJson)) {
             return $empty;
@@ -651,15 +775,41 @@ final class FormSubmissions
             return $empty;
         }
 
-        $channel = $context['channel'] ?? '';
-        $campaign = is_array($context['attribution'] ?? null)
-            ? ($context['attribution']['utm_campaign'] ?? '')
+        $attribution = is_array($context['attribution'] ?? null) ? $context['attribution'] : [];
+
+        // landing_page is stored as {"url": "..."} inside the context, not as a
+        // bare string — see PayloadBuilder::emptyContext(), which is the shape
+        // every stored context follows.
+        $landing = is_array($context['landing_page'] ?? null)
+            ? ($context['landing_page']['url'] ?? '')
             : '';
 
         return [
-            'channel'      => is_scalar($channel) ? mb_substr((string) $channel, 0, 32) : '',
-            'utm_campaign' => is_scalar($campaign) ? mb_substr((string) $campaign, 0, 191) : '',
+            'channel'      => self::derivedValue($context['channel'] ?? '', 32),
+            'utm_campaign' => self::derivedValue($attribution['utm_campaign'] ?? '', 191),
+            'utm_source'   => self::derivedValue($attribution['utm_source'] ?? '', 100),
+            'utm_medium'   => self::derivedValue($attribution['utm_medium'] ?? '', 100),
+            'utm_id'       => self::derivedValue($attribution['utm_id'] ?? '', 100),
+            'landing_page' => self::derivedValue($landing, 255),
         ];
+    }
+
+    /**
+     * One derived value, coerced to a bounded string.
+     *
+     * Non-scalars become '' rather than being cast: a filter that rewrote a
+     * context value to an array must not produce "Array" in a filter dropdown.
+     * The width bound matters too — a value longer than its column would be
+     * truncated by MySQL at a different point than the dropdown expects, and the
+     * two would then never match.
+     *
+     * @param mixed $value Raw value from the stored context.
+     * @param int   $width The destination column's width in characters.
+     * @return string
+     */
+    private static function derivedValue(mixed $value, int $width): string
+    {
+        return is_scalar($value) ? mb_substr((string) $value, 0, $width) : '';
     }
 
     /**
@@ -842,6 +992,11 @@ final class FormSubmissions
             // time — so cancelling here is what guarantees an erased lead can
             // never be mailed. (Deleting cannot recall a message already sent.)
             NotificationQueue::cancelForSubmission($submissionId);
+
+            // The lead's status history is data ABOUT this lead. "Removed
+            // permanently" that left behind a trail of who qualified them and
+            // what they were valued at would be a broken promise.
+            LeadEvents::deleteForSubmission($submissionId);
         }
     }
 
@@ -873,6 +1028,9 @@ final class FormSubmissions
         // Same argument for queued notifications: every one of them refers to
         // a submission that has just been erased.
         NotificationQueue::cancelAll();
+
+        // And for lead history: every row describes a submission that is gone.
+        LeadEvents::clearAll();
     }
 
     /**
