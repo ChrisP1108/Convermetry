@@ -201,6 +201,53 @@ final class GoalCompletions
     }
 
     /**
+     * The deduplication key for one prospective completion.
+     *
+     * PURE — no database, no WordPress state — because this single expression is
+     * the entire difference between "a phone CTA tapped five times is one
+     * conversion" and "…is five conversions", and that deserves to be directly
+     * testable rather than inferred from row counts.
+     *
+     * The prefix ('s' or 'u') is part of the key on purpose. Without it, a goal
+     * switched from once-per-session to every-occurrence could produce an
+     * every-occurrence key that collides with an existing session key, and the
+     * first completion after the change would silently vanish.
+     *
+     * The definition hash is included so that editing a goal's MATCHING RULE
+     * starts a clean series: otherwise a visitor who completed the old rule this
+     * session could never complete the new one, because the old key would still
+     * be occupying the index.
+     *
+     * WHEN THERE IS NO SESSION ID, once-per-session degrades to every-occurrence
+     * rather than sharing one key. Analytics events can legitimately arrive
+     * without a session — a server-side cvm_track_event() call, a browser with
+     * storage blocked — and hashing '' as the session would give every such
+     * completion for a goal the SAME key, so the site would record exactly one
+     * of them, ever. Over-counting a handful of session-less events is
+     * recoverable and visible; under-counting them to a single row is neither.
+     *
+     * @param string $goalId         Immutable goal id.
+     * @param string $definitionHash The goal's matching-rule hash.
+     * @param string $sessionId      The visitor's session id, or ''.
+     * @param string $eventUid       The triggering event's durable identity.
+     * @param bool   $oncePerSession Whether the goal counts once per session.
+     * @return string A 32-character key.
+     */
+    public static function dedupeKey(
+        string $goalId,
+        string $definitionHash,
+        string $sessionId,
+        string $eventUid,
+        bool $oncePerSession
+    ): string {
+        if ($oncePerSession && $sessionId !== '') {
+            return md5('s|' . $goalId . '|' . $definitionHash . '|' . $sessionId);
+        }
+
+        return md5('u|' . $goalId . '|' . $definitionHash . '|' . $eventUid);
+    }
+
+    /**
      * Inserts a batch of completions with a single multi-row INSERT IGNORE.
      *
      * IGNORE against the UNIQUE dedupe_key index is the whole deduplication

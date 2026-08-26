@@ -5,8 +5,13 @@ namespace Convermetry\Database;
 
 if (!defined('ABSPATH')) exit;
 
+use Convermetry\Goals\GoalRecorder;
+use Convermetry\Goals\GoalRepository;
+use Convermetry\Goals\GoalSettings;
+use Convermetry\Leads\Money;
 use Convermetry\Settings\Options;
 use Convermetry\Support\ClientIp;
+use Convermetry\Support\Url;
 use Convermetry\Tracking\Channels;
 
 /**
@@ -357,6 +362,20 @@ final class DatabaseManager
      * on, and a plain INSERT is used so genuine errors are not downgraded to
      * warnings.
      *
+     * GOAL MATCHING RUNS BEFORE THE INSERT, not after. Two things depend on
+     * that order:
+     *
+     *  - A custom_event exists only to be matched. If no goal is configured for
+     *    its name it means nothing to anyone, and storing it would let one typo
+     *    in a theme's JavaScript fill this table with rows no report reads. It is
+     *    dropped here, before it is ever written.
+     *  - The matcher needs context this table has nowhere to hold — the session's
+     *    landing page, the goal ids a CSS selector matched in the browser, a
+     *    supplied numeric value. sanitizeRow() normalizes every row to the fixed
+     *    COLUMNS list and discards the rest (it must: bulk inserts serialize by
+     *    that list). So each event travels as a {@see PreparedEvent} envelope
+     *    carrying both.
+     *
      * @param array<int, array{type: string, data: array<string, mixed>, seq?: int}> $events  Events to insert; 'seq' is
      *                                                                                        the event's index in the
      *                                                                                        original client batch.
@@ -376,22 +395,86 @@ final class DatabaseManager
         // be stored.
         $ip = ClientIp::forStorage();
 
-        $rows = [];
+        /** @var array<int, PreparedEvent> $prepared Keyed by ORIGINAL batch position. */
+        $prepared = [];
+
         foreach ($events as $index => $event) {
-            $row = self::sanitizeRow((string) ($event['type'] ?? ''), (array) ($event['data'] ?? []), $ip);
-            if ($row !== null) {
-                // The ordinal comes from the event's position in the ORIGINAL
-                // request, not the surviving-row index — a settings change
-                // between attempts may drop different events, and shifted
-                // ordinals would let a replayed event dodge the unique index.
-                $row['batch_seq'] = (int) ($event['seq'] ?? $index);
-                $rows[]           = $row;
+            $type = (string) ($event['type'] ?? '');
+            $data = (array) ($event['data'] ?? []);
+            $row  = self::sanitizeRow($type, $data, $ip);
+
+            if ($row === null) {
+                continue;
             }
+
+            // The ordinal comes from the event's position in the ORIGINAL
+            // request, not the surviving-row index — a settings change
+            // between attempts may drop different events, and shifted
+            // ordinals would let a replayed event dodge the unique index.
+            $seq = (int) ($event['seq'] ?? $index);
+
+            $prepared[$seq] = new PreparedEvent(
+                row: $row,
+                seq: $seq,
+                batchId: $batchId,
+                eventUid: PreparedEvent::mintUid($batchId, $seq),
+                landingPage: self::truncate(
+                    Url::boundedUrl($data['session_landing'] ?? '', true),
+                    255
+                ),
+                selectorGoals: self::selectorGoalIds($data['selector_goals'] ?? null),
+                customEventName: $row['event_type'] === 'custom_event' ? $row['element_label'] : '',
+                dynamicValue: Money::parse($data['goal_value'] ?? null),
+            );
         }
 
-        if ($rows === []) {
+        if ($prepared === []) {
             return 0;
         }
+
+        $plan = GoalRecorder::plan($prepared);
+
+        foreach ($plan['drop'] as $seq) {
+            unset($prepared[$seq]);
+        }
+
+        if ($prepared === []) {
+            // Every event in this batch was an unmatched custom event. Nothing
+            // was stored, and nothing went wrong — 0 is the honest answer, and
+            // it is not an error the client should retry.
+            return 0;
+        }
+
+        $inserted = self::writeRows($prepared, $batchId);
+
+        // A false return means the statement itself failed (e.g. the database
+        // went away) — distinct from 0, which just means every row was a
+        // replayed duplicate. Callers use the difference to decide between
+        // acknowledging the batch and telling the client to retry it.
+        if ($inserted === false) {
+            return false;
+        }
+
+        $matches = array_intersect_key($plan['matches'], $prepared);
+
+        if ($matches !== []) {
+            self::resolveSourceEventIds($prepared, array_keys($matches), $batchId, $inserted);
+            GoalRecorder::record($prepared, $matches, gmdate('Y-m-d H:i:s'));
+        }
+
+        return $inserted;
+    }
+
+    /**
+     * Writes the prepared rows with a single multi-row statement.
+     *
+     * @param array<int, PreparedEvent> $prepared Envelopes to store.
+     * @param string|null               $batchId  Client batch id, or null.
+     * @return int|false Rows stored, or false when the statement failed.
+     */
+    private static function writeRows(array $prepared, ?string $batchId): int|false
+    {
+        global $wpdb;
 
         $columns     = self::COLUMNS;
         $placeholder = array_fill(0, count(self::COLUMNS), '%s');
@@ -406,13 +489,13 @@ final class DatabaseManager
         $placeholders = '(' . implode(', ', $placeholder) . ')';
         $values       = [];
 
-        foreach ($rows as $row) {
+        foreach ($prepared as $event) {
             foreach (self::COLUMNS as $column) {
-                $values[] = $row[$column];
+                $values[] = $event->row[$column];
             }
             if ($batchId !== null) {
                 $values[] = $batchId;
-                $values[] = $row['batch_seq'];
+                $values[] = $event->seq;
             }
         }
 
@@ -420,15 +503,110 @@ final class DatabaseManager
 
         $inserted = $wpdb->query($wpdb->prepare(
             $verb . self::tableName() . " ({$columnSql}) VALUES "
-                . implode(', ', array_fill(0, count($rows), $placeholders)),
+                . implode(', ', array_fill(0, count($prepared), $placeholders)),
             $values
         ));
 
-        // A false return means the statement itself failed (e.g. the database
-        // went away) — distinct from 0, which just means every row was a
-        // replayed duplicate. Callers use the difference to decide between
-        // acknowledging the batch and telling the client to retry it.
         return $inserted === false ? false : (int) $inserted;
+    }
+
+    /**
+     * Fills in the stored row id for the envelopes that completed a goal.
+     *
+     * The id is what gives a goal completion a position in the funnel ordering
+     * (see the ORDERING note in the class docblock), so it is looked up
+     * explicitly rather than inferred.
+     *
+     * insert_id arithmetic is deliberately NOT used for browser batches. A
+     * multi-row INSERT IGNORE does not report which of its rows were actually
+     * stored, and whether skipped rows consume auto-increment values depends on
+     * the server's innodb_autoinc_lock_mode — so "first id + offset" is a guess
+     * that happens to be right on one configuration. One bounded SELECT keyed by
+     * the unique (batch_id, batch_seq) index is exact, and it is also correct on
+     * a REPLAY, where the rows already existed and nothing was inserted at all.
+     *
+     * Server-side events are the one case where insert_id is exact: they carry no
+     * batch id, arrive one at a time (cvm_track_event(), the provider hooks), and
+     * use a plain INSERT.
+     *
+     * @param array<int, PreparedEvent> $prepared    Envelopes, keyed by batch position.
+     * @param list<int>                 $matchedSeqs Positions that completed a goal.
+     * @param string|null               $batchId     Client batch id, or null.
+     * @param int                       $inserted    Rows the write actually stored.
+     * @return void
+     */
+    private static function resolveSourceEventIds(
+        array $prepared,
+        array $matchedSeqs,
+        ?string $batchId,
+        int $inserted
+    ): void {
+        global $wpdb;
+
+        if ($matchedSeqs === []) {
+            return;
+        }
+
+        if ($batchId === null) {
+            if (count($prepared) === 1 && $inserted === 1) {
+                $only = reset($prepared);
+                $only->sourceEventId = (int) $wpdb->insert_id;
+            }
+
+            return;
+        }
+
+        $placeholders = implode(', ', array_fill(0, count($matchedSeqs), '%d'));
+
+        $rows = $wpdb->get_results(
+            $wpdb->prepare(
+                'SELECT id, batch_seq FROM ' . self::tableName()
+                . " WHERE batch_id = %s AND batch_seq IN ({$placeholders})",
+                array_merge([$batchId], $matchedSeqs)
+            ),
+            ARRAY_A
+        );
+
+        foreach (is_array($rows) ? $rows : [] as $row) {
+            $seq = (int) ($row['batch_seq'] ?? -1);
+            if (isset($prepared[$seq])) {
+                $prepared[$seq]->sourceEventId = (int) $row['id'];
+            }
+        }
+    }
+
+    /**
+     * Validates the goal ids a browser reported for CSS-selector rules.
+     *
+     * Shape only — these are re-checked against the actual enabled selector
+     * goals by {@see \Convermetry\Goals\GoalMatcher}, which is where the real
+     * authorization lives. This just refuses to carry anything that is not
+     * even shaped like a goal id, and bounds the list so a crafted request
+     * cannot make the matcher do unbounded work.
+     *
+     * @param mixed $raw Raw value from the event payload.
+     * @return list<string>
+     */
+    private static function selectorGoalIds(mixed $raw): array
+    {
+        if (!is_array($raw)) {
+            return [];
+        }
+
+        $out = [];
+        foreach ($raw as $candidate) {
+            if (!is_string($candidate) || !GoalSettings::isValidId($candidate)) {
+                continue;
+            }
+
+            $out[] = $candidate;
+
+            if (count($out) >= GoalRepository::MAX_BROWSER_SELECTORS) {
+                break;
+            }
+        }
+
+        return array_values(array_unique($out));
     }
 
     /**

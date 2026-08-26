@@ -263,6 +263,55 @@ final class TrackingController
             'device'        => $device,
         ];
 
+        // The form lifecycle's shared dimension. Accepted only for those types;
+        // DatabaseManager independently refuses to store it on anything else, so
+        // a crafted request cannot attach a form identity to a pageview and
+        // pollute the engagement reports.
+        if (in_array($type, self::FORM_TYPES, true)) {
+            $data['form_key'] = self::scalarString($event['form_key'] ?? '');
+        }
+
+        // A validation error is the one event that describes a specific FIELD,
+        // which makes it the one place where a careless implementation could
+        // record what a visitor typed. It is rebuilt from three whitelisted
+        // pieces rather than sanitized in place: the field's id, the field's
+        // type, and an error CATEGORY from a fixed list. Anything else the
+        // request contained — including a 'value' key — is discarded here, and
+        // is discarded by construction rather than by a blocklist that would
+        // need updating every time a browser invents a new property.
+        if ($type === 'form_error') {
+            $data['element_label'] = self::fieldIdentifier(self::scalarString($event['field_id'] ?? ''));
+            $data['element_tag']   = self::scalarString($event['field_type'] ?? '');
+            $data['event_value']   = self::errorType(self::scalarString($event['error_type'] ?? ''));
+            $data['target_url']    = '';
+        }
+
+        // A custom event's NAME is the only thing that can match a goal. Its
+        // payload is never stored as text; a numeric value is read only when a
+        // goal is configured to accept one, and it is parsed to an exact
+        // decimal by Money before it goes anywhere near the database.
+        if ($type === 'custom_event') {
+            $data['element_label'] = self::scalarString($event['name'] ?? '');
+            $data['element_tag']   = 'custom';
+            $data['event_value']   = '';
+            $data['target_url']    = '';
+            $data['goal_value']    = self::scalarString($event['value'] ?? '');
+        }
+
+        // Goal ingestion context. Neither is a stored column: the landing page
+        // is written only onto a goal completion, and the selector matches are
+        // re-validated against the configured goals and then discarded.
+        if (in_array($type, self::GOAL_ELIGIBLE_TYPES, true)) {
+            $data['session_landing'] = self::normalizePageUrl(self::scalarString($event['session_landing'] ?? ''));
+
+            if (isset($event['selector_goals']) && is_array($event['selector_goals'])) {
+                $data['selector_goals'] = array_values(array_filter(
+                    array_map([self::class, 'scalarString'], $event['selector_goals']),
+                    static fn(string $id): bool => $id !== ''
+                ));
+            }
+        }
+
         // Campaign attribution rides on every tracker event. Only the
         // ad-click identifier's TYPE is accepted — the value itself is never
         // sent or stored. session_referrer is the referrer the session
@@ -279,6 +328,68 @@ final class TrackingController
         }
 
         return ['type' => $type, 'data' => $data];
+    }
+
+    /**
+     * @var string[] Event types that carry a form identity.
+     */
+    private const array FORM_TYPES = ['form_view', 'form_start', 'form_error', 'form_submit', 'form_success'];
+
+    /**
+     * @var string[] Event types a configured goal can be matched against, and
+     *      therefore the only ones that carry goal-ingestion context.
+     */
+    private const array GOAL_ELIGIBLE_TYPES = ['pageview', 'click', 'custom_event'];
+
+    /**
+     * @var string[] The error CATEGORIES a validation event may report.
+     *
+     * Taken from the HTML5 ValidityState flags, because that is the one source
+     * of validation state every form provider shares and none of it derives from
+     * what the visitor typed. A category outside this list is stored as
+     * 'invalid' rather than passed through — the list is a whitelist precisely
+     * so that a browser (or a crafted request) cannot smuggle free text into a
+     * column that reporting will later display.
+     */
+    private const array ERROR_TYPES = [
+        'required', 'type_mismatch', 'pattern', 'too_short', 'too_long',
+        'range', 'step', 'invalid',
+    ];
+
+    /** Maximum characters kept from a field identifier. */
+    private const int MAX_FIELD_ID_LEN = 64;
+
+    /**
+     * Reduces a reported field identifier to something that cannot carry a
+     * visitor's answer.
+     *
+     * A field id is a developer-chosen name ("phone", "desired-service",
+     * "field_a1b2c3"), so it is restricted to the characters those actually use
+     * and truncated hard. An implementation that sent a typed value here instead
+     * would be stripped to nothing recognizable rather than quietly stored, and
+     * the length bound alone rules out message bodies and email addresses.
+     *
+     * @param string $raw Reported field id.
+     * @return string
+     */
+    private static function fieldIdentifier(string $raw): string
+    {
+        $clean = (string) preg_replace('~[^A-Za-z0-9_.:\[\]-]~', '', $raw);
+
+        return substr($clean, 0, self::MAX_FIELD_ID_LEN);
+    }
+
+    /**
+     * Maps a reported validation error to a known category.
+     *
+     * @param string $raw Reported error type.
+     * @return string One of {@see self::ERROR_TYPES}.
+     */
+    private static function errorType(string $raw): string
+    {
+        $key = sanitize_key($raw);
+
+        return in_array($key, self::ERROR_TYPES, true) ? $key : 'invalid';
     }
 
     /**

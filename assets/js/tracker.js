@@ -153,6 +153,10 @@
     /** Every field a stored campaign (and a conversion's snapshot) may carry. */
     const CAMPAIGN_KEYS = UTM_KEYS.concat(['click_id_type']);
 
+    /** Event types a configured goal can be matched against, and therefore the
+     *  only ones that carry the session's landing page for goal reporting. */
+    const GOAL_ELIGIBLE = { pageview: true, click: true, custom_event: true };
+
     const queue = [];
     const PAGE_URL = location.origin + location.pathname;
     const REFERRER = normalizedReferrer();
@@ -469,6 +473,18 @@
         event.page_title = document.title || '';
         event.referrer = REFERRER;
         event.session_id = sessionId();
+
+        // The session's landing page rides along on the three event types a
+        // goal can be matched against, so a goal completion can record where the
+        // visit started without every event in the table carrying a column that
+        // only goal reporting reads. The server writes it onto the completion
+        // and never onto the event row.
+        if (GOAL_ELIGIBLE[type]) {
+            const acquisition = currentAcquisition(event.session_id);
+            if (acquisition && acquisition.l) {
+                event.session_landing = String(acquisition.l);
+            }
+        }
 
         queue.push(event);
 
@@ -842,11 +858,24 @@
             return;
         }
 
-        track('click', {
+        const clickEvent = {
             element_tag: el.tagName.toLowerCase(),
             element_label: labelFor(el),
             target_url: cleanTarget(el.href)
-        });
+        };
+
+        // CSS-selector goals are the one rule the server cannot evaluate — it
+        // has the destination URL but not the DOM. The ids reported here are a
+        // CLAIM, not a decision: the server re-checks each one against the
+        // actually-configured, actually-enabled selector goals before recording
+        // anything, so this channel cannot be used to invent a conversion or to
+        // reach a goal of any other kind.
+        const goalHits = matchedSelectorGoals(el);
+        if (goalHits.length) {
+            clickEvent.selector_goals = goalHits;
+        }
+
+        track('click', clickEvent);
 
         // A link click may navigate away immediately — get the batch out now.
         if (el.href) {
@@ -1099,6 +1128,348 @@
         setTimeout(bindJQueryFormEvents, 3000);
         setTimeout(bindJQueryFormEvents, 8000);
     }
+
+    /* ------------------------------------------------------------------ *
+     *  Form engagement — the path between seeing a form and submitting it
+     *
+     *  Four signals, each fired at most once per form per page view:
+     *
+     *    form_view   the form scrolled into view (not merely rendered — a
+     *                form in the footer of a long page was never "seen")
+     *    form_start  the visitor did something meaningful in it
+     *    form_error  a field failed validation
+     *    form_submit an attempt (already tracked above)
+     *
+     *  PRIVACY: none of these ever carries a field's VALUE. form_error reports
+     *  the field's id, its type, and which ValidityState flag failed — all
+     *  developer-chosen or browser-derived, none of it typed by the visitor.
+     *  The server independently rebuilds the event from those three whitelisted
+     *  pieces and discards everything else, so this is belt and braces.
+     *
+     *  FORM IDENTITY: form_key ties these browser observations to the
+     *  server-confirmed submission for the same form. It is read from a
+     *  data-cvm-form-key attribute the server renders where the form plugin
+     *  offers a filter, and otherwise derived from the form's own markup. It is
+     *  deliberately '' when neither is available: a wrong key is worse than an
+     *  absent one, because it would silently attribute one form's abandonment
+     *  to another.
+     * ------------------------------------------------------------------ */
+
+    const FORM_ATTR = 'data-cvm-form-key';
+    const MAX_ERRORS_PER_FORM = 10;
+
+    /** Per-form state for this page view: {viewed, started, errors}. */
+    const formState = (typeof WeakMap === 'function') ? new WeakMap() : null;
+
+    /** Returns (creating if needed) the tracking state for one form. */
+    function stateFor(form) {
+        if (!formState) {
+            return null;
+        }
+        let state = formState.get(form);
+        if (!state) {
+            state = { viewed: false, started: false, errors: 0 };
+            formState.set(form, state);
+        }
+        return state;
+    }
+
+    /**
+     * The provider-qualified identity of a form.
+     *
+     * Prefers the server-rendered attribute, which is authoritative because the
+     * server used the same key when it recorded the submission. The DOM
+     * fallbacks cover providers with no usable render filter; each mirrors the
+     * native id that provider's server-side integration keys on.
+     *
+     * Elementor is deliberately absent. Its server side currently keys per-form
+     * settings by the form's NAME while the DOM exposes the widget id, so a
+     * derived key would look correct and never join to anything. Reporting at
+     * page level with an honest gap beats a number that silently means nothing.
+     */
+    function formIdentity(form) {
+        const declared = form.getAttribute(FORM_ATTR);
+        if (declared) {
+            return String(declared).slice(0, 191);
+        }
+
+        let match;
+
+        // Gravity Forms — <form id="gform_7">
+        match = /^gform_(\d+)$/.exec(form.id || '');
+        if (match) {
+            return 'gravityforms:' + match[1];
+        }
+
+        // WPForms — <form id="wpforms-form-123">
+        match = /^wpforms-form-(\d+)$/.exec(form.id || '');
+        if (match) {
+            return 'wpforms:' + match[1];
+        }
+
+        // Contact Form 7 — hidden _wpcf7 input carries the post id.
+        const cf7 = form.querySelector('input[name="_wpcf7"]');
+        if (cf7 && cf7.value) {
+            return 'contactform7:' + cf7.value;
+        }
+
+        // Fluent Forms — data-form_id on the form element.
+        const fluent = form.getAttribute('data-form_id');
+        if (fluent) {
+            return 'fluentforms:' + fluent;
+        }
+
+        // Ninja Forms — <form id="nf-form-3-cont"> or a hidden formId input.
+        match = /^nf-form-(\d+)-cont$/.exec(form.id || '');
+        if (match) {
+            return 'ninjaforms:' + match[1];
+        }
+
+        // Formidable — <form id="form_contactform"> plus a hidden form_id.
+        const frm = form.querySelector('input[name="form_id"]');
+        if (frm && frm.value && /formidable|frm_/.test(form.className || '')) {
+            return 'formidableforms:' + frm.value;
+        }
+
+        return '';
+    }
+
+    /** A readable name for a form, for report rows. */
+    function formLabel(form) {
+        return cleanLabel(
+            form.getAttribute('data-cvm-form-name') ||
+            form.getAttribute('name') ||
+            form.id ||
+            form.getAttribute('aria-label')
+        ) || 'form';
+    }
+
+    /** Common fields for every form lifecycle event. */
+    function formEventData(form) {
+        return {
+            element_tag: 'form',
+            element_label: formLabel(form),
+            form_key: formIdentity(form)
+        };
+    }
+
+    /** Whether a form is one this tracker should observe at all. */
+    function trackableForm(form) {
+        return form && form.tagName === 'FORM' && !inAdminBar(form) &&
+            !form.hasAttribute('data-cvm-ignore');
+    }
+
+    /* form_view — an IntersectionObserver, so a form below the fold only
+     * counts once it is actually on screen. Without that, "start rate" would be
+     * measured against a denominator that includes every footer form nobody
+     * ever scrolled to, and the number would look alarming for no reason.
+     * Browsers without IntersectionObserver simply record no views (rather than
+     * recording every render), so the rate stays honest where it exists. */
+    const formObserver = (typeof IntersectionObserver === 'function')
+        ? new IntersectionObserver(function (entries) {
+            for (let i = 0; i < entries.length; i++) {
+                const entry = entries[i];
+                if (!entry.isIntersecting) {
+                    continue;
+                }
+                const form = entry.target;
+                const state = stateFor(form);
+                if (state && !state.viewed) {
+                    state.viewed = true;
+                    track('form_view', formEventData(form));
+                }
+                formObserver.unobserve(form);
+            }
+        }, { threshold: 0.25 })
+        : null;
+
+    /** Begins observing every form currently in the DOM. Idempotent. */
+    function observeForms() {
+        const forms = document.querySelectorAll('form');
+        for (let i = 0; i < forms.length; i++) {
+            const form = forms[i];
+            if (!trackableForm(form)) {
+                continue;
+            }
+            const state = stateFor(form);
+            if (formObserver && state && !state.viewed && !state.observed) {
+                state.observed = true;
+                formObserver.observe(form);
+            }
+        }
+    }
+
+    /* form_start — the first MEANINGFUL interaction, which is deliberately not
+     * focus. Focus fires when a visitor tabs through a page or a browser
+     * autofocuses a field, neither of which is "started filling this in". The
+     * first input/change event is, and firing once per form per page view means
+     * a long form produces one event rather than one per keystroke. */
+    function markStarted(form) {
+        const state = stateFor(form);
+        if (!state || state.started) {
+            return;
+        }
+        state.started = true;
+
+        // A form the visitor starts filling has definitionally been seen, even
+        // if the observer never fired (no IntersectionObserver, or the form was
+        // inserted already in view). Recording the view here keeps start rate
+        // from exceeding 100%.
+        if (!state.viewed) {
+            state.viewed = true;
+            track('form_view', formEventData(form));
+        }
+
+        track('form_start', formEventData(form));
+    }
+
+    document.addEventListener('input', function (e) {
+        const form = e.target && e.target.form;
+        if (trackableForm(form)) {
+            markStarted(form);
+        }
+    }, true);
+
+    document.addEventListener('change', function (e) {
+        const form = e.target && e.target.form;
+        if (trackableForm(form)) {
+            markStarted(form);
+        }
+    }, true);
+
+    /* form_error — the native constraint-validation event. It reports WHICH
+     * flag failed and nothing about the value, which is exactly the boundary
+     * this feature has to respect. Providers that render errors purely in their
+     * own JavaScript will not fire it; that gap is documented rather than
+     * papered over with per-provider DOM scraping. */
+    const VALIDITY_FLAGS = [
+        ['valueMissing', 'required'],
+        ['typeMismatch', 'type_mismatch'],
+        ['patternMismatch', 'pattern'],
+        ['tooShort', 'too_short'],
+        ['tooLong', 'too_long'],
+        ['rangeUnderflow', 'range'],
+        ['rangeOverflow', 'range'],
+        ['stepMismatch', 'step']
+    ];
+
+    /** The failing ValidityState flag, as a stable category name. */
+    function errorCategory(field) {
+        const validity = field.validity;
+        if (!validity) {
+            return 'invalid';
+        }
+        for (let i = 0; i < VALIDITY_FLAGS.length; i++) {
+            if (validity[VALIDITY_FLAGS[i][0]]) {
+                return VALIDITY_FLAGS[i][1];
+            }
+        }
+        return 'invalid';
+    }
+
+    /** A field's developer-chosen identifier — never its value. */
+    function fieldIdentifier(field) {
+        return String(field.getAttribute('name') || field.id || '').slice(0, 64);
+    }
+
+    document.addEventListener('invalid', function (e) {
+        const field = e.target;
+        const form = field && field.form;
+        if (!trackableForm(form)) {
+            return;
+        }
+
+        const state = stateFor(form);
+        if (state) {
+            if (state.errors >= MAX_ERRORS_PER_FORM) {
+                return;
+            }
+            state.errors++;
+        }
+
+        track('form_error', {
+            element_tag: 'form',
+            form_key: formIdentity(form),
+            field_id: fieldIdentifier(field),
+            field_type: String(field.type || field.tagName || '').toLowerCase().slice(0, 32),
+            error_type: errorCategory(field)
+        });
+    }, true);
+
+    /* Forms arrive late on plenty of sites — a modal, a tabbed layout, an
+     * Elementor popup, an AJAX-rendered step. Re-observing on DOM mutations
+     * catches those; the per-form state means nothing is double-counted. */
+    observeForms();
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', observeForms);
+    }
+    window.addEventListener('load', observeForms);
+
+    if (typeof MutationObserver === 'function') {
+        const domObserver = new MutationObserver(function () {
+            observeForms();
+        });
+        domObserver.observe(document.documentElement, { childList: true, subtree: true });
+    }
+
+    /* ------------------------------------------------------------------ *
+     *  Custom events and goal selectors
+     *
+     *  Convermetry.track('name', { value: 250 }) lets site code report an
+     *  action this tracker cannot observe. The NAME is all that can match a
+     *  configured goal; an unmatched name is discarded server-side and never
+     *  stored, so a typo here costs nothing. The optional numeric value is read
+     *  only when the matching goal is configured to accept one.
+     *
+     *  Nothing else in the payload is sent. That is deliberate: an API that
+     *  accepted arbitrary properties would become an unaudited channel for
+     *  putting customer data into an analytics table.
+     * ------------------------------------------------------------------ */
+
+    /** Configured CSS-selector goals, as { goalId: selector }. */
+    const selectorGoals = config.selectorGoals || {};
+
+    /** Goal ids whose selector matches the clicked element. */
+    function matchedSelectorGoals(el) {
+        const matched = [];
+        for (const goalId in selectorGoals) {
+            if (!Object.prototype.hasOwnProperty.call(selectorGoals, goalId)) {
+                continue;
+            }
+            try {
+                if (el.closest && el.closest(selectorGoals[goalId])) {
+                    matched.push(goalId);
+                }
+            } catch (e) {
+                // An invalid selector must not break click tracking for
+                // everything else on the page.
+            }
+        }
+        return matched;
+    }
+
+    window.Convermetry = window.Convermetry || {};
+
+    window.Convermetry.track = function (name, data) {
+        const eventName = cleanLabel(name).slice(0, 120);
+        if (!eventName) {
+            return;
+        }
+
+        const payload = { name: eventName };
+
+        // Only a finite number is carried, and only as a string. Anything else
+        // in `data` is ignored rather than serialized.
+        if (data && typeof data.value !== 'undefined') {
+            const value = Number(data.value);
+            if (isFinite(value)) {
+                payload.value = String(value);
+            }
+        }
+
+        track('custom_event', payload);
+        flush('normal');
+    };
 
     /* ------------------------------------------------------------------ *
      *  Hovers — pointer resting on an element for the dwell threshold

@@ -5,6 +5,7 @@ namespace Convermetry\Tracking;
 
 if (!defined('ABSPATH')) exit;
 
+use Convermetry\Goals\GoalRepository;
 use Convermetry\Settings\Options;
 
 /**
@@ -47,7 +48,20 @@ final class ScriptLoader
         }
 
         $enabled = Options::enabledTypes();
-        if ($enabled === []) {
+
+        // The tracker is not needed only when there is genuinely nothing for it
+        // to do. "No event types enabled" used to be the whole test, which would
+        // have silently disabled goal collection on a site that had turned the
+        // built-in interactions off but still had custom-event goals configured
+        // — the goals would have looked configured and collected nothing.
+        //
+        // Note the asymmetry: a URL or click goal cannot be rescued here,
+        // because it is matched against pageview/click events that are switched
+        // off at source. The Goals screen warns about exactly that case rather
+        // than silently re-enabling tracking the site owner turned off.
+        $selectorGoals = GoalRepository::browserSelectors();
+
+        if ($enabled === [] && $selectorGoals === []) {
             return;
         }
 
@@ -66,6 +80,12 @@ final class ScriptLoader
             'flushIntervalMs' => 5000,
             'maxBatch'        => 20,
             'respectDnt'      => Options::respectDnt(),
+            // The ONLY goal configuration that ever reaches a browser: the CSS
+            // selectors that cannot be evaluated without the DOM, each with the
+            // id to report back. No name, no value, no operator, and nothing at
+            // all about goals of any other type — a site's list of valuable
+            // actions is competitive information and stays on the server.
+            'selectorGoals'   => (object) $selectorGoals,
         ];
 
         wp_add_inline_script(
