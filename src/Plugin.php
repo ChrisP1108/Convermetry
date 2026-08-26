@@ -9,6 +9,7 @@ use Convermetry\Admin\AboutPage;
 use Convermetry\Admin\ActivityLogPage;
 use Convermetry\Admin\AnalyticsPage;
 use Convermetry\Admin\FormsPage;
+use Convermetry\Admin\FunnelsPage;
 use Convermetry\Admin\GoalsPage;
 use Convermetry\Admin\NotificationsPage;
 use Convermetry\Admin\SettingsPage;
@@ -181,6 +182,7 @@ final class Plugin
             AnalyticsPage::init();
             SubmissionsPage::init();
             GoalsPage::init();
+            FunnelsPage::init();
             FormsPage::init($this->formRegistry);
             NotificationsPage::init($this->formRegistry);
             WebhooksPage::init();

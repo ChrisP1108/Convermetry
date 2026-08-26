@@ -1516,3 +1516,121 @@
     color: #50575e;
     white-space: nowrap;
 }
+
+/* ------------------------------------------------------------------ *
+ *  Funnels screen
+ *
+ *  Bars rather than a table of numbers. The whole value of a funnel is
+ *  seeing WHERE the floor falls away, and a table makes the reader do
+ *  the subtraction themselves.
+ * ------------------------------------------------------------------ */
+
+.cvm-funnel {
+    background: #fff;
+    border: 1px solid #c3c4c7;
+    border-radius: 4px;
+    padding: 16px 20px 20px;
+    margin-bottom: 20px;
+    max-width: 70em;
+}
+
+.cvm-funnel-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    border-bottom: 1px solid #f0f0f1;
+    padding-bottom: 10px;
+    margin-bottom: 14px;
+}
+
+.cvm-funnel-header h2 {
+    margin: 0;
+    font-size: 15px;
+}
+
+.cvm-funnel-actions {
+    margin-left: auto;
+    white-space: nowrap;
+}
+
+.cvm-funnel-step {
+    position: relative;
+    background: #f0f0f1;
+    border-radius: 3px;
+    overflow: hidden;
+    margin: 0;
+}
+
+/* The bar is the background; the label sits over it, so a very short bar
+   never truncates its own text. */
+
+.cvm-funnel-bar {
+    position: absolute;
+    inset: 0 auto 0 0;
+    background: #dbe8f7;
+    border-left: 3px solid #2271b1;
+}
+
+.cvm-funnel-label {
+    position: relative;
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 12px;
+    padding: 10px 14px;
+    font-size: 13px;
+}
+
+.cvm-funnel-label span {
+    color: #50575e;
+    font-size: 12px;
+    white-space: nowrap;
+}
+
+.cvm-funnel-drop {
+    padding: 6px 14px;
+    font-size: 12px;
+    color: #646970;
+}
+
+.cvm-funnel-arrow {
+    color: #a7aaad;
+    margin-right: 4px;
+}
+
+.cvm-funnel-summary {
+    margin-top: 14px;
+}
+
+/* ── Step editor ─────────────────────────────────────────────────────── */
+
+.cvm-funnel-step-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 8px;
+}
+
+.cvm-funnel-step-num {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: #f0f0f1;
+    color: #50575e;
+    font-size: 11px;
+    font-weight: 600;
+    flex-shrink: 0;
+}
+
+.cvm-funnel-step-row input[type="text"] {
+    min-width: 180px;
+}
+
+.cvm-funnel-step-row [hidden] {
+    display: none;
+}
