@@ -19,7 +19,8 @@ use PHPUnit\Framework\TestCase;
  *  1. New submissions emit 2.0 with the descriptor list.
  *  2. Historical rows keep emitting 1.0 with their original map — otherwise
  *     one submission_id could arrive at two endpoints in two different shapes.
- *  3. Analytics reports were untouched and stay 1.0.
+ *  3. Analytics reports version SEPARATELY from submissions. They moved to 1.1
+ *     in 0.5.0 to add a goals section; submissions did not move, and must not.
  */
 final class PayloadSchemaTest extends TestCase
 {
@@ -139,10 +140,57 @@ final class PayloadSchemaTest extends TestCase
         self::assertSame('Email address', $payload['form_submission']['submission_data'][1]['label']);
     }
 
-    /** Reports were not touched by structured fields and must not move. */
-    public function testAnalyticsSchemaVersionIsUnchanged(): void
+    /**
+     * 0.5.0 moved reports from 1.0 to 1.1 to add 'analytics.goals'.
+     *
+     * A MINOR bump, and the distinction is the contract: every 1.0 field is
+     * still present, in place, with the same shape, so a receiver written
+     * against 1.0 keeps working untouched. Anything that removed or reshaped an
+     * existing field would have to be 2.0 instead.
+     */
+    public function testAnalyticsSchemaVersionIsAMinorBump(): void
     {
-        self::assertSame('1.0', PayloadBuilder::SCHEMA_VERSION);
+        self::assertSame('1.1', PayloadBuilder::SCHEMA_VERSION);
+
+        [$major] = explode('.', PayloadBuilder::SCHEMA_VERSION, 2);
+
+        self::assertSame(
+            '1',
+            $major,
+            'Adding a section is additive and stays within major version 1. Removing or reshaping an '
+            . 'existing field would break every 1.0 receiver and must be a major bump instead.'
+        );
+    }
+
+    /**
+     * Adding the goals section must not have touched anything a 1.0 receiver
+     * reads. Asserted against the source because buildSummary() needs a
+     * database, and this suite deliberately has none — what matters here is
+     * that no existing key was renamed or removed.
+     */
+    public function testEveryAnalyticsSectionFromTenIsStillEmitted(): void
+    {
+        $source = (string) file_get_contents(__DIR__ . '/../../src/Analytics/Reports.php');
+
+        $start = strpos($source, 'public static function buildSummary');
+        self::assertNotFalse($start);
+
+        $summary = substr($source, $start);
+
+        foreach ([
+            'totals', 'daily_pageviews', 'top_pages', 'top_landing_pages', 'top_clicks',
+            'top_forms', 'top_hovers', 'top_referrers', 'top_campaigns',
+            'top_campaign_content', 'channels', 'conversions', 'devices',
+        ] as $key) {
+            self::assertMatchesRegularExpression(
+                "~'" . preg_quote($key, '~') . "'\s*=>~",
+                $summary,
+                "The 1.0 analytics section '{$key}' is no longer emitted — that is a breaking change for "
+                . 'every existing receiver and cannot ship as a minor bump.'
+            );
+        }
+
+        self::assertMatchesRegularExpression("~'goals'\s*=>~", $summary, 'The 1.1 goals section is missing.');
     }
 
     public function testTheTwoMessageTypesVersionIndependently(): void
@@ -152,7 +200,26 @@ final class PayloadSchemaTest extends TestCase
             PayloadBuilder::FORM_SCHEMA_VERSION,
             'The split constant is the whole point: reports and submissions evolve separately'
         );
-        self::assertSame(PayloadBuilder::SCHEMA_VERSION, PayloadBuilder::LEGACY_FORM_SCHEMA_VERSION);
+
+        // Form submissions did NOT move in 0.5.0. Lead status and value are
+        // recorded locally and deliberately absent from the wire, precisely so
+        // that this constant did not have to move — a payload frozen on its
+        // first delivery attempt could only ever report a lead as 'new'.
+        self::assertSame('2.0', PayloadBuilder::FORM_SCHEMA_VERSION);
+        self::assertSame('1.0', PayloadBuilder::LEGACY_FORM_SCHEMA_VERSION);
+    }
+
+    /**
+     * A form_submission payload carries no lead block. A field reporting every
+     * qualified lead as 'new' forever would be worse than its absence.
+     */
+    public function testFormSubmissionsCarryNoLeadOutcome(): void
+    {
+        $payload = PayloadBuilder::formSubmissionTest();
+
+        self::assertArrayNotHasKey('lead', $payload['form_submission']);
+        self::assertArrayNotHasKey('lead_status', $payload['form_submission']);
+        self::assertArrayNotHasKey('lead_value', $payload['form_submission']);
     }
 
     /**

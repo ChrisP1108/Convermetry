@@ -7,6 +7,7 @@ if (!defined('ABSPATH')) exit;
 
 use Convermetry\Database\DatabaseManager;
 use Convermetry\Database\FormSubmissions;
+use Convermetry\Goals\GoalRepository;
 use Convermetry\Settings\Options;
 
 /**
@@ -1035,6 +1036,37 @@ final class Reports
     }
 
     /**
+     * The goal section of a report payload.
+     *
+     * Wrapped here rather than called inline so that a site with goal matching
+     * switched off, or with no goals configured, emits a well-formed empty
+     * section instead of the key vanishing — a receiver should not have to
+     * distinguish "no goals" from "an older plugin version".
+     *
+     * @param string $start UTC datetime (inclusive).
+     * @param string $end   UTC datetime (exclusive).
+     * @param int    $limit Maximum goals included.
+     * @return array<string, mixed>
+     */
+    private static function goalSummary(string $start, string $end, int $limit): array
+    {
+        $limit   = min($limit, self::MAX_PAYLOAD_GOALS);
+        $summary = GoalReports::summary($start, $end, GoalRepository::names(), $limit);
+
+        return [
+            'sessions'  => $summary['sessions'],
+            'total'     => $summary['total'],
+            // Stated explicitly rather than left for a receiver to infer from a
+            // row count that happens to equal the cap.
+            'truncated' => $summary['truncated'],
+            'goals'     => $summary['goals'],
+        ];
+    }
+
+    /** Maximum goals included in one analytics report payload. */
+    private const int MAX_PAYLOAD_GOALS = 100;
+
+    /**
      * Full aggregate summary for a range — the shape shared by the dashboard
      * and the analytics webhook payload's "analytics" section.
      *
@@ -1082,6 +1114,12 @@ final class Reports
                 'recent'           => self::recentConversions($start, $end, 500),
             ],
             'devices'              => self::deviceBreakdown($start, $end),
+            // Goal completions are point-in-time facts with no maturity period:
+            // a completion either happened inside this window or it did not, and
+            // nothing can change that afterwards. That is why goals travel on
+            // the wire while funnels, form engagement, and lead outcomes do not
+            // — see the note on PayloadBuilder::SCHEMA_VERSION.
+            'goals'                => self::goalSummary($start, $end, $limit),
         ];
     }
 }

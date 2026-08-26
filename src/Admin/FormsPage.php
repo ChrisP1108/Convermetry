@@ -5,6 +5,9 @@ namespace Convermetry\Admin;
 
 if (!defined('ABSPATH')) exit;
 
+use Convermetry\Analytics\FormEngagementReport;
+use Convermetry\Analytics\ReportQueryException;
+use Convermetry\Database\MigrationRunner;
 use Convermetry\Forms\FormProviderRegistry;
 use Convermetry\Forms\FormSettings;
 
@@ -200,6 +203,147 @@ final class FormsPage
      *
      * @return void
      */
+    /**
+     * Renders the form engagement and abandonment panel.
+     *
+     * Sits above the per-form configuration because it answers the question a
+     * site owner actually arrives with — "why is this form not converting?" —
+     * while the configuration below answers "how is it wired up?".
+     *
+     * The panel is careful about EVIDENCE. Views, starts and abandonment are
+     * what a browser reported; successful submissions are what the form
+     * plugin's own server-side hook confirmed. Those are different grades of
+     * certainty, and a completion rate above 100% is a real signal (visitors
+     * submitting with JavaScript blocked) rather than a bug, so the wording
+     * says which is which instead of presenting one merged number.
+     *
+     * @return void
+     */
+    private static function renderEngagement(): void
+    {
+        if (MigrationRunner::isPending()) {
+            return;
+        }
+
+        $end   = gmdate('Y-m-d H:i:s');
+        $start = gmdate('Y-m-d 00:00:00', time() - 29 * DAY_IN_SECONDS);
+
+        try {
+            $forms    = FormEngagementReport::totals($start, $end, 20);
+            $friction = FormEngagementReport::frictionPoints($start, $end, '', 8);
+        } catch (ReportQueryException) {
+            return;
+        }
+
+        echo '<h2>Engagement &amp; abandonment</h2>';
+        echo '<p class="description" style="max-width:760px;">The last 30 days. '
+            . '<strong>Views</strong>, <strong>Started</strong> and <strong>Abandoned</strong> count sessions '
+            . 'and are observed in the visitor\'s browser; <strong>Attempts</strong> counts individual submit '
+            . 'presses; <strong>Successful</strong> counts submissions your form plugin confirmed on the server. '
+            . 'A completion rate above 100% is not an error — it means people are submitting with JavaScript '
+            . 'blocked, so the browser-observed columns are undercounting.</p>';
+
+        if ($forms === []) {
+            echo '<div class="notice notice-info inline"><p>No form engagement recorded yet. '
+                . 'Form view, start, and validation-error tracking are switched on under '
+                . '<strong>Settings &rarr; Tracking</strong>. Elementor forms are not included here — see the '
+                . 'note below.</p></div>';
+        } else {
+            echo '<table class="widefat striped cvm-goals-table"><thead><tr>';
+            echo '<th scope="col">Form</th>';
+            foreach (['Views', 'Started', 'Attempts', 'Successful', 'Abandoned', 'Start Rate', 'Completion Rate'] as $label) {
+                echo '<th scope="col" class="cvm-num">' . esc_html($label) . '</th>';
+            }
+            echo '</tr></thead><tbody>';
+
+            foreach ($forms as $form) {
+                echo '<tr>';
+                echo '<td><strong>' . esc_html($form['form_name'] !== '' ? $form['form_name'] : $form['form_key'])
+                    . '</strong><div class="cvm-goal-meta"><code>' . esc_html($form['form_key']) . '</code>';
+                if ($form['in_progress'] > 0) {
+                    printf(
+                        ' &middot; %d still in progress',
+                        (int) $form['in_progress']
+                    );
+                }
+                echo '</div></td>';
+
+                foreach ([
+                    number_format_i18n($form['views']),
+                    number_format_i18n($form['started']),
+                    number_format_i18n($form['attempts']),
+                    number_format_i18n($form['successful']),
+                    number_format_i18n($form['abandoned']),
+                    $form['views'] > 0 ? $form['start_rate'] . '%' : '—',
+                    $form['started'] > 0 ? $form['completion_rate'] . '%' : '—',
+                ] as $cell) {
+                    echo '<td class="cvm-num">' . esc_html((string) $cell) . '</td>';
+                }
+
+                echo '</tr>';
+            }
+
+            echo '</tbody></table>';
+
+            printf(
+                '<p class="description">A start counts as abandoned once %d minutes pass with no confirmed '
+                . 'submission — anything more recent is shown as still in progress rather than being counted '
+                . 'against you.</p>',
+                FormEngagementReport::COMPLETION_WINDOW_MINUTES
+            );
+        }
+
+        if ($friction !== []) {
+            echo '<h3>Most common friction points</h3>';
+            echo '<p class="description" style="max-width:760px;">Which fields fail validation most often. '
+                . 'Convermetry records the field\'s name, its type, and which check failed — '
+                . '<strong>never what the visitor typed</strong>.</p>';
+
+            echo '<table class="widefat striped cvm-goals-table"><thead><tr>';
+            echo '<th scope="col">Field</th><th scope="col">Type</th><th scope="col">Problem</th>';
+            echo '<th scope="col" class="cvm-num">Errors</th><th scope="col" class="cvm-num">Sessions</th>';
+            echo '</tr></thead><tbody>';
+
+            foreach ($friction as $row) {
+                echo '<tr>';
+                echo '<td><code>' . esc_html($row['field_id']) . '</code></td>';
+                echo '<td>' . esc_html($row['field_type']) . '</td>';
+                echo '<td>' . esc_html(self::errorLabel($row['error_type'])) . '</td>';
+                echo '<td class="cvm-num">' . esc_html(number_format_i18n($row['errors'])) . '</td>';
+                echo '<td class="cvm-num">' . esc_html(number_format_i18n($row['sessions'])) . '</td>';
+                echo '</tr>';
+            }
+
+            echo '</tbody></table>';
+        }
+
+        echo '<div class="notice notice-info inline"><p><strong>Elementor forms are not included above.</strong> '
+            . 'Elementor identifies a form by its display name on the server while exposing a widget id in the '
+            . 'browser, so the two cannot be matched reliably — and an engagement figure attributed to the wrong '
+            . 'form is worse than none. Elementor submissions are recorded and attributed normally everywhere '
+            . 'else in Convermetry.</p></div>';
+    }
+
+    /**
+     * A readable description of a validation failure category.
+     *
+     * @param string $errorType A stored ValidityState category.
+     * @return string
+     */
+    private static function errorLabel(string $errorType): string
+    {
+        return match ($errorType) {
+            'required'      => 'Left empty',
+            'type_mismatch' => 'Wrong format (e.g. not an email address)',
+            'pattern'       => 'Did not match the expected pattern',
+            'too_short'     => 'Too short',
+            'too_long'      => 'Too long',
+            'range'         => 'Outside the allowed range',
+            'step'          => 'Not an allowed increment',
+            default         => 'Invalid',
+        };
+    }
+
     public static function render(): void
     {
         if (!current_user_can('manage_options')) {
@@ -215,6 +359,8 @@ final class FormsPage
             . 'and discovers their forms. Detected forms are <strong>included by default</strong> — a new form starts '
             . 'recording conversions and delivering webhooks without any setup. Exclude a form to stop processing it; '
             . 'its configuration is preserved and restored when re-enabled.</p>';
+
+        self::renderEngagement();
 
         // ── Provider status cards ──────────────────────────────────────
         echo '<div class="cvm-cards cvm-provider-cards">';

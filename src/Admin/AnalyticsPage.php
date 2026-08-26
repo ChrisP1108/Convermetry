@@ -5,9 +5,13 @@ namespace Convermetry\Admin;
 
 if (!defined('ABSPATH')) exit;
 
+use Convermetry\Analytics\GoalReports;
+use Convermetry\Analytics\LeadReports;
 use Convermetry\Analytics\ReportQueryException;
 use Convermetry\Analytics\Reports;
 use Convermetry\Api\TrackingController;
+use Convermetry\Goals\GoalRepository;
+use Convermetry\Leads\Money;
 use Convermetry\Settings\Options;
 
 /**
@@ -212,6 +216,20 @@ final class AnalyticsPage
 
         self::panelStart('devices', 'Devices', 'Mobile versus desktop share of page views.');
         self::renderDevices($start, $end);
+        self::panelEnd();
+
+        self::panelStart('goals', 'Goals', 'Important visitor actions other than form submissions — phone taps, downloads, booking clicks, pricing-page visits.');
+        self::renderGoals($start, $end);
+        self::panelEnd();
+
+        self::panelStart('outcomes', 'Lead outcomes', 'What the leads were actually worth. Counted by the date each lead arrived, with its status as it stands right now.');
+        echo '<div class="cvm-tables">';
+        self::renderLeadDimension($start, $end, 'channel', 'Leads by Channel');
+        self::renderLeadDimension($start, $end, 'campaign', 'Leads by Campaign');
+        self::renderLeadDimension($start, $end, 'landing_page', 'Landing Page Performance');
+        self::renderLeadDimension($start, $end, 'form', 'Leads by Form');
+        echo '</div>';
+        self::renderTimeToLead($start, $end);
         self::panelEnd();
 
         self::panelStart('conversions', 'Conversions', 'Individual confirmed conversions with their campaign attribution — server-confirmed submissions carry their provider and form identity.');
@@ -1208,6 +1226,188 @@ final class AnalyticsPage
     /**
      * Renders the "Recent Activity" table of the latest raw events.
      */
+    /**
+     * Goal completions for the period.
+     *
+     * @param string $start UTC datetime (inclusive).
+     * @param string $end   UTC datetime (exclusive).
+     * @return void
+     */
+    private static function renderGoals(string $start, string $end): void
+    {
+        self::renderQueriedTable('Goal Completions', static function () use ($start, $end): void {
+            $summary = GoalReports::summary($start, $end, GoalRepository::names(), 25);
+
+            $rows = [];
+            foreach ($summary['goals'] as $goal) {
+                $rows[] = [
+                    self::cellText((string) $goal['name']),
+                    self::cellNum((int) $goal['completions']),
+                    self::cellNum((int) $goal['sessions']),
+                    $goal['sessions'] > 0 ? esc_html($goal['conversion_rate'] . '%') : '&mdash;',
+                    (string) $goal['value'] === '0.00'
+                        ? '&mdash;'
+                        : esc_html(Money::format((string) $goal['value'], (string) $goal['currency'])),
+                ];
+            }
+
+            self::renderReportTable(
+                'Goal Completions',
+                'A goal counting once per visit can never exceed 100% — its rate is the share of sessions '
+                . 'that completed it. Configure goals under Convermetry → Goals.',
+                [
+                    ['label' => 'Goal'],
+                    ['label' => 'Completions', 'num' => true],
+                    ['label' => 'Sessions', 'num' => true],
+                    ['label' => 'Rate', 'num' => true],
+                    ['label' => 'Value', 'num' => true],
+                ],
+                $rows,
+                'No goal completions in this period. Goals are configured under Convermetry → Goals.'
+            );
+        });
+    }
+
+    /**
+     * One lead-outcome breakdown.
+     *
+     * @param string $start     UTC datetime (inclusive).
+     * @param string $end       UTC datetime (exclusive).
+     * @param string $dimension A LeadReports::DIMENSIONS key.
+     * @param string $title     Table heading.
+     * @return void
+     */
+    private static function renderLeadDimension(string $start, string $end, string $dimension, string $title): void
+    {
+        self::renderQueriedTable($title, static function () use ($start, $end, $dimension, $title): void {
+            $rows = [];
+
+            foreach (LeadReports::byDimension($start, $end, $dimension, 10) as $row) {
+                $leads = (int) $row['leads'];
+
+                $rows[] = [
+                    $dimension === 'landing_page'
+                        ? self::cellPage((string) $row['label'], '')
+                        : self::cellText((string) $row['label']),
+                    self::cellNum($leads),
+                    self::cellNum((int) $row['qualified']),
+                    self::cellNum((int) $row['won']),
+                    // A dimension with no leads has no rate. Printing 0% would
+                    // read as "they all failed" rather than "there were none".
+                    $leads > 0 ? esc_html($row['qualified_rate'] . '%') : '&mdash;',
+                    self::cellMoney($row['value']),
+                ];
+            }
+
+            self::renderReportTable(
+                $title,
+                'Attributed Lead Value is the total recorded against these leads — not revenue, and not ROI: '
+                . 'Convermetry has no ad-spend data. Currencies are listed separately rather than added together.',
+                [
+                    ['label' => match ($dimension) {
+                        'channel'      => 'Channel',
+                        'campaign'     => 'Campaign',
+                        'landing_page' => 'Landing Page',
+                        default        => 'Form',
+                    }],
+                    ['label' => 'Leads', 'num' => true],
+                    ['label' => 'Qualified', 'num' => true],
+                    ['label' => 'Won', 'num' => true],
+                    ['label' => 'Qual. Rate', 'num' => true],
+                    ['label' => 'Attributed Lead Value', 'num' => true],
+                ],
+                $rows,
+                'No leads recorded in this period.'
+            );
+        });
+    }
+
+    /**
+     * Time from a session's first page view to its confirmed submission.
+     *
+     * @param string $start UTC datetime (inclusive).
+     * @param string $end   UTC datetime (exclusive).
+     * @return void
+     */
+    private static function renderTimeToLead(string $start, string $end): void
+    {
+        self::renderQueriedTable('Time to Lead', static function () use ($start, $end): void {
+            $lag = LeadReports::timeToLead($start, $end);
+
+            $rows = [];
+            foreach ($lag['buckets'] as $label => $count) {
+                $rows[] = [
+                    esc_html($label),
+                    self::cellNum($count),
+                    $lag['sampled'] > 0
+                        ? esc_html(round($count / $lag['sampled'] * 100, 1) . '%')
+                        : '&mdash;',
+                ];
+            }
+
+            foreach ($lag['medians'] as $channel => $seconds) {
+                $rows[] = [
+                    '<em>' . esc_html($channel) . ' — median</em>',
+                    esc_html(self::humanDuration($seconds)),
+                    '&mdash;',
+                ];
+            }
+
+            self::renderReportTable(
+                'Time to Lead',
+                'Measured from the first page view of the session that converted, so a visitor who researched '
+                . 'over several visits is measured from their final one — Convermetry keeps no persistent '
+                . 'visitor identity across sessions. Medians rather than averages: one lead that took three '
+                . 'weeks would drag an average past every real experience of the site.',
+                [
+                    ['label' => 'Time to convert'],
+                    ['label' => 'Leads', 'num' => true],
+                    ['label' => 'Share', 'num' => true],
+                ],
+                $rows,
+                'No conversions with a measurable session start in this period.'
+            );
+        });
+    }
+
+    /**
+     * Renders a per-currency value map.
+     *
+     * Currencies are listed, never added together — a column showing "200" for
+     * 100 EUR plus 100 USD would be a fabricated number.
+     *
+     * @param array<string, string> $values Currency code => decimal string.
+     * @return string Safe HTML.
+     */
+    private static function cellMoney(array $values): string
+    {
+        $parts = [];
+
+        foreach ($values as $currency => $amount) {
+            if ((string) $amount !== '' && (float) $amount !== 0.0) {
+                $parts[] = esc_html(Money::format((string) $amount, (string) $currency));
+            }
+        }
+
+        return $parts === [] ? '&mdash;' : implode('<br>', $parts);
+    }
+
+    /**
+     * A duration in seconds as a short human string.
+     *
+     * @param int $seconds Duration.
+     * @return string
+     */
+    private static function humanDuration(int $seconds): string
+    {
+        return match (true) {
+            $seconds < MINUTE_IN_SECONDS => $seconds . 's',
+            $seconds < HOUR_IN_SECONDS   => round($seconds / MINUTE_IN_SECONDS) . ' min',
+            $seconds < DAY_IN_SECONDS    => round($seconds / HOUR_IN_SECONDS, 1) . ' hrs',
+            default                      => round($seconds / DAY_IN_SECONDS, 1) . ' days',
+        };
+    }
+
     private static function renderRecentEvents(): void
     {
         self::renderQueriedTable('Latest Events', static function (): void {

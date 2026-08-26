@@ -55,6 +55,10 @@ if (!defined('DAY_IN_SECONDS')) {
     define('DAY_IN_SECONDS', 86400);
 }
 
+if (!defined('WEEK_IN_SECONDS')) {
+    define('WEEK_IN_SECONDS', 604800);
+}
+
 if (!defined('CVM_VERSION')) {
     // Read from the plugin file rather than hardcoding it. This stub had already
     // drifted once — it said 0.1.0 while the plugin was 0.2.0 — and a test that

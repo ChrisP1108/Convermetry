@@ -59,13 +59,37 @@ final class PayloadBuilder
     /**
      * The analytics report schema version.
      *
-     * Structured submission fields did not change reports, so this stays at
-     * 1.0 while form submissions move to 2.0. The two message types version
-     * independently on purpose: bumping reports for a change that never
-     * touched them would force every analytics receiver to re-certify for
+     * 1.1 adds one section — 'analytics.goals' — and changes nothing else. Every
+     * 1.0 field is present, in place, with the same shape, so a receiver written
+     * against 1.0 keeps working untouched. That is what makes it a minor bump
+     * rather than a 2.0.
+     *
+     * The two message types version independently on purpose: form submissions
+     * are at 2.0 and are unaffected by this, and bumping them for a change that
+     * never touched them would force every submission receiver to re-certify for
      * nothing.
+     *
+     * WHAT IS DELIBERATELY NOT IN THIS PAYLOAD, and why — because its absence is
+     * a decision, not an oversight:
+     *
+     *  - Funnels and form abandonment need a MATURITY PERIOD (30 minutes for an
+     *    abandonment, 24 hours for a funnel's later steps). A report generated at
+     *    its own window's edge cannot see them yet, and scheduled windows advance
+     *    without ever revisiting, so those numbers would be permanently and
+     *    invisibly low for every receiver.
+     *  - Lead status and value MUTATE after the fact. A lead created on Monday
+     *    and marked won on Friday would be reported 'new' forever, and a
+     *    'lead' block on a form_submission payload — frozen on its first
+     *    delivery attempt — would be wrong for every lead anybody ever qualifies.
+     *
+     * Goal completions have neither problem: a completion happened inside the
+     * window or it did not, and nothing later changes that.
+     *
+     * All three are available in the admin screens, and the cvm_lead_events
+     * table exists so a lead_status_changed message can be added once there is a
+     * delivery path whose semantics can actually carry a correction.
      */
-    public const string SCHEMA_VERSION = '1.0';
+    public const string SCHEMA_VERSION = '1.1';
 
     /**
      * The form-submission schema version for submissions stored with
