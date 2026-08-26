@@ -1334,3 +1334,94 @@
         display: none;
     }
 }
+
+/* ------------------------------------------------------------------ *
+ *  Goals screen
+ *
+ *  Configuration and performance share one table on purpose: the most
+ *  common question about a goal is "is this actually counting anything?",
+ *  and answering it should not require holding a rule in your head while
+ *  looking at a number on another screen.
+ * ------------------------------------------------------------------ */
+
+.cvm-goals-intro {
+    max-width: 70em;
+}
+
+.cvm-period-filter {
+    margin: 16px 0;
+}
+
+.cvm-goals-table {
+    margin-top: 12px;
+}
+
+.cvm-goals-table th.cvm-num,
+.cvm-goals-table td.cvm-num {
+    text-align: right;
+    white-space: nowrap;
+}
+
+.cvm-goals-table code {
+    font-size: 12px;
+    background: #f0f0f1;
+    padding: 2px 6px;
+    border-radius: 3px;
+}
+
+/* Secondary detail under a goal's name: how it counts, what it is worth. */
+
+.cvm-goal-meta {
+    margin-top: 4px;
+    color: #646970;
+    font-size: 12px;
+}
+
+.cvm-goal-actions {
+    white-space: nowrap;
+}
+
+/* Keeps the Remove form on the same line as Edit — a block-level form
+   would otherwise push it onto its own row. */
+
+.cvm-inline-form {
+    display: inline;
+}
+
+.cvm-btn-danger-link {
+    color: #b32d2e;
+    cursor: pointer;
+}
+
+.cvm-btn-danger-link:hover {
+    color: #8a2424;
+}
+
+/* The "this goal has never fired" explanation, attached to its own row so
+   it spans the full table width rather than squeezing into one cell. */
+
+.cvm-goal-note td {
+    padding-top: 0;
+    border-top: none;
+    color: #646970;
+    font-size: 12px;
+}
+
+.cvm-goal-editor {
+    margin-top: 28px;
+    padding: 4px 20px 12px;
+    background: #fff;
+    border: 1px solid #c3c4c7;
+    border-radius: 4px;
+    max-width: 70em;
+}
+
+.cvm-goal-form .cvm-goal-type,
+.cvm-goal-form .cvm-goal-operator {
+    margin-right: 6px;
+    margin-bottom: 4px;
+}
+
+.cvm-goal-form .cvm-goal-value[hidden] {
+    display: none;
+}
