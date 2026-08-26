@@ -8,6 +8,10 @@ if (!defined('ABSPATH')) exit;
 use Convermetry\Analytics\SubmissionContext;
 use Convermetry\Database\FormSubmissions;
 use Convermetry\Forms\SubmissionFields;
+use Convermetry\Leads\LeadEvents;
+use Convermetry\Leads\LeadService;
+use Convermetry\Leads\LeadStatus;
+use Convermetry\Leads\Money;
 use Convermetry\Settings\Options;
 
 /**
@@ -59,6 +63,7 @@ final class SubmissionsPage
         add_action('wp_ajax_cvm_get_submissions', [self::class, 'handleGetSubmissionsAjax']);
         add_action('wp_ajax_cvm_get_submission_detail', [self::class, 'handleGetDetailAjax']);
         add_action('wp_ajax_cvm_delete_submission', [self::class, 'handleDeleteAjax']);
+        add_action('wp_ajax_cvm_update_lead', [self::class, 'handleUpdateLeadAjax']);
     }
 
     /**
@@ -114,6 +119,8 @@ final class SubmissionsPage
             'listNonce'    => wp_create_nonce('cvm_get_submissions'),
             'detailNonce'  => wp_create_nonce('cvm_get_submission_detail'),
             'deleteNonce'  => wp_create_nonce('cvm_delete_submission'),
+            'leadNonce'    => wp_create_nonce('cvm_update_lead'),
+            'leadStatuses' => LeadStatus::labels(),
             'exportBase'   => wp_nonce_url(
                 add_query_arg(
                     ['page' => self::MENU_SLUG, 'cvm_export' => 'csv_filtered'],
@@ -295,6 +302,48 @@ final class SubmissionsPage
     }
 
     /**
+     * Handles the cvm_update_lead AJAX action.
+     *
+     * Status and value are sent independently — the UI updates whichever the
+     * administrator touched — so an absent key means "leave unchanged" while an
+     * empty value string means "clear the recorded value". Conflating the two
+     * would make it impossible to remove a value once entered.
+     *
+     * @return never
+     */
+    public static function handleUpdateLeadAjax(): never
+    {
+        self::authorize('cvm_update_lead');
+
+        $submissionId = sanitize_text_field((string) ($_POST['submission_id'] ?? ''));
+        if ($submissionId === '') {
+            wp_send_json_error(['message' => 'Invalid submission id.']);
+        }
+
+        $status = array_key_exists('lead_status', $_POST)
+            ? sanitize_key((string) wp_unslash($_POST['lead_status']))
+            : null;
+
+        $value = array_key_exists('lead_value', $_POST)
+            ? sanitize_text_field((string) wp_unslash($_POST['lead_value']))
+            : null;
+
+        $result = LeadService::update($submissionId, $status, $value, get_current_user_id());
+
+        if (!$result['ok']) {
+            wp_send_json_error(['message' => $result['message']]);
+        }
+
+        wp_send_json_success([
+            'status'      => $result['status'],
+            'statusLabel' => LeadStatus::label($result['status']),
+            'chipClass'   => LeadStatus::chipClass($result['status']),
+            'value'       => $result['value'],
+            'valueLabel'  => Money::format($result['value'], $result['currency']),
+        ]);
+    }
+
+    /**
      * Shared nonce + capability guard for every AJAX action on this page.
      *
      * @param string $action The action name the nonce was created for.
@@ -325,6 +374,9 @@ final class SubmissionsPage
         // warning and filter on the literal "Array".
         $status = sanitize_key(self::scalarParam($src, 'delivery_status'));
 
+        $leadStatus = sanitize_key(self::scalarParam($src, 'lead_status'));
+        $hasValue   = sanitize_key(self::scalarParam($src, 'has_value'));
+
         return [
             'year'            => sanitize_text_field(self::scalarParam($src, 'filter_year')),
             'month'           => sanitize_text_field(self::scalarParam($src, 'filter_month')),
@@ -334,6 +386,8 @@ final class SubmissionsPage
             'campaign'        => sanitize_text_field(self::scalarParam($src, 'campaign')),
             'search'          => sanitize_text_field(self::scalarParam($src, 'search')),
             'delivery_status' => in_array($status, self::STATES, true) ? $status : '',
+            'lead_status'     => LeadStatus::isValid($leadStatus) ? $leadStatus : '',
+            'has_value'       => in_array($hasValue, ['yes', 'no'], true) ? $hasValue : '',
         ];
     }
 
@@ -589,6 +643,12 @@ final class SubmissionsPage
         $stateLabel = (string) ($status['label'] ?? 'Not sent');
         $bodyId     = 'cvm-sub-body-' . $rowId;
 
+        $leadStatus = LeadStatus::normalize($row['lead_status'] ?? null);
+        $leadValue  = Money::format(
+            $row['lead_value'] === null ? null : (string) $row['lead_value'],
+            (string) ($row['lead_currency'] ?? '')
+        );
+
         ob_start();
         ?>
         <li class="cvm-submission-item" data-row-id="<?php echo esc_attr((string) $rowId); ?>">
@@ -616,6 +676,14 @@ final class SubmissionsPage
                 <span class="cvm-sub-col cvm-sub-page"><?php echo esc_html(self::pathOf($pageUrl)); ?></span>
                 <span class="cvm-sub-col cvm-sub-channel"><?php echo esc_html($channel !== '' ? $channel : '—'); ?></span>
                 <span class="cvm-sub-col cvm-sub-campaign"><?php echo esc_html($campaign !== '' ? $campaign : '—'); ?></span>
+                <span class="cvm-sub-col cvm-sub-lead-status">
+                    <span class="cvm-status-chip <?php echo esc_attr(LeadStatus::chipClass($leadStatus)); ?>">
+                        <?php echo esc_html(LeadStatus::label($leadStatus)); ?>
+                    </span>
+                    <?php if ($leadValue !== '') : ?>
+                        <span class="cvm-sub-lead-value"><?php echo esc_html($leadValue); ?></span>
+                    <?php endif; ?>
+                </span>
                 <span class="cvm-sub-col cvm-sub-status">
                     <span class="cvm-status-chip cvm-status-<?php echo esc_attr($state); ?>">
                         <?php echo esc_html($stateLabel); ?>
@@ -696,6 +764,8 @@ final class SubmissionsPage
                 <button type="button" class="button cvm-submission-delete-btn">Delete Submission</button>
             </div>
 
+            <?php echo self::renderLeadBlock($row); ?>
+
             <div class="cvm-detail-block">
                 <h4>Form</h4>
                 <?php echo self::renderPairs($formPairs); ?>
@@ -760,6 +830,114 @@ final class SubmissionsPage
                 <?php echo self::renderDeliveryBlock($status, (string) ($row['submission_id'] ?? '')); ?>
             </div>
 
+        </div>
+        <?php
+        return (string) ob_get_clean();
+    }
+
+    /**
+     * Renders the lead qualification controls.
+     *
+     * Placed at the very top of the detail panel, above the form's own details,
+     * because it is the only part of this panel an administrator ever WRITES —
+     * everything below it is a record of what happened. Burying the one
+     * interactive control beneath four blocks of read-only history would make
+     * the common action the hardest to find.
+     *
+     * The history list is capped and deliberately terse. It answers "who changed
+     * this and when", which is the question that actually gets asked about a
+     * lead whose value someone disputes; it is not an activity feed.
+     *
+     * @param array<string, mixed> $row Submission row.
+     * @return string
+     */
+    private static function renderLeadBlock(array $row): string
+    {
+        $submissionId = (string) ($row['submission_id'] ?? '');
+        $status       = LeadStatus::normalize($row['lead_status'] ?? null);
+        $value        = $row['lead_value'] === null ? '' : (string) $row['lead_value'];
+        $currency     = (string) ($row['lead_currency'] ?? '');
+        $updatedAt    = (string) ($row['lead_status_at'] ?? '');
+
+        $editable = LeadService::userCanEdit();
+        $history  = LeadEvents::forSubmission($submissionId, 10);
+
+        ob_start();
+        ?>
+        <div class="cvm-detail-block cvm-lead-block" data-submission-id="<?php echo esc_attr($submissionId); ?>">
+            <h4>Lead outcome</h4>
+
+            <?php if (!$editable): ?>
+                <p class="cvm-empty-msg">
+                    Status: <strong><?php echo esc_html(LeadStatus::label($status)); ?></strong>
+                    <?php if ($value !== ''): ?>
+                        &middot; <?php echo esc_html(Money::format($value, $currency)); ?>
+                    <?php endif; ?>
+                </p>
+            <?php else: ?>
+                <div class="cvm-lead-controls">
+                    <label class="cvm-lead-field">
+                        <span>Status</span>
+                        <select class="cvm-lead-status">
+                            <?php foreach (LeadStatus::labels() as $machine => $label): ?>
+                                <option value="<?php echo esc_attr($machine); ?>" <?php selected($machine, $status); ?>>
+                                    <?php echo esc_html($label); ?>
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                    </label>
+
+                    <label class="cvm-lead-field">
+                        <span>Value<?php echo $currency !== '' ? ' (' . esc_html($currency) . ')' : ''; ?></span>
+                        <input
+                            type="text"
+                            class="cvm-lead-value"
+                            value="<?php echo esc_attr($value); ?>"
+                            placeholder="<?php echo esc_attr(Options::leadCurrency() !== '' ? '12,500.00' : '0.00'); ?>"
+                            inputmode="decimal"
+                        >
+                    </label>
+
+                    <button type="button" class="button button-primary cvm-lead-save">Save</button>
+                    <span class="cvm-lead-feedback" role="status" aria-live="polite"></span>
+                </div>
+
+                <p class="description">
+                    Recorded here only — lead outcomes are never sent to webhook endpoints in this version,
+                    because a submission's payload is frozen when it is first delivered and could never reflect
+                    a change made afterwards. Clear the value field to remove a recorded amount.
+                </p>
+            <?php endif; ?>
+
+            <?php if ($updatedAt !== '' || $history !== []): ?>
+                <div class="cvm-lead-history">
+                    <h5>History</h5>
+                    <ul>
+                        <?php foreach ($history as $entry): ?>
+                            <li>
+                                <?php
+                                $user = (int) $entry['user_id'] > 0 ? get_userdata((int) $entry['user_id']) : null;
+                                $who  = $user instanceof \WP_User ? $user->display_name : 'someone';
+
+                                printf(
+                                    '%s &rarr; %s%s &middot; %s by %s',
+                                    esc_html(LeadStatus::label((string) $entry['from_status'])),
+                                    esc_html(LeadStatus::label((string) $entry['to_status'])),
+                                    $entry['value'] === null
+                                        ? ''
+                                        : ' &middot; ' . esc_html(Money::format(
+                                            (string) $entry['value'],
+                                            (string) $entry['currency']
+                                        )),
+                                    esc_html(self::formatDate((string) $entry['created_at'])),
+                                    esc_html($who)
+                                );
+                                ?>
+                            </li>
+                        <?php endforeach; ?>
+                    </ul>
+                </div>
+            <?php endif; ?>
         </div>
         <?php
         return (string) ob_get_clean();
@@ -915,7 +1093,13 @@ final class SubmissionsPage
             'Provider', 'Form Name', 'Form ID', 'Native Form ID', 'Conversion Page',
             'Channel', 'UTM Source', 'UTM Medium', 'UTM Campaign', 'UTM Term',
             'UTM Content', 'Ad Click Type', 'Entrance Referrer', 'Landing Page',
-            'Device', 'IP Address', 'Delivery Status', 'Submission Data (JSON)',
+            'Device', 'IP Address', 'Delivery Status',
+            // Currency travels as its own column rather than being folded into
+            // the value. A spreadsheet that mixed "12500.00" and "€12500.00" in
+            // one column could not be summed or sorted, and a value with no code
+            // beside it is not safely addable on a multi-currency site.
+            'Lead Status', 'Lead Value', 'Lead Currency',
+            'Submission Data (JSON)',
         ], escape: '');
 
         $beforeId = PHP_INT_MAX;
@@ -956,6 +1140,11 @@ final class SubmissionsPage
                     (string) ($context['device'] ?? ''),
                     (string) ($row['ip_address'] ?? ''),
                     (string) ($status['label'] ?? 'Not sent'),
+                    LeadStatus::label(LeadStatus::normalize($row['lead_status'] ?? null)),
+                    // The raw decimal string, not the formatted display value:
+                    // a spreadsheet needs a number it can sum, not "12,500.00 USD".
+                    $row['lead_value'] === null ? '' : (string) $row['lead_value'],
+                    (string) ($row['lead_currency'] ?? ''),
                     (string) wp_json_encode(
                         SubmissionFields::fromStoredJson((string) ($row['submission_data'] ?? '')),
                         JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES

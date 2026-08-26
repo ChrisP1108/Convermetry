@@ -44,7 +44,8 @@
         // the full list. Server-sanitized before localization.
         const state = {
             page: 1, perPage: 10, search: cfg('initialSearch') || '', year: '', month: '',
-            provider: '', formName: '', channel: '', campaign: '', status: ''
+            provider: '', formName: '', channel: '', campaign: '', status: '',
+            leadStatus: '', hasValue: ''
         };
 
         let initialized = false;
@@ -63,7 +64,7 @@
         heading.innerHTML =
             '<span>Date</span><span>Visitor / Lead</span><span>Form</span>' +
             '<span>Page</span><span>Source</span><span>Campaign</span>' +
-            '<span>Delivery</span><span></span>';
+            '<span>Lead</span><span>Delivery</span><span></span>';
         root.appendChild(heading);
 
         const list = document.createElement('ul');
@@ -76,6 +77,8 @@
 
         // ── Controls wiring ──────────────────────────────────────────────────
         const simpleFilters = [
+            ['.cvm-filter-lead-status', 'leadStatus'],
+            ['.cvm-filter-has-value', 'hasValue'],
             ['.cvm-filter-year', 'year'],
             ['.cvm-filter-month', 'month'],
             ['.cvm-filter-provider', 'provider'],
@@ -178,6 +181,95 @@
                 });
         });
 
+        // ── Lead outcome (inside an expanded detail panel) ───────────────────
+        // Saved in place rather than reloading the list. Qualifying leads is
+        // done in runs — open a row, judge it, move on — and re-rendering the
+        // whole list after each save would collapse the row you were working in
+        // and lose your place.
+        list.addEventListener('click', function (e) {
+            const btn = e.target.closest('.cvm-lead-save');
+            if (!btn) return;
+
+            const block = btn.closest('.cvm-lead-block');
+            const item  = btn.closest('.cvm-submission-item');
+            if (!block || !item) return;
+
+            const submissionId = block.dataset.submissionId;
+            const statusSelect = block.querySelector('.cvm-lead-status');
+            const valueInput   = block.querySelector('.cvm-lead-value');
+            const feedback     = block.querySelector('.cvm-lead-feedback');
+            if (!submissionId || !statusSelect || !valueInput) return;
+
+            btn.disabled    = true;
+            btn.textContent = 'Saving…';
+            if (feedback) feedback.textContent = '';
+
+            const fd = new FormData();
+            fd.append('action', 'cvm_update_lead');
+            fd.append('nonce', cfg('leadNonce'));
+            fd.append('submission_id', submissionId);
+            fd.append('lead_status', statusSelect.value);
+            // Always sent, including empty — an empty string is what CLEARS a
+            // recorded value, and omitting the key would mean "leave unchanged".
+            fd.append('lead_value', valueInput.value);
+
+            fetch(cfg('ajaxUrl'), { method: 'POST', body: fd })
+                .then(function (res) { return res.json(); })
+                .then(function (resp) {
+                    btn.disabled    = false;
+                    btn.textContent = 'Save';
+
+                    if (!resp.success) {
+                        if (feedback) {
+                            feedback.className = 'cvm-lead-feedback cvm-lead-error';
+                            feedback.textContent = (resp.data && resp.data.message) ||
+                                'The lead could not be updated.';
+                        }
+                        return;
+                    }
+
+                    // Reflect the stored values, not what was typed: the server
+                    // normalizes "$12,500.5" to "12500.50", and showing the raw
+                    // input back would suggest it was stored verbatim.
+                    valueInput.value = resp.data.value === null ? '' : resp.data.value;
+                    updateRowChip(item, resp.data);
+
+                    if (feedback) {
+                        feedback.className = 'cvm-lead-feedback cvm-lead-saved';
+                        feedback.textContent = 'Saved';
+                    }
+                })
+                .catch(function () {
+                    btn.disabled    = false;
+                    btn.textContent = 'Save';
+                    if (feedback) {
+                        feedback.className = 'cvm-lead-feedback cvm-lead-error';
+                        feedback.textContent = 'The lead could not be updated.';
+                    }
+                });
+        });
+
+        /**
+         * Updates the collapsed row's chip so the list agrees with the panel
+         * without a refetch.
+         *
+         * @param {HTMLElement} item
+         * @param {object}      data
+         */
+        function updateRowChip(item, data) {
+            const cell = item.querySelector('.cvm-sub-lead-status');
+            if (!cell) return;
+
+            let html = '<span class="cvm-status-chip ' + escapeHtml(data.chipClass) + '">' +
+                       escapeHtml(data.statusLabel) + '</span>';
+
+            if (data.valueLabel) {
+                html += '<span class="cvm-sub-lead-value">' + escapeHtml(data.valueLabel) + '</span>';
+            }
+
+            cell.innerHTML = html;
+        }
+
         /**
          * Restores a delete button and says why it failed. Silently re-enabling
          * it looked identical to "nothing happened", which is the worst thing a
@@ -251,7 +343,9 @@
                 channel: state.channel,
                 campaign: state.campaign,
                 search: state.search,
-                delivery_status: state.status
+                delivery_status: state.status,
+                lead_status: state.leadStatus,
+                has_value: state.hasValue
             });
 
             // Drop empty values so the link stays readable.
@@ -289,6 +383,8 @@
             fd.append('channel', state.channel);
             fd.append('campaign', state.campaign);
             fd.append('delivery_status', state.status);
+            fd.append('lead_status', state.leadStatus);
+            fd.append('has_value', state.hasValue);
 
             fetch(cfg('ajaxUrl'), { method: 'POST', body: fd })
                 .then(function (res) { return res.json(); })
@@ -349,7 +445,8 @@
     function emptyMessage(state) {
         const filtered = state.search !== '' || state.year !== '' || state.month !== '' ||
                          state.provider !== '' || state.formName !== '' || state.channel !== '' ||
-                         state.campaign !== '' || state.status !== '';
+                         state.campaign !== '' || state.status !== '' ||
+                         state.leadStatus !== '' || state.hasValue !== '';
 
         return filtered
             ? 'No submissions match the current filters.'
@@ -424,6 +521,29 @@
     }
 
     /**
+     * Lead-status filter options, built from the labels the server localized.
+     *
+     * Read from CVM_SUB rather than duplicated here so the vocabulary has one
+     * owner — LeadStatus — and a status added there cannot go missing from the
+     * filter.
+     *
+     * @returns {string}
+     */
+    function leadStatusOptions() {
+        const statuses = (typeof CVM_SUB !== 'undefined' && CVM_SUB.leadStatuses) || {};
+        let html = '';
+
+        for (const machine in statuses) {
+            if (Object.prototype.hasOwnProperty.call(statuses, machine)) {
+                html += '<option value="' + escapeHtml(machine) + '">' +
+                        escapeHtml(statuses[machine]) + '</option>';
+            }
+        }
+
+        return html;
+    }
+
+    /**
      * Returns the HTML string for the controls bar. Year/month and the
      * value-list options start empty; the first response fills them.
      *
@@ -444,6 +564,15 @@
                        '<option value="failed">Failed</option>' +
                        '<option value="pending">Queued</option>' +
                        '<option value="not_sent">Not sent</option>' +
+                   '</select>' +
+                   '<select class="cvm-filter-lead-status">' +
+                       '<option value="">All Lead Statuses</option>' +
+                       leadStatusOptions() +
+                   '</select>' +
+                   '<select class="cvm-filter-has-value">' +
+                       '<option value="">Any Value</option>' +
+                       '<option value="yes">Has a value</option>' +
+                       '<option value="no">No value recorded</option>' +
                    '</select>' +
                    '<div class="cvm-acc-search">' +
                        '<input type="text" class="cvm-search-input" placeholder="Search name, email, field values, IDs…" />' +

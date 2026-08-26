@@ -6,6 +6,7 @@ namespace Convermetry\Database;
 if (!defined('ABSPATH')) exit;
 
 use Convermetry\Leads\LeadEvents;
+use Convermetry\Leads\LeadStatus;
 use Convermetry\Notifications\NotificationQueue;
 use Convermetry\Settings\Options;
 use Convermetry\Webhook\DeliveryLog;
@@ -407,6 +408,109 @@ final class FormSubmissions
             'provider'  => (string) $row['provider'],
             'form_name' => (string) $row['form_name'],
         ];
+    }
+
+    /**
+     * Fetches one submission's lead columns.
+     *
+     * A narrow read on purpose: the caller needs four small values and
+     * {@see get()} would drag three LONGTEXT columns into memory to supply them.
+     *
+     * @param string $submissionId The submission's globally unique id.
+     * @return array{lead_status: string, lead_value: string|null, lead_currency: string}|null
+     */
+    public static function getLead(string $submissionId): ?array
+    {
+        global $wpdb;
+
+        if ($submissionId === '') {
+            return null;
+        }
+
+        $row = $wpdb->get_row(
+            $wpdb->prepare(
+                'SELECT lead_status, lead_value, lead_currency FROM ' . self::tableName()
+                . ' WHERE submission_id = %s',
+                $submissionId
+            ),
+            ARRAY_A
+        );
+
+        if (!is_array($row)) {
+            return null;
+        }
+
+        return [
+            'lead_status'   => (string) $row['lead_status'],
+            // Kept as the string the DECIMAL column produced, or null. Casting
+            // to float here would undo the whole point of the column type.
+            'lead_value'    => $row['lead_value'] === null ? null : (string) $row['lead_value'],
+            'lead_currency' => (string) $row['lead_currency'],
+        ];
+    }
+
+    /**
+     * Applies a lead status/value change and records it in one transaction.
+     *
+     * The two writes are inseparable. A change that applied without being
+     * recorded leaves a lead whose history claims it is still 'new'; a history
+     * row without the change claims a lead was won when it was not. Neither is
+     * detectable from the other, so both commit or neither does.
+     *
+     * @param string      $submissionId The submission's globally unique id.
+     * @param string      $status       The new status (already validated).
+     * @param string|null $value        The new value as a decimal string, or null.
+     * @param string      $currency     Currency code for $value, or ''.
+     * @param int         $userId       The user making the change.
+     * @param string      $fromStatus   The previous status, for the history row.
+     * @return bool True when both writes committed.
+     */
+    public static function updateLead(
+        string $submissionId,
+        string $status,
+        ?string $value,
+        string $currency,
+        int $userId,
+        string $fromStatus
+    ): bool {
+        global $wpdb;
+
+        if ($submissionId === '') {
+            return false;
+        }
+
+        $wpdb->query('START TRANSACTION');
+
+        $updated = $wpdb->update(
+            self::tableName(),
+            [
+                'lead_status'    => $status,
+                'lead_value'     => $value,
+                'lead_currency'  => $currency,
+                'lead_status_at' => gmdate('Y-m-d H:i:s'),
+            ],
+            ['submission_id' => $submissionId],
+            // %s for a null value still binds NULL through $wpdb::update(),
+            // which is what distinguishes "no value recorded" from "0.00".
+            ['%s', '%s', '%s', '%s'],
+            ['%s']
+        );
+
+        if ($updated === false) {
+            $wpdb->query('ROLLBACK');
+
+            return false;
+        }
+
+        if (!LeadEvents::record($submissionId, $fromStatus, $status, $value, $currency, $userId)) {
+            $wpdb->query('ROLLBACK');
+
+            return false;
+        }
+
+        $wpdb->query('COMMIT');
+
+        return true;
     }
 
     /**
@@ -1037,9 +1141,10 @@ final class FormSubmissions
      * Builds a SQL WHERE clause and its ordered values from the filters.
      *
      * @param array<string, string> $filters year, month, provider, form_name,
-     *                                       channel, campaign, search, and
+     *                                       channel, campaign, search,
      *                                       delivery_status (see
-     *                                       delivered/partial/failed/pending/not_sent).
+     *                                       delivered/partial/failed/pending/not_sent),
+     *                                       lead_status, and has_value ('yes'/'no').
      * @return array{0: string, 1: list<mixed>}
      */
     private static function buildWhereClause(array $filters): array
@@ -1127,6 +1232,22 @@ final class FormSubmissions
             // a GROUP BY ... HAVING over the whole delivery log.
             $conditions[] = 'delivery_state = %s';
             $values[]     = $status;
+        }
+
+        $leadStatus = (string) ($filters['lead_status'] ?? '');
+        if (LeadStatus::isValid($leadStatus)) {
+            $conditions[] = 'lead_status = %s';
+            $values[]     = $leadStatus;
+        }
+
+        // Tested for NULL, not for zero. A lead explicitly recorded as worth
+        // 0.00 HAS a value — someone assessed it and decided — and hiding it
+        // under "no value" would misrepresent that judgement as an omission.
+        $hasValue = (string) ($filters['has_value'] ?? '');
+        if ($hasValue === 'yes') {
+            $conditions[] = 'lead_value IS NOT NULL';
+        } elseif ($hasValue === 'no') {
+            $conditions[] = 'lead_value IS NULL';
         }
 
         $where = $conditions ? 'WHERE ' . implode(' AND ', $conditions) : '';

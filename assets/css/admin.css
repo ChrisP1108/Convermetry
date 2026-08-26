@@ -1002,10 +1002,15 @@
 
 /* ── Collapsed row ────────────────────────────────────────────────────────── */
 
+/* Nine columns since 0.5.0 — Lead sits between Campaign and Delivery, so the
+   marketing story (source, campaign) reads left to right into its outcome
+   (qualified, worth this much) before the operational detail (was it
+   delivered) that matters least to the person doing the qualifying. */
+
 .cvm-submission-heading,
 .cvm-submission-summary {
     display: grid;
-    grid-template-columns: 130px minmax(140px, 1.4fr) minmax(110px, 1fr) minmax(90px, 1fr) 110px 110px 150px 14px;
+    grid-template-columns: 118px minmax(130px, 1.3fr) minmax(105px, 1fr) minmax(85px, 0.9fr) 100px 100px 130px 140px 14px;
 }
 
 .cvm-submission-heading {
@@ -1424,4 +1429,90 @@
 
 .cvm-goal-form .cvm-goal-value[hidden] {
     display: none;
+}
+
+/* ------------------------------------------------------------------ *
+ *  Lead outcome
+ *
+ *  The one part of a submission an administrator WRITES, so it sits at the
+ *  top of the detail panel — everything below it is a record of what
+ *  happened and cannot be changed.
+ * ------------------------------------------------------------------ */
+
+.cvm-lead-block {
+    background: #f6f7f7;
+    border-radius: 4px;
+    padding: 12px 16px;
+}
+
+.cvm-lead-controls {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 12px;
+}
+
+.cvm-lead-field {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 12px;
+    font-weight: 600;
+    color: #50575e;
+}
+
+.cvm-lead-field input,
+.cvm-lead-field select {
+    font-weight: 400;
+    min-width: 150px;
+}
+
+/* Reserves its space so the row does not jump when a message appears. */
+
+.cvm-lead-feedback {
+    min-height: 1.4em;
+    font-size: 12px;
+    align-self: center;
+}
+
+.cvm-lead-saved {
+    color: #007017;
+}
+
+.cvm-lead-error {
+    color: #b32d2e;
+}
+
+.cvm-lead-history {
+    margin-top: 14px;
+    padding-top: 10px;
+    border-top: 1px solid #dcdcde;
+}
+
+.cvm-lead-history h5 {
+    margin: 0 0 6px;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #757575;
+}
+
+.cvm-lead-history ul {
+    margin: 0;
+    font-size: 12px;
+    color: #50575e;
+}
+
+.cvm-lead-history li {
+    margin: 0 0 3px;
+}
+
+/* The value under a status chip in the collapsed row. */
+
+.cvm-sub-lead-value {
+    display: block;
+    margin-top: 3px;
+    font-size: 11px;
+    color: #50575e;
+    white-space: nowrap;
 }
