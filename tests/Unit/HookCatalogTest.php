@@ -69,6 +69,33 @@ final class HookCatalogTest extends TestCase
     }
 
     /**
+     * The About screen renders the same catalogue for administrators, from its
+     * own HOOKS constant. That copy is what makes the page self-contained —
+     * and exactly why it can go stale: a hook added to the code and the README
+     * would still leave the in-admin reference silently one release behind,
+     * with nothing to notice it but a reader who already knew.
+     */
+    public function testTheAboutScreenListsEveryDocumentedHook(): void
+    {
+        $onScreen  = self::aboutScreenHooks();
+        $documented = self::documentedHooks();
+
+        self::assertSame(
+            [],
+            array_values(array_diff($documented, $onScreen)),
+            'Documented hooks missing from the About screen: '
+            . implode(', ', array_diff($documented, $onScreen))
+        );
+
+        self::assertSame(
+            [],
+            array_values(array_diff($onScreen, $documented)),
+            'The About screen lists hooks the README does not: '
+            . implode(', ', array_diff($onScreen, $documented))
+        );
+    }
+
+    /**
      * The nineteen hooks that existed before the public integration API. Each
      * is a published contract that something out there already listens on, so
      * removing or renaming one is a breaking change no minor release may make.
@@ -203,6 +230,34 @@ final class HookCatalogTest extends TestCase
 
         // Table rows only: a hook mentioned in prose is not a hook reference.
         preg_match_all('~^\|\s*`(convermetry_[a-z_]+)`~m', $section, $matches);
+
+        $hooks = array_values(array_unique($matches[1]));
+        sort($hooks);
+
+        return $hooks;
+    }
+
+    /**
+     * The hook names in AboutPage's HOOKS constant.
+     *
+     * Reads the constant's entries rather than every convermetry_* literal in
+     * the file: the page also carries example snippets, and an example is not
+     * a catalogue entry.
+     *
+     * @return list<string>
+     */
+    private static function aboutScreenHooks(): array
+    {
+        $source = (string) file_get_contents(self::PLUGIN_DIR . 'src/Admin/AboutPage.php');
+
+        $start = strpos($source, 'private const array HOOKS = [');
+        self::assertIsInt($start, 'The HOOKS catalogue is missing from AboutPage.php.');
+
+        $end     = strpos($source, "\n    ];", $start);
+        $section = substr($source, $start, $end === false ? PHP_INT_MAX : $end - $start);
+
+        // Entry heads only: each entry opens with the hook name on its own line.
+        preg_match_all("~^\s+'(convermetry_[a-z_]+)',$~m", $section, $matches);
 
         $hooks = array_values(array_unique($matches[1]));
         sort($hooks);

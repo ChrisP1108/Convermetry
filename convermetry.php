@@ -159,12 +159,47 @@ if (version_compare(PHP_VERSION, '8.3', '<')) {
      *
      *     do_action('convermetry_form_submission', $formIdentifier, $fields, $context);
      *
+     * TWO FIELD SHAPES ARE ACCEPTED, and both stay fully supported.
+     *
+     * 1. A list of field descriptors — preferred, and the same shape that
+     *    reaches webhook receivers as submission_data (schema 2.0):
+     *
+     *        [
+     *            ['id' => 'email',     'label' => 'Email address', 'value' => $email],
+     *            ['id' => 'interests', 'label' => 'Services',      'value' => ['Tax', 'Retirement']],
+     *        ]
+     *
+     *    'id'    — the field's stable machine-readable key. Required; an entry
+     *              whose id is empty after sanitizing is dropped, as is any
+     *              id beginning with 'cvm_' (Convermetry's own correlation
+     *              fields, in any letter case).
+     *    'label' — the human-readable label shown in the Submissions panel,
+     *              CSV exports and notification emails. Falls back to 'id'
+     *              when missing, blank, or not a scalar.
+     *    'value' — a scalar, or a LIST of scalars for multi-value fields.
+     *              Nothing nested: a non-scalar becomes an empty string
+     *              rather than nested data.
+     *
+     * 2. The long-standing map of field names to raw values
+     *    (['email' => 'a@b.com', 'name' => 'Ada']), where each key becomes
+     *    BOTH the id and the label. Use it when there is no distinct label to
+     *    give.
+     *
+     * Shape detection is strict: the array must be list-keyed and every entry
+     * must be an array carrying a scalar 'id', or the whole array takes the
+     * map path — where nothing is lost. Duplicate labels are preserved as
+     * separate fields in either shape, and order is preserved as passed.
+     *
      * @param array{form_name: string, form_id?: string} $form_identifier Form name (required)
-     *                                                   and optional native form id.
-     * @param array<string, mixed>  $fields          Field names/IDs to raw values.
+     *                                                   and optional native form id. Per-form
+     *                                                   settings key as 'custom:<form_id>', or
+     *                                                   'custom:<form_name>' when no id is given.
+     * @param array<mixed>          $fields          Descriptor list or name => value map (above).
      * @param array<string, mixed>  $url_query       Extra query parameters for this call only.
      * @param array<string, string> $request_headers Extra request headers for this call only.
-     * @return \Convermetry\Forms\SubmissionResult Readonly result object.
+     * @return \Convermetry\Forms\SubmissionResult Readonly result object: ->ok, ->submissionId,
+     *                                              ->conversionId, ->status, ->msg, ->data,
+     *                                              ->queued, ->failedDeliveries.
      */
     function convermetry_submit_form(array $form_identifier, array $fields, array $url_query = [], array $request_headers = []): \Convermetry\Forms\SubmissionResult
     {

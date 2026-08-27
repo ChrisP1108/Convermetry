@@ -44,6 +44,7 @@ Convermetry works standalone — full analytics dashboard, form integrations, an
 10. [Session → submission → conversion correlation](#session--submission--conversion-correlation)
 11. [Supported form providers](#supported-form-providers)
 12. [Custom form integration API](#custom-form-integration-api)
+    - [Arguments](#arguments) · [The result object](#the-result-object) · [What both paths do](#what-both-paths-do)
 13. [Notifications](#notifications)
 14. [Webhooks](#webhooks)
 15. [The three identifiers](#the-three-identifiers-submission_id--conversion_id--delivery_id)
@@ -53,6 +54,7 @@ Convermetry works standalone — full analytics dashboard, form integrations, an
 19. [Activity Log](#activity-log)
 20. [REST APIs](#rest-apis)
 21. [Developer hooks](#developer-hooks)
+    - [Hook index](#hook-index) (all 85) · [Registering hooks](#registering-hooks) · [Webhook delivery](#webhook-delivery) · [Tracking](#tracking) · [Analytics](#analytics-1) · [Forms & submissions](#forms--submissions) · [Goals, funnels & leads](#goals-funnels--leads) · [Notifications](#notifications-1) · [Operations, settings & API](#operations-settings--api) · [Examples](#examples)
 22. [Privacy](#privacy)
 23. [Database tables](#database-tables)
 24. [Testing](#testing)
@@ -563,56 +565,217 @@ An external webhook outage can never make a valid form submission appear to fail
 
 ## Custom form integration API
 
-Fire-and-forget with background delivery and automatic retries:
+Any form Convermetry has no bundled provider for — a hand-rolled `<form>`, a
+headless/React front end, a booking widget, a server-to-server lead post — goes
+through one of two public entry points. Both run the **same pipeline**; they
+differ only in who handles a failed delivery.
+
+| | `do_action('convermetry_form_submission', …)` | `convermetry_submit_form(…)` |
+|---|---|---|
+| Semantics | Fire-and-forget | Result-aware |
+| Delivery | Queued, sent by the background worker | **Synchronous**, inside your request |
+| Retries | Automatic (the full webhook retry chain) | **None** — failures are handed back to you |
+| Returns | Nothing (`do_action` discards return values) | A readonly `SubmissionResult` |
+| Use when | A visitor is waiting, and reliability matters more than immediacy | You must know the outcome before responding |
+
+Prefer the action. Synchronous delivery puts every configured endpoint's
+latency inside your request, and a failed synchronous delivery is *yours* to
+retry — Convermetry deliberately does not queue it behind your back, because
+that would deliver the same lead twice to a caller that already retried.
 
 ```php
 do_action('convermetry_form_submission',
     ['form_name' => 'Booking Widget', 'form_id' => 'booking-1'],
-    ['name' => $name, 'email' => $email],
+    [
+        ['id' => 'email',     'label' => 'Email address',        'value' => $email],
+        ['id' => 'interests', 'label' => 'Services of interest', 'value' => ['Tax planning', 'Retirement']],
+    ],
     ['url_query' => ['channel' => 'widget'], 'headers' => ['X-Source' => 'booking']] // optional
 );
 ```
 
-**Two field shapes are accepted.** The `'name' => $value` map above is the
-long-standing form and stays fully supported — each key becomes both the field's
-`id` and its `label`. If you can supply a distinct human label, pass the richer
-descriptor list instead and it travels through to payloads, the Submissions
-page, CSV exports, and notification emails unchanged:
+### Arguments
+
+Both entry points take the same first two arguments in the same order.
+
+#### 1. `$form_identifier` — which form this is
+
+| Key | Type | Required | Meaning |
+|---|---|---|---|
+| `form_name` | string | **yes** | The human name of the form. Travels as `form_submission.form_name`, titles notification emails, and labels the Submissions list. An empty `form_name` is rejected outright (`SubmissionResult->msg` says so; the action silently records nothing). |
+| `form_id` | string | no | Your own stable identifier for the form. Travels as `native_form_id`, and as `form_id` unless a Custom/External Form ID is set for it on the Forms page. |
+
+Per-form settings (exclusion, URL parameters, headers, notification rules) key
+these submissions as **`custom:<form_id>`** when you pass a `form_id`, and
+**`custom:<form_name>`** when you do not. Passing a stable `form_id` is
+therefore what lets you rename the form later without resetting its
+configuration.
+
+#### 2. `$fields` — what was submitted
+
+**Two shapes are accepted, and both are fully supported.** The richer
+descriptor list is preferred; the historical map is not deprecated.
+
+**(a) Descriptor list — preferred.** An ordered list of `{id, label, value}`
+arrays, matching the [`submission_data` schema 2.0](#submission_data-schema-20)
+wire format one-for-one:
 
 ```php
 convermetry_submit_form(
     ['form_name' => 'Booking Widget', 'form_id' => 'booking-1'],
     [
         ['id' => 'email',     'label' => 'Email address',        'value' => $email],
+        ['id' => 'phone',     'label' => 'Phone',                'value' => $phone],
         ['id' => 'interests', 'label' => 'Services of interest', 'value' => ['Tax planning', 'Retirement']],
     ]
 );
 ```
 
-`value` may be a string or a list of strings — nothing nested. Entries with an
-empty `id` are dropped, `label` falls back to `id` when blank, duplicate labels
-are preserved as separate fields, and `cvm_*` keys are stripped from either
-shape. See [`submission_data`: schema 2.0](#submission_data-schema-20).
+| Key | Type | Required | Rules |
+|---|---|---|---|
+| `id` | string | **yes** | The field's stable, machine-readable identifier — what a receiver should match on. Passed through `sanitize_text_field()`. An entry whose `id` is empty after sanitizing is **dropped**, as is any `id` beginning with `cvm_` (Convermetry's own correlation fields, in any letter case). |
+| `label` | string | no | The human-readable label — what a person reads in the Submissions panel, a CSV export, or a notification email. Passed through `sanitize_text_field()`. **Falls back to `id`** when it is missing, blank, or not a scalar. |
+| `value` | string \| string[] | no | A scalar (cast to string) or a list of scalars, each `sanitize_text_field()`-ed. Arrays are reindexed with `array_values()`, so a multi-select's own keys are not part of the contract. Anything non-scalar — an object, a nested array — becomes an empty string rather than nested data. Missing `value` is an empty string. |
 
-Result-aware and synchronous — the caller receives the real outcome and handles failures itself (no automatic retries):
+**(b) `name => value` map — the long-standing shape.** Every key becomes both
+the field's `id` **and** its `label`:
+
+```php
+convermetry_submit_form(
+    ['form_name' => 'Booking Widget'],
+    ['name' => $name, 'email' => $email, 'interests' => ['Tax planning', 'Retirement']]
+);
+```
+
+```jsonc
+// …is recorded and delivered as:
+[
+    { "id": "name",      "label": "name",      "value": "Ada Lovelace" },
+    { "id": "email",     "label": "email",     "value": "ada@example.com" },
+    { "id": "interests", "label": "interests", "value": ["Tax planning", "Retirement"] }
+]
+```
+
+That is the only difference between the two shapes: the map cannot express a
+label distinct from the id. Use it when you have no separate label to give;
+reach for the descriptor list the moment you do.
+
+**Shape detection is strict, and deliberately so.** An array is treated as a
+descriptor list only when it is list-keyed (`array_is_list()`) **and every
+entry** is an array carrying a scalar `id`. One entry that fails sends the
+whole array down the map path, where nothing is lost — a permissive test that
+sniffed only the first entry would misread a map whose values happen to be
+arrays with an `id` key and silently discard the caller's data.
+
+**Rules that apply to both shapes:**
+
+- **`cvm_*` keys are always stripped** — from either shape, in any letter case.
+  Convermetry's correlation fields never reach storage, payloads, exports,
+  emails, or the Activity Log.
+- **Duplicate labels are preserved as separate fields.** Nothing keys or
+  deduplicates by label; two fields both labelled "Name" stay two fields. This
+  is the whole reason the wire format is a list.
+- **Order is preserved** exactly as you passed it.
+- **An empty field list is valid.** It records a submission with an empty
+  schema 2.0 list — not a legacy-shaped payload.
+- Values are sanitized, never validated. Convermetry is not your form's
+  validator; it records what the form accepted.
+
+#### 3. Runtime query parameters and headers — optional, this call only
+
+The two entry points spell this differently:
+
+```php
+// Action: one context array, both keys optional.
+do_action('convermetry_form_submission', $form_identifier, $fields, [
+    'url_query' => ['source' => 'widget'],   // appended to each endpoint's URL
+    'headers'   => ['X-Source' => 'booking'] // added to each outbound request
+]);
+
+// Function: two separate arguments.
+convermetry_submit_form($form_identifier, $fields, $url_query, $request_headers);
+```
+
+Both are **scalar maps** (non-scalar values are dropped) and apply to this
+submission only. They sit at the end of the merge precedence chain — global →
+page URL → per-form → **runtime** — so they win over everything configured in
+wp-admin. See [Webhooks → Request customization](#webhooks).
+
+### The result object
+
+`convermetry_submit_form()` returns a readonly
+`Convermetry\Forms\SubmissionResult`:
+
+| Property | Type | Meaning |
+|---|---|---|
+| `ok` | bool | True when the submission was recorded **and** every attempted delivery succeeded (or was queued). False on any failure. |
+| `submissionId` | string | The globally unique submission id; `''` when nothing was recorded. |
+| `conversionId` | string | The conversion id shared with analytics; `''` when nothing was recorded. |
+| `status` | int | HTTP status of the **last** synchronous delivery. `0` for early exits, transport errors, and queued deliveries. |
+| `msg` | string | User-facing failure description; `''` on success. |
+| `data` | mixed | The last endpoint's response body — JSON-decoded when valid JSON, raw string otherwise; `null` for early exits and background deliveries. Diagnostic, not for public display. |
+| `queued` | bool | True when deliveries were queued for the background worker rather than sent inline. |
+| `failedDeliveries` | array | One entry per endpoint whose **synchronous** dispatch failed: `['url', 'endpoint_url', 'headers', 'body', 'label']` — the exact request that was sent, so you can implement your own retry. Always empty for early exits and for queued deliveries, whose retries Convermetry owns. |
 
 ```php
 $result = convermetry_submit_form(
     ['form_name' => 'Booking Widget', 'form_id' => 'booking-1'],
-    $fields,
-    $url_query,       // optional, this call only
-    $request_headers  // optional, this call only
+    $fields
 );
 
 if (!$result->ok) {
-    // $result->msg              — user-facing description
-    // $result->status           — last HTTP status (0 for early exits/transport errors)
-    // $result->failedDeliveries — exact requests that failed, for custom retry logic
+    error_log('Convermetry: ' . $result->msg);
+    foreach ($result->failedDeliveries as $failed) {
+        // $failed['url'], ['headers'], ['body'] — replay them yourself.
+    }
 }
-// $result->submissionId / $result->conversionId — the recorded identifiers
+// $result->submissionId / $result->conversionId — the recorded identifiers.
 ```
 
-Both paths run the full pipeline — per-form exclusion and overrides (keyed `custom:<form_name>`), correlation-field extraction from the current request, conversion recording, and dedup. Third-party **provider adapters** register via:
+`ok === false` covers three genuinely different situations, distinguishable by
+the other fields: nothing was recorded (`submissionId === ''` — a missing
+`form_name`, an excluded form, an insert failure), or it was recorded and some
+delivery failed (`failedDeliveries` non-empty), or it was recorded with nothing
+to deliver.
+
+### What both paths do
+
+1. **Per-form settings are honored.** An excluded `custom:…` form records
+   nothing and reports why.
+2. **The gate and shape filters run.**
+   [`convermetry_should_record_submission`](#forms--submissions) can veto the
+   whole write, and [`convermetry_submission_fields`](#forms--submissions) sees
+   the normalized descriptors — so a spam rule or a field rewrite applies to
+   custom submissions exactly as it does to a bundled provider's.
+3. **Correlation fields are read from the current request** — `cvm_conversion_id`,
+   `cvm_session_id`, `cvm_context` — so a submission posted from a page the
+   tracker ran on carries the visitor's real session, channel, campaign,
+   entrance referrer, and landing page. When they are absent (server-to-server,
+   JS blocked, tracker disabled, DNT/GPC honored), a conversion id is generated
+   server-side and the submission still records and delivers, with an empty
+   `analytics_context`.
+4. **A `form_success` analytics event is recorded** under the same conversion
+   token, so the dashboard's conversion count includes it exactly once.
+5. **The submission row is written**, with the denormalized channel/campaign/
+   landing-page columns the Submissions filters and lead reports use, and the
+   submitter's IP when IP storage is on.
+6. **`convermetry_submission_recorded` fires** — notifications queue here, and
+   listeners run even with no webhook endpoints configured — followed by
+   `convermetry_submission_recorded_details`, which additionally carries the row
+   id, the form identity, and the fields themselves.
+7. **Delivery**: queued for the background worker (action) or dispatched
+   synchronously to every form endpoint (function).
+
+Duplicate protection is the same as for bundled providers: a repeated
+`cvm_conversion_id` hits the `UNIQUE conversion_id` index, and the second call
+reports success **without recording or delivering anything twice**, firing
+`convermetry_submission_duplicate` rather than `convermetry_submission_recorded`.
+
+### Registering a provider adapter instead
+
+If you are integrating a *form plugin* rather than one form, write an adapter
+and register it — you get automatic form discovery, the Forms page UI, per-form
+settings, and engagement reporting, none of which the one-off API provides:
 
 ```php
 add_filter('convermetry_form_providers', function (array $providers) {
@@ -620,6 +783,11 @@ add_filter('convermetry_form_providers', function (array $providers) {
     return $providers;
 });
 ```
+
+See [`convermetry_form_providers`](#forms--submissions) for the registration
+rules, and [Registering hooks](#registering-hooks) for its memoization timing.
+
+### Frontend and server-side custom events
 
 Custom **frontend** conversions (goals no server hook can see):
 
@@ -629,7 +797,15 @@ document.dispatchEvent(new CustomEvent('convermetry:conversion', {
 }));
 ```
 
-Custom **server-side** analytics events: `cvm_track_event('purchase', ['page_url' => ..., 'event_value' => '99.00']);`
+Custom **named events**, which [goals](#custom-events) can match:
+
+```js
+Convermetry.track('appointment_booked');
+Convermetry.track('appointment_booked', { value: 250 }); // value read only when the goal accepts one
+```
+
+Custom **server-side** analytics events:
+`cvm_track_event('purchase', ['page_url' => …, 'event_value' => '99.00']);`
 
 ## Notifications
 
@@ -1144,6 +1320,131 @@ Convermetry exposes a public hook API for plugins and code snippets. Two rules h
 - **Nothing registered means nothing changes.** With no callbacks, payload bytes, request URLs and headers, delivery ids, signatures, retry schedules, analytics results, admin HTML, REST output, CSV files, and tracker configuration are all exactly what they were. No `extensions` property appears anywhere until something fills it.
 - **Filters that customize data may see that data; observers may not.** A filter whose job is to change an email body necessarily sees the email body. The observational actions deliberately carry ids, counts, and outcomes — never submitted fields, rendered emails, request bodies, response bodies, signing secrets, credential-bearing URLs, or raw IP addresses. Where an argument does carry personal data it is called out below.
 
+### Hook index
+
+**85 hooks — 46 actions and 39 filters**, grouped below by the surface they
+touch. Every one is listed here alphabetically; follow the group link for its
+signature and semantics.
+
+| Hook | Type | Group |
+|---|---|---|
+| [`convermetry_admin_capability`](#operations-settings--api) | filter | Operations, settings & API |
+| [`convermetry_allow_insecure_webhooks`](#webhook-delivery) | filter | Webhook delivery |
+| [`convermetry_allowed_hosts`](#webhook-delivery) | filter | Webhook delivery |
+| [`convermetry_analytics_admin_panels`](#analytics-1) | action | Analytics |
+| [`convermetry_analytics_extensions`](#analytics-1) | filter | Analytics |
+| [`convermetry_analytics_periods`](#analytics-1) | filter | Analytics |
+| [`convermetry_analytics_report_failed`](#analytics-1) | action | Analytics |
+| [`convermetry_analytics_sections`](#analytics-1) | filter | Analytics |
+| [`convermetry_channel`](#tracking) | filter | Tracking |
+| [`convermetry_client_ip`](#tracking) | filter | Tracking |
+| [`convermetry_delivery_attempt_logged`](#webhook-delivery) | action | Webhook delivery |
+| [`convermetry_delivery_log_api_item`](#operations-settings--api) | filter | Operations, settings & API |
+| [`convermetry_delivery_log_row`](#webhook-delivery) | filter | Webhook delivery |
+| [`convermetry_discovered_forms`](#forms--submissions) | filter | Forms & submissions |
+| [`convermetry_form_delivery_queued`](#webhook-delivery) | action | Webhook delivery |
+| [`convermetry_form_providers`](#forms--submissions) | filter | Forms & submissions |
+| [`convermetry_form_settings_saved`](#forms--submissions) | action | Forms & submissions |
+| [`convermetry_form_submission`](#forms--submissions) | action | Forms & submissions |
+| [`convermetry_forms_admin_sections`](#forms--submissions) | action | Forms & submissions |
+| [`convermetry_funnel_deleted`](#goals-funnels--leads) | action | Goals, funnels & leads |
+| [`convermetry_funnel_saved`](#goals-funnels--leads) | action | Goals, funnels & leads |
+| [`convermetry_goal_completion`](#goals-funnels--leads) | filter | Goals, funnels & leads |
+| [`convermetry_goal_completions_recorded`](#goals-funnels--leads) | action | Goals, funnels & leads |
+| [`convermetry_goal_deleted`](#goals-funnels--leads) | action | Goals, funnels & leads |
+| [`convermetry_goal_matched`](#goals-funnels--leads) | action | Goals, funnels & leads |
+| [`convermetry_goal_saved`](#goals-funnels--leads) | action | Goals, funnels & leads |
+| [`convermetry_lead_status_updated`](#goals-funnels--leads) | action | Goals, funnels & leads |
+| [`convermetry_lead_updated`](#goals-funnels--leads) | action | Goals, funnels & leads |
+| [`convermetry_migration_completed`](#operations-settings--api) | action | Operations, settings & API |
+| [`convermetry_migration_failed`](#operations-settings--api) | action | Operations, settings & API |
+| [`convermetry_migration_started`](#operations-settings--api) | action | Operations, settings & API |
+| [`convermetry_notification_abandoned`](#notifications-1) | action | Notifications |
+| [`convermetry_notification_accepted`](#notifications-1) | action | Notifications |
+| [`convermetry_notification_before_send`](#notifications-1) | action | Notifications |
+| [`convermetry_notification_canceled`](#notifications-1) | action | Notifications |
+| [`convermetry_notification_message`](#notifications-1) | filter | Notifications |
+| [`convermetry_notification_queued`](#notifications-1) | action | Notifications |
+| [`convermetry_notification_recipients`](#notifications-1) | filter | Notifications |
+| [`convermetry_notification_retry_schedule`](#notifications-1) | filter | Notifications |
+| [`convermetry_notification_retry_scheduled`](#notifications-1) | action | Notifications |
+| [`convermetry_rate_limits`](#tracking) | filter | Tracking |
+| [`convermetry_retention_cleanup_completed`](#operations-settings--api) | action | Operations, settings & API |
+| [`convermetry_retention_cleanup_started`](#operations-settings--api) | action | Operations, settings & API |
+| [`convermetry_retry_schedule`](#webhook-delivery) | filter | Webhook delivery |
+| [`convermetry_sensitive_keys`](#notifications-1) | filter | Notifications |
+| [`convermetry_settings_saved`](#operations-settings--api) | action | Operations, settings & API |
+| [`convermetry_should_enqueue_tracker`](#tracking) | filter | Tracking |
+| [`convermetry_should_queue_notification`](#notifications-1) | filter | Notifications |
+| [`convermetry_should_record_goal_completion`](#goals-funnels--leads) | filter | Goals, funnels & leads |
+| [`convermetry_should_record_submission`](#forms--submissions) | filter | Forms & submissions |
+| [`convermetry_should_track_event`](#tracking) | filter | Tracking |
+| [`convermetry_source_aliases`](#tracking) | filter | Tracking |
+| [`convermetry_storage_error`](#operations-settings--api) | action | Operations, settings & API |
+| [`convermetry_stored_ip`](#tracking) | filter | Tracking |
+| [`convermetry_submission_context_extensions`](#forms--submissions) | filter | Forms & submissions |
+| [`convermetry_submission_csv_columns`](#forms--submissions) | filter | Forms & submissions |
+| [`convermetry_submission_csv_values`](#forms--submissions) | filter | Forms & submissions |
+| [`convermetry_submission_deleted`](#forms--submissions) | action | Forms & submissions |
+| [`convermetry_submission_delivery_state_changed`](#forms--submissions) | action | Forms & submissions |
+| [`convermetry_submission_detail_sections`](#forms--submissions) | action | Forms & submissions |
+| [`convermetry_submission_duplicate`](#forms--submissions) | action | Forms & submissions |
+| [`convermetry_submission_fields`](#forms--submissions) | filter | Forms & submissions |
+| [`convermetry_submission_recorded`](#forms--submissions) | action | Forms & submissions |
+| [`convermetry_submission_recorded_details`](#forms--submissions) | action | Forms & submissions |
+| [`convermetry_submission_row_actions`](#forms--submissions) | action | Forms & submissions |
+| [`convermetry_submissions_cleared`](#forms--submissions) | action | Forms & submissions |
+| [`convermetry_submissions_columns`](#forms--submissions) | filter | Forms & submissions |
+| [`convermetry_tracked_event`](#tracking) | filter | Tracking |
+| [`convermetry_tracker_config_extensions`](#tracking) | filter | Tracking |
+| [`convermetry_tracking_batch_recorded`](#tracking) | action | Tracking |
+| [`convermetry_tracking_rate_limited`](#tracking) | action | Tracking |
+| [`convermetry_webhook_before_send`](#webhook-delivery) | action | Webhook delivery |
+| [`convermetry_webhook_delivery_abandoned`](#webhook-delivery) | action | Webhook delivery |
+| [`convermetry_webhook_delivery_attempted`](#webhook-delivery) | action | Webhook delivery |
+| [`convermetry_webhook_delivery_canceled`](#webhook-delivery) | action | Webhook delivery |
+| [`convermetry_webhook_delivery_frozen`](#webhook-delivery) | action | Webhook delivery |
+| [`convermetry_webhook_delivery_succeeded`](#webhook-delivery) | action | Webhook delivery |
+| [`convermetry_webhook_headers`](#webhook-delivery) | filter | Webhook delivery |
+| [`convermetry_webhook_payload`](#webhook-delivery) | filter | Webhook delivery |
+| [`convermetry_webhook_payload_extensions`](#webhook-delivery) | filter | Webhook delivery |
+| [`convermetry_webhook_query_args`](#webhook-delivery) | filter | Webhook delivery |
+| [`convermetry_webhook_report_limit`](#webhook-delivery) | filter | Webhook delivery |
+| [`convermetry_webhook_retry_chain_exhausted`](#webhook-delivery) | action | Webhook delivery |
+| [`convermetry_webhook_retry_scheduled`](#webhook-delivery) | action | Webhook delivery |
+| [`convermetry_webhook_timeout`](#webhook-delivery) | filter | Webhook delivery |
+
+### Registering hooks
+
+Hook names are stable public API. Where you register matters for a few of them:
+
+- **A theme's `functions.php` loads after `plugins_loaded`**, which is late for
+  the ingestion path. Anything that must be in place for *every* request —
+  `convermetry_client_ip`, `convermetry_stored_ip`, `convermetry_allowed_hosts`,
+  `convermetry_rate_limits`, `convermetry_tracked_event`,
+  `convermetry_should_track_event` — belongs in an **mu-plugin**, or in a plugin
+  file that registers at load time.
+- **Three filters are memoized per request** and run only on their first use:
+  `convermetry_client_ip`, `convermetry_allowed_hosts`, and
+  `convermetry_form_providers`. Registering them after that first call has no
+  effect for the rest of the request.
+- **Composition filters run once per logical delivery, before the request is
+  frozen.** A retry replays frozen bytes and re-runs none of them, so a callback
+  added mid-retry-chain cannot reach a delivery already in flight.
+- **`admin_menu` runs before most plugin bootstraps**, so
+  `convermetry_admin_capability` must be registered early enough to affect menu
+  visibility as well as the handlers behind it.
+- **Filters that decide, filters that shape, actions that observe.** The
+  `convermetry_should_*` filters are pure decisions — the data is passed for
+  inspection and nothing returned from them changes it. The observational
+  actions never carry submitted fields, rendered emails, request or response
+  bodies, signing secrets, credential-bearing URLs, or raw IPs; where an
+  argument does carry personal data, its row says so.
+- **Do not throw from a callback.** Several run while a lease or a lock is held
+  (`convermetry_migration_started`) or immediately before a network request
+  (`convermetry_webhook_before_send`); an exception there costs the work the
+  hook was announcing.
+
 ### Webhook delivery
 
 Composition filters run **once per logical delivery, before the request is frozen**. A retry re-sends the frozen bytes and never re-runs them, so nothing here can change a delivery already in flight.
@@ -1170,11 +1471,11 @@ The lifecycle actions all receive the same credential-free `$context`: `message_
 | `convermetry_webhook_retry_chain_exhausted` | action | An **analytics** chain gave up, and its terminal state is persisted. `(array $context)` — *not* abandonment: the frozen body stays in the retry state and the next scheduled dispatch resumes it. Read as "this endpoint is failing", not "this data is gone" |
 | `convermetry_webhook_delivery_abandoned` | action | A queued **form** delivery is gone for good, its row deleted. `(array $context, string $reason)` — genuinely terminal, unlike the analytics chain |
 | `convermetry_webhook_delivery_canceled` | action | A queued delivery was removed unsent. `(array $context, string $reason)` — currently `'submission_deleted'`: the submission was deleted before the worker reached the row |
-| `convermetry_retry_schedule` | filter | The webhook retry backoff delays in seconds (both message types) |
-| `convermetry_webhook_report_limit` | filter | Max rows per `top_*` list in analytics payloads (default 200) |
-| `convermetry_delivery_log_row` | filter | Redact/modify an Activity Log row before storage; return `false` to skip logging |
-| `convermetry_allow_insecure_webhooks` | filter | Return `true` to allow `http://` endpoints (development only) |
-| `convermetry_allowed_hosts` | filter | Hostnames accepted in tracked URLs / Origin checks, treated as internal in referrer reports |
+| `convermetry_retry_schedule` | filter | The webhook retry backoff delays in seconds (both message types). `(int[] $delays)` — default `[300, 1800, 7200, 21600, 57600]`; each entry is clamped to a minimum of 60, and an empty or fully invalid list falls back to the default. The list length **is** the attempt count |
+| `convermetry_webhook_report_limit` | filter | Max rows per `top_*` list in analytics payloads. `(int $limit)` — default 200, clamped to a minimum of 1. Does **not** apply to `conversions.recent[]`, which is lossless: a window holding more than 100 conversions is split across consecutive deliveries rather than truncated |
+| `convermetry_delivery_log_row` | filter | Redact/modify an Activity Log row before storage. `(array|false $row)` — return an array to store it, anything else to skip logging that attempt; skipping affects only the log, never the delivery. Bodies reaching it are already sensitive-key-redacted and capped at 64 KB. The field-level redaction point for anything the built-in policy misses, including an analytics report's `conversions.recent[].ip_address` |
+| `convermetry_allow_insecure_webhooks` | filter | Return `true` to allow `http://` endpoints (development only). `(bool $allow)` — evaluated when endpoints are **saved**, not at send time, so turning it back off does not retire an `http://` endpoint already stored |
+| `convermetry_allowed_hosts` | filter | Hostnames accepted in tracked URLs / Origin checks, treated as internal in referrer reports. `(string[] $hosts)` — lowercase, no scheme or path; defaults to the hosts of `home_url()` and `site_url()`. **Memoized per request.** This widens what the public ingestion endpoint accepts, so add only hosts you control |
 
 ### Tracking
 
@@ -1184,12 +1485,12 @@ The lifecycle actions all receive the same credential-free `$context`: `message_
 | `convermetry_tracker_config_extensions` | filter | Add namespaced data to `window.ConvermetryConfig.extensions`. `(array $extensions, array $enabled)` — smallest budget in the plugin (8 KB / 20 keys), because this is inlined into every page view. **This data is public**: never put a key, token, or anything visitor-specific here. The REST endpoint and batching limits cannot be replaced |
 | `convermetry_should_track_event` | filter | Whether to record one tracked event. `(bool $should, string $type, array $data)` — runs **last** in sanitization, so `$data` is whitelisted and bounded; raw anonymous input from the public endpoint is never exposed to a hook. Returning `false` drops this event only |
 | `convermetry_tracked_event` | filter | Inspect/modify an event row before storage; return `false` to drop. `(array $row, string $type)` |
-| `convermetry_client_ip` | filter | Map the client IP used for tracking rate limits **and** as the basis of the stored address (reverse proxies / CDNs) |
+| `convermetry_client_ip` | filter | Map the client IP used for tracking rate limits **and** as the basis of the stored address (reverse proxies / CDNs). `(string $ip)` — defaults to `REMOTE_ADDR`; the result must validate as IPv4/IPv6 or it stores empty, and is **memoized for the request**. A forwarded header is spoofable unless a trusted proxy overwrites it, and a comma-joined `X-Forwarded-For` chain is not an address — pick the hop your proxy guarantees. Pseudonymize with `convermetry_stored_ip`, not here |
 | `convermetry_stored_ip` | filter | The address about to be **persisted**, after the privacy gates. `(string $ip)` — the pseudonymization hook (truncate, hash, or return `''`). Must return a valid IPv4/IPv6 address or `''`. Deliberately does **not** affect the rate-limit identity, which would collapse every visitor into one bucket |
 | `convermetry_tracking_batch_recorded` | action | One batch was written. `(int $stored, int $accepted, int $offered, ?string $batchId)` — one action per batch, never per event, on the plugin's hottest path. The three counts differ: offered → accepted (survived sanitization) → stored (survived deduplication) |
 | `convermetry_tracking_rate_limited` | action | A batch was rejected by the rate limiter. `(int $events, int $window)` — carries no address and no hash of one; the endpoint is public and unauthenticated |
-| `convermetry_rate_limits` | filter | `['per_ip' => 300, 'site_wide' => 3000]` events/minute |
-| `convermetry_source_aliases` | filter | Extend/override the utm_source alias map |
+| `convermetry_rate_limits` | filter | `['per_ip' => 300, 'site_wide' => 3000]` events/minute. `(array $defaults)` — both clamped to a minimum of 1; a non-array return or a missing key falls back. Charged **per event**, so one 20-event batch costs 20, and the per-IP check runs first so a flooding IP never consumes the site-wide budget |
+| `convermetry_source_aliases` | filter | Extend/override the utm_source alias map. `(array $aliases)` — keys are raw lowercase source values, values the canonical name. Return the map with entries **added**: a replacement map loses the defaults, and a source with no entry is stored as submitted |
 | `convermetry_channel` | filter | Override the marketing channel assigned at ingestion. `(string $channel, array $row, string $type)` |
 
 ### Analytics
@@ -1217,14 +1518,14 @@ The lifecycle actions all receive the same credential-free `$context`: `message_
 | `convermetry_submissions_cleared` | action | Every submission, queued delivery, queued notification, and lead history row was removed. `()` — once for the whole operation; the rows are dropped with `TRUNCATE` and bulk deletes that never load one |
 | `convermetry_form_settings_saved` | action | Per-form settings were written. `(string[] $formKeys)` — fires from the storage layer on a real write, so CLI callers raise it too |
 | `convermetry_discovered_forms` | filter | The forms discovered for one provider. `(array $forms, string $providerKey)` — runs **before** the 5-minute cache is written, so the result is normalized back to `{native_id, name}`, empty ids dropped, duplicates collapsed |
-| `convermetry_form_providers` | filter | Register custom `FormProviderInterface` adapters |
+| `convermetry_form_providers` | filter | Register custom `FormProviderInterface` adapters. `(FormProviderInterface[] $providers)` — entries that are not instances of the interface are silently discarded, and providers are keyed by `getKey()`, so an adapter reusing a bundled key **replaces** it. **Memoized on first use**: register at plugin load time, not on `init` |
 | `convermetry_submission_csv_columns` | filter | The export's columns as an ordered `key => header label` map. `(array $columns)` — paired with the values filter **by key, never by position**, so the two cannot drift out of alignment |
 | `convermetry_submission_csv_values` | filter | One exported row's `key => value` map. `(array $values, array $row)` — runs per row while streaming, so keep it cheap. Values must be scalar or null and go through the same formula-injection escaping as core ones. **Contains PII** |
 | `convermetry_submissions_columns` | filter | Extra cells appended to each row of the submissions list. `(array $columns, array $row)` — `key => already-escaped HTML`, **printed verbatim, so escape it yourself**. **`$row` contains PII** |
 | `convermetry_submission_detail_sections` | action | Render extra blocks at the end of a submission's detail panel. `(array $row)` — after the nonce and capability checks; **escape your own output**. **`$row` contains PII** |
 | `convermetry_submission_row_actions` | action | Render extra buttons in a submission's action bar. `(array $row)` — nonce-protect anything that acts. **`$row` contains PII** |
 | `convermetry_forms_admin_sections` | action | Render extra content at the end of the Forms screen. `()` — outside the settings form, so post your own form to `admin-post.php`. **Escape your own output** |
-| `convermetry_form_submission` | action | Submit a custom form (fire-and-forget, background delivery) |
+| `convermetry_form_submission` | action | Submit a custom form (fire-and-forget, background delivery). `(array $formIdentifier, array $fields, array $context = [])` — `$fields` accepts a list of `['id', 'label', 'value']` descriptors **or** the historical `name => value` map. See [Custom form integration API](#custom-form-integration-api) |
 
 ### Goals, funnels & leads
 
@@ -1254,8 +1555,8 @@ The lifecycle actions all receive the same credential-free `$context`: `message_
 | `convermetry_notification_retry_scheduled` | action | The next attempt is persisted. `(string $submissionId, string $recipient, int $nextAttempt, int $nextAttemptAt)` |
 | `convermetry_notification_abandoned` | action | Retries spent, row deleted, message will never be sent. `(string $submissionId, string $recipient, int $attempt, string $error)` |
 | `convermetry_notification_canceled` | action | Queued notifications were cancelled unsent. `(string $submissionId, string $recipient, string $reason, int $count)` — `$reason` is `'expired'`, `'submission_deleted'`, or `'admin_clear'`. Per-row from the worker; **one aggregate action** for bulk clears, with `$recipient` empty — addresses are never read back purely to emit a hook |
-| `convermetry_notification_retry_schedule` | filter | The email-notification retry backoff in seconds (default `[300, 900, 3600]`). Deliberately separate from the webhook schedule — a stale lead notification is worse than none, and email has no receiver-side idempotency |
-| `convermetry_sensitive_keys` | filter | Extend the credential-looking field/header names redacted from the Activity Log **and** omitted from notification emails (e.g. add `ssn`). Matched as substrings of a canonical form: lowercase with non-alphanumeric runs collapsed to `_`, so `API Key`, `x-api-key` and `API_KEY` all match `api_key`. Extend it; returning a shorter list weakens both surfaces |
+| `convermetry_notification_retry_schedule` | filter | The email-notification retry backoff in seconds. `(int[] $delays)` — default `[300, 900, 3600]`; entries clamped to a minimum of 60, non-numeric entries discarded, empty falls back. Deliberately separate from the webhook schedule — a stale lead notification is worse than none, and email has no receiver-side idempotency. The hard two-hour TTL sits above it regardless |
+| `convermetry_sensitive_keys` | filter | Extend the credential-looking field/header names redacted from the Activity Log **and** omitted from notification emails (e.g. add `ssn`). `(string[] $patterns)` — defaults are `password`, `passwd`, `pwd`, `secret`, `token`, `api_key`, `apikey`, `authorization`, `credential`, `private_key`, `access_token`, `refresh_token`, `client_secret`, plus `cookie` for headers. Matched as substrings of a canonical form: lowercase with non-alphanumeric runs collapsed to `_`, so `API Key`, `x-api-key` and `API_KEY` all match `api_key`. The returned list **is** the effective list — extend it; a shorter one weakens both surfaces. Note the asymmetry: a match is `[REDACTED]` in the log, but omitted with no placeholder from an email, because a placeholder announces that a secret exists |
 
 ### Operations, settings & API
 

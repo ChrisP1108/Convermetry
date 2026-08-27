@@ -244,6 +244,201 @@
     margin: 20px 0 4px;
 }
 
+/* About page — sticky section nav ----------------------------------------- */
+
+.cvm-about-intro {
+    font-size: 14px;
+    line-height: 1.7;
+    max-width: 900px;
+}
+
+/* Sits directly under the wp-admin bar. The custom property is defined by
+   core; the 32px fallback covers older versions and the admin-bar-less case,
+   where a few extra pixels of offset are harmless. */
+.cvm-about-nav {
+    position: sticky;
+    top: var(--wp-admin--admin-bar--height, 32px);
+    z-index: 20;
+    margin: 16px 0 24px;
+    background: #fff;
+    border: 1px solid #c3c4c7;
+    border-radius: 4px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+.cvm-about-nav-inner {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    flex-wrap: wrap;
+    padding: 8px 10px;
+    /* Never let the bar itself grow tall enough to swallow the viewport on a
+       narrow screen — it scrolls instead. */
+    max-height: 40vh;
+    overflow-y: auto;
+}
+
+.cvm-about-nav a {
+    display: inline-block;
+    padding: 5px 10px;
+    border-radius: 3px;
+    font-size: 12.5px;
+    font-weight: 500;
+    line-height: 1.4;
+    color: #3c434a;
+    text-decoration: none;
+    white-space: nowrap;
+}
+
+.cvm-about-nav a:hover,
+.cvm-about-nav a:focus {
+    background: #f0f0f1;
+    color: #2271b1;
+}
+
+.cvm-about-nav a:focus-visible {
+    outline: 2px solid #2271b1;
+    outline-offset: -1px;
+}
+
+.cvm-about-nav .cvm-about-nav-link.is-active {
+    background: #e8f0fb;
+    color: #2271b1;
+    font-weight: 600;
+}
+
+.cvm-about-nav-top {
+    font-weight: 600 !important;
+    color: #2271b1 !important;
+    border-right: 1px solid #dcdcde;
+    border-radius: 3px 0 0 3px !important;
+    margin-right: 6px;
+    padding-right: 12px !important;
+}
+
+/* Anchored sections ------------------------------------------------------- */
+
+.cvm-about-section {
+    /* Keeps a jumped-to heading clear of the sticky bar. */
+    scroll-margin-top: calc(var(--wp-admin--admin-bar--height, 32px) + 72px);
+    margin-bottom: 8px;
+}
+
+.cvm-about-section-title {
+    margin: 28px 0 12px;
+    padding-bottom: 6px;
+    font-size: 18px;
+    font-weight: 600;
+    color: #1d2327;
+    border-bottom: 2px solid #2271b1;
+}
+
+.cvm-about-card .cvm-card-title {
+    font-size: 14px;
+}
+
+/* Hook reference blocks --------------------------------------------------- */
+
+.cvm-about-hook {
+    scroll-margin-top: calc(var(--wp-admin--admin-bar--height, 32px) + 72px);
+    padding: 4px 0 18px;
+    border-top: 1px solid #f0f0f1;
+    margin-top: 18px;
+}
+
+.cvm-about-hook:first-of-type {
+    border-top: 0;
+    margin-top: 0;
+}
+
+.cvm-about-hook-name {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin: 12px 0 4px;
+    font-size: 14px;
+}
+
+.cvm-about-hook-name code {
+    background: transparent;
+    padding: 0;
+    font-size: 14px;
+    font-weight: 600;
+    color: #1d2327;
+}
+
+.cvm-about-hook-type {
+    display: inline-block;
+    padding: 1px 8px;
+    border-radius: 3px;
+    font-size: 10.5px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.cvm-about-hook-type-action {
+    background: #edfaef;
+    border: 1px solid #a7d7ad;
+    color: #1e6b28;
+}
+
+.cvm-about-hook-type-filter {
+    background: #e8f0fb;
+    border: 1px solid #b3c8f0;
+    color: #2271b1;
+}
+
+.cvm-about-hook-summary {
+    margin: 0 0 4px;
+    font-size: 13px;
+    line-height: 1.7;
+    color: #3c434a;
+    max-width: 900px;
+}
+
+.cvm-about-args td:first-child,
+.cvm-about-args th:first-child {
+    width: 170px;
+}
+
+.cvm-about-returns {
+    background: #f6f7f7;
+    border-left: 4px solid #c3c4c7;
+    border-radius: 0 4px 4px 0;
+    padding: 10px 14px;
+    margin: 12px 0;
+    font-size: 13px;
+    line-height: 1.7;
+    color: #3c434a;
+    max-width: 900px;
+}
+
+.cvm-about-returns .cvm-about-label {
+    margin-right: 6px;
+}
+
+.cvm-about ol.cvm-about-list {
+    padding-left: 22px;
+}
+
+@media (max-width: 782px) {
+    .cvm-about-nav-inner {
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        max-height: none;
+    }
+
+    .cvm-about-table td:first-child,
+    .cvm-about-table th:first-child,
+    .cvm-about-args td:first-child,
+    .cvm-about-args th:first-child {
+        width: auto;
+        white-space: normal;
+    }
+}
+
 /* Delivery Log — webhook label badge ------------------------------------- */
 
 .cvm-log-webhook-label {

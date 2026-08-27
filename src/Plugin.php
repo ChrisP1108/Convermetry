@@ -145,6 +145,16 @@ final class Plugin
         // Public custom-form API: fire-and-forget submissions with
         // background delivery. Result-aware callers use
         // convermetry_submit_form() instead.
+        //
+        //     do_action('convermetry_form_submission', $formIdentifier, $fields, $context);
+        //
+        // $formIdentifier is ['form_name' => string, 'form_id' => string?].
+        // $fields is either a list of ['id', 'label', 'value'] descriptors —
+        // the same shape webhook receivers get as submission_data — or the
+        // long-standing name => value map, where each key becomes both id and
+        // label. SubmissionFields owns the normalization for both.
+        // $context is optional: ['url_query' => array, 'headers' => array],
+        // applying to this submission only.
         add_action(
             'convermetry_form_submission',
             function (array $formIdentifier, array $fields, array $context = []): void {
