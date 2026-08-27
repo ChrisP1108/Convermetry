@@ -70,7 +70,7 @@ final class WebhooksPage
             AnalyticsPage::MENU_SLUG,
             'Convermetry Webhooks',
             'Webhooks',
-            'manage_options',
+            Capability::required(Capability::WEBHOOKS_MANAGE),
             self::MENU_SLUG,
             [self::class, 'render']
         );
@@ -111,7 +111,7 @@ final class WebhooksPage
     public static function handleSave(): void
     {
         if (
-            !current_user_can('manage_options')
+            !Capability::currentUserCan(Capability::WEBHOOKS_MANAGE)
             || !isset($_POST['cvm_webhooks_nonce'])
             || !wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['cvm_webhooks_nonce'])), self::SAVE_ACTION)
         ) {
@@ -243,7 +243,7 @@ final class WebhooksPage
             empty($_GET['cvm_retry']) ||
             empty($_GET['cvm_nonce']) ||
             !wp_verify_nonce(sanitize_text_field(wp_unslash($_GET['cvm_nonce'])), self::DISCARD_ACTION) ||
-            !current_user_can('manage_options')
+            !Capability::currentUserCan(Capability::WEBHOOKS_MANAGE)
         ) {
             return;
         }
@@ -273,7 +273,7 @@ final class WebhooksPage
         if (
             !isset($_POST['nonce']) ||
             !wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['nonce'])), 'cvm_test_webhook') ||
-            !current_user_can('manage_options')
+            !Capability::currentUserCan(Capability::WEBHOOKS_MANAGE)
         ) {
             wp_send_json_error(['message' => 'Unauthorized.']);
         }
@@ -344,7 +344,7 @@ final class WebhooksPage
      */
     public static function render(): void
     {
-        if (!current_user_can('manage_options')) {
+        if (!Capability::currentUserCan(Capability::WEBHOOKS_MANAGE)) {
             return;
         }
 

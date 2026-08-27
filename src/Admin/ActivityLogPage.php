@@ -65,7 +65,7 @@ final class ActivityLogPage
             AnalyticsPage::MENU_SLUG,
             'Convermetry Activity Log',
             'Activity Log',
-            'manage_options',
+            Capability::required(Capability::ACTIVITY_VIEW),
             self::MENU_SLUG,
             [self::class, 'render']
         );
@@ -114,7 +114,7 @@ final class ActivityLogPage
             $_POST['cvm_action'] !== 'clear_activity_logs' ||
             !isset($_POST['cvm_clear_nonce']) ||
             !wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['cvm_clear_nonce'])), 'cvm_clear_activity_logs') ||
-            !current_user_can('manage_options')
+            !Capability::currentUserCan(Capability::ACTIVITY_MANAGE)
         ) {
             return;
         }
@@ -134,7 +134,7 @@ final class ActivityLogPage
      */
     public static function processExport(): void
     {
-        if (!isset($_GET['cvm_export']) || !current_user_can('manage_options')) {
+        if (!isset($_GET['cvm_export']) || !Capability::currentUserCan(Capability::ACTIVITY_VIEW)) {
             return;
         }
 
@@ -174,7 +174,7 @@ final class ActivityLogPage
         if (
             !isset($_POST['nonce']) ||
             !wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['nonce'])), 'cvm_get_activity_logs') ||
-            !current_user_can('manage_options')
+            !Capability::currentUserCan(Capability::ACTIVITY_VIEW)
         ) {
             wp_send_json_error(['message' => 'Unauthorized.']);
         }
@@ -227,7 +227,7 @@ final class ActivityLogPage
         if (
             !isset($_POST['nonce']) ||
             !wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['nonce'])), 'cvm_delete_activity_log') ||
-            !current_user_can('manage_options')
+            !Capability::currentUserCan(Capability::ACTIVITY_MANAGE)
         ) {
             wp_send_json_error(['message' => 'Unauthorized.']);
         }
@@ -255,7 +255,7 @@ final class ActivityLogPage
         if (
             !isset($_POST['nonce']) ||
             !wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['nonce'])), 'cvm_toggle_delivery_api') ||
-            !current_user_can('manage_options')
+            !Capability::currentUserCan(Capability::API_MANAGE)
         ) {
             wp_send_json_error(['message' => 'Unauthorized.']);
         }
@@ -281,7 +281,7 @@ final class ActivityLogPage
         if (
             !isset($_POST['nonce']) ||
             !wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['nonce'])), 'cvm_regen_delivery_api_key') ||
-            !current_user_can('manage_options')
+            !Capability::currentUserCan(Capability::API_MANAGE)
         ) {
             wp_send_json_error(['message' => 'Unauthorized.']);
         }
@@ -299,7 +299,7 @@ final class ActivityLogPage
      */
     public static function render(): void
     {
-        if (!current_user_can('manage_options')) {
+        if (!Capability::currentUserCan(Capability::ACTIVITY_VIEW)) {
             return;
         }
 

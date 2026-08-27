@@ -61,7 +61,7 @@ final class FunnelsPage
             AnalyticsPage::MENU_SLUG,
             'Convermetry Funnels',
             'Funnels',
-            'manage_options',
+            Capability::required(Capability::FUNNELS_MANAGE),
             self::MENU_SLUG,
             [self::class, 'render']
         );
@@ -164,7 +164,7 @@ final class FunnelsPage
             && ($_POST['cvm_action'] ?? '') === $action
             && isset($_POST['cvm_nonce'])
             && wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['cvm_nonce'])), $nonce)
-            && current_user_can('manage_options');
+            && Capability::currentUserCan(Capability::FUNNELS_MANAGE);
     }
 
     /**
@@ -203,7 +203,7 @@ final class FunnelsPage
      */
     public static function render(): void
     {
-        if (!current_user_can('manage_options')) {
+        if (!Capability::currentUserCan(Capability::FUNNELS_MANAGE)) {
             return;
         }
 

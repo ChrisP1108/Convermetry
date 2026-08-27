@@ -7,6 +7,7 @@ if (!defined('ABSPATH')) exit;
 
 use Convermetry\Analytics\Reports;
 use Convermetry\Forms\SubmissionFields;
+use Convermetry\Support\Extensions;
 
 /**
  * Builds the JSON payloads for every outbound Convermetry webhook message.
@@ -301,6 +302,50 @@ final class PayloadBuilder
      */
     private static function filter(array $payload, string $messageType, array $meta): array
     {
+        /**
+         * Filters extension data added to an outbound webhook payload.
+         *
+         * A non-empty result becomes the payload's top-level 'extensions'
+         * property. An empty one adds no property at all, so a site with no
+         * integrations sends exactly the bytes it always did — which matters
+         * here more than anywhere else in the plugin, because a receiver
+         * validating against a strict schema would reject an unexpected key.
+         *
+         * Keys must be namespaced 'vendor/thing'. No core payload property
+         * contains a '/', so a namespaced key can never collide with one, and
+         * the merge cannot overwrite a core property even if it tried.
+         *
+         * Runs once per logical delivery, before the payload is encoded and
+         * frozen: an analytics report is built once per reporting window and a
+         * submission once per submission, and every retry resends the frozen
+         * bytes without re-running this. It runs BEFORE
+         * convermetry_webhook_payload, so that filter still sees and can strip
+         * whatever is added here.
+         *
+         * Bounded to 32 KB and 50 top-level keys, values restricted to JSON
+         * primitives and arrays; anything unencodable is dropped rather than
+         * risking a payload that fails to encode and turns into a failed
+         * delivery.
+         *
+         * $meta carries the submission id for a form payload — enough to look
+         * up whatever you need without this hook having to carry the visitor's
+         * data itself.
+         *
+         * @param array<string, mixed> $extensions  Empty array to add to.
+         * @param string               $messageType 'analytics_report' or 'form_submission'.
+         * @param array<string, mixed> $meta        ['start' => int, 'end' => int] for reports;
+         *                                          ['submission_id' => string] for submissions.
+         */
+        $payload = Extensions::attach(
+            $payload,
+            'extensions',
+            'convermetry_webhook_payload_extensions',
+            Extensions::WEBHOOK_MAX_BYTES,
+            Extensions::WEBHOOK_MAX_KEYS,
+            $messageType,
+            $meta
+        );
+
         /**
          * Filters an outbound webhook payload before it is JSON-encoded.
          *

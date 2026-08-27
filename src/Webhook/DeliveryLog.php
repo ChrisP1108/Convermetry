@@ -7,6 +7,8 @@ if (!defined('ABSPATH')) exit;
 
 use Convermetry\Database\DatabaseManager;
 use Convermetry\Settings\Options;
+use Convermetry\Support\Errors;
+use Convermetry\Support\Retention;
 use Convermetry\Support\SensitiveKeys;
 
 /**
@@ -196,9 +198,12 @@ final class DeliveryLog
      *    message (string, used for transport errors).
      *
      * @param array<string, mixed> $entry Delivery attempt details.
-     * @return void
+     * @return string What became of the row: 'stored', 'suppressed' (a
+     *                convermetry_delivery_log_row callback returned false), or
+     *                'failed' (the INSERT itself failed). Callers that only log
+     *                may ignore it; convermetry_delivery_attempt_logged reports it.
      */
-    public static function log(array $entry): void
+    public static function log(array $entry): string
     {
         global $wpdb;
 
@@ -260,14 +265,16 @@ final class DeliveryLog
          */
         $row = apply_filters('convermetry_delivery_log_row', $row);
         if (!is_array($row)) {
-            return;
+            return 'suppressed';
         }
 
-        $wpdb->insert(
+        $inserted = $wpdb->insert(
             self::tableName(),
             $row,
             ['%d', '%s', '%s', '%s', '%s', '%s', '%d', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%d', '%s', '%s']
         );
+
+        return $inserted === false ? 'failed' : 'stored';
     }
 
     /**
@@ -613,7 +620,7 @@ final class DeliveryLog
      *
      * @return void
      */
-    public static function purgeOld(): void
+    public static function purgeOld(): int
     {
         global $wpdb;
 
@@ -621,6 +628,9 @@ final class DeliveryLog
         $table    = self::tableName();
         $deadline = microtime(true) + self::CLEANUP_TIME_BUDGET;
         $runs     = 0;
+        $total    = 0;
+
+        Retention::started('delivery_log', $cutoff);
 
         do {
             $deleted = $wpdb->query(
@@ -630,11 +640,22 @@ final class DeliveryLog
                     self::CLEANUP_CHUNK
                 )
             );
+
+            $total += is_int($deleted) ? $deleted : 0;
         } while (
             is_int($deleted) && $deleted === self::CLEANUP_CHUNK
             && ++$runs < self::CLEANUP_MAX_CHUNKS
             && microtime(true) < $deadline
         );
+
+        $outcome = Retention::outcome($deleted, self::CLEANUP_CHUNK, $total);
+        Retention::completed('delivery_log', $cutoff, $outcome);
+
+        if ($outcome['outcome'] === Retention::QUERY_FAILED) {
+            Errors::storage('delivery_log', 'retention_delete', 'delete_failed', ['cutoff' => $cutoff]);
+        }
+
+        return $total;
     }
 
     /**

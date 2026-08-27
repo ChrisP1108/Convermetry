@@ -9,6 +9,8 @@ use Convermetry\Leads\LeadEvents;
 use Convermetry\Leads\LeadStatus;
 use Convermetry\Notifications\NotificationQueue;
 use Convermetry\Settings\Options;
+use Convermetry\Support\Errors;
+use Convermetry\Support\Retention;
 use Convermetry\Webhook\DeliveryLog;
 use Convermetry\Webhook\FormDeliveryQueue;
 
@@ -463,6 +465,7 @@ final class FormSubmissions
      * @param string      $currency     Currency code for $value, or ''.
      * @param int         $userId       The user making the change.
      * @param string      $fromStatus   The previous status, for the history row.
+     * @param string      $eventId      Pre-minted history event id; '' mints one downstream.
      * @return bool True when both writes committed.
      */
     public static function updateLead(
@@ -471,7 +474,8 @@ final class FormSubmissions
         ?string $value,
         string $currency,
         int $userId,
-        string $fromStatus
+        string $fromStatus,
+        string $eventId = ''
     ): bool {
         global $wpdb;
 
@@ -498,12 +502,16 @@ final class FormSubmissions
 
         if ($updated === false) {
             $wpdb->query('ROLLBACK');
+            Errors::storage('leads', 'update', 'lead_update_failed', ['submission_id' => $submissionId]);
 
             return false;
         }
 
-        if (!LeadEvents::record($submissionId, $fromStatus, $status, $value, $currency, $userId)) {
+        if (!LeadEvents::record($submissionId, $fromStatus, $status, $value, $currency, $userId, $eventId)) {
             $wpdb->query('ROLLBACK');
+            Errors::storage('leads', 'history_insert', 'lead_history_insert_failed', [
+                'submission_id' => $submissionId,
+            ]);
 
             return false;
         }
@@ -560,10 +568,21 @@ final class FormSubmissions
             is_array($queueRows) ? $queueRows : []
         );
 
+        // Read before the write so the action can report a genuine transition
+        // rather than firing on every recomputation. This method runs several
+        // times per delivery — on enqueue, after each attempt, after each retry
+        // is scheduled — and most of those leave the state exactly as it was.
+        $previous = (string) $wpdb->get_var($wpdb->prepare(
+            'SELECT delivery_state FROM ' . self::tableName() . ' WHERE submission_id = %s',
+            $submissionId
+        ));
+
+        $state = self::classifyDelivery($endpoints);
+
         $wpdb->update(
             self::tableName(),
             [
-                'delivery_state' => self::classifyDelivery($endpoints),
+                'delivery_state' => $state,
                 'delivery_json'  => (string) wp_json_encode(
                     $endpoints,
                     JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
@@ -573,6 +592,31 @@ final class FormSubmissions
             ['%s', '%s'],
             ['%s']
         );
+
+        if ($state === $previous) {
+            return;
+        }
+
+        /**
+         * Fires when a submission's recorded delivery state genuinely changes.
+         *
+         * Fires only on a transition — not on every recomputation. The state is
+         * recomputed several times per delivery (on enqueue, after each attempt,
+         * after each retry is scheduled) and most of those leave it unchanged;
+         * those are silent.
+         *
+         * States are 'not_sent', 'pending', 'partial', 'delivered', and
+         * 'failed'. 'partial' means some configured endpoints accepted the
+         * submission and others did not.
+         *
+         * Fires after the row is updated, so a listener that reads the
+         * submission sees the new state.
+         *
+         * @param string $submissionId The submission's globally unique id.
+         * @param string $state        The new delivery state.
+         * @param string $previous     The state it replaced ('' for a row with none yet).
+         */
+        do_action('convermetry_submission_delivery_state_changed', $submissionId, $state, $previous);
     }
 
     /**
@@ -1102,6 +1146,27 @@ final class FormSubmissions
             // what they were valued at would be a broken promise.
             LeadEvents::deleteForSubmission($submissionId);
         }
+
+        /**
+         * Fires after a submission and everything attached to it are gone.
+         *
+         * Deliberately last: by the time this runs the submission row, its
+         * pending webhook queue rows, its queued notifications, and its lead
+         * status history have all been removed. A listener can therefore treat
+         * this as "the erasure is complete" rather than "an erasure has begun",
+         * and anything it queries will agree.
+         *
+         * Only the Activity Log survives, by design — it records that deliveries
+         * were attempted, not what they contained.
+         *
+         * Carries ids only. The submitted fields are the thing being erased;
+         * handing them to a listener at the moment of deletion would defeat the
+         * point. Read them before deletion if you need them.
+         *
+         * @param int    $id           Submission table row id (now gone).
+         * @param string $submissionId The submission's globally unique id ('' if it could not be read).
+         */
+        do_action('convermetry_submission_deleted', $id, $submissionId);
     }
 
     /**
@@ -1135,6 +1200,22 @@ final class FormSubmissions
 
         // And for lead history: every row describes a submission that is gone.
         LeadEvents::clearAll();
+
+        /**
+         * Fires after every submission, queued delivery, queued notification,
+         * and lead history row has been removed.
+         *
+         * Fires once for the whole operation, after all four tables are drained
+         * — never once per submission. The rows are removed with TRUNCATE and
+         * bulk DELETEs that never load a single submission, and reading them all
+         * back purely to emit hooks would both defeat the erasure and be
+         * unbounded work.
+         *
+         * No count is passed for the same reason: TRUNCATE does not report one.
+         *
+         * @return void
+         */
+        do_action('convermetry_submissions_cleared');
     }
 
     /**
@@ -1279,7 +1360,7 @@ final class FormSubmissions
      *
      * @return void
      */
-    public static function purgeOld(): void
+    public static function purgeOld(): int
     {
         global $wpdb;
 
@@ -1287,6 +1368,9 @@ final class FormSubmissions
         $table    = self::tableName();
         $deadline = microtime(true) + self::CLEANUP_TIME_BUDGET;
         $runs     = 0;
+        $total    = 0;
+
+        Retention::started('form_submissions', $cutoff);
 
         do {
             $deleted = $wpdb->query($wpdb->prepare(
@@ -1294,10 +1378,21 @@ final class FormSubmissions
                 $cutoff,
                 self::CLEANUP_CHUNK
             ));
+
+            $total += is_int($deleted) ? $deleted : 0;
         } while (
             is_int($deleted) && $deleted === self::CLEANUP_CHUNK
             && ++$runs < self::CLEANUP_MAX_CHUNKS
             && microtime(true) < $deadline
         );
+
+        $outcome = Retention::outcome($deleted, self::CLEANUP_CHUNK, $total);
+        Retention::completed('form_submissions', $cutoff, $outcome);
+
+        if ($outcome['outcome'] === Retention::QUERY_FAILED) {
+            Errors::storage('form_submissions', 'retention_delete', 'delete_failed', ['cutoff' => $cutoff]);
+        }
+
+        return $total;
     }
 }

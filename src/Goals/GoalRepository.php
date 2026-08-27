@@ -199,11 +199,13 @@ final class GoalRepository
             return false;
         }
 
-        $goals   = self::all();
+        $goals    = self::all();
         $replaced = false;
+        $previous = null;
 
         foreach ($goals as $index => $existing) {
             if ((string) $existing['goal_id'] === $goalId) {
+                $previous      = $existing;
                 $goals[$index] = $goal;
                 $replaced      = true;
                 break;
@@ -220,7 +222,32 @@ final class GoalRepository
             $goals[] = $goal;
         }
 
-        return self::persist($goals);
+        if (!self::persist($goals)) {
+            return false;
+        }
+
+        /**
+         * Fires after a goal definition is persisted.
+         *
+         * Fires from the repository rather than the admin screen, so a WP-CLI
+         * command or a future REST endpoint that saves a goal raises the same
+         * event as somebody clicking Save. Only fires when the write actually
+         * succeeded — a rejected save (invalid id, or the goal cap reached)
+         * fires nothing.
+         *
+         * $previous is null for a newly created goal, and the goal as it was
+         * stored for an edit — so a listener can tell creation from edit, and
+         * see exactly what changed. Note that editing a goal's matching rules
+         * changes its definition hash, which is how historical completions stay
+         * attributed to the rules that were in force when they happened.
+         *
+         * @param string                    $goalId   Immutable goal id.
+         * @param array<string, mixed>      $goal     The stored goal definition.
+         * @param array<string, mixed>|null $previous The definition it replaced, or null for a new goal.
+         */
+        do_action('convermetry_goal_saved', $goalId, $goal, $previous);
+
+        return true;
     }
 
     /**
@@ -244,7 +271,28 @@ final class GoalRepository
             }
         }
 
-        return $found && self::persist($goals);
+        if (!$found || !self::persist($goals)) {
+            return false;
+        }
+
+        /**
+         * Fires after a goal is deleted.
+         *
+         * Fires only when a goal with this id actually existed AND the write
+         * succeeded — the admin screen redirects with a "deleted" notice either
+         * way, so a listener here would otherwise be told about goals that were
+         * already gone.
+         *
+         * The deletion is soft: the goal stops matching new events, but its
+         * recorded completions and its name survive so historical reports do not
+         * develop holes. Treat this as "stopped collecting", not "erased".
+         *
+         * @param string $goalId Immutable goal id.
+         * @param string $now    UTC 'Y-m-d H:i:s' deletion timestamp.
+         */
+        do_action('convermetry_goal_deleted', $goalId, $now);
+
+        return true;
     }
 
     /**

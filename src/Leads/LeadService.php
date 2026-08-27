@@ -5,6 +5,7 @@ namespace Convermetry\Leads;
 
 if (!defined('ABSPATH')) exit;
 
+use Convermetry\Admin\Capability;
 use Convermetry\Database\FormSubmissions;
 use Convermetry\Settings\Options;
 
@@ -33,10 +34,14 @@ final class LeadService
     /**
      * The capability required to change a lead's outcome.
      *
-     * Deliberately the same capability the rest of the plugin's admin surfaces
-     * use. Lead value is commercially sensitive and, unlike most analytics, it
-     * is WRITTEN by a human — so it gets the same gate as deleting submissions,
-     * not a lesser one.
+     * Kept for compatibility with anything that read it, and still the default
+     * this resolves to. It is no longer used internally: a constant cannot be
+     * filtered, and {@see userCanEdit()} now asks {@see Capability} for the
+     * 'leads.edit' scope so a site can delegate lead editing without granting
+     * every other Convermetry permission. Read
+     * Capability::required(Capability::LEADS_EDIT) rather than this constant.
+     *
+     * @deprecated Use {@see Capability::LEADS_EDIT} with {@see Capability::required()}.
      */
     public const string CAPABILITY = 'manage_options';
 
@@ -102,7 +107,22 @@ final class LeadService
             }
         }
 
-        $stored = FormSubmissions::updateLead($submissionId, $toStatus, $newValue, $currency, $userId, $fromStatus);
+        // Minted before the transaction rather than read back after it. The
+        // history row's id is decided here, passed down, and written inside the
+        // same transaction as always — the transaction's shape, order, and
+        // rollback conditions are untouched, and the id is available to report
+        // once it has committed.
+        $eventId = LeadEvents::mintId();
+
+        $stored = FormSubmissions::updateLead(
+            $submissionId,
+            $toStatus,
+            $newValue,
+            $currency,
+            $userId,
+            $fromStatus,
+            $eventId
+        );
 
         if (!$stored) {
             return self::failure('The lead could not be updated.');
@@ -118,6 +138,43 @@ final class LeadService
          * @param string      $currency     The currency stamped on the value, or ''.
          */
         do_action('convermetry_lead_status_updated', $submissionId, $toStatus, $fromStatus, $newValue, $currency);
+
+        /**
+         * Fires after a lead update and its history row have both committed.
+         *
+         * Fires immediately after convermetry_lead_status_updated, which is
+         * unchanged and keeps its five arguments. This one carries what that
+         * action's fixed signature cannot: the before/after value, the user who
+         * made the change, and the id of the history row recording it.
+         *
+         * Both fire AFTER the transaction commits, never inside it, so a
+         * listener that queries the submission or its history sees the new state
+         * and cannot roll the write back by throwing.
+         *
+         * Values are exact decimal STRINGS, never floats — '1234.50', not
+         * 1234.5. Currency is stamped onto a value when it is first set and is
+         * not a conversion: two leads with different currencies are two
+         * different amounts and Convermetry never adds them together. A null
+         * value means no amount is recorded, which is not the same as '0.00'.
+         *
+         * @param string      $submissionId  The submission's globally unique id.
+         * @param array{status: string, value: string|null, currency: string} $to   State after the change.
+         * @param array{status: string, value: string|null, currency: string} $from State before the change.
+         * @param int         $userId        WordPress user id that made the change (0 when unknown).
+         * @param string      $leadEventId   Id of the lead-history row recording this change.
+         */
+        do_action(
+            'convermetry_lead_updated',
+            $submissionId,
+            ['status' => $toStatus, 'value' => $newValue, 'currency' => $currency],
+            [
+                'status'   => $fromStatus,
+                'value'    => $current['lead_value'],
+                'currency' => (string) $current['lead_currency'],
+            ],
+            $userId,
+            $eventId
+        );
 
         return [
             'ok'       => true,
@@ -135,7 +192,7 @@ final class LeadService
      */
     public static function userCanEdit(): bool
     {
-        return current_user_can(self::CAPABILITY);
+        return Capability::currentUserCan(Capability::LEADS_EDIT);
     }
 
     /**

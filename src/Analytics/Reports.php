@@ -9,6 +9,7 @@ use Convermetry\Database\DatabaseManager;
 use Convermetry\Database\FormSubmissions;
 use Convermetry\Goals\GoalRepository;
 use Convermetry\Settings\Options;
+use Convermetry\Support\Extensions;
 
 /**
  * Read-only aggregate queries over the events table (and the form
@@ -1096,7 +1097,7 @@ final class Reports
             $totals['form_success'] = $conversionTotal;
         }
 
-        return [
+        $summary = [
             'totals'               => $totals,
             'daily_pageviews'      => self::dailyCounts($start, $end, 'pageview'),
             'top_pages'            => self::topPages($start, $end, $limit),
@@ -1121,5 +1122,122 @@ final class Reports
             // — see the note on PayloadBuilder::SCHEMA_VERSION.
             'goals'                => self::goalSummary($start, $end, $limit),
         ];
+
+        // Attached here rather than merged into the literal above, so the
+        // fourteen sections a 1.x receiver parses stay exactly where they are
+        // and an 'extensions' property exists only when something filled it.
+        $extensions = self::extensionSummaries($start, $end, $limit);
+
+        return $extensions === [] ? $summary : $summary + ['extensions' => $extensions];
+    }
+
+    /**
+     * Collects third-party analytics sections for one reporting window.
+     *
+     * Computing this inside {@see buildSummary()} is what keeps a frozen webhook
+     * retry honest: the analytics payload is built once, at freeze time, and
+     * every retry resends those exact bytes — so extension data is gathered once
+     * per delivery and never rebuilt or re-filtered mid-chain.
+     *
+     * A section that throws is dropped and announced rather than propagated.
+     * That is a deliberate asymmetry with this class's rule that a
+     * ReportQueryException must reach the caller: a failed CORE query means the
+     * numbers on screen would be wrong, which must never be mistaken for zeros,
+     * whereas a broken third-party section must not be able to take down a
+     * webhook delivery and the dashboard along with it.
+     *
+     * @param string $start UTC datetime (inclusive).
+     * @param string $end   UTC datetime (exclusive).
+     * @param int    $limit Maximum rows per "top_*" list.
+     * @return array<string, mixed> Empty when nothing is registered or nothing produced data.
+     */
+    public static function extensionSummaries(string $start, string $end, int $limit): array
+    {
+        $summaries = [];
+
+        // With no section registered this loop never runs: no queries, no
+        // third-party code, nothing but the filter dispatch below — which is
+        // the same cost every other extension surface pays.
+        foreach (AnalyticsSectionRegistry::all() as $key => $section) {
+            try {
+                $summaries[$key] = $section->summarize($start, $end, $limit);
+            } catch (\Throwable $e) {
+                self::announceSectionFailure($key, $start, $end, $e);
+            }
+        }
+
+        /**
+         * Filters the extension data attached to an analytics summary.
+         *
+         * A non-empty result becomes the summary's 'extensions' property — which
+         * reaches both the analytics webhook payload (as analytics.extensions)
+         * and anything else reading a summary. An empty result adds no property
+         * at all, so a site with no integrations sends the same bytes it always
+         * did.
+         *
+         * Runs once per summary build. For a scheduled webhook delivery that is
+         * once, at freeze time: retries resend the frozen body and never rebuild
+         * or re-filter this data, so nothing here can change mid-retry-chain.
+         *
+         * $extensions arrives pre-populated with whatever registered
+         * AnalyticsSectionInterface implementations produced, keyed by their
+         * namespaced keys. Adding a key directly from this filter is fine for
+         * something small; a section that runs its own queries belongs in
+         * convermetry_analytics_sections, which is also what puts it on the
+         * dashboard.
+         *
+         * Keys must be namespaced 'vendor/thing' — core section names never
+         * contain a '/', so they cannot be shadowed — and values must be JSON
+         * primitives and arrays, bounded to 32 KB and 50 keys.
+         *
+         * @param array<string, mixed> $extensions Section summaries so far.
+         * @param string               $start      UTC window start (inclusive).
+         * @param string               $end        UTC window end (exclusive).
+         * @param int                  $limit      Row limit for top-N lists.
+         */
+        return Extensions::sanitize(
+            apply_filters('convermetry_analytics_extensions', $summaries, $start, $end, $limit),
+            Extensions::ANALYTICS_MAX_BYTES,
+            Extensions::ANALYTICS_MAX_KEYS
+        );
+    }
+
+    /**
+     * Announces a third-party section that failed to summarize.
+     *
+     * @param string     $key   The section's namespaced key.
+     * @param string     $start UTC window start.
+     * @param string     $end   UTC window end.
+     * @param \Throwable $e     What it threw.
+     * @return void
+     */
+    private static function announceSectionFailure(string $key, string $start, string $end, \Throwable $e): void
+    {
+        /**
+         * Fires when generating a report fails.
+         *
+         * Currently fires for a registered analytics section whose summarize()
+         * threw: the section is dropped, its siblings still run, and the
+         * delivery or dashboard render continues.
+         *
+         * $error is the exception's class name, not its message, and never its
+         * SQL or stack trace: a failed query's text quotes the statement
+         * verbatim, which on this plugin's tables means row values. If you need
+         * the detail, catch it inside your own summarize().
+         *
+         * @param string $component What failed ('analytics_section').
+         * @param string $reportKey The section's namespaced key.
+         * @param string $start     UTC window start (inclusive).
+         * @param string $end       UTC window end (exclusive).
+         * @param string $error     The exception class name.
+         */
+        do_action(
+            'convermetry_analytics_report_failed',
+            'analytics_section',
+            $key,
+            $start,
+            $end,
+            $e::class
+        );
     }
 }

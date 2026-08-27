@@ -137,7 +137,35 @@ final class GoalRecorder
             }
 
             foreach ($goals as $goal) {
-                $rows[] = self::buildRow($event, $goal, $currency, $now);
+                $row = self::buildRow($event, $goal, $currency, $now);
+
+                /**
+                 * Filters whether to record one matched goal completion.
+                 *
+                 * Runs once per matched goal per event, after the completion row
+                 * is fully built and before it is offered to the INSERT. Return
+                 * false to drop this completion; the rest of the batch is
+                 * unaffected.
+                 *
+                 * A decision only. The row is passed so a callback can inspect
+                 * the channel, campaign, page, or value it would record, but
+                 * nothing returned here changes it: the completion id, goal id,
+                 * definition hash, event uid, deduplication key, and timestamp
+                 * are all identity, and a hook that could rewrite them could
+                 * silently defeat once-per-session deduplication or attribute a
+                 * completion to the wrong goal definition. Use
+                 * convermetry_goal_completion, which runs just before this, to
+                 * change the row's contents.
+                 *
+                 * Runs on the request that recorded the triggering event.
+                 *
+                 * @param bool                 $should Whether to record. Default true.
+                 * @param array<string, mixed> $row    The completion row as it would be stored.
+                 * @param array<string, mixed> $goal   The matched goal definition.
+                 */
+                if (apply_filters('convermetry_should_record_goal_completion', true, $row, $goal)) {
+                    $rows[] = $row;
+                }
             }
         }
 
@@ -154,6 +182,36 @@ final class GoalRecorder
          * @param array<int, array<string, mixed>> $rows   The completion rows that were offered.
          */
         do_action('convermetry_goal_matched', $stored, $rows);
+
+        /**
+         * Fires after a batch of goal completions has been offered to storage.
+         *
+         * The two counts are different numbers and the gap between them is the
+         * point: completions are written with INSERT IGNORE against a unique
+         * deduplication key, so $offered is how many matches were made and
+         * $stored is how many were NEW. A once-per-session goal matched on a
+         * visitor's fifth pageview contributes to $offered and not to $stored,
+         * and that is correct rather than a failure.
+         *
+         * $completionIds lists the ids of the rows that were OFFERED, in the
+         * same order. Convermetry does not read back which of them the INSERT
+         * accepted — that would be a second query on the tracking write path —
+         * so the list is not a list of stored ids and must not be treated as one.
+         *
+         * Fires once per batch, after the INSERT, only when at least one row was
+         * offered. This is the counterpart of the older convermetry_goal_matched
+         * action, which is unchanged and still fires immediately before it.
+         *
+         * @param int          $stored        Completions actually inserted.
+         * @param int          $offered       Completion rows offered to the INSERT.
+         * @param list<string> $completionIds Ids of the offered rows, in order.
+         */
+        do_action(
+            'convermetry_goal_completions_recorded',
+            $stored,
+            count($rows),
+            array_map(static fn(array $row): string => (string) ($row['completion_id'] ?? ''), $rows)
+        );
 
         return $stored;
     }

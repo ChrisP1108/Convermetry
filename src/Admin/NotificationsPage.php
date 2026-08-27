@@ -68,7 +68,7 @@ final class NotificationsPage
             AnalyticsPage::MENU_SLUG,
             'Convermetry Notifications',
             'Notifications',
-            'manage_options',
+            Capability::required(Capability::NOTIFICATIONS_MANAGE),
             self::MENU_SLUG,
             [self::class, 'render']
         );
@@ -107,7 +107,7 @@ final class NotificationsPage
     public static function handleSave(): void
     {
         if (
-            !current_user_can('manage_options')
+            !Capability::currentUserCan(Capability::NOTIFICATIONS_MANAGE)
             || !isset($_POST['cvm_notifications_nonce'])
             || !wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['cvm_notifications_nonce'])), self::SAVE_ACTION)
         ) {
@@ -184,7 +184,7 @@ final class NotificationsPage
     public static function handleCancelQueued(): void
     {
         if (
-            !current_user_can('manage_options')
+            !Capability::currentUserCan(Capability::NOTIFICATIONS_MANAGE)
             || !isset($_POST['cvm_notifications_nonce'])
             || !wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['cvm_notifications_nonce'])), self::CANCEL_ACTION)
         ) {
@@ -215,7 +215,7 @@ final class NotificationsPage
         if (
             !isset($_POST['nonce'])
             || !wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['nonce'])), 'cvm_test_notification')
-            || !current_user_can('manage_options')
+            || !Capability::currentUserCan(Capability::NOTIFICATIONS_MANAGE)
         ) {
             wp_send_json_error(['message' => 'Unauthorized.']);
         }
@@ -285,7 +285,7 @@ final class NotificationsPage
      */
     public static function render(): void
     {
-        if (!current_user_can('manage_options')) {
+        if (!Capability::currentUserCan(Capability::NOTIFICATIONS_MANAGE)) {
             return;
         }
 

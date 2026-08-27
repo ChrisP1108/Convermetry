@@ -311,6 +311,25 @@ final class NotificationQueue
 
             if ($inserted === 1) {
                 $queued++;
+
+                /**
+                 * Fires when a notification is genuinely queued for one
+                 * recipient.
+                 *
+                 * Fires once per recipient per submission, and ONLY when the
+                 * INSERT IGNORE actually created a row — a duplicate suppressed
+                 * by the unique (submission_id, recipient_key) index does not
+                 * fire it. Nothing has been rendered or sent at this point; the
+                 * subject and body are built by the worker on each attempt.
+                 *
+                 * $recipient is an administrator-configured address from the
+                 * Notifications settings page, never a visitor's.
+                 *
+                 * @param string $submissionId The submission being notified about.
+                 * @param string $recipient    Recipient address.
+                 * @param int    $attempt      Always 0 — no attempt has been made yet.
+                 */
+                do_action('convermetry_notification_queued', $submissionId, (string) $recipient, 0);
             }
         }
 
@@ -412,6 +431,7 @@ final class NotificationQueue
         $createdAt = (int) strtotime(((string) $row['created_at']) . ' UTC');
         if ($createdAt > 0 && $createdAt < time() - self::MAX_AGE) {
             $wpdb->delete(self::tableName(), ['id' => $rowId], ['%d']);
+            self::announceCancellation($submissionId, $recipient, 'expired', 1);
             return;
         }
 
@@ -432,6 +452,7 @@ final class NotificationQueue
         // lead, so this is the point where deletion has to win.
         if ($submission === null) {
             $wpdb->delete(self::tableName(), ['id' => $rowId], ['%d']);
+            self::announceCancellation($submissionId, $recipient, 'submission_deleted', 1);
             return;
         }
 
@@ -445,21 +466,133 @@ final class NotificationQueue
         }
 
         $context = SubmissionContext::of($submission);
+        $attempt = (int) $row['attempt'] + 1;
+
+        $message = [
+            'recipient' => $recipient,
+            'subject'   => EmailBuilder::subject((string) $snapshot['subject'], $submission, $context, $siteInfo),
+            'html'      => EmailBuilder::body($submission, $context, $snapshot, $siteInfo),
+            'headers'   => NotificationMailer::headers($submissionId),
+        ];
+
+        /**
+         * Filters one notification message immediately before it is sent.
+         *
+         * Runs once per attempt, so a retry re-renders and re-filters — unlike a
+         * webhook, an email has no frozen body.
+         *
+         * A callback may change the subject, the HTML body, and additional
+         * headers. It may NOT change the recipient: one queue row is one
+         * address, chosen and deduplicated at queue time, and a per-attempt
+         * rewrite could collapse two rows onto one mailbox or send a retry
+         * somewhere its predecessor never went. Whatever is returned for
+         * 'recipient' is ignored.
+         *
+         * The result is re-validated: the subject gets EmailBuilder's
+         * header-injection strip and 200-character cap, the body gets the
+         * 256 KB size cap, and Content-Type, Auto-Submitted,
+         * X-Auto-Response-Suppress and X-Convermetry-Submission are reinstated
+         * whatever the callback did with them.
+         *
+         * $message['html'] contains the visitor's submitted field values. This
+         * filter exists to customize that email, so it necessarily sees them —
+         * the observational notification actions deliberately do not.
+         *
+         * @param array{recipient: string, subject: string, html: string, headers: list<string>} $message
+         * @param string $submissionId The submission being notified about.
+         * @param int    $attempt      1-based attempt number.
+         */
+        $filtered = apply_filters('convermetry_notification_message', $message, $submissionId, $attempt);
+
+        if ($filtered !== $message) {
+            $message = NotificationMailer::reconcile($message, $filtered, $submissionId);
+        }
+
+        /**
+         * Fires immediately before one notification email is handed to wp_mail().
+         *
+         * Fires once per attempt, so once per retry. Carries no subject, no body,
+         * and no submitted fields: this is the observational hook, and a lead
+         * notification's body is the lead. Use convermetry_notification_message
+         * to see or change the content.
+         *
+         * The Test Email button on the Notifications page is a manual diagnostic
+         * that queues nothing, and fires none of the notification lifecycle
+         * actions.
+         *
+         * @param string $submissionId The submission being notified about.
+         * @param string $recipient    Administrator-configured recipient address.
+         * @param int    $attempt      1-based attempt number.
+         */
+        do_action('convermetry_notification_before_send', $submissionId, $recipient, $attempt);
 
         $result = NotificationMailer::send(
-            $recipient,
-            EmailBuilder::subject((string) $snapshot['subject'], $submission, $context, $siteInfo),
-            EmailBuilder::body($submission, $context, $snapshot, $siteInfo),
-            $submissionId
+            $message['recipient'],
+            $message['subject'],
+            $message['html'],
+            $submissionId,
+            $message['headers']
         );
 
         if ($result['ok']) {
             // Accepted by the local transport — not confirmed delivered.
             $wpdb->delete(self::tableName(), ['id' => $rowId], ['%d']);
+
+            /**
+             * Fires after wp_mail() accepted a notification AND its queue row
+             * has been removed.
+             *
+             * "Accepted", never "delivered": wp_mail() returning true means the
+             * local transport took the message, not that a mailbox received it.
+             * Bounces, greylisting, and spam filing all happen afterwards and are
+             * invisible to WordPress.
+             *
+             * Fires once per queue row that is successfully sent — so a
+             * submission notifying three recipients fires it three times.
+             *
+             * @param string $submissionId The submission notified about.
+             * @param string $recipient    Recipient address the message was accepted for.
+             * @param int    $attempt      1-based attempt that succeeded.
+             */
+            do_action('convermetry_notification_accepted', $submissionId, $recipient, $attempt);
             return;
         }
 
-        self::rescheduleOrAbandon($rowId, (int) $row['attempt'] + 1, $recipient, $result['message']);
+        self::rescheduleOrAbandon($rowId, $attempt, $recipient, $result['message'], $submissionId);
+    }
+
+    /**
+     * Announces one cancelled notification.
+     *
+     * @param string $submissionId The submission the notification belonged to.
+     * @param string $recipient    Recipient address ('' for bulk cancellations).
+     * @param string $reason       'expired', 'submission_deleted', or 'admin_clear'.
+     * @param int    $count        Rows cancelled.
+     * @return void
+     */
+    private static function announceCancellation(string $submissionId, string $recipient, string $reason, int $count): void
+    {
+        /**
+         * Fires when queued notifications are cancelled without being sent.
+         *
+         * Cardinality is deliberate. The worker cancels one row at a time and
+         * fires this once per row with $count === 1 and the recipient it knows.
+         * Bulk cancellations — a deleted submission, or the admin discarding the
+         * queue — fire it ONCE for the whole operation with $count set and
+         * $recipient empty, because selecting every queued address purely to
+         * emit hooks would read addresses the operation itself never needed.
+         *
+         * $reason is one of:
+         *  - 'expired'            the row outlived its two-hour TTL unsent;
+         *  - 'submission_deleted' the submission was deleted or aged out;
+         *  - 'admin_clear'        an administrator discarded the queue.
+         *
+         * @param string $submissionId Submission id, '' for a site-wide clear.
+         * @param string $recipient    Recipient address, '' for bulk cancellations.
+         * @param string $reason       Stable reason code.
+         * @param int    $count        Number of queued notifications cancelled.
+         */
+        do_action('convermetry_notification_canceled', $submissionId, $recipient, $reason, $count);
     }
 
     /**
@@ -468,11 +601,17 @@ final class NotificationQueue
      * @param int    $rowId     Queue row id.
      * @param int    $attempt   1-based attempt just completed.
      * @param string $recipient Recipient address, for the failure notice.
-     * @param string $error     Failure reason.
+     * @param string $error        Failure reason.
+     * @param string $submissionId The submission the notification belongs to.
      * @return void
      */
-    private static function rescheduleOrAbandon(int $rowId, int $attempt, string $recipient, string $error): void
-    {
+    private static function rescheduleOrAbandon(
+        int $rowId,
+        int $attempt,
+        string $recipient,
+        string $error,
+        string $submissionId = ''
+    ): void {
         global $wpdb;
 
         $delays = self::retryDelays();
@@ -492,8 +631,26 @@ final class NotificationQueue
                 'error'     => $error,
             ], WEEK_IN_SECONDS);
 
+            /**
+             * Fires after a notification's retries are spent and its queue row
+             * has been deleted. Terminal: this message will never be sent.
+             *
+             * Fires once per abandoned row, after the delete, so the queue a
+             * listener inspects is already settled. $error is the transport's
+             * own failure message, truncated — useful for alerting on a broken
+             * MTA, which is otherwise entirely silent.
+             *
+             * @param string $submissionId The submission that will not be notified about.
+             * @param string $recipient    Recipient address that was never reached.
+             * @param int    $attempt      Number of attempts made.
+             * @param string $error        Last transport failure message.
+             */
+            do_action('convermetry_notification_abandoned', $submissionId, $recipient, $attempt, $error);
+
             return;
         }
+
+        $nextAt = time() + $delays[$attempt - 1];
 
         $wpdb->update(
             $table,
@@ -501,13 +658,28 @@ final class NotificationQueue
                 'status'          => 'pending',
                 'claim'           => '',
                 'attempt'         => $attempt,
-                'next_attempt_at' => gmdate('Y-m-d H:i:s', time() + $delays[$attempt - 1]),
+                'next_attempt_at' => gmdate('Y-m-d H:i:s', $nextAt),
                 'last_error'      => mb_substr($error, 0, 191),
             ],
             ['id' => $rowId],
             ['%s', '%s', '%d', '%s', '%s'],
             ['%d']
         );
+
+        /**
+         * Fires after a failed notification's next attempt has been persisted
+         * to its queue row — never speculatively before that write.
+         *
+         * Fires once per scheduled retry. The schedule itself is
+         * convermetry_notification_retry_schedule's, and is deliberately
+         * separate from the webhook schedule.
+         *
+         * @param string $submissionId The submission being notified about.
+         * @param string $recipient    Recipient address.
+         * @param int    $nextAttempt  Attempt number that will run next.
+         * @param int    $nextAttemptAt Unix timestamp of the next attempt.
+         */
+        do_action('convermetry_notification_retry_scheduled', $submissionId, $recipient, $attempt + 1, $nextAt);
     }
 
     /**
@@ -527,7 +699,15 @@ final class NotificationQueue
             return;
         }
 
-        $wpdb->delete(self::tableName(), ['submission_id' => $submissionId], ['%s']);
+        $deleted = $wpdb->delete(self::tableName(), ['submission_id' => $submissionId], ['%s']);
+
+        // One aggregate announcement rather than one per row: the delete never
+        // needed to know which addresses were queued, and reading them back
+        // purely to emit hooks would surface addresses this operation exists to
+        // forget.
+        if (is_int($deleted) && $deleted > 0) {
+            self::announceCancellation($submissionId, '', 'submission_deleted', $deleted);
+        }
     }
 
     /**
@@ -539,7 +719,11 @@ final class NotificationQueue
     {
         global $wpdb;
 
-        $wpdb->query('DELETE FROM ' . self::tableName());
+        $deleted = $wpdb->query('DELETE FROM ' . self::tableName());
+
+        if (is_int($deleted) && $deleted > 0) {
+            self::announceCancellation('', '', 'admin_clear', $deleted);
+        }
     }
 
     /**

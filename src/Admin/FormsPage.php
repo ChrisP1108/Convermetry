@@ -68,7 +68,7 @@ final class FormsPage
             AnalyticsPage::MENU_SLUG,
             'Convermetry Forms',
             'Forms',
-            'manage_options',
+            Capability::required(Capability::FORMS_MANAGE),
             self::MENU_SLUG,
             [self::class, 'render']
         );
@@ -108,7 +108,7 @@ final class FormsPage
     public static function handleSave(): void
     {
         if (
-            !current_user_can('manage_options')
+            !Capability::currentUserCan(Capability::FORMS_MANAGE)
             || !isset($_POST['cvm_forms_nonce'])
             || !wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['cvm_forms_nonce'])), self::SAVE_ACTION)
         ) {
@@ -346,7 +346,7 @@ final class FormsPage
 
     public static function render(): void
     {
-        if (!current_user_can('manage_options')) {
+        if (!Capability::currentUserCan(Capability::FORMS_MANAGE)) {
             return;
         }
 
@@ -440,6 +440,19 @@ final class FormsPage
         echo '</div>';
 
         submit_button('Save Form Settings');
+
+        /**
+         * Fires at the end of the Forms admin screen, after the settings form.
+         *
+         * Runs only after this screen's forms.manage capability check has
+         * already passed. A callback ECHOES its own markup and MUST escape
+         * everything it prints; Convermetry escapes none of it.
+         *
+         * Note the placement: this is OUTSIDE the settings <form>, so fields
+         * added here are not submitted with it. Render your own form, posting to
+         * admin-post.php with your own nonce and handler.
+         */
+        do_action('convermetry_forms_admin_sections');
         echo '</form>';
         echo '</div>';
     }

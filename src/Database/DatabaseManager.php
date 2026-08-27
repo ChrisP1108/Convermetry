@@ -11,6 +11,8 @@ use Convermetry\Goals\GoalSettings;
 use Convermetry\Leads\Money;
 use Convermetry\Settings\Options;
 use Convermetry\Support\ClientIp;
+use Convermetry\Support\Errors;
+use Convermetry\Support\Retention;
 use Convermetry\Support\Url;
 use Convermetry\Tracking\Channels;
 
@@ -452,6 +454,8 @@ final class DatabaseManager
         // replayed duplicate. Callers use the difference to decide between
         // acknowledging the batch and telling the client to retry it.
         if ($inserted === false) {
+            Errors::storage('events', 'insert', 'event_insert_failed', ['events' => count($prepared)]);
+
             return false;
         }
 
@@ -818,12 +822,17 @@ final class DatabaseManager
         $cutoff   = gmdate('Y-m-d H:i:s', time() - Options::retentionDays() * DAY_IN_SECONDS);
         $table    = self::tableName();
         $deadline = microtime(true) + self::CLEANUP_TIME_BUDGET;
+        $total    = 0;
+
+        Retention::started('events', $cutoff);
 
         for ($chunk = 0; $chunk < $maxChunks; $chunk++) {
             // Chunk 0 skips the renewal check: the lock was just acquired by
             // this same request. Every later chunk renews first — a prior
             // chunk's DELETE can take long enough for the lease to go stale.
             if ($chunk > 0 && !self::renewCleanupLock($lock, $chunk)) {
+                Retention::completed('events', $cutoff, Retention::lockLost($total));
+
                 return 'lock_lost';
             }
 
@@ -834,17 +843,28 @@ final class DatabaseManager
             ));
 
             if (!is_int($deleted)) {
+                Retention::completed('events', $cutoff, Retention::outcome($deleted, self::CLEANUP_CHUNK, $total));
+                Errors::storage('events', 'retention_delete', 'delete_failed', ['cutoff' => $cutoff]);
+
                 return 'query_failed';
             }
 
+            $total += $deleted;
+
             if ($deleted < self::CLEANUP_CHUNK) {
+                Retention::completed('events', $cutoff, Retention::outcome($deleted, self::CLEANUP_CHUNK, $total));
+
                 return 'completed';
             }
 
             if (microtime(true) >= $deadline) {
+                Retention::completed('events', $cutoff, Retention::outcome($deleted, self::CLEANUP_CHUNK, $total));
+
                 return 'truncated';
             }
         }
+
+        Retention::completed('events', $cutoff, Retention::outcome(self::CLEANUP_CHUNK, self::CLEANUP_CHUNK, $total));
 
         return 'truncated';
     }

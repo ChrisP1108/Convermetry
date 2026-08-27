@@ -188,6 +188,37 @@ final class Url
     }
 
     /**
+     * Reduces an outbound endpoint URL to its origin — scheme://host(:port).
+     *
+     * Everything that can carry a credential is dropped: the path, the query
+     * string, the fragment, and any userinfo. Webhook endpoint URLs frequently
+     * embed bearer tokens in exactly those places, so this is the only form of
+     * an endpoint URL that may leave the site — through the delivery-log REST
+     * API, and through the public delivery-lifecycle actions.
+     *
+     * Unlike the tracked-URL helpers above this one keeps ANY port, because the
+     * host is a receiver the administrator configured rather than a value a
+     * visitor supplied.
+     *
+     * @param string $url Full endpoint URL.
+     * @return string Origin, or '' when the URL cannot be parsed.
+     */
+    public static function origin(string $url): string
+    {
+        if ($url === '') {
+            return '';
+        }
+
+        $parts = wp_parse_url($url);
+        if (!is_array($parts) || empty($parts['host'])) {
+            return '';
+        }
+
+        return strtolower((string) ($parts['scheme'] ?? 'https')) . '://' . $parts['host']
+            . (isset($parts['port']) ? ':' . (int) $parts['port'] : '');
+    }
+
+    /**
      * The non-default ports this site itself is served on (from home_url() and
      * site_url()). Usually empty; non-empty on e.g. local dev setups.
      *

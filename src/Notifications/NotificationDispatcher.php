@@ -93,11 +93,58 @@ final class NotificationDispatcher
             return null;
         }
 
+        /**
+         * Filters whether to queue notifications for one submission.
+         *
+         * Runs after the configured rules have already said yes — the master
+         * switch and the per-form rule are checked first, so a callback can only
+         * narrow what the administrator enabled, never widen it. Return false to
+         * skip: no queue rows are written and no mail is sent for this
+         * submission. Returning true when the settings said no does nothing.
+         *
+         * Runs once per submission, on the request that recorded it, before any
+         * message is rendered.
+         *
+         * $identity holds the submission's identity columns — id, provider, form
+         * key and form name — never its submitted field values.
+         *
+         * @param bool                 $should   Whether to queue. Default true.
+         * @param string               $formKey  Provider-scoped form key.
+         * @param array<string, mixed> $identity Submission identity columns.
+         */
+        if (!apply_filters('convermetry_should_queue_notification', true, $formKey, $identity)) {
+            return null;
+        }
+
         // Re-validated here rather than trusted from the option: an address
         // written by WP-CLI, a migration, or a filter must never reach
         // wp_mail() unchecked. Recipients are always administrator-configured
         // and are never derived from submitted visitor data.
         $recipients = NotificationSettings::sanitizeRecipients($settings['recipients'] ?? []);
+
+        /**
+         * Filters the recipients a submission's notifications are queued for.
+         *
+         * Runs once per submission at QUEUE time, not per attempt: each address
+         * becomes its own queue row with its own retry chain, deduplicated on
+         * that address, so the recipient list has to be settled before any row
+         * exists. convermetry_notification_message cannot change it afterwards.
+         *
+         * The result is re-validated exactly as the stored setting is — each
+         * address through sanitize_email() and is_email(), case-insensitively
+         * deduplicated, and capped at 20 recipients. Anything that fails is
+         * dropped; if nothing survives, nothing is queued.
+         *
+         * @param list<string>         $recipients Validated configured recipients.
+         * @param string               $formKey    Provider-scoped form key.
+         * @param array<string, mixed> $identity   Submission identity columns.
+         */
+        $filtered = apply_filters('convermetry_notification_recipients', $recipients, $formKey, $identity);
+
+        if ($filtered !== $recipients) {
+            $recipients = NotificationSettings::sanitizeRecipients($filtered);
+        }
+
         if ($recipients === []) {
             return null;
         }

@@ -53,7 +53,7 @@ final class SettingsPage
             AnalyticsPage::MENU_SLUG,
             'Convermetry Settings',
             'Settings',
-            'manage_options',
+            Capability::required(Capability::SETTINGS_MANAGE),
             self::MENU_SLUG,
             [self::class, 'render']
         );
@@ -137,7 +137,7 @@ final class SettingsPage
      */
     public static function render(): void
     {
-        if (!current_user_can('manage_options')) {
+        if (!Capability::currentUserCan(Capability::SETTINGS_MANAGE)) {
             return;
         }
 

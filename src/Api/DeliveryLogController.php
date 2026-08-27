@@ -6,6 +6,8 @@ namespace Convermetry\Api;
 if (!defined('ABSPATH')) exit;
 
 use Convermetry\Settings\Options;
+use Convermetry\Support\Extensions;
+use Convermetry\Support\Url;
 use Convermetry\Webhook\DeliveryLog;
 
 /**
@@ -398,7 +400,7 @@ final class DeliveryLogController
         $responseDecoded = json_decode((string) ($entry['response_data'] ?? ''), true);
         $endpoint        = (string) ($entry['endpoint_url'] ?? '');
 
-        return [
+        $item = [
             'id'             => (int) ($entry['id'] ?? 0),
             'created_at'     => (string) ($entry['created_at'] ?? ''),
             'success'        => (int) ($entry['success'] ?? 0) === 1,
@@ -417,6 +419,42 @@ final class DeliveryLogController
             'request_data'   => is_array($requestDecoded) ? $requestDecoded : [],
             'response_data'  => is_array($responseDecoded) ? $responseDecoded : (string) ($entry['response_data'] ?? ''),
         ];
+
+        /**
+         * Filters extension data added to one delivery-log API item.
+         *
+         * Runs once per row in a response, AFTER the endpoint URL has been
+         * redacted to its origin and the stored bodies decoded — so a callback
+         * sees what a consumer will see, and cannot accidentally reinstate a
+         * credential this endpoint exists to withhold.
+         *
+         * The seventeen core keys are IMMUTABLE. They are this API's published
+         * contract, consumers parse them positionally in typed clients, and a
+         * filter that could rewrite `success` or `response_code` would let a
+         * plugin lie to a monitoring dashboard about whether deliveries are
+         * working. Extension data arrives as its own 'extensions' property
+         * instead, under namespaced 'vendor/thing' keys, and the property is
+         * absent entirely when nothing is added — so an existing consumer sees
+         * byte-identical output.
+         *
+         * Bounded to 4 KB and 10 keys per item, because this runs for every row
+         * of a page that may hold a hundred.
+         *
+         * Remember who is reading: this API is authenticated by a single
+         * read-only key that a site may have handed to an external dashboard.
+         * Do not attach anything you would not give that key's holder.
+         *
+         * @param array<string, mixed> $extensions Empty array to add to.
+         * @param array<string, mixed> $item       The redacted item as it will be returned.
+         */
+        return Extensions::attach(
+            $item,
+            'extensions',
+            'convermetry_delivery_log_api_item',
+            Extensions::API_ITEM_MAX_BYTES,
+            Extensions::API_ITEM_MAX_KEYS,
+            $item
+        );
     }
 
     /**
@@ -429,16 +467,6 @@ final class DeliveryLogController
      */
     private static function redactEndpointUrl(string $url): string
     {
-        if ($url === '') {
-            return '';
-        }
-
-        $parts = wp_parse_url($url);
-        if (!is_array($parts) || empty($parts['host'])) {
-            return '';
-        }
-
-        return strtolower((string) ($parts['scheme'] ?? 'https')) . '://' . $parts['host']
-            . (isset($parts['port']) ? ':' . (int) $parts['port'] : '');
+        return Url::origin($url);
     }
 }
