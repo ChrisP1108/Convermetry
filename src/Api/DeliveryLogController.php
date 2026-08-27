@@ -6,6 +6,7 @@ namespace Convermetry\Api;
 if (!defined('ABSPATH')) exit;
 
 use Convermetry\Settings\Options;
+use Convermetry\Support\Url;
 use Convermetry\Webhook\DeliveryLog;
 
 /**
@@ -429,16 +430,6 @@ final class DeliveryLogController
      */
     private static function redactEndpointUrl(string $url): string
     {
-        if ($url === '') {
-            return '';
-        }
-
-        $parts = wp_parse_url($url);
-        if (!is_array($parts) || empty($parts['host'])) {
-            return '';
-        }
-
-        return strtolower((string) ($parts['scheme'] ?? 'https')) . '://' . $parts['host']
-            . (isset($parts['port']) ? ':' . (int) $parts['port'] : '');
+        return Url::origin($url);
     }
 }
