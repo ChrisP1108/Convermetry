@@ -26,6 +26,7 @@ use Convermetry\Goals\GoalCompletions;
 use Convermetry\Leads\LeadEvents;
 use Convermetry\Notifications\NotificationDispatcher;
 use Convermetry\Notifications\NotificationQueue;
+use Convermetry\Settings\SettingsEvents;
 use Convermetry\Tracking\ScriptLoader;
 use Convermetry\Webhook\AnalyticsDispatcher;
 use Convermetry\Webhook\DeliveryLog;
@@ -125,6 +126,11 @@ final class Plugin
         FormDeliveryQueue::init();
         NotificationQueue::init();
         DeliveryLogController::init();
+
+        // Listens on WordPress's own option-write hooks rather than the admin
+        // handlers, so convermetry_settings_saved fires on a real write and
+        // never on a form submitted without edits.
+        SettingsEvents::init();
 
         // Listens on 'convermetry_submission_recorded', which fires before the
         // webhook-endpoint check in SubmissionService::record() — so internal

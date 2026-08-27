@@ -7,6 +7,8 @@ if (!defined('ABSPATH')) exit;
 
 use Convermetry\Database\DatabaseManager;
 use Convermetry\Settings\Options;
+use Convermetry\Support\Errors;
+use Convermetry\Support\Retention;
 
 /**
  * Owns the goal completions table.
@@ -315,7 +317,7 @@ final class GoalCompletions
      *
      * @return void
      */
-    public static function purgeOld(): void
+    public static function purgeOld(): int
     {
         global $wpdb;
 
@@ -323,6 +325,9 @@ final class GoalCompletions
         $table    = self::tableName();
         $deadline = microtime(true) + self::CLEANUP_TIME_BUDGET;
         $runs     = 0;
+        $total    = 0;
+
+        Retention::started('goal_completions', $cutoff);
 
         do {
             $deleted = $wpdb->query($wpdb->prepare(
@@ -330,11 +335,22 @@ final class GoalCompletions
                 $cutoff,
                 self::CLEANUP_CHUNK
             ));
+
+            $total += is_int($deleted) ? $deleted : 0;
         } while (
             is_int($deleted) && $deleted === self::CLEANUP_CHUNK
             && ++$runs < self::CLEANUP_MAX_CHUNKS
             && microtime(true) < $deadline
         );
+
+        $outcome = Retention::outcome($deleted, self::CLEANUP_CHUNK, $total);
+        Retention::completed('goal_completions', $cutoff, $outcome);
+
+        if ($outcome['outcome'] === Retention::QUERY_FAILED) {
+            Errors::storage('goal_completions', 'retention_delete', 'delete_failed', ['cutoff' => $cutoff]);
+        }
+
+        return $total;
     }
 
     /**

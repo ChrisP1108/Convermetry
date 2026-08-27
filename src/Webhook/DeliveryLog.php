@@ -7,6 +7,8 @@ if (!defined('ABSPATH')) exit;
 
 use Convermetry\Database\DatabaseManager;
 use Convermetry\Settings\Options;
+use Convermetry\Support\Errors;
+use Convermetry\Support\Retention;
 use Convermetry\Support\SensitiveKeys;
 
 /**
@@ -618,7 +620,7 @@ final class DeliveryLog
      *
      * @return void
      */
-    public static function purgeOld(): void
+    public static function purgeOld(): int
     {
         global $wpdb;
 
@@ -626,6 +628,9 @@ final class DeliveryLog
         $table    = self::tableName();
         $deadline = microtime(true) + self::CLEANUP_TIME_BUDGET;
         $runs     = 0;
+        $total    = 0;
+
+        Retention::started('delivery_log', $cutoff);
 
         do {
             $deleted = $wpdb->query(
@@ -635,11 +640,22 @@ final class DeliveryLog
                     self::CLEANUP_CHUNK
                 )
             );
+
+            $total += is_int($deleted) ? $deleted : 0;
         } while (
             is_int($deleted) && $deleted === self::CLEANUP_CHUNK
             && ++$runs < self::CLEANUP_MAX_CHUNKS
             && microtime(true) < $deadline
         );
+
+        $outcome = Retention::outcome($deleted, self::CLEANUP_CHUNK, $total);
+        Retention::completed('delivery_log', $cutoff, $outcome);
+
+        if ($outcome['outcome'] === Retention::QUERY_FAILED) {
+            Errors::storage('delivery_log', 'retention_delete', 'delete_failed', ['cutoff' => $cutoff]);
+        }
+
+        return $total;
     }
 
     /**

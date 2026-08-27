@@ -696,6 +696,11 @@ final class SubmissionsPage
                         <?php echo esc_html($stateLabel); ?>
                     </span>
                 </span>
+                <?php foreach (self::extraColumns($row) as $key => $html): ?>
+                    <span class="cvm-sub-col cvm-sub-ext" data-column="<?php echo esc_attr($key); ?>"><?php
+                        echo $html; // Escaped by the callback that produced it — see extraColumns().
+                    ?></span>
+                <?php endforeach; ?>
                 <span class="cvm-accordion-arrow" aria-hidden="true">&#9660;</span>
             </button>
 
@@ -705,6 +710,53 @@ final class SubmissionsPage
         </li>
         <?php
         return (string) ob_get_clean();
+    }
+
+    /**
+     * Extra summary-row cells contributed by an integration.
+     *
+     * @param array<string, mixed> $row Submission row (PII).
+     * @return array<string, string> Key => already-escaped cell HTML.
+     */
+    private static function extraColumns(array $row): array
+    {
+        /**
+         * Filters extra cells appended to each row of the submissions list.
+         *
+         * Return a map of KEY => already-escaped HTML. Each entry becomes one
+         * <span class="cvm-sub-col cvm-sub-ext" data-column="{key}"> at the end
+         * of the row, after the delivery-status chip and before the expand
+         * arrow. With nothing registered no span is emitted and the list's HTML
+         * is unchanged.
+         *
+         * THE VALUE IS PRINTED VERBATIM and MUST already be escaped — pass it
+         * through esc_html() yourself. It is a string of HTML rather than a
+         * plain value so a callback can render a chip or a link the way the core
+         * columns do; that flexibility is what makes the escaping your job.
+         *
+         * The row is a horizontal flex layout sized for its eight core columns,
+         * so keep additions to one short value; this list is not a data grid.
+         *
+         * Runs once per row rendered, inside the cvm_get_submissions AJAX
+         * response, after that handler's nonce and submissions.view checks.
+         *
+         * $row CONTAINS PERSONAL DATA, including the visitor's submitted values
+         * and IP address.
+         *
+         * @param array<string, string> $columns Empty map to add to.
+         * @param array<string, mixed>  $row     The submission row (PII).
+         */
+        $columns = apply_filters('convermetry_submissions_columns', [], $row);
+
+        $out = [];
+        foreach (is_array($columns) ? $columns : [] as $key => $html) {
+            $key = trim((string) $key);
+            if ($key !== '' && is_scalar($html)) {
+                $out[$key] = (string) $html;
+            }
+        }
+
+        return $out;
     }
 
     /**
@@ -769,6 +821,22 @@ final class SubmissionsPage
 
             <div class="cvm-detail-actions">
                 <button type="button" class="button cvm-submission-delete-btn">Delete Submission</button>
+                <?php
+                /**
+                 * Fires in one submission's action bar, after the Delete button.
+                 *
+                 * For buttons and links that act on this submission — resending
+                 * it to a CRM, opening it in another system. Runs after the same
+                 * nonce and capability checks as the panel around it.
+                 *
+                 * A callback ECHOES its own markup and MUST escape everything it
+                 * prints. Use class="button" to match the existing control, and
+                 * nonce-protect anything that acts.
+                 *
+                 * @param array<string, mixed> $row The submission row (PII).
+                 */
+                do_action('convermetry_submission_row_actions', $row);
+                ?>
             </div>
 
             <?php echo self::renderLeadBlock($row); ?>
@@ -836,6 +904,30 @@ final class SubmissionsPage
                 <h4>Webhook delivery</h4>
                 <?php echo self::renderDeliveryBlock($status, (string) ($row['submission_id'] ?? '')); ?>
             </div>
+
+            <?php
+            /**
+             * Fires at the end of one submission's detail panel.
+             *
+             * Runs inside the cvm_get_submission_detail AJAX response, after
+             * that handler's nonce check and its submissions.view capability
+             * check — so a callback need not re-authorize, though it must apply
+             * its own check for anything a viewer of this screen should not see.
+             *
+             * A callback ECHOES its own markup and MUST escape everything it
+             * prints; Convermetry escapes none of it. Wrap output in a
+             * <div class="cvm-detail-block"> with an <h4> to match the panels
+             * above it.
+             *
+             * $row IS THE SUBMISSION ROW AND CONTAINS PERSONAL DATA: the
+             * visitor's submitted field values in submission_data, their IP
+             * address, and their full attribution context. Do not echo any of it
+             * without deciding that it belongs on this screen.
+             *
+             * @param array<string, mixed> $row The submission row (PII).
+             */
+            do_action('convermetry_submission_detail_sections', $row);
+            ?>
 
         </div>
         <?php
@@ -1095,19 +1187,9 @@ final class SubmissionsPage
         // straight to the browser, so that notice lands INSIDE the downloaded
         // file and corrupts it. '' is also the RFC 4180 behaviour PHP 9 will
         // default to, and the only correct choice for a spreadsheet export.
-        fputcsv($output, [
-            'Date/Time (UTC)', 'Submission ID', 'Conversion ID', 'Session ID',
-            'Provider', 'Form Name', 'Form ID', 'Native Form ID', 'Conversion Page',
-            'Channel', 'UTM Source', 'UTM Medium', 'UTM Campaign', 'UTM Term',
-            'UTM Content', 'Ad Click Type', 'Entrance Referrer', 'Landing Page',
-            'Device', 'IP Address', 'Delivery Status',
-            // Currency travels as its own column rather than being folded into
-            // the value. A spreadsheet that mixed "12500.00" and "€12500.00" in
-            // one column could not be summed or sorted, and a value with no code
-            // beside it is not safely addable on a multi-currency site.
-            'Lead Status', 'Lead Value', 'Lead Currency',
-            'Submission Data (JSON)',
-        ], escape: '');
+        $columns = self::exportColumns();
+
+        fputcsv($output, array_values($columns), escape: '');
 
         $beforeId = PHP_INT_MAX;
 
@@ -1118,50 +1200,188 @@ final class SubmissionsPage
             foreach ($rows as $row) {
                 $beforeId = (int) ($row['id'] ?? 0);
 
-                $context     = self::decodeJson((string) ($row['context'] ?? ''));
-                $attribution = is_array($context['attribution'] ?? null) ? $context['attribution'] : [];
-                $landing     = is_array($context['landing_page'] ?? null)
-                    ? (string) ($context['landing_page']['url'] ?? '')
-                    : '';
-                $status = $statuses[(string) ($row['submission_id'] ?? '')] ?? null;
+                $values = self::exportValues(
+                    $row,
+                    $statuses[(string) ($row['submission_id'] ?? '')] ?? null
+                );
 
-                fputcsv($output, array_map([self::class, 'escapeCsvCell'], [
-                    (string) ($row['created_at'] ?? ''),
-                    (string) ($row['submission_id'] ?? ''),
-                    (string) ($row['conversion_id'] ?? ''),
-                    (string) ($row['session_id'] ?? ''),
-                    (string) ($row['provider'] ?? ''),
-                    (string) ($row['form_name'] ?? ''),
-                    (string) ($row['form_id'] ?? ''),
-                    (string) ($row['native_form_id'] ?? ''),
-                    (string) ($row['page_url'] ?? ''),
-                    (string) ($row['channel'] ?? ''),
-                    (string) ($attribution['utm_source'] ?? ''),
-                    (string) ($attribution['utm_medium'] ?? ''),
-                    (string) ($attribution['utm_campaign'] ?? ''),
-                    (string) ($attribution['utm_term'] ?? ''),
-                    (string) ($attribution['utm_content'] ?? ''),
-                    (string) ($attribution['click_id_type'] ?? ''),
-                    (string) ($context['entrance_referrer'] ?? ''),
-                    $landing,
-                    (string) ($context['device'] ?? ''),
-                    (string) ($row['ip_address'] ?? ''),
-                    (string) ($status['label'] ?? 'Not sent'),
-                    LeadStatus::label(LeadStatus::normalize($row['lead_status'] ?? null)),
-                    // The raw decimal string, not the formatted display value:
-                    // a spreadsheet needs a number it can sum, not "12,500.00 USD".
-                    $row['lead_value'] === null ? '' : (string) $row['lead_value'],
-                    (string) ($row['lead_currency'] ?? ''),
-                    (string) wp_json_encode(
-                        SubmissionFields::fromStoredJson((string) ($row['submission_data'] ?? '')),
-                        JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
-                    ),
-                ]), escape: '');
+                // Assembled by walking the COLUMN keys, so a row can never be
+                // shorter, longer, or shuffled relative to the header — a
+                // missing key becomes an empty cell rather than a shift that
+                // silently files one visitor's email under another's column.
+                $cells = [];
+                foreach (array_keys($columns) as $key) {
+                    $cells[] = self::escapeCsvCell((string) ($values[$key] ?? ''));
+                }
+
+                fputcsv($output, $cells, escape: '');
             }
         } while (count($rows) === self::EXPORT_CHUNK);
 
         fclose($output);
         exit;
+    }
+
+    /**
+     * The export's columns, as an ordered key => header-label map.
+     *
+     * @return array<string, string>
+     */
+    private static function exportColumns(): array
+    {
+        $columns = [
+            'created_at'      => 'Date/Time (UTC)',
+            'submission_id'   => 'Submission ID',
+            'conversion_id'   => 'Conversion ID',
+            'session_id'      => 'Session ID',
+            'provider'        => 'Provider',
+            'form_name'       => 'Form Name',
+            'form_id'         => 'Form ID',
+            'native_form_id'  => 'Native Form ID',
+            'page_url'        => 'Conversion Page',
+            'channel'         => 'Channel',
+            'utm_source'      => 'UTM Source',
+            'utm_medium'      => 'UTM Medium',
+            'utm_campaign'    => 'UTM Campaign',
+            'utm_term'        => 'UTM Term',
+            'utm_content'     => 'UTM Content',
+            'click_id_type'   => 'Ad Click Type',
+            'referrer'        => 'Entrance Referrer',
+            'landing_page'    => 'Landing Page',
+            'device'          => 'Device',
+            'ip_address'      => 'IP Address',
+            'delivery_status' => 'Delivery Status',
+            // Currency travels as its own column rather than being folded into
+            // the value. A spreadsheet that mixed "12500.00" and "€12500.00" in
+            // one column could not be summed or sorted, and a value with no code
+            // beside it is not safely addable on a multi-currency site.
+            'lead_status'     => 'Lead Status',
+            'lead_value'      => 'Lead Value',
+            'lead_currency'   => 'Lead Currency',
+            'submission_data' => 'Submission Data (JSON)',
+        ];
+
+        /**
+         * Filters the submissions CSV export's columns.
+         *
+         * The map is KEY => HEADER LABEL, and its order is the column order.
+         * Add a key here and supply its value from
+         * convermetry_submission_csv_values; the two are matched by key, never
+         * by position, so a value that is missing for one row becomes an empty
+         * cell rather than shifting every later column along by one.
+         *
+         * Removing a core key removes that column from the file. Renaming a
+         * label is safe; renaming a KEY is what breaks the pairing.
+         *
+         * Runs once per export, before the header row is written. Both this and
+         * the values filter run only for a user who passed the
+         * submissions.export capability check.
+         *
+         * @param array<string, string> $columns Ordered key => header label.
+         */
+        $filtered = apply_filters('convermetry_submission_csv_columns', $columns);
+
+        if ($filtered === $columns) {
+            return $columns;
+        }
+
+        $out = [];
+        foreach (is_array($filtered) ? $filtered : [] as $key => $label) {
+            $key = trim((string) $key);
+            if ($key !== '' && is_scalar($label)) {
+                $out[$key] = (string) $label;
+            }
+        }
+
+        return $out === [] ? $columns : $out;
+    }
+
+    /**
+     * One export row's values, as a key => value map matching the column keys.
+     *
+     * @param array<string, mixed>      $row    Submission row.
+     * @param array<string, mixed>|null $status Resolved delivery status, when known.
+     * @return array<string, string>
+     */
+    private static function exportValues(array $row, ?array $status): array
+    {
+        $context     = self::decodeJson((string) ($row['context'] ?? ''));
+        $attribution = is_array($context['attribution'] ?? null) ? $context['attribution'] : [];
+        $landing     = is_array($context['landing_page'] ?? null)
+            ? (string) ($context['landing_page']['url'] ?? '')
+            : '';
+
+        $values = [
+            'created_at'      => (string) ($row['created_at'] ?? ''),
+            'submission_id'   => (string) ($row['submission_id'] ?? ''),
+            'conversion_id'   => (string) ($row['conversion_id'] ?? ''),
+            'session_id'      => (string) ($row['session_id'] ?? ''),
+            'provider'        => (string) ($row['provider'] ?? ''),
+            'form_name'       => (string) ($row['form_name'] ?? ''),
+            'form_id'         => (string) ($row['form_id'] ?? ''),
+            'native_form_id'  => (string) ($row['native_form_id'] ?? ''),
+            'page_url'        => (string) ($row['page_url'] ?? ''),
+            'channel'         => (string) ($row['channel'] ?? ''),
+            'utm_source'      => (string) ($attribution['utm_source'] ?? ''),
+            'utm_medium'      => (string) ($attribution['utm_medium'] ?? ''),
+            'utm_campaign'    => (string) ($attribution['utm_campaign'] ?? ''),
+            'utm_term'        => (string) ($attribution['utm_term'] ?? ''),
+            'utm_content'     => (string) ($attribution['utm_content'] ?? ''),
+            'click_id_type'   => (string) ($attribution['click_id_type'] ?? ''),
+            'referrer'        => (string) ($context['entrance_referrer'] ?? ''),
+            'landing_page'    => $landing,
+            'device'          => (string) ($context['device'] ?? ''),
+            'ip_address'      => (string) ($row['ip_address'] ?? ''),
+            'delivery_status' => (string) ($status['label'] ?? 'Not sent'),
+            'lead_status'     => LeadStatus::label(LeadStatus::normalize($row['lead_status'] ?? null)),
+            // The raw decimal string, not the formatted display value:
+            // a spreadsheet needs a number it can sum, not "12,500.00 USD".
+            'lead_value'      => $row['lead_value'] === null ? '' : (string) $row['lead_value'],
+            'lead_currency'   => (string) ($row['lead_currency'] ?? ''),
+            'submission_data' => (string) wp_json_encode(
+                SubmissionFields::fromStoredJson((string) ($row['submission_data'] ?? '')),
+                JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
+            ),
+        ];
+
+        /**
+         * Filters one submission's CSV export values.
+         *
+         * The map is KEY => VALUE, matched against the keys from
+         * convermetry_submission_csv_columns. A key with no column is ignored; a
+         * column with no value here becomes an empty cell. Position never
+         * matters, so the two filters cannot drift out of alignment.
+         *
+         * Runs once per exported row — a filtered export of ten thousand
+         * submissions runs a callback ten thousand times, streaming, so keep it
+         * cheap and do not query per row.
+         *
+         * Values must be scalar or null; anything else is dropped. Every value,
+         * core and third-party alike, is then passed through the same
+         * formula-injection escaping, which prefixes a tab to anything starting
+         * =, +, -, or @ so a spreadsheet treats it as text. Do not pre-escape.
+         *
+         * $row AND the returned values CONTAIN PERSONAL DATA — the export exists
+         * to produce a file of visitors' names, email addresses, and messages.
+         *
+         * @param array<string, string> $values Key => value for this row.
+         * @param array<string, mixed>  $row    The raw submission row.
+         */
+        $filtered = apply_filters('convermetry_submission_csv_values', $values, $row);
+
+        if ($filtered === $values) {
+            return $values;
+        }
+
+        $out = [];
+        foreach (is_array($filtered) ? $filtered : [] as $key => $value) {
+            $key = trim((string) $key);
+            if ($key !== '' && ($value === null || is_scalar($value))) {
+                $out[$key] = (string) $value;
+            }
+        }
+
+        return $out;
     }
 
     /**

@@ -5,6 +5,7 @@ namespace Convermetry\Admin;
 
 if (!defined('ABSPATH')) exit;
 
+use Convermetry\Analytics\AnalyticsSectionRegistry;
 use Convermetry\Analytics\GoalReports;
 use Convermetry\Analytics\LeadReports;
 use Convermetry\Analytics\ReportQueryException;
@@ -240,7 +241,70 @@ final class AnalyticsPage
         self::renderRecentEvents();
         self::panelEnd();
 
+        self::renderExtensionSections($start, $end);
+
+        /**
+         * Fires at the end of the analytics dashboard, after every core panel.
+         *
+         * Runs only after this screen's capability check has already passed —
+         * see Capability::ANALYTICS_VIEW — so a callback does not need to
+         * re-authorize, though it must apply its own check if it renders
+         * anything a viewer of this page should not see.
+         *
+         * A callback ECHOES its own markup and MUST escape everything it prints.
+         * Convermetry escapes none of it. Use the same structure the core panels
+         * do — a <details class="cvm-panel"> with a <summary> and a
+         * <div class="cvm-panel-body"> — to inherit the page's styling.
+         *
+         * For a reporting block that should also reach the analytics webhook
+         * payload, register an AnalyticsSectionInterface through
+         * convermetry_analytics_sections instead: those render here too, and
+         * their data travels on the wire.
+         *
+         * @param string $start UTC window start (inclusive), 'Y-m-d H:i:s'.
+         * @param string $end   UTC window end (exclusive), 'Y-m-d H:i:s'.
+         */
+        do_action('convermetry_analytics_admin_panels', $start, $end);
+
         echo '</div>';
+    }
+
+    /**
+     * Renders a panel for each registered analytics section.
+     *
+     * With none registered the loop body never runs, so this page's HTML is
+     * byte-for-byte what it was before third-party sections existed.
+     *
+     * @param string $start UTC window start (inclusive).
+     * @param string $end   UTC window end (exclusive).
+     * @return void
+     */
+    private static function renderExtensionSections(string $start, string $end): void
+    {
+        foreach (AnalyticsSectionRegistry::all() as $key => $section) {
+            // The dashboard's own row limit, not the webhook's — the same split
+            // the core reports already have between screen and wire.
+            try {
+                $summary = $section->summarize($start, $end, 10);
+            } catch (\Throwable) {
+                self::panelStart($key, $section->getLabel(), $section->getDescription());
+                self::renderErrorNotice();
+                self::panelEnd();
+                continue;
+            }
+
+            self::panelStart($key, $section->getLabel(), $section->getDescription());
+
+            // A section that throws while rendering must not take the rest of
+            // the dashboard down with it — including the panels after this one.
+            try {
+                $section->render($summary);
+            } catch (\Throwable) {
+                self::renderErrorNotice();
+            }
+
+            self::panelEnd();
+        }
     }
 
     /**
@@ -294,7 +358,63 @@ final class AnalyticsPage
     {
         $days = isset($_GET['period']) ? (int) $_GET['period'] : 30;
 
-        return in_array($days, self::PERIODS, true) ? $days : 30;
+        return in_array($days, self::periods(), true) ? $days : 30;
+    }
+
+    /**
+     * The selectable reporting periods, in days.
+     *
+     * @return int[] Sorted ascending, deduplicated, each within retention.
+     */
+    private static function periods(): array
+    {
+        /**
+         * Filters the reporting periods offered on the dashboard.
+         *
+         * Each value is a number of DAYS. The defaults are 7, 30, and 90; append
+         * to them for a longer view, or return a shorter list to simplify the
+         * screen.
+         *
+         * The result is validated: non-integers and values below 1 are dropped,
+         * everything is clamped to the site's retention period, duplicates are
+         * removed, and the list is sorted. Clamping matters — offering "last 365
+         * days" on a site that keeps 90 days of data would draw a chart that
+         * looks like traffic collapsed nine months ago, when in fact the rows
+         * were deleted. If nothing survives, the defaults are used.
+         *
+         * This changes which windows an administrator can SELECT. It does not
+         * change the scheduled webhook reporting window, which is driven by the
+         * delivery interval on the Webhooks screen.
+         *
+         * @param int[] $periods Selectable periods in days. Default [7, 30, 90].
+         */
+        $filtered = apply_filters('convermetry_analytics_periods', self::PERIODS);
+
+        if ($filtered === self::PERIODS) {
+            return self::PERIODS;
+        }
+
+        $retention = Options::retentionDays();
+        $periods   = [];
+
+        foreach (is_array($filtered) ? $filtered : [] as $days) {
+            if (!is_int($days) && !(is_string($days) && ctype_digit($days))) {
+                continue;
+            }
+
+            $days = min($retention, (int) $days);
+            if ($days >= 1) {
+                $periods[$days] = $days;
+            }
+        }
+
+        if ($periods === []) {
+            return self::PERIODS;
+        }
+
+        sort($periods);
+
+        return $periods;
     }
 
     /**
@@ -313,7 +433,7 @@ final class AnalyticsPage
         echo '<div class="cvm-period">';
         echo '<nav class="cvm-period-group" aria-label="Reporting period">';
 
-        foreach (self::PERIODS as $days) {
+        foreach (self::periods() as $days) {
             $url = add_query_arg(
                 ['page' => self::MENU_SLUG, 'period' => $days],
                 self_admin_url('admin.php')

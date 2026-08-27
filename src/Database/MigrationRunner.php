@@ -209,22 +209,107 @@ final class MigrationRunner
             return;
         }
 
+        /**
+         * Fires when a migration pass begins, with the lease held.
+         *
+         * Fires once per pass, on whichever request won the lease — an admin
+         * page load, a cron run, or WP-CLI. A pass runs only when at least one
+         * table owner reports a version mismatch, so this is not a per-request
+         * event.
+         *
+         * Observational only: a listener cannot skip, reorder, or cancel a
+         * migration. Returning a value does nothing, and throwing aborts the
+         * pass with the lease still held until it expires — do not throw.
+         *
+         * No SQL is passed here or to any migration action. Convermetry's schema
+         * changes run through dbDelta and the statements are an implementation
+         * detail, not an integration surface.
+         *
+         * @param string $context Where the pass is running: 'cli', 'cron', or 'admin'.
+         */
+        do_action('convermetry_migration_started', self::context());
+
+        $failure = null;
+
         try {
             foreach (self::owners() as $owner) {
                 if ($owner::needsUpgrade()) {
                     $owner::maybeUpgrade();
                 }
             }
+        } catch (\Throwable $e) {
+            // Captured rather than caught-and-swallowed: the lease still has to
+            // be released by the finally below, and the failure still has to
+            // reach the caller — but a listener has to be told BEFORE it does,
+            // or the action would be unreachable on the throwing path.
+            $failure = $e;
         } finally {
             self::releaseLock($lock);
+        }
+
+        if ($failure !== null) {
+            /**
+             * Fires when a migration pass throws.
+             *
+             * Fires AFTER the migration lease is released and BEFORE the
+             * exception continues to the caller, so a listener neither blocks
+             * the next pass nor changes the fact that this one failed.
+             *
+             * A migration that merely did not land is NOT a failure and does not
+             * fire this: an owner leaves its version unstamped by design when a
+             * dbDelta is partial, and the next pass simply asks it again. Only a
+             * thrown error reaches here.
+             *
+             * $error is the exception's class name, never its message: a
+             * database error message quotes the failing statement verbatim.
+             *
+             * @param string $context Where the pass was running: 'cli', 'cron', or 'admin'.
+             * @param string $error   The exception class name.
+             */
+            do_action('convermetry_migration_failed', self::context(), $failure::class);
+
+            throw $failure;
         }
 
         // A migration that did not land (a partial dbDelta, an interrupted
         // rebuild) leaves its version unstamped by design, so the owner will be
         // asked again. Re-arm rather than waiting for the next admin visit.
-        if (self::isPending()) {
+        $pending = self::isPending();
+
+        if ($pending) {
             self::schedule();
         }
+
+        /**
+         * Fires when a migration pass finishes.
+         *
+         * Fires after the lease is released AND after the still-pending check
+         * and any rescheduling have been decided — so $pending is the settled
+         * answer, not a guess made mid-pass.
+         *
+         * $pending true means at least one owner's schema version is still
+         * unstamped and another pass has been scheduled. That is normal for a
+         * large table mid-migration and is not an error; it becomes one only if
+         * it never becomes false.
+         *
+         * @param string $context Where the pass ran: 'cli', 'cron', or 'admin'.
+         * @param bool   $pending Whether migrations remain outstanding.
+         */
+        do_action('convermetry_migration_completed', self::context(), $pending);
+    }
+
+    /**
+     * A safe label for where the current migration pass is running.
+     *
+     * @return string 'cli', 'cron', or 'admin'.
+     */
+    private static function context(): string
+    {
+        if (defined('WP_CLI') && WP_CLI) {
+            return 'cli';
+        }
+
+        return wp_doing_cron() ? 'cron' : 'admin';
     }
 
     /**

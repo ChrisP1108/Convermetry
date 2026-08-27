@@ -10,6 +10,7 @@ use Convermetry\Leads\LeadStatus;
 use Convermetry\Notifications\NotificationQueue;
 use Convermetry\Settings\Options;
 use Convermetry\Support\Errors;
+use Convermetry\Support\Retention;
 use Convermetry\Webhook\DeliveryLog;
 use Convermetry\Webhook\FormDeliveryQueue;
 
@@ -1359,7 +1360,7 @@ final class FormSubmissions
      *
      * @return void
      */
-    public static function purgeOld(): void
+    public static function purgeOld(): int
     {
         global $wpdb;
 
@@ -1367,6 +1368,9 @@ final class FormSubmissions
         $table    = self::tableName();
         $deadline = microtime(true) + self::CLEANUP_TIME_BUDGET;
         $runs     = 0;
+        $total    = 0;
+
+        Retention::started('form_submissions', $cutoff);
 
         do {
             $deleted = $wpdb->query($wpdb->prepare(
@@ -1374,10 +1378,21 @@ final class FormSubmissions
                 $cutoff,
                 self::CLEANUP_CHUNK
             ));
+
+            $total += is_int($deleted) ? $deleted : 0;
         } while (
             is_int($deleted) && $deleted === self::CLEANUP_CHUNK
             && ++$runs < self::CLEANUP_MAX_CHUNKS
             && microtime(true) < $deadline
         );
+
+        $outcome = Retention::outcome($deleted, self::CLEANUP_CHUNK, $total);
+        Retention::completed('form_submissions', $cutoff, $outcome);
+
+        if ($outcome['outcome'] === Retention::QUERY_FAILED) {
+            Errors::storage('form_submissions', 'retention_delete', 'delete_failed', ['cutoff' => $cutoff]);
+        }
+
+        return $total;
     }
 }

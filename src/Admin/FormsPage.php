@@ -440,6 +440,19 @@ final class FormsPage
         echo '</div>';
 
         submit_button('Save Form Settings');
+
+        /**
+         * Fires at the end of the Forms admin screen, after the settings form.
+         *
+         * Runs only after this screen's forms.manage capability check has
+         * already passed. A callback ECHOES its own markup and MUST escape
+         * everything it prints; Convermetry escapes none of it.
+         *
+         * Note the placement: this is OUTSIDE the settings <form>, so fields
+         * added here are not submitted with it. Render your own form, posting to
+         * admin-post.php with your own nonce and handler.
+         */
+        do_action('convermetry_forms_admin_sections');
         echo '</form>';
         echo '</div>';
     }
