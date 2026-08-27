@@ -10,6 +10,7 @@ use Convermetry\Database\DatabaseManager;
 use Convermetry\Database\FormSubmissions;
 use Convermetry\Settings\Options;
 use Convermetry\Support\ClientIp;
+use Convermetry\Support\Extensions;
 use Convermetry\Support\Http;
 use Convermetry\Support\PrivacySignal;
 use Convermetry\Tracking\Correlation;
@@ -100,8 +101,64 @@ final class SubmissionService
         // for both the descriptor lists the providers now build and the
         // historical maps third-party callers still pass.
         $submissionData = SubmissionFields::normalize($fields);
-        $device         = wp_is_mobile() ? 'mobile' : 'desktop';
-        $page           = $this->pageInfo($correlation);
+
+        /**
+         * Filters a submission's normalized field descriptors.
+         *
+         * Runs once per submission, after normalization and before anything is
+         * written — so a callback can redact, relabel, or drop a field before it
+         * reaches the database, the webhook payload, or a notification email.
+         *
+         * $fields is a list of {id, label, value} descriptors, where value is a
+         * string or a list of strings. It contains the visitor's submitted data:
+         * this filter exists to customize exactly that, so PII is unavoidable
+         * here in a way it deliberately is not for the observational actions.
+         *
+         * A changed result is passed through SubmissionFields::normalize() a
+         * second time, so the descriptor shape and the cvm_* strip still hold
+         * however the callback reshaped things — Convermetry's own tracking
+         * fields can never be reintroduced as submitted data. Returning the
+         * array unchanged skips that second pass entirely.
+         *
+         * @param list<array{id: string, label: string, value: string|list<string>}> $fields Normalized descriptors.
+         * @param string $formKey  Provider-scoped form key.
+         * @param string $provider Provider key (e.g. 'elementor').
+         */
+        $filteredFields = apply_filters('convermetry_submission_fields', $submissionData, $formKey, $provider);
+
+        if ($filteredFields !== $submissionData) {
+            $submissionData = SubmissionFields::normalize(is_array($filteredFields) ? $filteredFields : []);
+        }
+
+        /**
+         * Filters whether to record a submission at all.
+         *
+         * Runs after the form identity is sanitized and the fields are
+         * normalized — so a spam or business rule can inspect what was actually
+         * submitted — and before ANY write happens. Returning false skips the
+         * analytics conversion event, the submission row, the webhook queue
+         * rows, and the notifications, in that order, by never reaching them.
+         *
+         * The visitor sees nothing. A skipped submission returns a successful,
+         * empty result with no submission id and nothing queued, because the
+         * synchronous integrations (Elementor's, notably) surface a failure
+         * result to the person who just filled the form in — and someone whose
+         * submission a site owner chose not to track has still submitted it
+         * successfully as far as they are concerned.
+         *
+         * $fields carries the visitor's submitted values.
+         *
+         * @param bool   $should   Whether to record. Default true.
+         * @param string $formKey  Provider-scoped form key.
+         * @param string $provider Provider key.
+         * @param list<array{id: string, label: string, value: string|list<string>}> $fields Normalized descriptors.
+         */
+        if (!apply_filters('convermetry_should_record_submission', true, $formKey, $provider, $submissionData)) {
+            return new SubmissionResult(ok: true, submissionId: '', conversionId: '', msg: '', queued: false);
+        }
+
+        $device = wp_is_mobile() ? 'mobile' : 'desktop';
+        $page   = $this->pageInfo($correlation);
 
         // The confirmed conversion, recorded through the shared analytics
         // write path under the tracker's own conversion token — the frontend
@@ -112,6 +169,20 @@ final class SubmissionService
         $submissionId = 's' . substr(md5(wp_generate_uuid4() . wp_rand()), 0, 20);
 
         $context = $correlation->toAnalyticsContext($device);
+
+        // Attached ONCE, here, before the context is persisted — never during
+        // the later SubmissionContext::enrich() the delivery worker runs. A
+        // per-delivery attach would let two endpoints receive different context
+        // for the same submission, and a retry receive different context again.
+        $context = Extensions::attach(
+            $context,
+            'extensions',
+            'convermetry_submission_context_extensions',
+            Extensions::CONTEXT_MAX_BYTES,
+            Extensions::CONTEXT_MAX_KEYS,
+            $formKey,
+            $provider
+        );
 
         // Captured here, in the visitor's own request. Delivery (and every
         // retry) runs later in a background worker where REMOTE_ADDR belongs
@@ -158,6 +229,31 @@ final class SubmissionService
             // success without doing anything twice.
             $existing = $this->findByConversionId($correlation->conversionId);
             if ($existing !== null) {
+                /**
+                 * Fires when a submission is recognised as a duplicate of one
+                 * already recorded — a double-fired provider callback, or a
+                 * replayed AJAX request.
+                 *
+                 * Nothing is written and nothing is re-queued: the original
+                 * submission's deliveries and notifications are already in
+                 * flight, and this action exists precisely so an integration can
+                 * observe the duplicate WITHOUT repeating side effects. Do not
+                 * use it to re-send anything.
+                 *
+                 * Fires on the duplicate request only; the original submission
+                 * fired convermetry_submission_recorded on its own request.
+                 *
+                 * @param string $submissionId The ORIGINAL submission's id.
+                 * @param string $conversionId The conversion id both share.
+                 * @param string $formKey      Provider-scoped form key.
+                 */
+                do_action(
+                    'convermetry_submission_duplicate',
+                    (string) $existing['submission_id'],
+                    $correlation->conversionId,
+                    $formKey
+                );
+
                 return new SubmissionResult(
                     ok: true,
                     submissionId: (string) $existing['submission_id'],
@@ -179,6 +275,41 @@ final class SubmissionService
          * @param array<string, mixed> $context      The captured analytics context.
          */
         do_action('convermetry_submission_recorded', $submissionId, $correlation->conversionId, $context);
+
+        /**
+         * Fires immediately after convermetry_submission_recorded, with the
+         * details that action deliberately does not carry.
+         *
+         * The older action's three arguments are a fixed contract that
+         * notifications and third-party listeners already depend on, so rather
+         * than appending to it, everything else lives here. Both fire on every
+         * recorded submission, in this order, before webhook delivery is
+         * considered — so a listener runs even on a site with no endpoints.
+         *
+         * $fields CONTAINS PERSONAL DATA: it is the visitor's submitted values,
+         * sanitized and with Convermetry's own cvm_* fields stripped, but
+         * otherwise exactly what they typed. Anything a listener does with it —
+         * logging, forwarding, storing — inherits the site's obligations for
+         * that data. If you only need to know that a submission happened, use
+         * convermetry_submission_recorded instead.
+         *
+         * @param int    $rowId        Submission table row id.
+         * @param string $submissionId The submission's globally unique id.
+         * @param array{provider: string, form_key: string, form_name: string, native_id: string} $form Form identity.
+         * @param list<array{id: string, label: string, value: string|list<string>}> $fields Sanitized fields (PII).
+         */
+        do_action(
+            'convermetry_submission_recorded_details',
+            $rowId,
+            $submissionId,
+            [
+                'provider'  => $provider,
+                'form_key'  => $formKey,
+                'form_name' => $formName,
+                'native_id' => $nativeId,
+            ],
+            $submissionData
+        );
 
         if (!Options::webhooksActive() || Options::formEndpoints() === []) {
             // No delivery configured — the submission and conversion are

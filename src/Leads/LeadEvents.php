@@ -164,6 +164,22 @@ final class LeadEvents
     }
 
     /**
+     * Mints a history event id.
+     *
+     * Separated from {@see record()} so a caller can decide the id BEFORE
+     * opening the transaction that writes it, and therefore report it after the
+     * commit. Reading the id back afterwards would need another query inside a
+     * transaction whose shape is deliberately fixed; deciding it up front costs
+     * nothing and changes nothing about what is stored.
+     *
+     * @return string A 32-character hex id.
+     */
+    public static function mintId(): string
+    {
+        return md5(wp_generate_uuid4() . wp_rand());
+    }
+
+    /**
      * Records one status/value transition.
      *
      * Called by {@see LeadService} inside the same transaction as the
@@ -176,6 +192,7 @@ final class LeadEvents
      * @param string|null $value        Value after the change, as a decimal string, or null.
      * @param string      $currency     Currency code for $value, or ''.
      * @param int         $userId       WordPress user id that made the change (0 when unknown).
+     * @param string      $eventId      Pre-minted history event id; '' mints one here.
      * @return bool True when the row was stored.
      */
     public static function record(
@@ -184,7 +201,8 @@ final class LeadEvents
         string $toStatus,
         ?string $value,
         string $currency,
-        int $userId
+        int $userId,
+        string $eventId = ''
     ): bool {
         global $wpdb;
 
@@ -197,7 +215,7 @@ final class LeadEvents
         // The bound parameters are assembled in the same branch that chooses the
         // placeholder, so the two can never fall out of step.
         $params = [
-            md5(wp_generate_uuid4() . wp_rand()),
+            $eventId !== '' ? $eventId : self::mintId(),
             $submissionId,
             $fromStatus,
             $toStatus,

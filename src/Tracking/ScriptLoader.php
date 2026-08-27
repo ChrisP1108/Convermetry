@@ -7,6 +7,7 @@ if (!defined('ABSPATH')) exit;
 
 use Convermetry\Goals\GoalRepository;
 use Convermetry\Settings\Options;
+use Convermetry\Support\Extensions;
 
 /**
  * Enqueues the frontend tracker script and injects its configuration.
@@ -65,6 +66,30 @@ final class ScriptLoader
             return;
         }
 
+        /**
+         * Filters whether to load the frontend tracker on this request.
+         *
+         * Runs after every configured exclusion has already been applied — the
+         * logged-in exclusion, and the "nothing enabled and no selector goals"
+         * check — so a callback can only suppress the tracker, never resurrect
+         * it on a request the settings excluded. Return false to skip loading
+         * it; no script is enqueued and no config is inlined.
+         *
+         * Runs on wp_enqueue_scripts, so conditional tags (is_singular(),
+         * is_page(), is_user_logged_in()) are all available. Typical uses are
+         * excluding a checkout flow, a members' area, or a staging subtree.
+         *
+         * Note that Do Not Track and Global Privacy Control are enforced by the
+         * tracker itself and again at the REST endpoint, so this filter is not
+         * where privacy signals are handled.
+         *
+         * @param bool     $should  Whether to enqueue. Default true.
+         * @param string[] $enabled Enabled event type keys.
+         */
+        if (!apply_filters('convermetry_should_enqueue_tracker', true, $enabled)) {
+            return;
+        }
+
         wp_enqueue_script(
             self::HANDLE,
             CVM_PLUGIN_URL . 'assets/js/tracker.js',
@@ -87,6 +112,39 @@ final class ScriptLoader
             // actions is competitive information and stays on the server.
             'selectorGoals'   => (object) $selectorGoals,
         ];
+
+        /**
+         * Filters extension data added to the frontend tracker config.
+         *
+         * A non-empty result is attached as window.ConvermetryConfig.extensions;
+         * an empty one adds no property at all, so a site with no integrations
+         * inlines exactly the bytes it always did.
+         *
+         * Keys must be namespaced 'vendor/thing'. Core keys — endpoint, events,
+         * hoverDwellMs, flushIntervalMs, maxBatch, respectDnt, selectorGoals —
+         * cannot be replaced from here: the REST endpoint and the batching
+         * limits are the tracker's safety envelope, not tuning knobs.
+         *
+         * The budget is deliberately the smallest of Convermetry's extension
+         * surfaces (8 KB, 20 keys, values must be JSON primitives) because this
+         * one is inlined into the HTML of every single page view, for every
+         * visitor. Anything larger belongs in your own enqueued script.
+         *
+         * THIS DATA IS PUBLIC. It is rendered into the page source for anyone,
+         * logged in or not, to read. Never put a key, a token, an internal
+         * identifier, or anything about a specific visitor here.
+         *
+         * @param array<string, mixed> $extensions Empty array to add to.
+         * @param string[]             $enabled    Enabled event type keys.
+         */
+        $config = Extensions::attach(
+            $config,
+            'extensions',
+            'convermetry_tracker_config_extensions',
+            Extensions::TRACKER_MAX_BYTES,
+            Extensions::TRACKER_MAX_KEYS,
+            $enabled
+        );
 
         wp_add_inline_script(
             self::HANDLE,

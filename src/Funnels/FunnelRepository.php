@@ -105,9 +105,11 @@ final class FunnelRepository
 
         $funnels  = self::all();
         $replaced = false;
+        $previous = null;
 
         foreach ($funnels as $index => $existing) {
             if ((string) $existing['funnel_id'] === $funnelId) {
+                $previous        = $existing;
                 $funnels[$index] = $funnel;
                 $replaced        = true;
                 break;
@@ -123,7 +125,30 @@ final class FunnelRepository
             $funnels[] = $funnel;
         }
 
-        return self::persist($funnels);
+        if (!self::persist($funnels)) {
+            return false;
+        }
+
+        /**
+         * Fires after a funnel definition is persisted.
+         *
+         * Fires from the repository rather than the admin screen, so a WP-CLI
+         * command or a future REST endpoint raises the same event. Only fires
+         * when the write actually succeeded.
+         *
+         * $previous is null for a newly created funnel and the stored definition
+         * for an edit. A funnel stores no data of its own — it is a question
+         * asked of existing events — so editing one changes what every past
+         * report says, retroactively. That is worth knowing if you cache
+         * anything derived from a funnel.
+         *
+         * @param string                    $funnelId Immutable funnel id.
+         * @param array<string, mixed>      $funnel   The stored funnel definition.
+         * @param array<string, mixed>|null $previous The definition it replaced, or null for a new funnel.
+         */
+        do_action('convermetry_funnel_saved', $funnelId, $funnel, $previous);
+
+        return true;
     }
 
     /**
@@ -153,7 +178,27 @@ final class FunnelRepository
             }
         }
 
-        return $found && self::persist($funnels);
+        if (!$found || !self::persist($funnels)) {
+            return false;
+        }
+
+        /**
+         * Fires after a funnel is deleted.
+         *
+         * Fires only when a funnel with this id actually existed AND the write
+         * succeeded — the admin screen redirects with a "deleted" notice either
+         * way, so a listener here would otherwise be told about funnels that
+         * were already gone.
+         *
+         * The deletion is soft: the definition is retained so an accidental
+         * deletion is recoverable, but the funnel stops appearing in reports.
+         *
+         * @param string $funnelId Immutable funnel id.
+         * @param string $now      UTC 'Y-m-d H:i:s' deletion timestamp.
+         */
+        do_action('convermetry_funnel_deleted', $funnelId, $now);
+
+        return true;
     }
 
     /**

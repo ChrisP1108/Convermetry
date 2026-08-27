@@ -69,7 +69,45 @@ final class ClientIp
             return '';
         }
 
-        return self::get();
+        $ip = self::get();
+
+        /**
+         * Filters the IP address about to be PERSISTED with an event or a
+         * submission.
+         *
+         * Runs after the configured privacy gates, so it never sees an address
+         * the site already decided not to store — it receives '' in that case,
+         * and a callback must not turn that back into an address.
+         *
+         * This is the pseudonymization hook. Truncating the last octet, hashing
+         * with a rotating salt, or returning '' for visitors from a particular
+         * region are all reasonable here, and none of them affect how the site
+         * functions, because the stored address is used for display and export
+         * only.
+         *
+         * It deliberately does NOT affect the address used for rate limiting.
+         * That identity comes from {@see get()}, is applied before these gates,
+         * and is what stops one client flooding the tracking endpoint —
+         * anonymizing it would collapse every visitor into one bucket and let
+         * anyone exhaust the site-wide limit. Use convermetry_client_ip if you
+         * genuinely need to change the address for both purposes (e.g. behind a
+         * trusted proxy).
+         *
+         * The result must be a valid IPv4 address, a valid IPv6 address, or an
+         * empty string; anything else is discarded in favour of ''. Storing a
+         * non-address in the ip_address column would corrupt exports and any
+         * downstream geo lookup.
+         *
+         * @param string $ip The address about to be stored, or '' when the
+         *                   privacy gates already suppressed it.
+         */
+        $filtered = (string) apply_filters('convermetry_stored_ip', $ip);
+
+        if ($filtered === $ip) {
+            return $ip;
+        }
+
+        return $filtered !== '' && filter_var($filtered, FILTER_VALIDATE_IP) !== false ? $filtered : '';
     }
 
     /**

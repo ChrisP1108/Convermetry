@@ -133,9 +133,68 @@ final class FormProviderRegistry
         }
 
         $forms = $provider->getForms();
+
+        /**
+         * Filters the forms discovered for one provider.
+         *
+         * Runs after the provider's own discovery and BEFORE the result is
+         * cached, so a callback can add a form the provider cannot enumerate
+         * (one built by a page builder, or registered only at runtime), rename
+         * one, or hide one from the Forms page.
+         *
+         * Because the filtered list is what gets cached — for five minutes —
+         * the result is normalized first: each entry must be an array reducible
+         * to {native_id, name}, entries without a native id are dropped, names
+         * fall back to the id, and duplicate native ids collapse to the first
+         * occurrence. A malformed return would otherwise poison the cache for
+         * every admin who loads the page in the next five minutes.
+         *
+         * This affects which forms an administrator can CONFIGURE. It does not
+         * affect which submissions are recorded: a form absent from this list
+         * still records submissions under its own form key.
+         *
+         * @param array<int, array{native_id: string, name: string}> $forms Discovered forms.
+         * @param string $providerKey Provider key (e.g. 'elementor').
+         */
+        $filtered = apply_filters('convermetry_discovered_forms', $forms, $provider->getKey());
+
+        if ($filtered !== $forms) {
+            $forms = self::normalizeDiscovered($filtered);
+        }
+
         set_transient($cacheKey, $forms, self::DISCOVERY_CACHE_TTL);
 
         return $forms;
+    }
+
+    /**
+     * Reduces a filtered discovery result back to the canonical shape.
+     *
+     * @param mixed $forms Whatever the filter returned.
+     * @return array<int, array{native_id: string, name: string}>
+     */
+    private static function normalizeDiscovered(mixed $forms): array
+    {
+        $out  = [];
+        $seen = [];
+
+        foreach (is_array($forms) ? $forms : [] as $form) {
+            if (!is_array($form)) {
+                continue;
+            }
+
+            $nativeId = sanitize_text_field((string) ($form['native_id'] ?? ''));
+            if ($nativeId === '' || isset($seen[$nativeId])) {
+                continue;
+            }
+
+            $name = sanitize_text_field((string) ($form['name'] ?? ''));
+
+            $seen[$nativeId] = true;
+            $out[]           = ['native_id' => $nativeId, 'name' => $name !== '' ? $name : $nativeId];
+        }
+
+        return $out;
     }
 
     /**

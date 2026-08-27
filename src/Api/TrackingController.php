@@ -157,6 +157,25 @@ final class TrackingController
         $events = array_slice($events, 0, self::MAX_EVENTS_PER_REQUEST);
 
         if (!self::chargeRateLimit(count($events))) {
+            /**
+             * Fires when a tracking batch is rejected by the rate limiter.
+             *
+             * Fires once per rejected request, before anything is stored.
+             *
+             * Carries NO identity — not the IP address and not a hash of one.
+             * The tracking endpoint is public and unauthenticated, so this
+             * action fires on input from anyone at all; handing every caller's
+             * address to arbitrary listeners would turn a rate limiter into a
+             * visitor log. What a listener can legitimately do with this is
+             * alert on volume: a site that is suddenly shedding batches is
+             * either under attack or has outgrown its limits, and
+             * convermetry_rate_limits is where the limits are raised.
+             *
+             * @param int $events The number of events in the rejected batch.
+             * @param int $window The rate-limit window in seconds.
+             */
+            do_action('convermetry_tracking_rate_limited', count($events), self::RATE_LIMIT_WINDOW);
+
             // Tell the tracker how long to wait rather than leaving it to
             // guess — this is the one piece of pacing only the server knows.
             return new \WP_REST_Response(['error' => 'rate_limited'], 429, ['Retry-After' => '60']);
@@ -196,6 +215,31 @@ final class TrackingController
         if ($stored === false) {
             return new \WP_REST_Response(['error' => 'storage_unavailable'], 503);
         }
+
+        /**
+         * Fires after a batch of tracking events has been written.
+         *
+         * One action per BATCH, deliberately, rather than one per event. The
+         * tracker sends up to 25 events per request and the endpoint is the
+         * hottest path in the plugin; a per-event action would run arbitrary
+         * third-party code dozens of times per visitor and turn every listener
+         * into a page-speed regression.
+         *
+         * The three counts differ and the difference is the useful part:
+         * $offered is what the browser sent, $accepted is what survived the
+         * whitelist and the convermetry_should_track_event filter, and $stored
+         * is what the INSERT actually created — lower again when a replayed
+         * batch was deduplicated on (batch_id, seq).
+         *
+         * Does not fire when the batch was rate limited or rejected by the
+         * privacy, bot, or origin gates, none of which reach a write.
+         *
+         * @param int         $stored   Rows actually inserted.
+         * @param int         $accepted Events that passed sanitization.
+         * @param int         $offered  Events the request contained.
+         * @param string|null $batchId  The tracker's batch id, or null when absent/malformed.
+         */
+        do_action('convermetry_tracking_batch_recorded', $stored, count($batch), count($events), $batchId);
 
         return new \WP_REST_Response(['stored' => $stored], 202);
     }
@@ -325,6 +369,34 @@ final class TrackingController
             $data['click_id_type']    = sanitize_key(self::scalarString($event['click_id_type'] ?? ''));
             $data['session_referrer'] = self::normalizeReferrer(self::scalarString($event['session_referrer'] ?? ''));
             $data['session_direct']   = self::scalarString($event['session_direct'] ?? '') === '1';
+        }
+
+        /**
+         * Filters whether to record one tracked event.
+         *
+         * Runs LAST in sanitization, and that placement is the security
+         * property: by the time a callback sees an event, its type has been
+         * checked against the enabled list, its URLs normalized and stripped of
+         * query strings, its campaign values validated, and every field it
+         * carries reduced to a known key with a bounded scalar value. The raw
+         * request body from the public, unauthenticated tracking endpoint is
+         * never exposed to a hook — a callback that received it would be handed
+         * attacker-controlled input on the plugin's hottest path.
+         *
+         * Return false to drop this event. The rest of the batch is unaffected,
+         * and the response still reports success to the tracker: a dropped event
+         * is a site's own decision, not an error the browser should retry.
+         *
+         * Runs once per event within a batch, on the visitor's request, before
+         * any write. Goal matching happens after storage, so dropping an event
+         * also drops any goal it would have completed.
+         *
+         * @param bool                 $should Whether to record. Default true.
+         * @param string               $type   Sanitized event type.
+         * @param array<string, mixed> $data   Sanitized, whitelisted event fields.
+         */
+        if (!apply_filters('convermetry_should_track_event', true, $type, $data)) {
+            return null;
         }
 
         return ['type' => $type, 'data' => $data];

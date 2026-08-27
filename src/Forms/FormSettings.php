@@ -117,6 +117,27 @@ final class FormSettings
             ];
         }
 
-        update_option(self::OPTION_KEY, $merged, false);
+        $saved = update_option(self::OPTION_KEY, $merged, false);
+
+        // Announced only on a real write. update_option() returns false when
+        // the stored value is unchanged, and a "settings saved" event that fires
+        // for a no-op save is one an integration cannot act on.
+        if ($saved) {
+            /**
+             * Fires after per-form settings are persisted.
+             *
+             * Fires once per save, from the storage layer rather than the admin
+             * page, so a future CLI or REST caller raises the same event.
+             *
+             * $formKeys lists the forms that were rendered on the saving screen
+             * — the ones whose configuration this save could have changed. Forms
+             * whose provider is deactivated keep their stored configuration and
+             * are not listed. Values are not passed: read them with
+             * FormSettings::forForm() if you need them.
+             *
+             * @param string[] $formKeys Provider-scoped form keys included in this save.
+             */
+            do_action('convermetry_form_settings_saved', array_values($rendered));
+        }
     }
 }
