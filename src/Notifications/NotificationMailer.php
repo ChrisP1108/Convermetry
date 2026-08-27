@@ -68,19 +68,98 @@ final class NotificationMailer
     }
 
     /**
+     * Header names a convermetry_notification_message callback may not set.
+     *
+     * Content-Type carries the same argument as {@see headers()}; the two
+     * auto-response headers exist to stop out-of-office bounces at the site's
+     * own address; and the submission header is the only idempotency signal a
+     * receiving mailbox gets for an at-least-once send. All four are restored
+     * after filtering, so a callback that drops or rewrites one changes nothing.
+     */
+    private const array PROTECTED_HEADERS = [
+        'content-type',
+        'auto-submitted',
+        'x-auto-response-suppress',
+        'x-convermetry-submission',
+    ];
+
+    /**
+     * Re-validates a filtered notification message.
+     *
+     * The recipient is deliberately NOT filterable and is always the original:
+     * one queue row is one address, chosen when the notification was queued and
+     * deduplicated on it. Letting a per-attempt filter rewrite it would mean two
+     * rows could collapse onto one mailbox, or a retry chain could wander to a
+     * different address than the attempt before it.
+     *
+     * @param array{recipient: string, subject: string, html: string, headers: list<string>} $original Pre-filter message.
+     * @param mixed                                                                          $filtered Whatever the filter returned.
+     * @param string                                                                         $submissionId Submission id, for the dedup header.
+     * @return array{recipient: string, subject: string, html: string, headers: list<string>}
+     */
+    public static function reconcile(array $original, mixed $filtered, string $submissionId = ''): array
+    {
+        if (!is_array($filtered)) {
+            return $original;
+        }
+
+        // Subject: header-injection strip and length cap reapplied, exactly as
+        // EmailBuilder::subject() does, because a filtered subject has not been
+        // through it.
+        $subject = is_scalar($filtered['subject'] ?? null) ? (string) $filtered['subject'] : $original['subject'];
+        $subject = trim((string) preg_replace('/\s+/', ' ', (string) preg_replace('/[\r\n\t\x00]+/', ' ', $subject)));
+        $subject = mb_substr($subject, 0, NotificationSettings::SUBJECT_MAX_LEN);
+        if ($subject === '') {
+            $subject = $original['subject'];
+        }
+
+        // Body: the size cap is reapplied, so a filter cannot produce a message
+        // large enough for the transport to reject or truncate mid-tag.
+        $html = is_string($filtered['html'] ?? null) ? EmailBuilder::capBody($filtered['html']) : $original['html'];
+
+        $headers = [];
+        foreach (is_array($filtered['headers'] ?? null) ? $filtered['headers'] : [] as $header) {
+            if (!is_scalar($header)) {
+                continue;
+            }
+
+            $header = self::headerSafe(trim((string) $header));
+            $name   = strtolower(trim((string) strstr($header, ':', true)));
+
+            if ($name !== '' && !in_array($name, self::PROTECTED_HEADERS, true)) {
+                $headers[] = $header;
+            }
+        }
+
+        return [
+            'recipient' => $original['recipient'],
+            'subject'   => $subject,
+            'html'      => $html,
+            // Required headers reinstated at the front, whatever the filter did.
+            'headers'   => array_merge(self::headers($submissionId), $headers),
+        ];
+    }
+
+    /**
      * Sends one message to one recipient.
      *
      * One wp_mail() call per recipient, never a combined To/Cc list, so no
      * recipient ever learns who else is on the internal notification list.
      *
-     * @param string $to           A validated recipient address.
-     * @param string $subject      Rendered subject.
-     * @param string $html         Rendered HTML body.
-     * @param string $submissionId Submission id, for the dedup header.
+     * @param string            $to           A validated recipient address.
+     * @param string            $subject      Rendered subject.
+     * @param string            $html         Rendered HTML body.
+     * @param string            $submissionId Submission id, for the dedup header.
+     * @param list<string>|null $headers      Reconciled headers; null builds the standard set.
      * @return array{ok: bool, message: string}
      */
-    public static function send(string $to, string $subject, string $html, string $submissionId = ''): array
-    {
+    public static function send(
+        string $to,
+        string $subject,
+        string $html,
+        string $submissionId = '',
+        ?array $headers = null
+    ): array {
         self::$reported = '';
 
         // Core swallows PHPMailer exceptions and simply returns false after
@@ -89,7 +168,7 @@ final class NotificationMailer
         add_action('wp_mail_failed', [self::class, 'captureFailure']);
 
         try {
-            $returned = wp_mail($to, self::headerSafe($subject), $html, self::headers($submissionId));
+            $returned = wp_mail($to, self::headerSafe($subject), $html, $headers ?? self::headers($submissionId));
             $error    = null;
         } catch (Throwable $e) {
             // Replacement mailers (WP Mail SMTP, SES, Postmark) do throw.

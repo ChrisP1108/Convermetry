@@ -221,6 +221,31 @@ final class FormDeliveryQueue
 
             if ($inserted === 1) {
                 $queued++;
+
+                /**
+                 * Fires when a form submission is genuinely queued for delivery
+                 * to one endpoint.
+                 *
+                 * Fires once per endpoint per submission, and ONLY when the
+                 * INSERT IGNORE actually created a row. A re-enqueue that the
+                 * unique (submission_id, endpoint_key) index suppressed does not
+                 * fire it, so a listener can count these as real work rather
+                 * than as attempts at work.
+                 *
+                 * Nothing has been sent at this point and nothing is frozen: the
+                 * payload is built on the worker's first attempt. Never fires on
+                 * the synchronous delivery path, which sends without queuing.
+                 *
+                 * @param array<string, mixed> $context Credential-free delivery context.
+                 */
+                do_action('convermetry_form_delivery_queued', DeliveryContext::build($endpoint['url'], [
+                    'message_type'   => DeliveryContext::FORM,
+                    'kind'           => 'immediate',
+                    'attempt'        => 0,
+                    'delivery_id'    => self::deliveryId($endpoint['url'], $submissionId),
+                    'endpoint_label' => (string) ($endpoint['label'] ?? ''),
+                    'submission_id'  => $submissionId,
+                ]));
             }
         }
 
@@ -356,6 +381,11 @@ final class FormDeliveryQueue
         // ever fires for a deliberate deletion.
         if ($submission === null) {
             $wpdb->delete($table, ['id' => $rowId], ['%d']);
+
+            // Cancelled, not abandoned: no attempt was ever made and no
+            // Activity Log row is written for this. Announced after the delete,
+            // so the queue a listener inspects is already settled.
+            DeliveryContext::canceled(self::contextFor($row, null, $attempt), 'submission_deleted');
             return;
         }
 
@@ -387,18 +417,19 @@ final class FormDeliveryQueue
                 // Unencodable payload (a filter introduced a bad value) — a
                 // failed attempt that enters the normal retry chain; the
                 // payload is rebuilt (and the filter re-run) next attempt.
-                self::logAttempt($row, $submission, $attempt, $endpointUrl, [], '', [
+                $context = self::logAttempt($row, $submission, $attempt, $endpointUrl, [], '', [
                     'ok' => false, 'code' => 0, 'message' => 'Payload could not be JSON-encoded', 'body' => '',
-                ]);
-                self::rescheduleOrAbandon($rowId, $attempt, $submissionId);
+                ], false);
+                self::rescheduleOrAbandon($rowId, $attempt, $submissionId, $context);
                 return;
             }
 
-            $frozenUrl     = RequestFactory::buildUrl($endpointUrl, $formKey, $pageQuery, $runtimeQuery);
-            $frozenHeaders = RequestFactory::buildHeaders($formKey, $runtimeHeaders);
+            $composition   = self::contextFor($row, $submission, $attempt);
+            $frozenUrl     = RequestFactory::buildUrl($endpointUrl, $formKey, $pageQuery, $runtimeQuery, $composition);
+            $frozenHeaders = RequestFactory::buildHeaders($formKey, $runtimeHeaders, $composition);
             $frozenBody    = $encoded;
 
-            $wpdb->update(
+            $frozen = $wpdb->update(
                 $table,
                 [
                     'frozen_url'     => $frozenUrl,
@@ -409,6 +440,14 @@ final class FormDeliveryQueue
                 ['%s', '%s', '%s'],
                 ['%d']
             );
+
+            // 'queue_row' claims persistence, so it is only announced when the
+            // UPDATE actually reported success. A failed freeze still sends this
+            // attempt — the bytes are in hand — but the row is not yet frozen,
+            // and saying otherwise would be a lie a listener could act on.
+            if ($frozen !== false) {
+                DeliveryContext::frozen($composition, 'queue_row', strlen($frozenBody));
+            }
         } else {
             $frozenHeaders = self::decodeJson((string) ($row['frozen_headers'] ?? ''));
             if ($frozenUrl === '') {
@@ -416,13 +455,27 @@ final class FormDeliveryQueue
             }
         }
 
-        $result = Http::postJson(
-            $frozenUrl,
+        $sendContext = self::contextFor($row, $submission, $attempt);
+        $sendHeaders = RequestFactory::withProtocolHeaders(
+            $frozenHeaders,
+            $endpointUrl,
             $frozenBody,
-            RequestFactory::withProtocolHeaders($frozenHeaders, $endpointUrl, $frozenBody, (string) $row['delivery_id'])
+            (string) $row['delivery_id']
         );
 
-        self::logAttempt($row, $submission, $attempt, $frozenUrl, $frozenHeaders, $frozenBody, $result);
+        DeliveryContext::beforeSend($sendContext, $frozenUrl, $sendHeaders, $frozenBody);
+        $result = Http::postJson($frozenUrl, $frozenBody, $sendHeaders, $sendContext);
+
+        $context = self::logAttempt(
+            $row,
+            $submission,
+            $attempt,
+            $frozenUrl,
+            $frozenHeaders,
+            $frozenBody,
+            $result,
+            true
+        );
 
         if ($result['ok']) {
             $wpdb->delete($table, ['id' => $rowId], ['%d']);
@@ -431,10 +484,38 @@ final class FormDeliveryQueue
             // the submission is legitimately "pending", and refreshing any
             // earlier would freeze that state in over the success.
             FormSubmissions::refreshDeliveryState($submissionId);
+
+            // Announced last, so a listener that reads the submission sees the
+            // recomputed delivery state rather than the pending one.
+            DeliveryContext::succeeded($context);
             return;
         }
 
-        self::rescheduleOrAbandon($rowId, $attempt, $submissionId);
+        self::rescheduleOrAbandon($rowId, $attempt, $submissionId, $context);
+    }
+
+    /**
+     * Builds the public lifecycle context for one queued delivery.
+     *
+     * @param array<string, mixed>      $row        Queue row.
+     * @param array<string, mixed>|null $submission Submission row, when loaded.
+     * @param int                       $attempt    1-based attempt number.
+     * @return array<string, mixed>
+     */
+    private static function contextFor(array $row, ?array $submission, int $attempt): array
+    {
+        $endpointUrl = (string) $row['endpoint_url'];
+
+        return DeliveryContext::build($endpointUrl, [
+            'message_type'   => DeliveryContext::FORM,
+            'kind'           => $attempt > 1 ? 'retry' : 'immediate',
+            'attempt'        => $attempt,
+            'delivery_id'    => (string) $row['delivery_id'],
+            'endpoint_label' => Options::endpointLabel($endpointUrl),
+            'submission_id'  => (string) $row['submission_id'],
+            'conversion_id'  => (string) ($submission['conversion_id'] ?? ''),
+            'form_key'       => (string) ($submission['form_key'] ?? ''),
+        ]);
     }
 
     /**
@@ -447,7 +528,8 @@ final class FormDeliveryQueue
      * @param array<string, string>     $headers    Frozen delivery headers.
      * @param string                    $body       Exact JSON body sent ('' when encoding failed).
      * @param array<string, mixed>      $result     Http::postJson() result.
-     * @return void
+     * @param bool                      $transportAttempted Whether a request actually reached the wire.
+     * @return array<string, mixed> The delivery context, for the caller's terminal action.
      */
     private static function logAttempt(
         array $row,
@@ -456,11 +538,12 @@ final class FormDeliveryQueue
         string $requestUrl,
         array $headers,
         string $body,
-        array $result
-    ): void {
+        array $result,
+        bool $transportAttempted
+    ): array {
         $endpointUrl = (string) $row['endpoint_url'];
 
-        DeliveryLog::log([
+        $logged = DeliveryLog::log([
             'ok'              => !empty($result['ok']),
             'endpoint_url'    => $endpointUrl,
             'endpoint_label'  => Options::endpointLabel($endpointUrl),
@@ -479,6 +562,19 @@ final class FormDeliveryQueue
             'response_data'   => (string) ($result['body'] ?? ''),
             'message'         => (string) ($result['message'] ?? ''),
         ]);
+
+        // Both attempt actions are fired here rather than at the call sites:
+        // this method wraps exactly one DeliveryLog::log() and is reached from
+        // every attempt the queue makes, so "one pair of actions per attempt"
+        // holds by construction instead of by discipline.
+        $context = DeliveryContext::attempted(
+            self::contextFor($row, $submission, $attempt),
+            $result,
+            $transportAttempted
+        );
+        DeliveryContext::attemptLogged($context, $logged);
+
+        return $context;
     }
 
     /**
@@ -488,11 +584,16 @@ final class FormDeliveryQueue
      *
      * @param int    $rowId        Queue row id.
      * @param int    $attempt      The attempt number that just failed (1-based).
-     * @param string $submissionId The submission whose recorded delivery state to refresh.
+     * @param string               $submissionId The submission whose recorded delivery state to refresh.
+     * @param array<string, mixed> $context      Delivery context for the terminal lifecycle action.
      * @return void
      */
-    private static function rescheduleOrAbandon(int $rowId, int $attempt, string $submissionId = ''): void
-    {
+    private static function rescheduleOrAbandon(
+        int $rowId,
+        int $attempt,
+        string $submissionId = '',
+        array $context = []
+    ): void {
         global $wpdb;
 
         $table  = self::tableName();
@@ -505,10 +606,17 @@ final class FormDeliveryQueue
             // The retry chain is spent and the queue row is gone, so the
             // submission settles out of "pending" into its final verdict.
             FormSubmissions::refreshDeliveryState($submissionId);
+
+            // Genuinely terminal, unlike the analytics chain: this row will
+            // never be retried, and only the Activity Log remembers it.
+            if ($context !== []) {
+                DeliveryContext::abandoned($context, 'retries_exhausted');
+            }
             return;
         }
 
-        $next = gmdate('Y-m-d H:i:s', time() + $delays[$attempt - 1]);
+        $nextAt = time() + $delays[$attempt - 1];
+        $next   = gmdate('Y-m-d H:i:s', $nextAt);
 
         $wpdb->update(
             $table,
@@ -520,6 +628,10 @@ final class FormDeliveryQueue
 
         // Still pending, but the attempt counter the chip shows has moved.
         FormSubmissions::refreshDeliveryState($submissionId);
+
+        if ($context !== []) {
+            DeliveryContext::retryScheduled($context, $attempt + 1, $nextAt);
+        }
     }
 
     /**
@@ -627,21 +739,28 @@ final class FormDeliveryQueue
 
         $encoded = wp_json_encode($payload);
 
-        $requestUrl = RequestFactory::buildUrl($url);
-        $headers    = RequestFactory::buildHeaders();
+        $context = DeliveryContext::build($url, [
+            'message_type'   => DeliveryContext::FORM,
+            'kind'           => 'test',
+            'attempt'        => 1,
+            'delivery_id'    => (string) $payload['delivery_id'],
+            'endpoint_label' => Options::endpointLabel($url),
+        ]);
+
+        $requestUrl = RequestFactory::buildUrl($url, '', [], [], $context);
+        $headers    = RequestFactory::buildHeaders('', [], $context);
 
         if (!is_string($encoded) || $encoded === '') {
             $encoded = '';
             $result  = ['ok' => false, 'code' => 0, 'message' => 'Payload could not be JSON-encoded', 'body' => ''];
         } else {
-            $result = Http::postJson(
-                $requestUrl,
-                $encoded,
-                RequestFactory::withProtocolHeaders($headers, $url, $encoded, (string) $payload['delivery_id'])
-            );
+            $sendHeaders = RequestFactory::withProtocolHeaders($headers, $url, $encoded, (string) $payload['delivery_id']);
+
+            DeliveryContext::beforeSend($context, $requestUrl, $sendHeaders, $encoded);
+            $result = Http::postJson($requestUrl, $encoded, $sendHeaders, $context);
         }
 
-        DeliveryLog::log([
+        $logged = DeliveryLog::log([
             'ok'              => $result['ok'],
             'endpoint_url'    => $url,
             'endpoint_label'  => Options::endpointLabel($url),
@@ -657,6 +776,15 @@ final class FormDeliveryQueue
             'response_data'   => $result['body'],
             'message'         => $result['message'],
         ]);
+
+        $context = DeliveryContext::attempted($context, $result, $encoded !== '');
+        DeliveryContext::attemptLogged($context, $logged);
+
+        // A test queues nothing and retries never, so there is no state to
+        // commit first and no chain action to follow.
+        if ($result['ok']) {
+            DeliveryContext::succeeded($context);
+        }
 
         return ['ok' => $result['ok'], 'code' => $result['code'], 'message' => $result['message']];
     }

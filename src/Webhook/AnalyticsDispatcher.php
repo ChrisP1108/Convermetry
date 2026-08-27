@@ -374,6 +374,13 @@ final class AnalyticsDispatcher
                 self::scheduleRetry($url, $attempt + 1, $delivery);
             } else {
                 self::storeRetryState($url, $attempt, 0, $delivery, true);
+
+                // Not "abandoned": the frozen body stays in the retry state and
+                // the next scheduled dispatch resumes it, so the window is not
+                // lost. Only retention expiry ever discards it.
+                DeliveryContext::retryChainExhausted(
+                    self::contextFor($url, $delivery, 'retry', $attempt)
+                );
             }
         } finally {
             self::releaseLock($lock);
@@ -446,7 +453,7 @@ final class AnalyticsDispatcher
 
             $deliveryId = md5($url . '|test|' . $now . '|' . wp_rand());
 
-            DeliveryLog::log([
+            $logged = DeliveryLog::log([
                 'ok'            => false,
                 'endpoint_url'  => $url,
                 'endpoint_label' => Options::endpointLabel($url),
@@ -455,6 +462,17 @@ final class AnalyticsDispatcher
                 'kind'          => 'test',
                 'message'       => self::REPORT_FAILURE_MESSAGE,
             ]);
+
+            $result = ['ok' => false, 'code' => 0, 'message' => self::REPORT_FAILURE_MESSAGE, 'body' => ''];
+
+            // No before_send: the report query failed, so nothing was ever
+            // composed and nothing reached the wire.
+            $context = DeliveryContext::attempted(
+                self::contextFor($url, ['delivery_id' => $deliveryId], 'test', 1),
+                $result,
+                false
+            );
+            DeliveryContext::attemptLogged($context, $logged);
 
             return ['ok' => false, 'code' => 0, 'message' => self::REPORT_FAILURE_MESSAGE];
         }
@@ -467,8 +485,9 @@ final class AnalyticsDispatcher
 
         $encoded = wp_json_encode($payload);
 
-        $requestUrl = RequestFactory::buildUrl($url);
-        $headers    = RequestFactory::buildHeaders();
+        $context    = self::contextFor($url, $payload, 'test', 1);
+        $requestUrl = RequestFactory::buildUrl($url, '', [], [], $context);
+        $headers    = RequestFactory::buildHeaders('', [], $context);
 
         // Never POST an empty body when encoding fails (e.g. a filter
         // introduced an unencodable value) — log the failure instead.
@@ -476,14 +495,13 @@ final class AnalyticsDispatcher
             $encoded = '';
             $result  = ['ok' => false, 'code' => 0, 'message' => 'Payload could not be JSON-encoded', 'body' => ''];
         } else {
-            $result = Http::postJson(
-                $requestUrl,
-                $encoded,
-                RequestFactory::withProtocolHeaders($headers, $url, $encoded, (string) $payload['delivery_id'])
-            );
+            $sendHeaders = RequestFactory::withProtocolHeaders($headers, $url, $encoded, (string) $payload['delivery_id']);
+
+            DeliveryContext::beforeSend($context, $requestUrl, $sendHeaders, $encoded);
+            $result = Http::postJson($requestUrl, $encoded, $sendHeaders, $context);
         }
 
-        DeliveryLog::log([
+        $logged = DeliveryLog::log([
             'ok'             => $result['ok'],
             'endpoint_url'   => $url,
             'endpoint_label' => Options::endpointLabel($url),
@@ -497,6 +515,15 @@ final class AnalyticsDispatcher
             'response_data'  => $result['body'],
             'message'        => $result['message'],
         ]);
+
+        $context = DeliveryContext::attempted($context, $result, $encoded !== '');
+        DeliveryContext::attemptLogged($context, $logged);
+
+        // A test advances no bookkeeping, so there is nothing to commit before
+        // announcing it, and no retry chain to schedule or exhaust.
+        if ($result['ok']) {
+            DeliveryContext::succeeded($context);
+        }
 
         return ['ok' => $result['ok'], 'code' => $result['code'], 'message' => $result['message']];
     }
@@ -706,9 +733,20 @@ final class AnalyticsDispatcher
             // stays available even when the try block never reached that line.
             'delivery_id'  => self::deliveryId($url, $startTs, $endTs),
             'body'         => is_string($body) ? $body : '',
-            'url'          => RequestFactory::buildUrl($url),
-            'headers'      => RequestFactory::buildHeaders(),
         ];
+
+        // Composed from the delivery being frozen, so the query-argument and
+        // header filters can see which endpoint and which window they are
+        // composing for. Both run exactly here — once per logical delivery,
+        // before the request is frozen — and never again for its retries.
+        $context = self::contextFor($url, $delivery, 'scheduled', 0);
+
+        $delivery['url']     = RequestFactory::buildUrl($url, '', [], [], $context);
+        $delivery['headers'] = RequestFactory::buildHeaders('', [], $context);
+
+        // 'memory': an analytics delivery freezes as a value here, and is
+        // persisted only if it later needs a retry.
+        DeliveryContext::frozen($context, 'memory', strlen((string) $delivery['body']));
 
         if ($failureReason !== null) {
             $delivery['failure_reason'] = $failureReason;
@@ -758,10 +796,14 @@ final class AnalyticsDispatcher
                 'window_end'   => $endTs,
                 'delivery_id'  => (string) ($state['delivery_id'] ?? self::deliveryId($url, $startTs, $endTs)),
                 'body'         => $state['body'],
+                // Rebuilt WITHOUT the composition filters: this state was
+                // written before frozen request columns existed, and re-running
+                // them mid-chain would let a delivery change destination between
+                // attempt one and attempt four.
                 'url'          => is_string($state['request_url'] ?? null) && $state['request_url'] !== ''
                     ? $state['request_url']
-                    : RequestFactory::buildUrl($url),
-                'headers'      => is_array($state['headers'] ?? null) ? $state['headers'] : RequestFactory::buildHeaders(),
+                    : RequestFactory::recoverUrl($url),
+                'headers'      => is_array($state['headers'] ?? null) ? $state['headers'] : RequestFactory::recoverHeaders(),
             ];
         }
 
@@ -786,6 +828,8 @@ final class AnalyticsDispatcher
         $body       = (string) $delivery['body'];
         $requestUrl = (string) ($delivery['url'] ?? $url);
         $headers    = is_array($delivery['headers'] ?? null) ? $delivery['headers'] : [];
+        $label      = Options::endpointLabel($url);
+        $context    = self::contextFor($url, $delivery, $kind, $attempt, $label);
 
         // An empty body means either payload encoding failed or a report
         // query failed (see freezeDelivery()) — either way, sending it could
@@ -797,17 +841,18 @@ final class AnalyticsDispatcher
                 : 'Payload could not be JSON-encoded';
             $result  = ['ok' => false, 'code' => 0, 'message' => $message, 'body' => ''];
         } else {
-            $result = Http::postJson(
-                $requestUrl,
-                $body,
-                RequestFactory::withProtocolHeaders($headers, $url, $body, (string) $delivery['delivery_id'])
-            );
+            // Resolved into a local so the lifecycle action announces the exact
+            // header set — signature included — that goes on the wire.
+            $sendHeaders = RequestFactory::withProtocolHeaders($headers, $url, $body, (string) $delivery['delivery_id']);
+
+            DeliveryContext::beforeSend($context, $requestUrl, $sendHeaders, $body);
+            $result = Http::postJson($requestUrl, $body, $sendHeaders, $context);
         }
 
-        DeliveryLog::log([
+        $logged = DeliveryLog::log([
             'ok'             => $result['ok'],
             'endpoint_url'   => $url,
-            'endpoint_label' => Options::endpointLabel($url),
+            'endpoint_label' => $label,
             'delivery_id'    => (string) $delivery['delivery_id'],
             'message_type'   => 'analytics_report',
             'kind'           => $kind,
@@ -820,6 +865,9 @@ final class AnalyticsDispatcher
             'message'        => $result['message'],
         ]);
 
+        $context = DeliveryContext::attempted($context, $result, $body !== '');
+        DeliveryContext::attemptLogged($context, $logged);
+
         if ($result['ok']) {
             $lastSent = get_option(self::LAST_SENT_OPTION, []);
             $lastSent = is_array($lastSent) ? $lastSent : [];
@@ -829,9 +877,41 @@ final class AnalyticsDispatcher
 
             update_option(self::LAST_SENT_OPTION, $lastSent, false);
             self::clearRetry($url);
+
+            // Announced only now: the window marker has advanced and the retry
+            // chain is cleared, so a listener reading either sees settled state.
+            DeliveryContext::succeeded($context);
         }
 
         return $result['ok'];
+    }
+
+    /**
+     * Builds the public lifecycle context for one analytics delivery.
+     *
+     * @param string               $url      Configured endpoint URL.
+     * @param array<string, mixed> $delivery Frozen delivery.
+     * @param string               $kind     'scheduled', 'retry', or 'test'.
+     * @param int                  $attempt  Attempt number.
+     * @param string|null          $label    Endpoint label, when the caller already resolved it.
+     * @return array<string, mixed>
+     */
+    private static function contextFor(
+        string $url,
+        array $delivery,
+        string $kind,
+        int $attempt,
+        ?string $label = null
+    ): array {
+        return DeliveryContext::build($url, [
+            'message_type'   => DeliveryContext::ANALYTICS,
+            'kind'           => $kind,
+            'attempt'        => $attempt,
+            'delivery_id'    => (string) ($delivery['delivery_id'] ?? ''),
+            'endpoint_label' => $label ?? Options::endpointLabel($url),
+            'window_start'   => (int) ($delivery['window_start'] ?? 0),
+            'window_end'     => (int) ($delivery['window_end'] ?? 0),
+        ]);
     }
 
     /**
@@ -859,10 +939,18 @@ final class AnalyticsDispatcher
 
         if (wp_schedule_single_event($when, self::RETRY_HOOK, [$url]) === false) {
             self::storeRetryState($url, max(1, $attempt - 1), 0, $delivery, true);
+            DeliveryContext::retryChainExhausted(
+                self::contextFor($url, $delivery, 'retry', max(1, $attempt - 1))
+            );
             return;
         }
 
         self::storeRetryState($url, $attempt, $when, $delivery, false);
+
+        // Announced only after both the cron event and the frozen state are
+        // persisted — a listener told about a retry that was never stored would
+        // be watching for an attempt that never comes.
+        DeliveryContext::retryScheduled(self::contextFor($url, $delivery, 'retry', $attempt), $attempt, $when);
     }
 
     /**

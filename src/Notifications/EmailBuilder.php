@@ -481,10 +481,14 @@ final class EmailBuilder
      * Caps the whole message. Truncation is display-only — the stored
      * submission and the webhook payload are untouched.
      *
+     * Public so {@see NotificationMailer::reconcile()} can reapply it to a body
+     * returned by convermetry_notification_message, which has not been through
+     * {@see body()} and is therefore unbounded until it has.
+     *
      * @param string $html Rendered body.
      * @return string
      */
-    private static function capBody(string $html): string
+    public static function capBody(string $html): string
     {
         if (strlen($html) <= self::MAX_BODY_BYTES) {
             return $html;

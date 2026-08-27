@@ -13,6 +13,7 @@ use Convermetry\Support\ClientIp;
 use Convermetry\Support\Http;
 use Convermetry\Support\PrivacySignal;
 use Convermetry\Tracking\Correlation;
+use Convermetry\Webhook\DeliveryContext;
 use Convermetry\Webhook\DeliveryLog;
 use Convermetry\Webhook\FormDeliveryQueue;
 use Convermetry\Webhook\PayloadBuilder;
@@ -286,21 +287,34 @@ final class SubmissionService
 
             $encoded = wp_json_encode($payload);
 
-            $requestUrl = RequestFactory::buildUrl($endpoint['url'], $formKey, $pageQuery, $runtime['query']);
-            $headers    = RequestFactory::buildHeaders($formKey, $runtime['headers']);
+            // The synchronous path freezes nothing — one attempt per endpoint,
+            // no retries — so composition and sending happen together and
+            // convermetry_webhook_delivery_frozen never fires here.
+            $context = DeliveryContext::build($endpoint['url'], [
+                'message_type'   => DeliveryContext::FORM,
+                'kind'           => 'immediate',
+                'attempt'        => 1,
+                'delivery_id'    => $deliveryId,
+                'endpoint_label' => $endpoint['label'],
+                'submission_id'  => $submissionId,
+                'conversion_id'  => $conversionId,
+                'form_key'       => $formKey,
+            ]);
+
+            $requestUrl = RequestFactory::buildUrl($endpoint['url'], $formKey, $pageQuery, $runtime['query'], $context);
+            $headers    = RequestFactory::buildHeaders($formKey, $runtime['headers'], $context);
 
             if (!is_string($encoded) || $encoded === '') {
                 $result = ['ok' => false, 'code' => 0, 'message' => 'Payload could not be JSON-encoded', 'body' => ''];
                 $encoded = '';
             } else {
-                $result = Http::postJson(
-                    $requestUrl,
-                    $encoded,
-                    RequestFactory::withProtocolHeaders($headers, $endpoint['url'], $encoded, $deliveryId)
-                );
+                $sendHeaders = RequestFactory::withProtocolHeaders($headers, $endpoint['url'], $encoded, $deliveryId);
+
+                DeliveryContext::beforeSend($context, $requestUrl, $sendHeaders, $encoded);
+                $result = Http::postJson($requestUrl, $encoded, $sendHeaders, $context);
             }
 
-            DeliveryLog::log([
+            $logged = DeliveryLog::log([
                 'ok'              => $result['ok'],
                 'endpoint_url'    => $endpoint['url'],
                 'endpoint_label'  => $endpoint['label'],
@@ -319,6 +333,17 @@ final class SubmissionService
                 'response_data'   => (string) $result['body'],
                 'message'         => (string) $result['message'],
             ]);
+
+            $context = DeliveryContext::attempted($context, $result, $encoded !== '');
+            DeliveryContext::attemptLogged($context, $logged);
+
+            // Nothing is queued on this path, so there is no retry state to
+            // commit before announcing success — and no chain action ever
+            // follows: a failed synchronous delivery is reported to the caller
+            // rather than retried.
+            if ($result['ok']) {
+                DeliveryContext::succeeded($context);
+            }
 
             $lastStatus = (int) $result['code'];
             $lastData   = $result['body'] !== '' && json_validate((string) $result['body'])
