@@ -65,7 +65,7 @@ final class AnalyticsPage
         add_menu_page(
             'Convermetry',
             'Convermetry',
-            'manage_options',
+            Capability::required(Capability::ANALYTICS_VIEW),
             self::MENU_SLUG,
             [self::class, 'render'],
             'dashicons-chart-area',
@@ -76,7 +76,7 @@ final class AnalyticsPage
             self::MENU_SLUG,
             'Convermetry Analytics',
             'Analytics',
-            'manage_options',
+            Capability::required(Capability::ANALYTICS_VIEW),
             self::MENU_SLUG,
             [self::class, 'render']
         );
@@ -128,7 +128,7 @@ final class AnalyticsPage
      */
     public static function render(): void
     {
-        if (!current_user_can('manage_options')) {
+        if (!Capability::currentUserCan(Capability::ANALYTICS_VIEW)) {
             return;
         }
 

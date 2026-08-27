@@ -5,6 +5,7 @@ namespace Convermetry\Leads;
 
 if (!defined('ABSPATH')) exit;
 
+use Convermetry\Admin\Capability;
 use Convermetry\Database\FormSubmissions;
 use Convermetry\Settings\Options;
 
@@ -33,10 +34,14 @@ final class LeadService
     /**
      * The capability required to change a lead's outcome.
      *
-     * Deliberately the same capability the rest of the plugin's admin surfaces
-     * use. Lead value is commercially sensitive and, unlike most analytics, it
-     * is WRITTEN by a human — so it gets the same gate as deleting submissions,
-     * not a lesser one.
+     * Kept for compatibility with anything that read it, and still the default
+     * this resolves to. It is no longer used internally: a constant cannot be
+     * filtered, and {@see userCanEdit()} now asks {@see Capability} for the
+     * 'leads.edit' scope so a site can delegate lead editing without granting
+     * every other Convermetry permission. Read
+     * Capability::required(Capability::LEADS_EDIT) rather than this constant.
+     *
+     * @deprecated Use {@see Capability::LEADS_EDIT} with {@see Capability::required()}.
      */
     public const string CAPABILITY = 'manage_options';
 
@@ -187,7 +192,7 @@ final class LeadService
      */
     public static function userCanEdit(): bool
     {
-        return current_user_can(self::CAPABILITY);
+        return Capability::currentUserCan(Capability::LEADS_EDIT);
     }
 
     /**

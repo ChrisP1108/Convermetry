@@ -36,7 +36,7 @@ final class AboutPage
             AnalyticsPage::MENU_SLUG,
             'About Convermetry',
             'About',
-            'manage_options',
+            Capability::required(Capability::ANALYTICS_VIEW),
             self::MENU_SLUG,
             [self::class, 'render']
         );
@@ -71,7 +71,7 @@ final class AboutPage
      */
     public static function render(): void
     {
-        if (!current_user_can('manage_options')) {
+        if (!Capability::currentUserCan(Capability::ANALYTICS_VIEW)) {
             return;
         }
 

@@ -77,7 +77,7 @@ final class SubmissionsPage
             AnalyticsPage::MENU_SLUG,
             'Convermetry Submissions',
             'Submissions',
-            'manage_options',
+            Capability::required(Capability::SUBMISSIONS_VIEW),
             self::MENU_SLUG,
             [self::class, 'render']
         );
@@ -147,7 +147,7 @@ final class SubmissionsPage
             $_POST['cvm_action'] !== 'clear_submissions' ||
             !isset($_POST['cvm_clear_nonce']) ||
             !wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['cvm_clear_nonce'])), 'cvm_clear_submissions') ||
-            !current_user_can('manage_options')
+            !Capability::currentUserCan(Capability::SUBMISSIONS_DELETE)
         ) {
             return;
         }
@@ -171,7 +171,7 @@ final class SubmissionsPage
      */
     public static function processExport(): void
     {
-        if (!isset($_GET['cvm_export']) || !current_user_can('manage_options')) {
+        if (!isset($_GET['cvm_export']) || !Capability::currentUserCan(Capability::SUBMISSIONS_EXPORT)) {
             return;
         }
 
@@ -212,7 +212,7 @@ final class SubmissionsPage
      */
     public static function handleGetSubmissionsAjax(): never
     {
-        self::authorize('cvm_get_submissions');
+        self::authorize('cvm_get_submissions', Capability::SUBMISSIONS_VIEW);
 
         $page    = max(1, (int) ($_POST['page'] ?? 1));
         $perPage = min(100, max(5, (int) ($_POST['per_page'] ?? 10)));
@@ -262,7 +262,7 @@ final class SubmissionsPage
      */
     public static function handleGetDetailAjax(): never
     {
-        self::authorize('cvm_get_submission_detail');
+        self::authorize('cvm_get_submission_detail', Capability::SUBMISSIONS_VIEW);
 
         $id  = (int) ($_POST['submission_row'] ?? 0);
         $row = $id > 0 ? FormSubmissions::get($id) : null;
@@ -290,7 +290,7 @@ final class SubmissionsPage
      */
     public static function handleDeleteAjax(): never
     {
-        self::authorize('cvm_delete_submission');
+        self::authorize('cvm_delete_submission', Capability::SUBMISSIONS_DELETE);
 
         $id = (int) ($_POST['submission_row'] ?? 0);
         if ($id <= 0) {
@@ -313,7 +313,7 @@ final class SubmissionsPage
      */
     public static function handleUpdateLeadAjax(): never
     {
-        self::authorize('cvm_update_lead');
+        self::authorize('cvm_update_lead', Capability::LEADS_EDIT);
 
         $submissionId = sanitize_text_field((string) ($_POST['submission_id'] ?? ''));
         if ($submissionId === '') {
@@ -346,15 +346,22 @@ final class SubmissionsPage
     /**
      * Shared nonce + capability guard for every AJAX action on this page.
      *
+     * The scope is a parameter rather than a constant because these four
+     * actions are not equally privileged: two of them read, one deletes a
+     * submission outright, and one writes a lead's commercial value. Sharing a
+     * single capability here would have made the scope split on the rest of the
+     * page decorative.
+     *
      * @param string $action The action name the nonce was created for.
+     * @param string $scope  The {@see Capability} scope this action needs.
      * @return void
      */
-    private static function authorize(string $action): void
+    private static function authorize(string $action, string $scope): void
     {
         if (
             !isset($_POST['nonce']) ||
             !wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['nonce'])), $action) ||
-            !current_user_can('manage_options')
+            !Capability::currentUserCan($scope)
         ) {
             wp_send_json_error(['message' => 'Unauthorized.']);
         }
@@ -524,7 +531,7 @@ final class SubmissionsPage
      */
     public static function render(): void
     {
-        if (!current_user_can('manage_options')) {
+        if (!Capability::currentUserCan(Capability::SUBMISSIONS_VIEW)) {
             return;
         }
 

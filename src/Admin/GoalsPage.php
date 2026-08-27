@@ -90,7 +90,7 @@ final class GoalsPage
             AnalyticsPage::MENU_SLUG,
             'Convermetry Goals',
             'Goals',
-            'manage_options',
+            Capability::required(Capability::GOALS_MANAGE),
             self::MENU_SLUG,
             [self::class, 'render']
         );
@@ -170,7 +170,7 @@ final class GoalsPage
             && ($_POST['cvm_action'] ?? '') === $action
             && isset($_POST['cvm_nonce'])
             && wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['cvm_nonce'])), $nonce)
-            && current_user_can('manage_options');
+            && Capability::currentUserCan(Capability::GOALS_MANAGE);
     }
 
     /**
@@ -209,7 +209,7 @@ final class GoalsPage
      */
     public static function render(): void
     {
-        if (!current_user_can('manage_options')) {
+        if (!Capability::currentUserCan(Capability::GOALS_MANAGE)) {
             return;
         }
 
