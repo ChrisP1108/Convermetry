@@ -213,27 +213,28 @@ final class GoalsPage
             return;
         }
 
-        echo '<div class="wrap cvm-wrap cvm-goals-wrap">';
-        echo '<h1>Goals</h1>';
+        ?>
+        <div class="wrap cvm-wrap cvm-goals-wrap">
+        <h1>Goals</h1>
+        <?php
 
         self::renderNotices();
 
-        echo '<p class="description cvm-goals-intro">'
-            . 'A goal is an important visitor action that is not a form submission — a phone number tapped, '
-            . 'a PDF opened, a booking link followed, a pricing page reached. Convermetry matches these on the '
-            . 'server as activity arrives, so completions carry the same channel and campaign attribution as '
-            . 'everything else and can be broken down the same way.'
-            . '</p>';
+        ?>
+        <p class="description cvm-goals-intro">A goal is an important visitor action that is not a form submission — a phone
+        number tapped, a PDF opened, a booking link followed, a pricing page reached. Convermetry matches these on the server as activity
+        arrives, so completions carry the same channel and campaign attribution as everything else and can be broken down the same
+        way.</p>
+        <?php
 
         // Nothing on this page can work against a half-migrated schema, so it
         // says so plainly rather than rendering controls that would fail.
         if (MigrationRunner::isPending()) {
-            echo '<div class="notice notice-warning inline"><p>'
-                . '<strong>Preparing.</strong> Convermetry is still applying a database update from the last '
-                . 'plugin upgrade. Goals will become available as soon as it finishes — this page will work '
-                . 'normally then, and no data is lost in the meantime.'
-                . '</p></div>';
-            echo '</div>';
+            ?>
+            <div class="notice notice-warning inline"><p><strong>Preparing.</strong> Convermetry is still applying a database
+            update from the last plugin upgrade. Goals will become available as soon as it finishes — this page will work normally
+            then, and no data is lost in the meantime.</p></div></div>
+            <?php
             return;
         }
 
@@ -247,7 +248,9 @@ final class GoalsPage
         self::renderList($goals, $period);
         self::renderEditor();
 
-        echo '</div>';
+        ?>
+        </div>
+        <?php
     }
 
     /**
@@ -268,7 +271,9 @@ final class GoalsPage
         };
 
         if ($message !== '') {
-            echo '<div class="notice notice-success is-dismissible"><p>' . esc_html($message) . '</p></div>';
+            ?>
+            <div class="notice notice-success is-dismissible"><p><?php echo esc_html($message); ?></p></div>
+            <?php
         }
 
         $problem = match ($error) {
@@ -282,7 +287,9 @@ final class GoalsPage
         };
 
         if ($problem !== '') {
-            echo '<div class="notice notice-error is-dismissible"><p>' . esc_html($problem) . '</p></div>';
+            ?>
+            <div class="notice notice-error is-dismissible"><p><?php echo esc_html($problem); ?></p></div>
+            <?php
         }
     }
 
@@ -301,12 +308,11 @@ final class GoalsPage
     private static function renderTrackingWarnings(): void
     {
         if (!Options::goalsEnabled()) {
-            echo '<div class="notice notice-warning inline"><p>'
-                . '<strong>Goal matching is switched off.</strong> Goals below are kept but nothing is being '
-                . 'recorded. Turn it back on under <a href="'
-                . esc_url(add_query_arg(['page' => SettingsPage::MENU_SLUG], self_admin_url('admin.php')))
-                . '">Settings &rarr; Tracking</a>.'
-                . '</p></div>';
+            ?>
+            <div class="notice notice-warning inline"><p><strong>Goal matching is switched off.</strong> Goals below are
+            kept but nothing is being recorded. Turn it back on under <a href="<?php echo esc_url(add_query_arg(['page' => SettingsPage::MENU_SLUG], self_admin_url('admin.php'))); ?>">Settings
+            &rarr; Tracking</a>.</p></div>
+            <?php
 
             return;
         }
@@ -366,7 +372,9 @@ final class GoalsPage
      */
     private static function renderPeriodFilter(int $active): void
     {
-        echo '<div class="cvm-period-filter">';
+        ?>
+        <div class="cvm-period-filter">
+        <?php
         foreach (self::PERIODS as $days) {
             $url = add_query_arg(
                 ['page' => self::MENU_SLUG, 'period' => (string) $days],
@@ -379,7 +387,9 @@ final class GoalsPage
                 $days
             );
         }
-        echo '</div>';
+        ?>
+        </div>
+        <?php
     }
 
     /**
@@ -392,11 +402,11 @@ final class GoalsPage
     private static function renderList(array $goals, int $period): void
     {
         if ($goals === []) {
-            echo '<div class="notice notice-info inline"><p>'
-                . 'No goals yet. Add one below — <strong>Phone link clicks</strong> and '
-                . '<strong>Email link clicks</strong> need no configuration beyond a name, and are the '
-                . 'quickest way to see whether this is measuring what you expect.'
-                . '</p></div>';
+            ?>
+            <div class="notice notice-info inline"><p>No goals yet. Add one below — <strong>Phone link clicks</strong>
+            and <strong>Email link clicks</strong> need no configuration beyond a name, and are the quickest way to see whether this
+            is measuring what you expect.</p></div>
+            <?php
 
             return;
         }
@@ -408,10 +418,10 @@ final class GoalsPage
             $summary = GoalReports::summary($start, $end, GoalRepository::names(), GoalSettings::MAX_GOALS);
             $lastSeen = GoalReports::lastSeen();
         } catch (ReportQueryException) {
-            echo '<div class="notice notice-error inline"><p>'
-                . 'Goal performance could not be loaded — a database query failed. The goals themselves are '
-                . 'listed below and are unaffected.'
-                . '</p></div>';
+            ?>
+            <div class="notice notice-error inline"><p>Goal performance could not be loaded — a database query failed.
+            The goals themselves are listed below and are unaffected.</p></div>
+            <?php
             $summary  = ['goals' => [], 'sessions' => 0];
             $lastSeen = [];
         }
@@ -421,20 +431,23 @@ final class GoalsPage
             $stats[(string) $row['goal_id']] = $row;
         }
 
-        echo '<table class="widefat striped cvm-goals-table"><thead><tr>';
-        echo '<th scope="col">Goal</th><th scope="col">Rule</th>';
-        echo '<th scope="col" class="cvm-num">Completions</th>';
-        echo '<th scope="col" class="cvm-num">Sessions</th>';
-        echo '<th scope="col" class="cvm-num">Rate</th>';
-        echo '<th scope="col" class="cvm-num">Value</th>';
-        echo '<th scope="col">&nbsp;</th>';
-        echo '</tr></thead><tbody>';
+        ?>
+        <table class="widefat striped cvm-goals-table"><thead><tr>
+        <th scope="col">Goal</th><th scope="col">Rule</th>
+        <th scope="col" class="cvm-num">Completions</th>
+        <th scope="col" class="cvm-num">Sessions</th>
+        <th scope="col" class="cvm-num">Rate</th>
+        <th scope="col" class="cvm-num">Value</th>
+        <th scope="col">&nbsp;</th></tr></thead><tbody>
+        <?php
 
         foreach ($goals as $goal) {
             self::renderRow($goal, $stats, $lastSeen);
         }
 
-        echo '</tbody></table>';
+        ?>
+        </tbody></table>
+        <?php
 
         printf(
             '<p class="description">Rates are the share of sessions in this period that completed the goal '
@@ -457,60 +470,66 @@ final class GoalsPage
         $row    = $stats[$goalId] ?? null;
         $seen   = $lastSeen[$goalId] ?? '';
 
-        echo '<tr>';
-
-        echo '<td><strong>' . esc_html((string) $goal['name']) . '</strong>';
+        ?>
+        <tr>
+        <td><strong><?php echo esc_html((string) $goal['name']); ?></strong>
+        <?php
         if (empty($goal['enabled'])) {
-            echo ' <span class="cvm-status-chip cvm-status-not_sent">Paused</span>';
+            ?>
+             <span class="cvm-status-chip cvm-status-not_sent">Paused</span>
+            <?php
         }
-        echo '<div class="cvm-goal-meta">';
-        echo esc_html(!empty($goal['once_per_session']) ? 'Once per session' : 'Every occurrence');
+        ?>
+        <div class="cvm-goal-meta">
+        <?php echo esc_html(!empty($goal['once_per_session']) ? 'Once per session' : 'Every occurrence'); ?>
+        <?php
         if (($goal['goal_value'] ?? null) !== null) {
-            echo ' &middot; worth ' . esc_html(Money::format((string) $goal['goal_value'], Options::leadCurrency()));
+            ?>
+             &middot; worth <?php echo esc_html(Money::format((string) $goal['goal_value'], Options::leadCurrency())); ?>
+            <?php
         }
-        echo '</div></td>';
-
-        echo '<td><code>' . esc_html(self::describeRule($goal)) . '</code></td>';
+        ?>
+        </div></td>
+        <td><code><?php echo esc_html(self::describeRule($goal)); ?></code></td>
+        <?php
 
         $completions = (int) ($row['completions'] ?? 0);
 
-        echo '<td class="cvm-num">' . esc_html(number_format_i18n($completions)) . '</td>';
-        echo '<td class="cvm-num">' . esc_html(number_format_i18n((int) ($row['sessions'] ?? 0))) . '</td>';
-        echo '<td class="cvm-num">' . esc_html(
+        ?>
+        <td class="cvm-num"><?php echo esc_html(number_format_i18n($completions)); ?></td>
+        <td class="cvm-num"><?php echo esc_html(number_format_i18n((int) ($row['sessions'] ?? 0))); ?></td>
+        <td class="cvm-num"><?php echo esc_html(
             $row === null || ($row['sessions'] ?? 0) === 0 ? '—' : $row['conversion_rate'] . '%'
-        ) . '</td>';
-        echo '<td class="cvm-num">' . esc_html(
+        ); ?></td>
+        <td class="cvm-num"><?php echo esc_html(
             $row === null || (string) $row['value'] === '0.00'
                 ? '—'
                 : Money::format((string) $row['value'], (string) ($row['currency'] ?? ''))
-        ) . '</td>';
-
-        echo '<td class="cvm-goal-actions">';
+        ); ?></td>
+        <td class="cvm-goal-actions">
+        <?php
         printf(
             '<button type="button" class="button-link cvm-goal-edit" data-goal="%s">Edit</button> ',
             esc_attr((string) wp_json_encode($goal))
         );
-        echo '<form method="post" class="cvm-inline-form" onsubmit="return confirm('
-            . esc_attr("Remove this goal? Its past completions are kept and still appear in reports for earlier periods.")
-            . ');">';
+        ?>
+        <form method="post" class="cvm-inline-form" onsubmit="return confirm(<?php echo esc_attr("Remove this goal? Its past completions are kept and still appear in reports for earlier periods."); ?>);">
+        <?php
         wp_nonce_field('cvm_delete_goal', 'cvm_nonce');
-        echo '<input type="hidden" name="cvm_action" value="delete_goal">';
-        echo '<input type="hidden" name="goal_id" value="' . esc_attr($goalId) . '">';
-        echo '<button type="submit" class="button-link cvm-btn-danger-link">Remove</button>';
-        echo '</form>';
-        echo '</td>';
-
-        echo '</tr>';
+        ?>
+        <input type="hidden" name="cvm_action" value="delete_goal">
+        <input type="hidden" name="goal_id" value="<?php echo esc_attr($goalId); ?>">
+        <button type="submit" class="button-link cvm-btn-danger-link">Remove</button></form></td></tr>
+        <?php
 
         // A goal that has never fired is nearly always a rule that matches
         // nothing. Saying so beats showing a zero and leaving the reader to
         // wonder whether the feature works.
         if ($completions === 0 && $seen === '' && !empty($goal['enabled'])) {
-            echo '<tr class="cvm-goal-note"><td colspan="7"><em>'
-                . 'This goal has never recorded a completion. Check that the rule matches what visitors '
-                . 'actually do — a URL rule should be the path as it appears in the address bar, such as '
-                . '<code>/thank-you/</code>.'
-                . '</em></td></tr>';
+            ?>
+            <tr class="cvm-goal-note"><td colspan="7"><em>This goal has never recorded a completion. Check that the rule
+            matches what visitors actually do — a URL rule should be the path as it appears in the address bar, such as <code>/thank-you/</code>.</em></td></tr>
+            <?php
         }
     }
 

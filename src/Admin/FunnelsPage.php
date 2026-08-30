@@ -207,23 +207,24 @@ final class FunnelsPage
             return;
         }
 
-        echo '<div class="wrap cvm-wrap cvm-funnels-wrap">';
-        echo '<h1>Funnels</h1>';
+        ?>
+        <div class="wrap cvm-wrap cvm-funnels-wrap">
+        <h1>Funnels</h1>
+        <?php
 
         self::renderNotices();
 
-        echo '<p class="description cvm-goals-intro">'
-            . 'A funnel measures the path to a conversion in order: how many visitors reached each step, '
-            . 'and how many were lost between them. Steps are counted per session and must happen in '
-            . 'sequence — a visitor who reaches step three without step two is not counted at step three.'
-            . '</p>';
+        ?>
+        <p class="description cvm-goals-intro">A funnel measures the path to a conversion in order: how many visitors reached
+        each step, and how many were lost between them. Steps are counted per session and must happen in sequence — a visitor who
+        reaches step three without step two is not counted at step three.</p>
+        <?php
 
         if (MigrationRunner::isPending()) {
-            echo '<div class="notice notice-warning inline"><p>'
-                . '<strong>Preparing.</strong> Convermetry is still applying a database update from the last '
-                . 'plugin upgrade. Funnels will become available as soon as it finishes.'
-                . '</p></div>';
-            echo '</div>';
+            ?>
+            <div class="notice notice-warning inline"><p><strong>Preparing.</strong> Convermetry is still applying a database
+            update from the last plugin upgrade. Funnels will become available as soon as it finishes.</p></div></div>
+            <?php
 
             return;
         }
@@ -234,11 +235,11 @@ final class FunnelsPage
         self::renderPeriodFilter($period);
 
         if ($funnels === []) {
-            echo '<div class="notice notice-info inline"><p>'
-                . 'No funnels yet. A good first one is three steps: the page a campaign lands on, the form '
-                . 'being started, and the submission being confirmed — that alone usually shows whether the '
-                . 'problem is traffic, the page, or the form.'
-                . '</p></div>';
+            ?>
+            <div class="notice notice-info inline"><p>No funnels yet. A good first one is three steps: the page a campaign
+            lands on, the form being started, and the submission being confirmed — that alone usually shows whether the problem is
+            traffic, the page, or the form.</p></div>
+            <?php
         } else {
             $end   = gmdate('Y-m-d H:i:s');
             $start = gmdate('Y-m-d 00:00:00', time() - ($period - 1) * DAY_IN_SECONDS);
@@ -250,7 +251,9 @@ final class FunnelsPage
 
         self::renderEditor();
 
-        echo '</div>';
+        ?>
+        </div>
+        <?php
     }
 
     /**
@@ -271,7 +274,9 @@ final class FunnelsPage
         };
 
         if ($message !== '') {
-            echo '<div class="notice notice-success is-dismissible"><p>' . esc_html($message) . '</p></div>';
+            ?>
+            <div class="notice notice-success is-dismissible"><p><?php echo esc_html($message); ?></p></div>
+            <?php
         }
 
         $problem = match ($error) {
@@ -288,7 +293,9 @@ final class FunnelsPage
         };
 
         if ($problem !== '') {
-            echo '<div class="notice notice-error is-dismissible"><p>' . esc_html($problem) . '</p></div>';
+            ?>
+            <div class="notice notice-error is-dismissible"><p><?php echo esc_html($problem); ?></p></div>
+            <?php
         }
     }
 
@@ -300,7 +307,9 @@ final class FunnelsPage
      */
     private static function renderPeriodFilter(int $active): void
     {
-        echo '<div class="cvm-period-filter">';
+        ?>
+        <div class="cvm-period-filter">
+        <?php
         foreach (self::PERIODS as $days) {
             $url = add_query_arg(
                 ['page' => self::MENU_SLUG, 'period' => (string) $days],
@@ -313,7 +322,9 @@ final class FunnelsPage
                 $days
             );
         }
-        echo '</div>';
+        ?>
+        </div>
+        <?php
     }
 
     /**
@@ -326,47 +337,57 @@ final class FunnelsPage
      */
     private static function renderFunnel(array $funnel, string $start, string $end): void
     {
-        echo '<div class="cvm-funnel">';
-        echo '<div class="cvm-funnel-header">';
-        echo '<h2>' . esc_html((string) $funnel['name']) . '</h2>';
+        ?>
+        <div class="cvm-funnel">
+        <div class="cvm-funnel-header">
+        <h2><?php echo esc_html((string) $funnel['name']); ?></h2>
+        <?php
 
         if (empty($funnel['enabled'])) {
-            echo '<span class="cvm-status-chip cvm-status-not_sent">Paused</span>';
+            ?>
+            <span class="cvm-status-chip cvm-status-not_sent">Paused</span>
+            <?php
         }
 
-        echo '<div class="cvm-funnel-actions">';
+        ?>
+        <div class="cvm-funnel-actions">
+        <?php
         printf(
             '<button type="button" class="button-link cvm-funnel-edit" data-funnel="%s">Edit</button> ',
             esc_attr((string) wp_json_encode($funnel))
         );
-        echo '<form method="post" class="cvm-inline-form" onsubmit="return confirm('
-            . esc_attr('Remove this funnel? Its definition is deleted; no analytics data is affected.')
-            . ');">';
+        ?>
+        <form method="post" class="cvm-inline-form" onsubmit="return confirm(<?php echo esc_attr('Remove this funnel? Its definition is deleted; no analytics data is affected.'); ?>);">
+        <?php
         wp_nonce_field('cvm_delete_funnel', 'cvm_nonce');
-        echo '<input type="hidden" name="cvm_action" value="delete_funnel">';
-        echo '<input type="hidden" name="funnel_id" value="' . esc_attr((string) $funnel['funnel_id']) . '">';
-        echo '<button type="submit" class="button-link cvm-btn-danger-link">Remove</button>';
-        echo '</form>';
-        echo '</div></div>';
+        ?>
+        <input type="hidden" name="cvm_action" value="delete_funnel">
+        <input type="hidden" name="funnel_id" value="<?php echo esc_attr((string) $funnel['funnel_id']); ?>">
+        <button type="submit" class="button-link cvm-btn-danger-link">Remove</button></form></div></div>
+        <?php
 
         try {
             $report = FunnelReport::compute($funnel, $start, $end);
         } catch (ReportQueryException) {
-            echo '<p class="cvm-empty-msg">This funnel could not be measured — a database query failed.</p>';
-            echo '</div>';
+            ?>
+            <p class="cvm-empty-msg">This funnel could not be measured — a database query failed.</p></div>
+            <?php
 
             return;
         }
 
         if ($report['error'] !== '') {
-            echo '<p class="cvm-empty-msg">' . esc_html($report['error']) . '</p>';
-            echo '</div>';
+            ?>
+            <p class="cvm-empty-msg"><?php echo esc_html($report['error']); ?></p></div>
+            <?php
 
             return;
         }
 
         self::renderSteps($report, $funnel);
-        echo '</div>';
+        ?>
+        </div>
+        <?php
     }
 
     /**
@@ -382,15 +403,17 @@ final class FunnelsPage
         $entered = (int) ($steps[0]['sessions'] ?? 0);
 
         if ($entered === 0) {
-            echo '<p class="cvm-empty-msg">'
-                . 'No sessions reached the first step during this period, so there is nothing to measure yet. '
-                . 'Check that the first step matches a page visitors actually land on.'
-                . '</p>';
+            ?>
+            <p class="cvm-empty-msg">No sessions reached the first step during this period, so there is nothing to measure
+            yet. Check that the first step matches a page visitors actually land on.</p>
+            <?php
 
             return;
         }
 
-        echo '<div class="cvm-funnel-steps">';
+        ?>
+        <div class="cvm-funnel-steps">
+        <?php
 
         foreach ($steps as $index => $step) {
             if ($index > 0) {
@@ -417,7 +440,9 @@ final class FunnelsPage
             );
         }
 
-        echo '</div>';
+        ?>
+        </div>
+        <?php
 
         printf(
             '<p class="description cvm-funnel-summary">Overall conversion: <strong>%s%%</strong> — %s of %s '

@@ -48,7 +48,11 @@ final class EventTypeRegistrationTest extends TestCase
         $start = strpos($source, 'private static function renderTrackingSection');
         self::assertNotFalse($start, 'renderTrackingSection() was renamed — update this test.');
 
-        $end = strpos($source, 'echo \'<h2>Tracking</h2>\'', $start);
+        // Anchored on the heading's MARKUP, not on the statement that emits
+        // it: the admin pages render through PHP templates now, so the heading
+        // is inline HTML rather than an echo, and an anchor that names the
+        // output mechanism breaks every time that mechanism changes.
+        $end = strpos($source, '<h2>Tracking</h2>', $start);
         self::assertNotFalse($end, 'The tracking label map no longer precedes the Tracking heading.');
 
         preg_match_all(

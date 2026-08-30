@@ -260,25 +260,28 @@ final class NotificationsPage
         }
 
         if (!empty($_GET['cvm_saved'])) {
-            echo '<div class="notice notice-success is-dismissible"><p>Notification settings saved.</p></div>';
+            ?>
+            <div class="notice notice-success is-dismissible"><p>Notification settings saved.</p></div>
+            <?php
         }
 
         if (!empty($_GET['cvm_cancelled'])) {
-            echo '<div class="notice notice-success is-dismissible"><p>Queued notifications discarded.</p></div>';
+            ?>
+            <div class="notice notice-success is-dismissible"><p>Queued notifications discarded.</p></div>
+            <?php
         }
 
         // Without this, a site whose mail system is broken sends nothing,
         // forever, with no signal anywhere in the admin.
         $failure = get_transient(NotificationQueue::FAILURE_TRANSIENT);
         if (is_array($failure)) {
-            echo '<div class="notice notice-warning is-dismissible"><p><strong>A notification could not be sent.</strong> '
-                . esc_html(sprintf(
+            ?>
+            <div class="notice notice-warning is-dismissible"><p><strong>A notification could not be sent.</strong> <?php echo esc_html(sprintf(
                     'The last attempt to %s failed and was given up on: %s',
                     (string) ($failure['recipient'] ?? 'a recipient'),
                     (string) ($failure['error'] ?? 'no reason reported')
-                ))
-                . ' ' . esc_html('This usually means the site cannot send mail at all — an SMTP plugin normally fixes it.')
-                . '</p></div>';
+                )); ?> <?php echo esc_html('This usually means the site cannot send mail at all — an SMTP plugin normally fixes it.'); ?></p></div>
+            <?php
         }
     }
 
@@ -298,28 +301,37 @@ final class NotificationsPage
         $enabled  = !empty($settings['enabled']);
         $scope    = Options::notificationScope();
 
-        echo '<div class="wrap cvm-wrap">';
-        echo '<h1>Convermetry Notifications</h1>';
-
-        echo '<p class="description">Send an internal email whenever a form submission is recorded, '
-            . 'enriched with the analytics context Convermetry already captured for that visitor.</p>';
+        ?>
+        <div class="wrap cvm-wrap">
+        <h1>Convermetry Notifications</h1>
+        <p class="description">Send an internal email whenever a form submission is recorded, enriched with the analytics context
+        Convermetry already captured for that visitor.</p>
+        <?php
 
         self::renderPrivacyCard();
 
-        echo '<form method="post" action="' . esc_url(admin_url('admin-post.php')) . '">';
+        ?>
+        <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
+        <?php
         wp_nonce_field(self::SAVE_ACTION, 'cvm_notifications_nonce');
-        echo '<input type="hidden" name="action" value="' . esc_attr(self::SAVE_ACTION) . '">';
+        ?>
+        <input type="hidden" name="action" value="<?php echo esc_attr(self::SAVE_ACTION); ?>">
+        <?php
 
         self::renderMasterSection($enabled, $settings);
         self::renderContentSection($includes);
         self::renderFormsSection($scope);
 
         submit_button('Save Notification Settings');
-        echo '</form>';
+        ?>
+        </form>
+        <?php
 
         self::renderQueueSection();
 
-        echo '</div>';
+        ?>
+        </div>
+        <?php
     }
 
     /**
@@ -329,27 +341,20 @@ final class NotificationsPage
      */
     private static function renderPrivacyCard(): void
     {
-        echo '<div class="cvm-card"><span class="cvm-card-label">Before you switch this on</span><ul>';
-
-        echo '<li><strong>Email creates a copy of lead data outside Convermetry\'s control.</strong> '
-            . 'Deleting a submission, or letting retention expire it, cancels any notification still queued — '
-            . 'but it cannot recall a message that has already been sent. Those copies live in the recipients\' '
-            . 'mailboxes under whatever retention policy applies there, not yours.</li>';
-
-        echo '<li><strong>Your form plugin may already email you.</strong> Most form plugins send their own '
-            . 'notification. These are in addition to those, not a replacement — check before you end up with two.</li>';
-
-        echo '<li><strong>"Sent" means handed to your mail system.</strong> Convermetry can tell you that WordPress '
-            . 'accepted a message, which is not the same as it reaching an inbox. Nothing here can confirm delivery '
-            . 'or detect spam foldering.</li>';
-
-        echo '<li>Notifications are <strong>internal only</strong>. Convermetry never emails the person who '
-            . 'submitted the form, and never uses a submitted address as the sender.</li>';
-
-        echo '<li>Convermetry uses <code>wp_mail()</code>, so any SMTP plugin you already run keeps working. '
-            . 'It stores no mail credentials of its own.</li>';
-
-        echo '</ul></div>';
+        ?>
+        <div class="cvm-card"><span class="cvm-card-label">Before you switch this on</span><ul>
+        <li><strong>Email creates a copy of lead data outside Convermetry's control.</strong> Deleting a submission, or letting
+        retention expire it, cancels any notification still queued — but it cannot recall a message that has already been sent. Those
+        copies live in the recipients' mailboxes under whatever retention policy applies there, not yours.</li>
+        <li><strong>Your form plugin may already email you.</strong> Most form plugins send their own notification. These are
+        in addition to those, not a replacement — check before you end up with two.</li>
+        <li><strong>"Sent" means handed to your mail system.</strong> Convermetry can tell you that WordPress accepted a message,
+        which is not the same as it reaching an inbox. Nothing here can confirm delivery or detect spam foldering.</li>
+        <li>Notifications are <strong>internal only</strong>. Convermetry never emails the person who submitted the form, and
+        never uses a submitted address as the sender.</li>
+        <li>Convermetry uses <code>wp_mail()</code>, so any SMTP plugin you already run keeps working. It stores no mail credentials
+        of its own.</li></ul></div>
+        <?php
     }
 
     /**
@@ -363,44 +368,31 @@ final class NotificationsPage
     {
         $recipients = is_array($settings['recipients'] ?? null) ? $settings['recipients'] : [];
 
-        echo '<h2>Delivery</h2><table class="form-table" role="presentation"><tbody>';
-
-        echo '<tr><th scope="row">Notifications</th><td>';
-        echo '<label><input type="checkbox" name="cvm_notifications[enabled]" value="1" '
-            . checked($enabled, true, false) . '> Email me when a form submission is recorded</label>';
-        echo '<p class="description">Off by default. Turning this off stops new notifications; any already queued '
-            . '(at most about two hours\' worth) still send with the settings that were active when the lead '
-            . 'arrived. Use <em>Discard queued notifications</em> below to drop them instead.</p>';
-        echo '</td></tr>';
-
-        echo '<tr><th scope="row"><label for="cvm-notify-recipients">Send to</label></th><td>';
-        echo '<textarea id="cvm-notify-recipients" name="cvm_notifications[recipients]" rows="4" class="large-text" '
-            . 'placeholder="sales@example.com&#10;owner@example.com">'
-            . esc_textarea(implode("\n", array_map('strval', $recipients)))
-            . '</textarea>';
-        echo '<p class="description">One address per line (commas and semicolons also work). Invalid addresses and '
-            . 'duplicates are removed when you save. Maximum '
-            . esc_html((string) NotificationSettings::MAX_RECIPIENTS) . '. Each recipient gets their own '
-            . 'message, so nobody sees who else is on the list.</p>';
-        echo '</td></tr>';
-
-        echo '<tr><th scope="row"><label for="cvm-notify-subject">Subject</label></th><td>';
-        echo '<input type="text" id="cvm-notify-subject" name="cvm_notifications[subject]" class="large-text" '
-            . 'value="' . esc_attr(Options::notificationSubjectTemplate()) . '">';
-        echo '<p class="description">Available placeholders: <code>{site_name}</code>, <code>{form_name}</code>, '
-            . '<code>{provider}</code>, <code>{channel}</code>, <code>{submission_id}</code>, <code>{form_id}</code>, '
-            . '<code>{campaign}</code>, <code>{date}</code>. Anything else is left as literal text.</p>';
-        echo '</td></tr>';
-
-        echo '<tr><th scope="row">Test</th><td>';
-        echo '<input type="email" id="cvm-notify-test-address" class="regular-text" placeholder="you@example.com"> ';
-        echo '<button type="button" class="button cvm-test-notification">Send test email</button> ';
-        echo '<span class="cvm-test-result" role="status" aria-live="polite"></span>';
-        echo '<p class="description">Sends a sample built entirely from made-up data. It never reads a real '
-            . 'submission, so testing cannot expose a lead.</p>';
-        echo '</td></tr>';
-
-        echo '</tbody></table>';
+        ?>
+        <h2>Delivery</h2><table class="form-table" role="presentation"><tbody>
+        <tr><th scope="row">Notifications</th><td>
+        <label><input type="checkbox" name="cvm_notifications[enabled]" value="1" <?php echo checked($enabled, true, false); ?>>
+        Email me when a form submission is recorded</label>
+        <p class="description">Off by default. Turning this off stops new notifications; any already queued (at most about
+        two hours' worth) still send with the settings that were active when the lead arrived. Use <em>Discard queued notifications</em>
+        below to drop them instead.</p></td></tr>
+        <tr><th scope="row"><label for="cvm-notify-recipients">Send to</label></th><td>
+        <textarea id="cvm-notify-recipients" name="cvm_notifications[recipients]" rows="4" class="large-text" placeholder="sales@example.com&#10;owner@example.com"><?php echo esc_textarea(implode("\n", array_map('strval', $recipients))); ?></textarea>
+        <p class="description">One address per line (commas and semicolons also work). Invalid addresses and duplicates are
+        removed when you save. Maximum <?php echo esc_html((string) NotificationSettings::MAX_RECIPIENTS); ?>. Each recipient gets
+        their own message, so nobody sees who else is on the list.</p></td></tr>
+        <tr><th scope="row"><label for="cvm-notify-subject">Subject</label></th><td>
+        <input type="text" id="cvm-notify-subject" name="cvm_notifications[subject]" class="large-text" value="<?php echo esc_attr(Options::notificationSubjectTemplate()); ?>">
+        <p class="description">Available placeholders: <code>{site_name}</code>, <code>{form_name}</code>, <code>{provider}</code>,
+        <code>{channel}</code>, <code>{submission_id}</code>, <code>{form_id}</code>, <code>{campaign}</code>, <code>{date}</code>.
+        Anything else is left as literal text.</p></td></tr>
+        <tr><th scope="row">Test</th><td>
+        <input type="email" id="cvm-notify-test-address" class="regular-text" placeholder="you@example.com"> 
+        <button type="button" class="button cvm-test-notification">Send test email</button> 
+        <span class="cvm-test-result" role="status" aria-live="polite"></span>
+        <p class="description">Sends a sample built entirely from made-up data. It never reads a real submission, so testing
+        cannot expose a lead.</p></td></tr></tbody></table>
+        <?php
     }
 
     /**
@@ -411,37 +403,29 @@ final class NotificationsPage
      */
     private static function renderContentSection(array $includes): void
     {
-        echo '<h2>What to include</h2><table class="form-table" role="presentation"><tbody>';
-
-        echo '<tr><th scope="row">Submitted fields</th><td>';
-        echo '<label><input type="checkbox" name="cvm_notifications[include_fields]" value="1" '
-            . checked($includes['fields'], true, false) . '> Include the visitor\'s answers</label>';
-        echo '<p class="description">Fields that look like credentials — passwords, tokens, API keys, secrets, '
-            . 'authorization values — are always left out, even with this on.</p>';
-        echo '</td></tr>';
-
-        echo '<tr><th scope="row">Analytics summary</th><td>';
-        echo '<label><input type="checkbox" name="cvm_notifications[include_analytics]" value="1" '
-            . checked($includes['analytics'], true, false) . '> Include channel, campaign, and session details</label>';
-        echo '<p class="description">Channel, UTM source/medium/campaign, landing page, device, pages viewed, and '
-            . 'session start. When a visitor could not be correlated, the email says so explicitly.</p>';
-        echo '</td></tr>';
-
-        echo '<tr><th scope="row">Visitor journey</th><td>';
-        echo '<label><input type="checkbox" name="cvm_notifications[include_journey]" value="1" '
-            . checked($includes['journey'], true, false) . '> Include the pages this visitor viewed</label>';
-        echo '<p class="description"><strong>Off by default.</strong> This is browsing history for an identifiable '
-            . 'person; mailing it to a shared inbox is a policy decision worth making deliberately.</p>';
-        echo '</td></tr>';
-
-        echo '<tr><th scope="row">IP address</th><td>';
-        echo '<label><input type="checkbox" name="cvm_notifications[include_ip]" value="1" '
-            . checked($includes['ip'], true, false) . '> Include the submitter\'s IP address</label>';
-        echo '<p class="description"><strong>Off by default.</strong> An IP address is personal data in the EU and UK. '
-            . 'It is only available at all when IP storage is enabled on the Settings page.</p>';
-        echo '</td></tr>';
-
-        echo '</tbody></table>';
+        ?>
+        <h2>What to include</h2><table class="form-table" role="presentation"><tbody>
+        <tr><th scope="row">Submitted fields</th><td>
+        <label><input type="checkbox" name="cvm_notifications[include_fields]" value="1" <?php echo checked($includes['fields'], true, false); ?>>
+        Include the visitor's answers</label>
+        <p class="description">Fields that look like credentials — passwords, tokens, API keys, secrets, authorization values
+        — are always left out, even with this on.</p></td></tr>
+        <tr><th scope="row">Analytics summary</th><td>
+        <label><input type="checkbox" name="cvm_notifications[include_analytics]" value="1" <?php echo checked($includes['analytics'], true, false); ?>>
+        Include channel, campaign, and session details</label>
+        <p class="description">Channel, UTM source/medium/campaign, landing page, device, pages viewed, and session start.
+        When a visitor could not be correlated, the email says so explicitly.</p></td></tr>
+        <tr><th scope="row">Visitor journey</th><td>
+        <label><input type="checkbox" name="cvm_notifications[include_journey]" value="1" <?php echo checked($includes['journey'], true, false); ?>>
+        Include the pages this visitor viewed</label>
+        <p class="description"><strong>Off by default.</strong> This is browsing history for an identifiable person; mailing
+        it to a shared inbox is a policy decision worth making deliberately.</p></td></tr>
+        <tr><th scope="row">IP address</th><td>
+        <label><input type="checkbox" name="cvm_notifications[include_ip]" value="1" <?php echo checked($includes['ip'], true, false); ?>>
+        Include the submitter's IP address</label>
+        <p class="description"><strong>Off by default.</strong> An IP address is personal data in the EU and UK. It is only
+        available at all when IP storage is enabled on the Settings page.</p></td></tr></tbody></table>
+        <?php
     }
 
     /**
@@ -452,51 +436,56 @@ final class NotificationsPage
      */
     private static function renderFormsSection(string $scope): void
     {
-        echo '<h2>Which forms</h2><table class="form-table" role="presentation"><tbody>';
-
-        echo '<tr><th scope="row">Scope</th><td>';
-        echo '<label><input type="radio" name="cvm_notifications[scope]" value="all" '
-            . checked($scope, 'all', false) . '> Every form, except those switched off below</label><br>';
-        echo '<label><input type="radio" name="cvm_notifications[scope]" value="selected" '
-            . checked($scope, 'selected', false) . '> Only the forms switched on below</label>';
-        echo '</td></tr>';
-
-        echo '</tbody></table>';
+        ?>
+        <h2>Which forms</h2><table class="form-table" role="presentation"><tbody>
+        <tr><th scope="row">Scope</th><td>
+        <label><input type="radio" name="cvm_notifications[scope]" value="all" <?php echo checked($scope, 'all', false); ?>>
+        Every form, except those switched off below</label><br>
+        <label><input type="radio" name="cvm_notifications[scope]" value="selected" <?php echo checked($scope, 'selected', false); ?>>
+        Only the forms switched on below</label></td></tr></tbody></table>
+        <?php
 
         $discovered = self::discoveredForms();
 
         if ($discovered === []) {
-            echo '<div class="notice notice-info inline"><p>No forms have been discovered yet. Under '
-                . '<em>Every form</em>, any form that appears later will notify automatically.</p></div>';
+            ?>
+            <div class="notice notice-info inline"><p>No forms have been discovered yet. Under <em>Every form</em>, any
+            form that appears later will notify automatically.</p></div>
+            <?php
             return;
         }
 
-        echo '<table class="widefat striped"><thead><tr>'
-            . '<th scope="col">Form</th><th scope="col">Provider</th><th scope="col">Notifications</th>'
-            . '</tr></thead><tbody>';
+        ?>
+        <table class="widefat striped"><thead><tr><th scope="col">Form</th><th scope="col">Provider</th><th scope="col">Notifications</th></tr></thead><tbody>
+        <?php
 
         foreach ($discovered as $form) {
             $formKey = (string) $form['form_key'];
             $rule    = Options::notificationFormRule($formKey);
 
-            echo '<tr>';
-            echo '<td>' . esc_html((string) $form['name']) . '<br><code>' . esc_html($formKey) . '</code></td>';
-            echo '<td>' . esc_html((string) $form['provider_label']) . '</td>';
-            echo '<td>';
-            echo '<input type="hidden" name="cvm_rendered_forms[]" value="' . esc_attr($formKey) . '">';
-            echo '<select name="cvm_notifications[forms][' . esc_attr($formKey) . ']">';
+            ?>
+            <tr>
+            <td><?php echo esc_html((string) $form['name']); ?><br><code><?php echo esc_html($formKey); ?></code></td>
+            <td><?php echo esc_html((string) $form['provider_label']); ?></td>
+            <td>
+            <input type="hidden" name="cvm_rendered_forms[]" value="<?php echo esc_attr($formKey); ?>">
+            <select name="cvm_notifications[forms][<?php echo esc_attr($formKey); ?>]">
+            <?php
             foreach (['inherit' => 'Use the scope above', 'enabled' => 'Always notify', 'disabled' => 'Never notify'] as $value => $label) {
-                echo '<option value="' . esc_attr($value) . '" ' . selected($rule, $value, false) . '>'
-                    . esc_html($label) . '</option>';
+                ?>
+                <option value="<?php echo esc_attr($value); ?>" <?php echo selected($rule, $value, false); ?>><?php echo esc_html($label); ?></option>
+                <?php
             }
-            echo '</select></td>';
-            echo '</tr>';
+            ?>
+            </select></td></tr>
+            <?php
         }
 
-        echo '</tbody></table>';
-
-        echo '<p class="description">Elementor forms are identified by their <em>name</em>, so renaming an Elementor '
-            . 'form resets its rule here to the scope default — the same behaviour as the Forms page.</p>';
+        ?>
+        </tbody></table>
+        <p class="description">Elementor forms are identified by their <em>name</em>, so renaming an Elementor form resets
+        its rule here to the scope default — the same behaviour as the Forms page.</p>
+        <?php
     }
 
     /**
@@ -508,19 +497,27 @@ final class NotificationsPage
     {
         $pending = NotificationQueue::pendingCount();
 
-        echo '<h2>Queue</h2>';
-        echo '<p>' . esc_html(sprintf(
+        ?>
+        <h2>Queue</h2>
+        <p><?php echo esc_html(sprintf(
             '%d notification%s waiting to be sent.',
             $pending,
             $pending === 1 ? '' : 's'
-        )) . '</p>';
+        )); ?></p>
+        <?php
 
         if ($pending > 0) {
-            echo '<form method="post" action="' . esc_url(admin_url('admin-post.php')) . '">';
+            ?>
+            <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
+            <?php
             wp_nonce_field(self::CANCEL_ACTION, 'cvm_notifications_nonce');
-            echo '<input type="hidden" name="action" value="' . esc_attr(self::CANCEL_ACTION) . '">';
+            ?>
+            <input type="hidden" name="action" value="<?php echo esc_attr(self::CANCEL_ACTION); ?>">
+            <?php
             submit_button('Discard queued notifications', 'delete', 'submit', false);
-            echo '</form>';
+            ?>
+            </form>
+            <?php
         }
     }
 

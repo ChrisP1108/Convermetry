@@ -311,29 +311,34 @@ final class WebhooksPage
         }
 
         if (!empty($_GET['cvm_saved'])) {
-            echo '<div class="notice notice-success is-dismissible"><p>Webhook settings saved.</p></div>';
+            ?>
+            <div class="notice notice-success is-dismissible"><p>Webhook settings saved.</p></div>
+            <?php
 
             $rejected = get_transient('cvm_webhook_rejected_' . get_current_user_id());
             if (is_array($rejected) && $rejected !== []) {
                 delete_transient('cvm_webhook_rejected_' . get_current_user_id());
                 foreach ($rejected as $url) {
-                    echo '<div class="notice notice-warning"><p>Endpoint <code>' . esc_html((string) $url)
-                        . '</code> was not saved: endpoints must be valid HTTPS URLs. (Development setups can allow '
-                        . 'HTTP via the <code>convermetry_allow_insecure_webhooks</code> filter.)</p></div>';
+                    ?>
+                    <div class="notice notice-warning"><p>Endpoint <code><?php echo esc_html((string) $url); ?></code>
+                    was not saved: endpoints must be valid HTTPS URLs. (Development setups can allow HTTP via the <code>convermetry_allow_insecure_webhooks</code>
+                    filter.)</p></div>
+                    <?php
                 }
             }
         }
 
         if (!empty($_GET['cvm_retry_discarded'])) {
             if ($_GET['cvm_retry_discarded'] === 'busy') {
-                echo '<div class="notice notice-warning is-dismissible"><p>'
-                    . 'A webhook dispatch run is in progress; the retry was not discarded. Try again in a moment.'
-                    . '</p></div>';
+                ?>
+                <div class="notice notice-warning is-dismissible"><p>A webhook dispatch run is in progress; the retry
+                was not discarded. Try again in a moment.</p></div>
+                <?php
             } else {
-                echo '<div class="notice notice-success is-dismissible"><p>'
-                    . 'The pending retry was discarded. The endpoint\'s next scheduled delivery will cover that '
-                    . 'window\'s data again under a new delivery id.'
-                    . '</p></div>';
+                ?>
+                <div class="notice notice-success is-dismissible"><p>The pending retry was discarded. The endpoint's
+                next scheduled delivery will cover that window's data again under a new delivery id.</p></div>
+                <?php
             }
         }
     }
@@ -366,40 +371,39 @@ final class WebhooksPage
             }
         }
 
-        echo '<div class="wrap cvm-wrap">';
-        echo '<h1>Convermetry Webhooks</h1>';
-
-        echo '<form method="post" action="' . esc_url(admin_url('admin-post.php')) . '">';
+        ?>
+        <div class="wrap cvm-wrap">
+        <h1>Convermetry Webhooks</h1>
+        <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
+        <?php
         wp_nonce_field(self::SAVE_ACTION, 'cvm_webhooks_nonce');
-        echo '<input type="hidden" name="action" value="' . esc_attr(self::SAVE_ACTION) . '">';
+        ?>
+        <input type="hidden" name="action" value="<?php echo esc_attr(self::SAVE_ACTION); ?>">
+        <?php
 
         // ── Webhook Status toggle card ─────────────────────────────────
-        echo '<div class="cvm-card cvm-toggle-card" id="cvm-webhook-toggle-card"'
-            . ($hasAnyUrl ? '' : ' style="display:none"') . '>';
-        echo '<h2 class="cvm-card-title">Webhook Status</h2>';
-        echo '<div class="cvm-toggle-row">';
-        echo '<label class="cvm-toggle" for="cvm_webhook_active" aria-label="Toggle webhook active state">';
-        echo '<input type="checkbox" id="cvm_webhook_active" name="cvm_webhook_active" value="1" '
-            . checked(!empty($settings['active']), true, false) . '>';
-        echo '<span class="cvm-toggle-slider" aria-hidden="true"></span>';
-        echo '</label>';
-        echo '<span class="cvm-toggle-label" id="cvm-webhook-toggle-label">'
-            . (!empty($settings['active']) ? 'Active' : 'Inactive') . '</span>';
-        echo '</div>';
-        echo '<p class="description">When inactive, no new deliveries are sent — scheduled analytics reports pause '
-            . 'and newly confirmed form submissions wait in the queue. Saved endpoints and settings are preserved.</p>';
-        echo '</div>';
+        ?>
+        <div class="cvm-card cvm-toggle-card" id="cvm-webhook-toggle-card"<?php echo ($hasAnyUrl ? '' : ' style="display:none"'); ?>>
+        <h2 class="cvm-card-title">Webhook Status</h2>
+        <div class="cvm-toggle-row">
+        <label class="cvm-toggle" for="cvm_webhook_active" aria-label="Toggle webhook active state">
+        <input type="checkbox" id="cvm_webhook_active" name="cvm_webhook_active" value="1" <?php echo checked(!empty($settings['active']), true, false); ?>>
+        <span class="cvm-toggle-slider" aria-hidden="true"></span></label>
+        <span class="cvm-toggle-label" id="cvm-webhook-toggle-label"><?php echo (!empty($settings['active']) ? 'Active' : 'Inactive'); ?></span></div>
+        <p class="description">When inactive, no new deliveries are sent — scheduled analytics reports pause and newly confirmed
+        form submissions wait in the queue. Saved endpoints and settings are preserved.</p></div>
+        <?php
 
         // ── Endpoints card ─────────────────────────────────────────────
-        echo '<div class="cvm-card">';
-        echo '<h2 class="cvm-card-title">Webhook Endpoints</h2>';
-        echo '<p class="description" style="margin-bottom:14px;">Each endpoint chooses which message types it receives: '
-            . '<strong>Analytics Reports</strong> (aggregated analytics on the schedule below) and/or '
-            . '<strong>Form Submissions</strong> (each confirmed lead, delivered immediately in the background). '
-            . 'Endpoints must use HTTPS. Add a label so each endpoint is easy to identify in the Activity Log. '
-            . 'Failed deliveries retry automatically — 5m, 30m, 2h, 6h, then 16h after the initial attempt.</p>';
-
-        echo '<div id="cvm-webhooks-container">';
+        ?>
+        <div class="cvm-card">
+        <h2 class="cvm-card-title">Webhook Endpoints</h2>
+        <p class="description" style="margin-bottom:14px;">Each endpoint chooses which message types it receives: <strong>Analytics
+        Reports</strong> (aggregated analytics on the schedule below) and/or <strong>Form Submissions</strong> (each confirmed lead,
+        delivered immediately in the background). Endpoints must use HTTPS. Add a label so each endpoint is easy to identify in the
+        Activity Log. Failed deliveries retry automatically — 5m, 30m, 2h, 6h, then 16h after the initial attempt.</p>
+        <div id="cvm-webhooks-container">
+        <?php
         foreach ($endpoints as $idx => $endpoint) {
             self::renderEndpointBlock(
                 $idx,
@@ -410,27 +414,25 @@ final class WebhooksPage
                 $endpoint->forms
             );
         }
-        echo '</div>';
-
-        echo '<button type="button" id="cvm-add-webhook" class="button" style="margin-top:12px;">+ Add Endpoint</button>';
-        echo '</div>';
+        ?>
+        </div>
+        <button type="button" id="cvm-add-webhook" class="button" style="margin-top:12px;">+ Add Endpoint</button></div>
+        <?php
 
         // ── Delivery settings card ─────────────────────────────────────
-        echo '<div class="cvm-card">';
-        echo '<h2 class="cvm-card-title">Delivery Settings</h2>';
-        echo '<table class="form-table" role="presentation">';
-
-        echo '<tr><th scope="row"><label for="cvm-shared-secret">Shared signing secret <span class="description">(optional)</span></label></th><td>';
-        echo '<input type="text" id="cvm-shared-secret" class="regular-text code" autocomplete="off" name="cvm_shared_secret" value="'
-            . esc_attr((string) $settings['shared_secret']) . '">';
-        echo '<p class="description">When set, every webhook request includes an <code>X-Convermetry-Signature</code> header — '
-            . '<code>sha256=&lt;hex&gt;</code>, the HMAC-SHA256 of the raw JSON body keyed with this secret — so receivers can '
-            . 'verify payloads genuinely came from this site. An endpoint block\'s own signing secret overrides this shared one '
-            . 'for that endpoint, so one receiver never learns the key that signs payloads for the others.</p>';
-        echo '</td></tr>';
-
-        echo '<tr><th scope="row"><label for="cvm-interval">Analytics send interval</label></th><td>';
-        echo '<select id="cvm-interval" name="cvm_interval">';
+        ?>
+        <div class="cvm-card">
+        <h2 class="cvm-card-title">Delivery Settings</h2>
+        <table class="form-table" role="presentation">
+        <tr><th scope="row"><label for="cvm-shared-secret">Shared signing secret <span class="description">(optional)</span></label></th><td>
+        <input type="text" id="cvm-shared-secret" class="regular-text code" autocomplete="off" name="cvm_shared_secret" value="<?php echo esc_attr((string) $settings['shared_secret']); ?>">
+        <p class="description">When set, every webhook request includes an <code>X-Convermetry-Signature</code> header —
+        <code>sha256=&lt;hex&gt;</code>, the HMAC-SHA256 of the raw JSON body keyed with this secret — so receivers can verify payloads
+        genuinely came from this site. An endpoint block's own signing secret overrides this shared one for that endpoint, so one receiver
+        never learns the key that signs payloads for the others.</p></td></tr>
+        <tr><th scope="row"><label for="cvm-interval">Analytics send interval</label></th><td>
+        <select id="cvm-interval" name="cvm_interval">
+        <?php
         $intervalLabels = [
             'hourly'     => 'Hourly',
             'twicedaily' => 'Twice daily',
@@ -438,13 +440,16 @@ final class WebhooksPage
             'weekly'     => 'Weekly',
         ];
         foreach ($intervalLabels as $value => $label) {
-            echo '<option value="' . esc_attr($value) . '" ' . selected($settings['interval'], $value, false) . '>'
-                . esc_html($label) . '</option>';
+            ?>
+            <option value="<?php echo esc_attr($value); ?>" <?php echo selected($settings['interval'], $value, false); ?>><?php echo esc_html($label); ?></option>
+            <?php
         }
-        echo '</select>';
-        echo '<p class="description">Applies to Analytics Reports only — form submissions always deliver immediately. '
-            . 'Each site delivers at a random, stable time within the interval (scattered up to 24 hours), so many sites '
-            . 'sharing an endpoint don\'t all send at the same moment.';
+        ?>
+        </select>
+        <p class="description">Applies to Analytics Reports only — form submissions always deliver immediately. Each site
+        delivers at a random, stable time within the interval (scattered up to 24 hours), so many sites sharing an endpoint don't all
+        send at the same moment.
+        <?php
 
         $next = wp_next_scheduled(AnalyticsDispatcher::CRON_HOOK);
         if ($next !== false) {
@@ -452,66 +457,66 @@ final class WebhooksPage
                 ? 'in ' . human_time_diff(time(), (int) $next)
                 : 'as soon as WP-Cron next runs';
 
-            echo ' Next scheduled send: <strong>' . esc_html(gmdate('Y-m-d H:i', (int) $next)) . ' UTC</strong> ('
-                . esc_html($due) . ').';
+            ?>
+             Next scheduled send: <strong><?php echo esc_html(gmdate('Y-m-d H:i', (int) $next)); ?> UTC</strong> (<?php echo esc_html($due); ?>).<?php
         }
-        echo '</p></td></tr>';
 
-        echo '<tr><th scope="row">History backfill</th><td>';
-        echo '<label><input type="checkbox" name="cvm_backfill" value="1" '
-            . checked(!empty($settings['backfill']), true, false) . '> Send retained history to new analytics endpoints</label>';
-        echo '<p class="description">When enabled, an endpoint that has never received an analytics delivery starts from the '
-            . 'beginning of the retention window instead of one send interval ago. History is delivered in interval-sized '
-            . 'windows (up to 10 per scheduled run), so a long backlog is worked off over a few runs.</p>';
-        echo '</td></tr>';
-
-        echo '<tr><th scope="row">Form delivery failure mode</th><td>';
-        echo '<label style="display:block;margin-bottom:6px;"><input type="radio" name="cvm_failure_mode" value="background" '
-            . checked($settings['failure_mode'] !== 'show_error', true, false) . '> '
-            . '<strong>Retry in background</strong> (recommended) — the visitor always sees the form\'s normal success state; '
-            . 'failed deliveries retry automatically.</label>';
-        echo '<label style="display:block;"><input type="radio" name="cvm_failure_mode" value="show_error" '
-            . checked($settings['failure_mode'] === 'show_error', true, false) . '> '
-            . '<strong>Show error to visitor</strong> — delivery runs during the submission and a failure is shown on the form '
-            . '(supported for Elementor Pro forms; other providers always use background delivery).</label>';
-        echo '</td></tr>';
-
-        echo '</table>';
-        echo '</div>';
+        /* The close tag hugs </p>: on its own line it would emit a newline
+           between the sentence above and the closing tag. */
+        ?></p></td></tr>
+        <tr><th scope="row">History backfill</th><td>
+        <label><input type="checkbox" name="cvm_backfill" value="1" <?php echo checked(!empty($settings['backfill']), true, false); ?>>
+        Send retained history to new analytics endpoints</label>
+        <p class="description">When enabled, an endpoint that has never received an analytics delivery starts from the beginning
+        of the retention window instead of one send interval ago. History is delivered in interval-sized windows (up to 10 per scheduled
+        run), so a long backlog is worked off over a few runs.</p></td></tr>
+        <tr><th scope="row">Form delivery failure mode</th><td>
+        <label style="display:block;margin-bottom:6px;"><input type="radio" name="cvm_failure_mode" value="background" <?php echo checked($settings['failure_mode'] !== 'show_error', true, false); ?>>
+        <strong>Retry in background</strong> (recommended) — the visitor always sees the form's normal success state; failed deliveries
+        retry automatically.</label>
+        <label style="display:block;"><input type="radio" name="cvm_failure_mode" value="show_error" <?php echo checked($settings['failure_mode'] === 'show_error', true, false); ?>>
+        <strong>Show error to visitor</strong> — delivery runs during the submission and a failure is shown on the form (supported
+        for Elementor Pro forms; other providers always use background delivery).</label></td></tr></table></div>
+        <?php
 
         // ── Request customization card ─────────────────────────────────
-        echo '<div class="cvm-card">';
-        echo '<h2 class="cvm-card-title">Request Customization</h2>';
-        echo '<p class="description" style="margin-bottom:14px;">Headers and URL query parameters added to every webhook '
-            . 'request. Per-form headers and parameters (configured on the Forms page) are merged after these; when page URL '
-            . 'parameters are included, the precedence is: global parameters &rarr; page parameters &rarr; per-form parameters. '
-            . 'Header values that look like credentials are redacted in the Activity Log but sent intact.</p>';
-
-        echo '<h3>Global Request Headers</h3>';
+        ?>
+        <div class="cvm-card">
+        <h2 class="cvm-card-title">Request Customization</h2>
+        <p class="description" style="margin-bottom:14px;">Headers and URL query parameters added to every webhook request.
+        Per-form headers and parameters (configured on the Forms page) are merged after these; when page URL parameters are included,
+        the precedence is: global parameters &rarr; page parameters &rarr; per-form parameters. Header values that look like credentials
+        are redacted in the Activity Log but sent intact.</p>
+        <h3>Global Request Headers</h3>
+        <?php
         self::renderKvBuilder('cvm_global_headers', Options::globalHeaders(), 'e.g. Authorization');
 
-        echo '<h3>Global URL Query Parameters</h3>';
+        ?>
+        <h3>Global URL Query Parameters</h3>
+        <?php
         self::renderKvBuilder('cvm_global_query', Options::globalQueryParams(), 'e.g. source');
 
-        echo '<p style="margin-top:12px;"><label><input type="checkbox" name="cvm_include_page_params" value="1" '
-            . checked(!empty($settings['include_page_params']), true, false) . '> '
-            . 'Include page URL parameters — query parameters present on the page a form was submitted from '
-            . '(e.g. <code>?utm_source=google&amp;gclid=…</code>) are appended to the webhook URL for that submission.</label></p>';
-
-        echo '</div>';
+        ?>
+        <p style="margin-top:12px;"><label><input type="checkbox" name="cvm_include_page_params" value="1" <?php echo checked(!empty($settings['include_page_params']), true, false); ?>>
+        Include page URL parameters — query parameters present on the page a form was submitted from (e.g. <code>?utm_source=google&amp;gclid=…</code>)
+        are appended to the webhook URL for that submission.</label></p></div>
+        <?php
 
         submit_button('Save Webhook Settings');
-        echo '</form>';
+        ?>
+        </form>
+        <?php
 
         self::renderPendingRetries();
         self::renderPendingQueue();
 
         $logUrl = add_query_arg(['page' => ActivityLogPage::MENU_SLUG], self_admin_url('admin.php'));
-        echo '<h2>Activity Log</h2>';
-        echo '<p>Every delivery attempt — analytics report or form submission, scheduled, immediate, retry, or test — is '
-            . 'recorded with its payload and response (sensitive values redacted) on the <a href="' . esc_url($logUrl) . '">Activity Log</a> page.</p>';
-
-        echo '</div>';
+        ?>
+        <h2>Activity Log</h2>
+        <p>Every delivery attempt — analytics report or form submission, scheduled, immediate, retry, or test — is recorded
+        with its payload and response (sensitive values redacted) on the <a href="<?php echo esc_url($logUrl); ?>">Activity Log</a>
+        page.</p></div>
+        <?php
     }
 
     /**
@@ -527,52 +532,35 @@ final class WebhooksPage
      */
     private static function renderEndpointBlock(int $index, string $url, string $label, string $secret, bool $analytics, bool $forms): void
     {
-        echo '<div class="cvm-webhook-block" data-webhook-index="' . esc_attr((string) $index) . '">';
-
-        echo '<div class="cvm-webhook-block-header">';
-        echo '<strong class="cvm-webhook-block-title">Endpoint ' . esc_html((string) ($index + 1)) . '</strong>';
+        ?>
+        <div class="cvm-webhook-block" data-webhook-index="<?php echo esc_attr((string) $index); ?>">
+        <div class="cvm-webhook-block-header">
+        <strong class="cvm-webhook-block-title">Endpoint <?php echo esc_html((string) ($index + 1)); ?></strong>
+        <?php
         if ($index > 0) {
-            echo '<button type="button" class="button cvm-remove-webhook-btn" aria-label="Remove endpoint '
-                . esc_attr((string) ($index + 1)) . '">Remove</button>';
+            ?>
+            <button type="button" class="button cvm-remove-webhook-btn" aria-label="Remove endpoint <?php echo esc_attr((string) ($index + 1)); ?>">Remove</button>
+            <?php
         }
-        echo '</div>';
-
-        echo '<div class="cvm-webhook-url-row">';
-        echo '<input type="url" class="cvm-webhook-url-input regular-text code" '
-            . 'name="cvm_webhooks[' . esc_attr((string) $index) . '][url]" '
-            . 'value="' . esc_attr($url) . '" placeholder="https://example.com/convermetry-hook" '
-            . 'aria-label="Endpoint ' . esc_attr((string) ($index + 1)) . ' URL">';
-        echo '</div>';
-
-        echo '<div class="cvm-webhook-field">';
-        echo '<input type="text" class="regular-text cvm-webhook-label-input" '
-            . 'name="cvm_webhooks[' . esc_attr((string) $index) . '][label]" '
-            . 'value="' . esc_attr($label) . '" placeholder="Label (optional — shown in the Activity Log)" '
-            . 'aria-label="Endpoint ' . esc_attr((string) ($index + 1)) . ' label">';
-        echo '</div>';
-
-        echo '<div class="cvm-webhook-field">';
-        echo '<input type="text" class="regular-text code cvm-webhook-secret-input" autocomplete="off" '
-            . 'name="cvm_webhooks[' . esc_attr((string) $index) . '][secret]" '
-            . 'value="' . esc_attr($secret) . '" placeholder="Signing secret (optional — overrides the shared secret)" '
-            . 'aria-label="Endpoint ' . esc_attr((string) ($index + 1)) . ' signing secret">';
-        echo '</div>';
-
-        echo '<fieldset class="cvm-webhook-types">';
-        echo '<legend class="screen-reader-text">Delivery types for endpoint ' . esc_attr((string) ($index + 1)) . '</legend>';
-        echo '<label><input type="checkbox" name="cvm_webhooks[' . esc_attr((string) $index) . '][analytics]" value="1" '
-            . checked($analytics, true, false) . '> Analytics Reports</label> ';
-        echo '<label><input type="checkbox" name="cvm_webhooks[' . esc_attr((string) $index) . '][forms]" value="1" '
-            . checked($forms, true, false) . '> Form Submissions</label>';
-        echo '</fieldset>';
-
-        echo '<div class="cvm-endpoint-tests">';
-        echo '<button type="button" class="button cvm-test-endpoint" data-type="analytics">Send analytics test</button> ';
-        echo '<button type="button" class="button cvm-test-endpoint" data-type="form">Send form test</button>';
-        echo '<span class="cvm-test-result" role="status" aria-live="polite"></span>';
-        echo '</div>';
-
-        echo '</div>';
+        ?>
+        </div>
+        <div class="cvm-webhook-url-row">
+        <input type="url" class="cvm-webhook-url-input regular-text code" name="cvm_webhooks[<?php echo esc_attr((string) $index); ?>][url]" value="<?php echo esc_attr($url); ?>" placeholder="https://example.com/convermetry-hook" aria-label="Endpoint <?php echo esc_attr((string) ($index + 1)); ?> URL"></div>
+        <div class="cvm-webhook-field">
+        <input type="text" class="regular-text cvm-webhook-label-input" name="cvm_webhooks[<?php echo esc_attr((string) $index); ?>][label]" value="<?php echo esc_attr($label); ?>" placeholder="Label (optional — shown in the Activity Log)" aria-label="Endpoint <?php echo esc_attr((string) ($index + 1)); ?> label"></div>
+        <div class="cvm-webhook-field">
+        <input type="text" class="regular-text code cvm-webhook-secret-input" autocomplete="off" name="cvm_webhooks[<?php echo esc_attr((string) $index); ?>][secret]" value="<?php echo esc_attr($secret); ?>" placeholder="Signing secret (optional — overrides the shared secret)" aria-label="Endpoint <?php echo esc_attr((string) ($index + 1)); ?> signing secret"></div>
+        <fieldset class="cvm-webhook-types">
+        <legend class="screen-reader-text">Delivery types for endpoint <?php echo esc_attr((string) ($index + 1)); ?></legend>
+        <label><input type="checkbox" name="cvm_webhooks[<?php echo esc_attr((string) $index); ?>][analytics]" value="1" <?php echo checked($analytics, true, false); ?>>
+        Analytics Reports</label> 
+        <label><input type="checkbox" name="cvm_webhooks[<?php echo esc_attr((string) $index); ?>][forms]" value="1" <?php echo checked($forms, true, false); ?>>
+        Form Submissions</label></fieldset>
+        <div class="cvm-endpoint-tests">
+        <button type="button" class="button cvm-test-endpoint" data-type="analytics">Send analytics test</button> 
+        <button type="button" class="button cvm-test-endpoint" data-type="form">Send form test</button>
+        <span class="cvm-test-result" role="status" aria-live="polite"></span></div></div>
+        <?php
     }
 
     /**
@@ -585,22 +573,24 @@ final class WebhooksPage
      */
     private static function renderKvBuilder(string $name, array $pairs, string $placeholder): void
     {
-        echo '<div class="cvm-kv-builder" data-kv-name="' . esc_attr($name) . '" data-kv-next="' . esc_attr((string) count($pairs)) . '">';
-        echo '<div class="cvm-kv-rows">';
+        ?>
+        <div class="cvm-kv-builder" data-kv-name="<?php echo esc_attr($name); ?>" data-kv-next="<?php echo esc_attr((string) count($pairs)); ?>">
+        <div class="cvm-kv-rows">
+        <?php
 
         foreach ($pairs as $index => $pair) {
-            echo '<div class="cvm-kv-row">';
-            echo '<input type="text" class="regular-text code cvm-kv-key" name="' . esc_attr($name . '[' . $index . '][key]')
-                . '" placeholder="' . esc_attr($placeholder) . '" value="' . esc_attr((string) ($pair['key'] ?? '')) . '">';
-            echo '<input type="text" class="regular-text code cvm-kv-value" name="' . esc_attr($name . '[' . $index . '][value]')
-                . '" placeholder="Value" value="' . esc_attr((string) ($pair['value'] ?? '')) . '">';
-            echo '<button type="button" class="button cvm-kv-remove" aria-label="Remove this row">Remove</button>';
-            echo '</div>';
+            ?>
+            <div class="cvm-kv-row">
+            <input type="text" class="regular-text code cvm-kv-key" name="<?php echo esc_attr($name . '[' . $index . '][key]'); ?>" placeholder="<?php echo esc_attr($placeholder); ?>" value="<?php echo esc_attr((string) ($pair['key'] ?? '')); ?>">
+            <input type="text" class="regular-text code cvm-kv-value" name="<?php echo esc_attr($name . '[' . $index . '][value]'); ?>" placeholder="Value" value="<?php echo esc_attr((string) ($pair['value'] ?? '')); ?>">
+            <button type="button" class="button cvm-kv-remove" aria-label="Remove this row">Remove</button></div>
+            <?php
         }
 
-        echo '</div>';
-        echo '<button type="button" class="button cvm-kv-add">+ Add</button>';
-        echo '</div>';
+        ?>
+        </div>
+        <button type="button" class="button cvm-kv-add">+ Add</button></div>
+        <?php
     }
 
     /**
@@ -618,7 +608,9 @@ final class WebhooksPage
 
         $max = AnalyticsDispatcher::maxRetries();
 
-        echo '<div class="notice notice-warning inline"><p><strong>Pending analytics delivery retries</strong></p><ul style="margin-left:1.5em;list-style:disc;">';
+        ?>
+        <div class="notice notice-warning inline"><p><strong>Pending analytics delivery retries</strong></p><ul style="margin-left:1.5em;list-style:disc;">
+        <?php
 
         foreach ($pending as $retry) {
             $when = (int) ($retry['scheduled_for'] ?? 0);
@@ -651,12 +643,12 @@ final class WebhooksPage
             );
         }
 
-        echo '</ul>';
-        echo '<p class="description">Discarding a retry drops its frozen payload; the data itself is not lost — the '
-            . 'endpoint\'s next scheduled delivery covers that window again under a new delivery id (a receiver that '
-            . 'already processed the frozen delivery would then see that data twice). Frozen retries older than the '
-            . 'retention window are discarded automatically.</p>';
-        echo '</div>';
+        ?>
+        </ul>
+        <p class="description">Discarding a retry drops its frozen payload; the data itself is not lost — the endpoint's
+        next scheduled delivery covers that window again under a new delivery id (a receiver that already processed the frozen delivery
+        would then see that data twice). Frozen retries older than the retention window are discarded automatically.</p></div>
+        <?php
     }
 
     /**
@@ -675,10 +667,11 @@ final class WebhooksPage
         $rows = FormDeliveryQueue::pendingRows(10);
         $max  = AnalyticsDispatcher::maxRetries() + 1;
 
-        echo '<div class="notice notice-info inline"><p><strong>'
-            . esc_html(number_format_i18n($count)) . ' pending form-submission '
-            . ($count === 1 ? 'delivery' : 'deliveries') . '</strong> waiting in the background queue.</p>';
-        echo '<ul style="margin-left:1.5em;list-style:disc;">';
+        ?>
+        <div class="notice notice-info inline"><p><strong><?php echo esc_html(number_format_i18n($count)); ?> pending form-submission
+        <?php echo ($count === 1 ? 'delivery' : 'deliveries'); ?></strong> waiting in the background queue.</p>
+        <ul style="margin-left:1.5em;list-style:disc;">
+        <?php
 
         foreach ($rows as $row) {
             $due = (int) strtotime((string) $row['next_attempt_at'] . ' UTC');
@@ -692,6 +685,8 @@ final class WebhooksPage
             );
         }
 
-        echo '</ul></div>';
+        ?>
+        </ul></div>
+        <?php
     }
 }

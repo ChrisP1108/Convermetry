@@ -194,7 +194,9 @@ final class FormsPage
     public static function maybeShowNotices(): void
     {
         if (isset($_GET['page']) && $_GET['page'] === self::MENU_SLUG && !empty($_GET['cvm_saved'])) {
-            echo '<div class="notice notice-success is-dismissible"><p>Form settings saved.</p></div>';
+            ?>
+            <div class="notice notice-success is-dismissible"><p>Form settings saved.</p></div>
+            <?php
         }
     }
 
@@ -235,38 +237,49 @@ final class FormsPage
             return;
         }
 
-        echo '<h2>Engagement &amp; abandonment</h2>';
-        echo '<p class="description" style="max-width:760px;">The last 30 days. '
-            . '<strong>Views</strong>, <strong>Started</strong> and <strong>Abandoned</strong> count sessions '
-            . 'and are observed in the visitor\'s browser; <strong>Attempts</strong> counts individual submit '
-            . 'presses; <strong>Successful</strong> counts submissions your form plugin confirmed on the server. '
-            . 'A completion rate above 100% is not an error — it means people are submitting with JavaScript '
-            . 'blocked, so the browser-observed columns are undercounting.</p>';
+        ?>
+        <h2>Engagement &amp; abandonment</h2>
+        <p class="description" style="max-width:760px;">The last 30 days. <strong>Views</strong>, <strong>Started</strong>
+        and <strong>Abandoned</strong> count sessions and are observed in the visitor's browser; <strong>Attempts</strong> counts individual
+        submit presses; <strong>Successful</strong> counts submissions your form plugin confirmed on the server. A completion rate
+        above 100% is not an error — it means people are submitting with JavaScript blocked, so the browser-observed columns are
+        undercounting.</p>
+        <?php
 
         if ($forms === []) {
-            echo '<div class="notice notice-info inline"><p>No form engagement recorded yet. '
-                . 'Form view, start, and validation-error tracking are switched on under '
-                . '<strong>Settings &rarr; Tracking</strong>. Elementor forms are not included here — see the '
-                . 'note below.</p></div>';
+            ?>
+            <div class="notice notice-info inline"><p>No form engagement recorded yet. Form view, start, and validation-error
+            tracking are switched on under <strong>Settings &rarr; Tracking</strong>. Elementor forms are not included here — see
+            the note below.</p></div>
+            <?php
         } else {
-            echo '<table class="widefat striped cvm-goals-table"><thead><tr>';
-            echo '<th scope="col">Form</th>';
+            ?>
+            <table class="widefat striped cvm-goals-table"><thead><tr>
+            <th scope="col">Form</th>
+            <?php
             foreach (['Views', 'Started', 'Attempts', 'Successful', 'Abandoned', 'Start Rate', 'Completion Rate'] as $label) {
-                echo '<th scope="col" class="cvm-num">' . esc_html($label) . '</th>';
+                ?>
+                <th scope="col" class="cvm-num"><?php echo esc_html($label); ?></th>
+                <?php
             }
-            echo '</tr></thead><tbody>';
+            ?>
+            </tr></thead><tbody>
+            <?php
 
             foreach ($forms as $form) {
-                echo '<tr>';
-                echo '<td><strong>' . esc_html($form['form_name'] !== '' ? $form['form_name'] : $form['form_key'])
-                    . '</strong><div class="cvm-goal-meta"><code>' . esc_html($form['form_key']) . '</code>';
+                ?>
+                <tr>
+                <td><strong><?php echo esc_html($form['form_name'] !== '' ? $form['form_name'] : $form['form_key']); ?></strong><div class="cvm-goal-meta"><code><?php echo esc_html($form['form_key']); ?></code>
+                <?php
                 if ($form['in_progress'] > 0) {
                     printf(
                         ' &middot; %d still in progress',
                         (int) $form['in_progress']
                     );
                 }
-                echo '</div></td>';
+                ?>
+                </div></td>
+                <?php
 
                 foreach ([
                     number_format_i18n($form['views']),
@@ -277,13 +290,19 @@ final class FormsPage
                     $form['views'] > 0 ? $form['start_rate'] . '%' : '—',
                     $form['started'] > 0 ? $form['completion_rate'] . '%' : '—',
                 ] as $cell) {
-                    echo '<td class="cvm-num">' . esc_html((string) $cell) . '</td>';
+                    ?>
+                    <td class="cvm-num"><?php echo esc_html((string) $cell); ?></td>
+                    <?php
                 }
 
-                echo '</tr>';
+                ?>
+                </tr>
+                <?php
             }
 
-            echo '</tbody></table>';
+            ?>
+            </tbody></table>
+            <?php
 
             printf(
                 '<p class="description">A start counts as abandoned once %d minutes pass with no confirmed '
@@ -294,34 +313,37 @@ final class FormsPage
         }
 
         if ($friction !== []) {
-            echo '<h3>Most common friction points</h3>';
-            echo '<p class="description" style="max-width:760px;">Which fields fail validation most often. '
-                . 'Convermetry records the field\'s name, its type, and which check failed — '
-                . '<strong>never what the visitor typed</strong>.</p>';
-
-            echo '<table class="widefat striped cvm-goals-table"><thead><tr>';
-            echo '<th scope="col">Field</th><th scope="col">Type</th><th scope="col">Problem</th>';
-            echo '<th scope="col" class="cvm-num">Errors</th><th scope="col" class="cvm-num">Sessions</th>';
-            echo '</tr></thead><tbody>';
+            ?>
+            <h3>Most common friction points</h3>
+            <p class="description" style="max-width:760px;">Which fields fail validation most often. Convermetry records
+            the field's name, its type, and which check failed — <strong>never what the visitor typed</strong>.</p>
+            <table class="widefat striped cvm-goals-table"><thead><tr>
+            <th scope="col">Field</th><th scope="col">Type</th><th scope="col">Problem</th>
+            <th scope="col" class="cvm-num">Errors</th><th scope="col" class="cvm-num">Sessions</th></tr></thead><tbody>
+            <?php
 
             foreach ($friction as $row) {
-                echo '<tr>';
-                echo '<td><code>' . esc_html($row['field_id']) . '</code></td>';
-                echo '<td>' . esc_html($row['field_type']) . '</td>';
-                echo '<td>' . esc_html(self::errorLabel($row['error_type'])) . '</td>';
-                echo '<td class="cvm-num">' . esc_html(number_format_i18n($row['errors'])) . '</td>';
-                echo '<td class="cvm-num">' . esc_html(number_format_i18n($row['sessions'])) . '</td>';
-                echo '</tr>';
+                ?>
+                <tr>
+                <td><code><?php echo esc_html($row['field_id']); ?></code></td>
+                <td><?php echo esc_html($row['field_type']); ?></td>
+                <td><?php echo esc_html(self::errorLabel($row['error_type'])); ?></td>
+                <td class="cvm-num"><?php echo esc_html(number_format_i18n($row['errors'])); ?></td>
+                <td class="cvm-num"><?php echo esc_html(number_format_i18n($row['sessions'])); ?></td></tr>
+                <?php
             }
 
-            echo '</tbody></table>';
+            ?>
+            </tbody></table>
+            <?php
         }
 
-        echo '<div class="notice notice-info inline"><p><strong>Elementor forms are not included above.</strong> '
-            . 'Elementor identifies a form by its display name on the server while exposing a widget id in the '
-            . 'browser, so the two cannot be matched reliably — and an engagement figure attributed to the wrong '
-            . 'form is worse than none. Elementor submissions are recorded and attributed normally everywhere '
-            . 'else in Convermetry.</p></div>';
+        ?>
+        <div class="notice notice-info inline"><p><strong>Elementor forms are not included above.</strong> Elementor identifies
+        a form by its display name on the server while exposing a widget id in the browser, so the two cannot be matched reliably —
+        and an engagement figure attributed to the wrong form is worse than none. Elementor submissions are recorded and attributed
+        normally everywhere else in Convermetry.</p></div>
+        <?php
     }
 
     /**
@@ -352,18 +374,20 @@ final class FormsPage
 
         $registry = self::$registry ?? new FormProviderRegistry();
 
-        echo '<div class="wrap cvm-wrap">';
-        echo '<h1>Convermetry Forms</h1>';
-
-        echo '<p class="description" style="max-width:760px;">Convermetry automatically detects supported form plugins '
-            . 'and discovers their forms. Detected forms are <strong>included by default</strong> — a new form starts '
-            . 'recording conversions and delivering webhooks without any setup. Exclude a form to stop processing it; '
-            . 'its configuration is preserved and restored when re-enabled.</p>';
+        ?>
+        <div class="wrap cvm-wrap">
+        <h1>Convermetry Forms</h1>
+        <p class="description" style="max-width:760px;">Convermetry automatically detects supported form plugins and discovers
+        their forms. Detected forms are <strong>included by default</strong> — a new form starts recording conversions and delivering
+        webhooks without any setup. Exclude a form to stop processing it; its configuration is preserved and restored when re-enabled.</p>
+        <?php
 
         self::renderEngagement();
 
         // ── Provider status cards ──────────────────────────────────────
-        echo '<div class="cvm-cards cvm-provider-cards">';
+        ?>
+        <div class="cvm-cards cvm-provider-cards">
+        <?php
         $availableProviders = [];
         foreach ($registry->all() as $provider) {
             $available = $provider->isAvailable();
@@ -371,19 +395,22 @@ final class FormsPage
                 $availableProviders[$provider->getKey()] = $provider;
             }
 
-            echo '<div class="cvm-card cvm-provider-card">';
-            echo '<span class="cvm-card-label">' . esc_html($provider->getLabel()) . '</span>';
-            echo '<span class="cvm-provider-status ' . ($available ? 'is-active' : 'is-unavailable') . '">'
-                . ($available ? 'Active' : 'Unavailable') . '</span>';
-            echo '</div>';
+            ?>
+            <div class="cvm-card cvm-provider-card">
+            <span class="cvm-card-label"><?php echo esc_html($provider->getLabel()); ?></span>
+            <span class="cvm-provider-status <?php echo ($available ? 'is-active' : 'is-unavailable'); ?>"><?php echo ($available ? 'Active' : 'Unavailable'); ?></span></div>
+            <?php
         }
-        echo '</div>';
+        ?>
+        </div>
+        <?php
 
         if ($availableProviders === []) {
-            echo '<div class="notice notice-info inline"><p>No supported form plugin is currently active. Install and '
-                . 'activate Elementor Pro, Gravity Forms, WPForms, Contact Form 7, or Fluent Forms — or integrate a custom '
-                . 'form with <code>convermetry_submit_form()</code> (see the About page).</p></div>';
-            echo '</div>';
+            ?>
+            <div class="notice notice-info inline"><p>No supported form plugin is currently active. Install and activate
+            Elementor Pro, Gravity Forms, WPForms, Contact Form 7, or Fluent Forms — or integrate a custom form with <code>convermetry_submit_form()</code>
+            (see the About page).</p></div></div>
+            <?php
             return;
         }
 
@@ -400,44 +427,46 @@ final class FormsPage
             }
         }
 
-        echo '<form method="post" action="' . esc_url(admin_url('admin-post.php')) . '">';
+        ?>
+        <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
+        <?php
         wp_nonce_field(self::SAVE_ACTION, 'cvm_forms_nonce');
-        echo '<input type="hidden" name="action" value="' . esc_attr(self::SAVE_ACTION) . '">';
-
-        echo '<div class="cvm-form-filters">';
-        echo '<label class="screen-reader-text" for="cvm-form-search">Search forms</label>';
-        echo '<input type="search" id="cvm-form-search" placeholder="Search by form name or ID…">';
-
-        echo '<label class="screen-reader-text" for="cvm-form-provider-filter">Filter by provider</label>';
-        echo '<select id="cvm-form-provider-filter"><option value="">All Providers</option>';
+        ?>
+        <input type="hidden" name="action" value="<?php echo esc_attr(self::SAVE_ACTION); ?>">
+        <div class="cvm-form-filters">
+        <label class="screen-reader-text" for="cvm-form-search">Search forms</label>
+        <input type="search" id="cvm-form-search" placeholder="Search by form name or ID…">
+        <label class="screen-reader-text" for="cvm-form-provider-filter">Filter by provider</label>
+        <select id="cvm-form-provider-filter"><option value="">All Providers</option>
+        <?php
         foreach ($availableProviders as $provider) {
-            echo '<option value="' . esc_attr($provider->getKey()) . '">' . esc_html($provider->getLabel()) . '</option>';
+            ?>
+            <option value="<?php echo esc_attr($provider->getKey()); ?>"><?php echo esc_html($provider->getLabel()); ?></option>
+            <?php
         }
-        echo '</select>';
-
-        echo '<label class="screen-reader-text" for="cvm-form-state-filter">Filter by state</label>';
-        echo '<select id="cvm-form-state-filter">'
-            . '<option value="">All States</option>'
-            . '<option value="included">Included</option>'
-            . '<option value="excluded">Excluded</option>'
-            . '</select>';
-
-        echo '<span class="cvm-form-filter-summary"><span id="cvm-form-filter-count">' . count($discovered) . '</span> of '
-            . count($discovered) . ' forms shown</span>';
-        echo '</div>';
-
-        echo '<div id="cvm-forms-list">';
+        ?>
+        </select>
+        <label class="screen-reader-text" for="cvm-form-state-filter">Filter by state</label>
+        <select id="cvm-form-state-filter"><option value="">All States</option><option value="included">Included</option><option value="excluded">Excluded</option></select>
+        <span class="cvm-form-filter-summary"><span id="cvm-form-filter-count"><?php echo count($discovered); ?></span> of
+        <?php echo count($discovered); ?> forms shown</span></div>
+        <div id="cvm-forms-list">
+        <?php
 
         if ($discovered === []) {
-            echo '<div class="notice notice-info inline"><p>No forms were discovered yet. Create a form in one of the '
-                . 'active providers and revisit this page.</p></div>';
+            ?>
+            <div class="notice notice-info inline"><p>No forms were discovered yet. Create a form in one of the active
+            providers and revisit this page.</p></div>
+            <?php
         }
 
         foreach ($discovered as $form) {
             self::renderFormBlock($form);
         }
 
-        echo '</div>';
+        ?>
+        </div>
+        <?php
 
         submit_button('Save Form Settings');
 
@@ -453,8 +482,9 @@ final class FormsPage
          * admin-post.php with your own nonce and handler.
          */
         do_action('convermetry_forms_admin_sections');
-        echo '</form>';
-        echo '</div>';
+        ?>
+        </form></div>
+        <?php
     }
 
     /**
@@ -470,56 +500,39 @@ final class FormsPage
         $hash    = md5($formKey);
         $name    = 'cvm_forms[' . $hash . ']';
 
-        echo '<details class="cvm-form-block"'
-            . ' data-provider="' . esc_attr($form['provider']) . '"'
-            . ' data-name="' . esc_attr($form['name']) . '"'
-            . ' data-native-id="' . esc_attr($form['native_id']) . '"'
-            . ' data-form-id="' . esc_attr($config['form_id']) . '"'
-            . ' data-excluded="' . ($config['excluded'] ? '1' : '0') . '">';
-
-        echo '<summary class="cvm-form-block-summary">';
-        echo '<span class="cvm-form-block-name">' . esc_html($form['name']) . '</span>';
-        echo '<span class="cvm-form-block-provider">' . esc_html($form['provider_label']) . '</span>';
-        echo '<span class="cvm-form-state-badge ' . ($config['excluded'] ? 'is-excluded' : 'is-included') . '">'
-            . ($config['excluded'] ? 'Excluded' : 'Included') . '</span>';
-        echo '</summary>';
-
-        echo '<div class="cvm-form-block-body">';
-        echo '<input type="hidden" name="' . esc_attr($name . '[key]') . '" value="' . esc_attr($formKey) . '">';
-
-        echo '<table class="form-table" role="presentation">';
-
-        echo '<tr><th scope="row">Native Form ID</th><td><code>' . esc_html($form['native_id']) . '</code></td></tr>';
-
-        echo '<tr><th scope="row"><label for="cvm-form-id-' . esc_attr($hash) . '">Custom/External Form ID</label></th><td>';
-        echo '<input type="text" id="cvm-form-id-' . esc_attr($hash) . '" class="regular-text cvm-form-id-input" '
-            . 'name="' . esc_attr($name . '[form_id]') . '" value="' . esc_attr($config['form_id']) . '">';
-        echo '<p class="description">Sent as <code>form_id</code> in webhook payloads for this form. '
-            . 'Leave blank to use the native form ID.</p>';
-        echo '</td></tr>';
-
-        echo '<tr><th scope="row">Status</th><td>';
-        echo '<label><input type="checkbox" class="cvm-form-excluded-toggle" name="' . esc_attr($name . '[excluded]')
-            . '" value="1" ' . checked($config['excluded'], true, false) . '> Exclude this form</label>';
-        echo '<p class="description">Excluded forms are not recorded or delivered. Their configuration is preserved.</p>';
-        echo '</td></tr>';
-
-        echo '<tr><th scope="row">Page URL parameters</th><td>';
-        echo '<label><input type="checkbox" name="' . esc_attr($name . '[include_page_params]') . '" value="1" '
-            . checked($config['include_page_params'], true, false) . '> '
-            . 'Include page URL parameters for this form (regardless of the global setting)</label>';
-        echo '</td></tr>';
-
-        echo '</table>';
-
-        echo '<h4>URL Query Parameters <span class="description">(this form only — highest precedence)</span></h4>';
+        ?>
+        <details class="cvm-form-block" data-provider="<?php echo esc_attr($form['provider']); ?>" data-name="<?php echo esc_attr($form['name']); ?>" data-native-id="<?php echo esc_attr($form['native_id']); ?>" data-form-id="<?php echo esc_attr($config['form_id']); ?>" data-excluded="<?php echo ($config['excluded'] ? '1' : '0'); ?>">
+        <summary class="cvm-form-block-summary">
+        <span class="cvm-form-block-name"><?php echo esc_html($form['name']); ?></span>
+        <span class="cvm-form-block-provider"><?php echo esc_html($form['provider_label']); ?></span>
+        <span class="cvm-form-state-badge <?php echo ($config['excluded'] ? 'is-excluded' : 'is-included'); ?>"><?php echo ($config['excluded'] ? 'Excluded' : 'Included'); ?></span></summary>
+        <div class="cvm-form-block-body">
+        <input type="hidden" name="<?php echo esc_attr($name . '[key]'); ?>" value="<?php echo esc_attr($formKey); ?>">
+        <table class="form-table" role="presentation">
+        <tr><th scope="row">Native Form ID</th><td><code><?php echo esc_html($form['native_id']); ?></code></td></tr>
+        <tr><th scope="row"><label for="cvm-form-id-<?php echo esc_attr($hash); ?>">Custom/External Form ID</label></th><td>
+        <input type="text" id="cvm-form-id-<?php echo esc_attr($hash); ?>" class="regular-text cvm-form-id-input" name="<?php echo esc_attr($name . '[form_id]'); ?>" value="<?php echo esc_attr($config['form_id']); ?>">
+        <p class="description">Sent as <code>form_id</code> in webhook payloads for this form. Leave blank to use the native
+        form ID.</p></td></tr>
+        <tr><th scope="row">Status</th><td>
+        <label><input type="checkbox" class="cvm-form-excluded-toggle" name="<?php echo esc_attr($name . '[excluded]'); ?>" value="1" <?php echo checked($config['excluded'], true, false); ?>>
+        Exclude this form</label>
+        <p class="description">Excluded forms are not recorded or delivered. Their configuration is preserved.</p></td></tr>
+        <tr><th scope="row">Page URL parameters</th><td>
+        <label><input type="checkbox" name="<?php echo esc_attr($name . '[include_page_params]'); ?>" value="1" <?php echo checked($config['include_page_params'], true, false); ?>>
+        Include page URL parameters for this form (regardless of the global setting)</label></td></tr></table>
+        <h4>URL Query Parameters <span class="description">(this form only — highest precedence)</span></h4>
+        <?php
         self::renderKvBuilder($name . '[query_params]', $config['query_params']);
 
-        echo '<h4>Request Headers <span class="description">(this form only)</span></h4>';
+        ?>
+        <h4>Request Headers <span class="description">(this form only)</span></h4>
+        <?php
         self::renderKvBuilder($name . '[headers]', $config['headers']);
 
-        echo '</div>';
-        echo '</details>';
+        ?>
+        </div></details>
+        <?php
     }
 
     /**
@@ -531,21 +544,23 @@ final class FormsPage
      */
     private static function renderKvBuilder(string $name, array $pairs): void
     {
-        echo '<div class="cvm-kv-builder" data-kv-name="' . esc_attr($name) . '" data-kv-next="' . esc_attr((string) count($pairs)) . '">';
-        echo '<div class="cvm-kv-rows">';
+        ?>
+        <div class="cvm-kv-builder" data-kv-name="<?php echo esc_attr($name); ?>" data-kv-next="<?php echo esc_attr((string) count($pairs)); ?>">
+        <div class="cvm-kv-rows">
+        <?php
 
         foreach ($pairs as $index => $pair) {
-            echo '<div class="cvm-kv-row">';
-            echo '<input type="text" class="regular-text code cvm-kv-key" name="' . esc_attr($name . '[' . $index . '][key]')
-                . '" placeholder="Key" value="' . esc_attr((string) ($pair['key'] ?? '')) . '">';
-            echo '<input type="text" class="regular-text code cvm-kv-value" name="' . esc_attr($name . '[' . $index . '][value]')
-                . '" placeholder="Value" value="' . esc_attr((string) ($pair['value'] ?? '')) . '">';
-            echo '<button type="button" class="button cvm-kv-remove" aria-label="Remove this row">Remove</button>';
-            echo '</div>';
+            ?>
+            <div class="cvm-kv-row">
+            <input type="text" class="regular-text code cvm-kv-key" name="<?php echo esc_attr($name . '[' . $index . '][key]'); ?>" placeholder="Key" value="<?php echo esc_attr((string) ($pair['key'] ?? '')); ?>">
+            <input type="text" class="regular-text code cvm-kv-value" name="<?php echo esc_attr($name . '[' . $index . '][value]'); ?>" placeholder="Value" value="<?php echo esc_attr((string) ($pair['value'] ?? '')); ?>">
+            <button type="button" class="button cvm-kv-remove" aria-label="Remove this row">Remove</button></div>
+            <?php
         }
 
-        echo '</div>';
-        echo '<button type="button" class="button cvm-kv-add">+ Add</button>';
-        echo '</div>';
+        ?>
+        </div>
+        <button type="button" class="button cvm-kv-add">+ Add</button></div>
+        <?php
     }
 }

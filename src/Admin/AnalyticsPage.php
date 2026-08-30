@@ -166,53 +166,72 @@ final class AnalyticsPage
             $overviewFailed = true;
         }
 
-        echo '<div class="wrap cvm-wrap cvm-dash">';
-        echo '<h1>Convermetry Analytics</h1>';
+        ?>
+        <div class="wrap cvm-wrap cvm-dash">
+        <h1>Convermetry Analytics</h1>
+        <?php
 
         self::maybeRenderRateLimitNotice();
         self::maybeRenderRetentionNotice($days);
         self::renderPeriodFilter($days, $effectiveDays);
 
-        echo '<section class="cvm-overview" aria-labelledby="cvm-h-overview">';
-        echo '<h2 id="cvm-h-overview">Overview</h2>';
+        ?>
+        <section class="cvm-overview" aria-labelledby="cvm-h-overview">
+        <h2 id="cvm-h-overview">Overview</h2>
+        <?php
         if ($overviewFailed) {
             self::renderErrorNotice();
         } else {
             self::renderSummaryCards($totals, $serverCount);
             self::renderPageviewChart($daily, $effectiveDays);
         }
-        echo '</section>';
+        ?>
+        </section>
+        <?php
 
         // Revealed by dashboard.js: without JavaScript the buttons would do
         // nothing, and the <details> panels are already usable natively.
-        echo '<div class="cvm-panel-toolbar" hidden>';
-        echo '<button type="button" class="button cvm-panels-expand">Expand all sections</button>';
-        echo '<button type="button" class="button cvm-panels-collapse">Collapse all sections</button>';
-        echo '<button type="button" class="button cvm-print-btn">Print / Save as PDF</button>';
-        echo '</div>';
+        ?>
+        <div class="cvm-panel-toolbar" hidden>
+        <button type="button" class="button cvm-panels-expand">Expand all sections</button>
+        <button type="button" class="button cvm-panels-collapse">Collapse all sections</button>
+        <button type="button" class="button cvm-print-btn">Print / Save as PDF</button></div>
+        <?php
 
         self::panelStart('content', 'Content', 'Which pages draw traffic and where visitors arrive.', true);
-        echo '<div class="cvm-tables">';
+        ?>
+        <div class="cvm-tables">
+        <?php
         self::renderTopPages($start, $end);
         self::renderLandingPages($start, $end);
-        echo '</div>';
+        ?>
+        </div>
+        <?php
         self::panelEnd();
 
         self::panelStart('engagement', 'Engagement', 'How visitors interact with your pages: clicks, form activity, and attention.');
-        echo '<div class="cvm-tables">';
+        ?>
+        <div class="cvm-tables">
+        <?php
         self::renderTopClicks($start, $end);
         self::renderTopForms($start, $end);
         self::renderTopHovers($start, $end);
-        echo '</div>';
+        ?>
+        </div>
+        <?php
         self::panelEnd();
 
         self::panelStart('acquisition', 'Acquisition', 'Where traffic comes from: referrers, campaigns, and marketing channels.');
-        echo '<div class="cvm-tables">';
+        ?>
+        <div class="cvm-tables">
+        <?php
         self::renderTopReferrers($start, $end);
         self::renderChannels($start, $end);
         self::renderCampaigns($start, $end);
         self::renderCampaignContent($start, $end);
-        echo '</div>';
+        ?>
+        </div>
+        <?php
         self::panelEnd();
 
         self::panelStart('devices', 'Devices', 'Mobile versus desktop share of page views.');
@@ -224,12 +243,16 @@ final class AnalyticsPage
         self::panelEnd();
 
         self::panelStart('outcomes', 'Lead outcomes', 'What the leads were actually worth. Counted by the date each lead arrived, with its status as it stands right now.');
-        echo '<div class="cvm-tables">';
+        ?>
+        <div class="cvm-tables">
+        <?php
         self::renderLeadDimension($start, $end, 'channel', 'Leads by Channel');
         self::renderLeadDimension($start, $end, 'campaign', 'Leads by Campaign');
         self::renderLeadDimension($start, $end, 'landing_page', 'Landing Page Performance');
         self::renderLeadDimension($start, $end, 'form', 'Leads by Form');
-        echo '</div>';
+        ?>
+        </div>
+        <?php
         self::renderTimeToLead($start, $end);
         self::panelEnd();
 
@@ -266,7 +289,9 @@ final class AnalyticsPage
          */
         do_action('convermetry_analytics_admin_panels', $start, $end);
 
-        echo '</div>';
+        ?>
+        </div>
+        <?php
     }
 
     /**
@@ -322,11 +347,12 @@ final class AnalyticsPage
 
         // cvm-rate-limit-notice keeps this warning visible in the printed
         // report too — it flags that the numbers below may undercount.
-        echo '<div class="notice notice-warning cvm-rate-limit-notice"><p><strong>Convermetry:</strong> '
-            . 'The site-wide event rate limit was reached in the last 24 hours (first at '
-            . esc_html(gmdate('Y-m-d H:i', $hitAt)) . ' UTC), so some visitor events were not recorded. '
-            . 'If this is legitimate traffic rather than a flood, raise the limits with the '
-            . '<code>convermetry_rate_limits</code> filter.</p></div>';
+        ?>
+        <div class="notice notice-warning cvm-rate-limit-notice"><p><strong>Convermetry:</strong> The site-wide event rate
+        limit was reached in the last 24 hours (first at <?php echo esc_html(gmdate('Y-m-d H:i', $hitAt)); ?> UTC), so some visitor
+        events were not recorded. If this is legitimate traffic rather than a flood, raise the limits with the <code>convermetry_rate_limits</code>
+        filter.</p></div>
+        <?php
     }
 
     /**
@@ -343,10 +369,12 @@ final class AnalyticsPage
             return;
         }
 
-        echo '<div class="notice notice-warning cvm-retention-notice cvm-rate-limit-notice"><p><strong>Convermetry:</strong> '
-            . 'The selected ' . (int) $days . '-day period is longer than the configured data retention window ('
-            . (int) $retention . ' days), so events older than ' . (int) $retention . ' days have already been deleted '
-            . 'and cannot appear below. Choose a shorter period, or raise <strong>Data retention</strong> in Settings.</p></div>';
+        ?>
+        <div class="notice notice-warning cvm-retention-notice cvm-rate-limit-notice"><p><strong>Convermetry:</strong> The
+        selected <?php echo (int) $days; ?>-day period is longer than the configured data retention window (<?php echo (int) $retention; ?>
+        days), so events older than <?php echo (int) $retention; ?> days have already been deleted and cannot appear below. Choose
+        a shorter period, or raise <strong>Data retention</strong> in Settings.</p></div>
+        <?php
     }
 
     /**
@@ -430,8 +458,10 @@ final class AnalyticsPage
         $startLabel = self::utcDate('M j, Y', time() - ($effectiveDays - 1) * DAY_IN_SECONDS);
         $endLabel   = self::utcDate('M j, Y', time());
 
-        echo '<div class="cvm-period">';
-        echo '<nav class="cvm-period-group" aria-label="Reporting period">';
+        ?>
+        <div class="cvm-period">
+        <nav class="cvm-period-group" aria-label="Reporting period">
+        <?php
 
         foreach (self::periods() as $days) {
             $url = add_query_arg(
@@ -441,27 +471,29 @@ final class AnalyticsPage
 
             $isActive = $days === $active;
 
-            echo '<a class="cvm-period-btn' . ($isActive ? ' is-active' : '') . '"'
-                . ($isActive ? ' aria-current="page"' : '')
-                . ' href="' . esc_url($url) . '">Last ' . (int) $days . ' days</a>';
+            ?>
+            <a class="cvm-period-btn<?php echo ($isActive ? ' is-active' : ''); ?>"<?php echo ($isActive ? ' aria-current="page"' : ''); ?> href="<?php echo esc_url($url); ?>">Last
+            <?php echo (int) $days; ?> days</a>
+            <?php
         }
 
-        echo '</nav>';
-        echo '<p class="cvm-period-range">'
-            . esc_html($startLabel) . ' &ndash; ' . esc_html($endLabel)
-            . '. Dates are UTC; the current day is still collecting data.</p>';
+        ?>
+        </nav>
+        <p class="cvm-period-range"><?php echo esc_html($startLabel); ?> &ndash; <?php echo esc_html($endLabel); ?>. Dates
+        are UTC; the current day is still collecting data.</p>
+        <?php
 
         // Print-only report header (dashboard.css shows it in @media print).
         $generatedFormat = trim(get_option('date_format', 'F j, Y') . ' ' . get_option('time_format', 'g:i a'));
         $rangeNote = $active === $effectiveDays
             ? ((string) $active . ' days')
             : ($active . ' days selected; ' . $effectiveDays . ' days shown per data retention');
-        echo '<p class="cvm-print-meta">'
-            . esc_html(get_bloginfo('name')) . ' &mdash; Convermetry analytics report &middot; '
-            . esc_html($startLabel) . ' &ndash; ' . esc_html($endLabel) . ' (UTC, last ' . esc_html($rangeNote) . '; the final day was still collecting when generated) &middot; Generated '
-            . esc_html(get_date_from_gmt(gmdate('Y-m-d H:i:s'), $generatedFormat))
-            . ' (' . esc_html(self::siteTimezoneLabel()) . ')</p>';
-        echo '</div>';
+        ?>
+        <p class="cvm-print-meta"><?php echo esc_html(get_bloginfo('name')); ?> &mdash; Convermetry analytics report &middot;
+        <?php echo esc_html($startLabel); ?> &ndash; <?php echo esc_html($endLabel); ?> (UTC, last <?php echo esc_html($rangeNote); ?>;
+        the final day was still collecting when generated) &middot; Generated <?php echo esc_html(get_date_from_gmt(gmdate('Y-m-d H:i:s'), $generatedFormat)); ?>
+        (<?php echo esc_html(self::siteTimezoneLabel()); ?>)</p></div>
+        <?php
     }
 
     /**
@@ -494,7 +526,9 @@ final class AnalyticsPage
         // into a single "Other Events" card so nothing is invisible.
         $other = array_sum(array_diff_key($totals, $cards));
 
-        echo '<div class="cvm-cards">';
+        ?>
+        <div class="cvm-cards">
+        <?php
         foreach ($cards as $type => [$label, $desc]) {
             self::renderStatCard(number_format_i18n($totals[$type] ?? 0), $label, $desc);
 
@@ -510,7 +544,9 @@ final class AnalyticsPage
         if ($other > 0) {
             self::renderStatCard(number_format_i18n($other), 'Other Events', 'Custom event types recorded via cvm_track_event().');
         }
-        echo '</div>';
+        ?>
+        </div>
+        <?php
     }
 
     /**
@@ -523,13 +559,19 @@ final class AnalyticsPage
      */
     private static function renderStatCard(string $value, string $label, string $desc): void
     {
-        echo '<div class="cvm-card cvm-stat-card">';
-        echo '<span class="cvm-card-value">' . esc_html($value) . '</span>';
-        echo '<span class="cvm-card-label">' . esc_html($label) . '</span>';
+        ?>
+        <div class="cvm-card cvm-stat-card">
+        <span class="cvm-card-value"><?php echo esc_html($value); ?></span>
+        <span class="cvm-card-label"><?php echo esc_html($label); ?></span>
+        <?php
         if ($desc !== '') {
-            echo '<span class="cvm-card-desc">' . esc_html($desc) . '</span>';
+            ?>
+            <span class="cvm-card-desc"><?php echo esc_html($desc); ?></span>
+            <?php
         }
-        echo '</div>';
+        ?>
+        </div>
+        <?php
     }
 
     /**
@@ -591,19 +633,22 @@ final class AnalyticsPage
             default     => 15,
         };
 
-        echo '<div class="cvm-chart-frame">';
-        echo '<h3>Daily Page Views</h3>';
-
-        echo '<p class="cvm-chart-summary">';
-        echo '<span>Total: <strong>' . esc_html(number_format_i18n($total)) . '</strong></span>';
-        echo '<span>Avg per completed day: <strong>' . esc_html($avgLabel) . '</strong></span>';
+        ?>
+        <div class="cvm-chart-frame">
+        <h3>Daily Page Views</h3>
+        <p class="cvm-chart-summary">
+        <span>Total: <strong><?php echo esc_html(number_format_i18n($total)); ?></strong></span>
+        <span>Avg per completed day: <strong><?php echo esc_html($avgLabel); ?></strong></span>
+        <?php
         if ($busiestDate !== '') {
-            echo '<span>Busiest day: <strong>'
-                . esc_html(self::utcDate('M j', (int) strtotime($busiestDate . ' UTC')))
-                . ' (' . esc_html(number_format_i18n($busiestCount)) . ')</strong></span>';
+            ?>
+            <span>Busiest day: <strong><?php echo esc_html(self::utcDate('M j', (int) strtotime($busiestDate . ' UTC'))); ?>
+            (<?php echo esc_html(number_format_i18n($busiestCount)); ?>)</strong></span>
+            <?php
         }
-        echo '<span class="cvm-chart-key"><span class="cvm-chart-key-swatch" aria-hidden="true"></span>Today (still collecting)</span>';
-        echo '</p>';
+        ?>
+        <span class="cvm-chart-key"><span class="cvm-chart-key-swatch" aria-hidden="true"></span>Today (still collecting)</span></p>
+        <?php
 
         // A density bucket, not a class per exact day count: retention can
         // clamp the effective period to any value, so the scroll/min-width
@@ -612,20 +657,17 @@ final class AnalyticsPage
         $layoutClass = 'cvm-chart-layout' . ($isWide ? ' cvm-chart-layout--wide' : '');
         $minWidth    = $isWide ? max(640, $days * 16) : 0;
 
-        echo '<div class="cvm-chart-scroll">';
-        echo '<div class="' . esc_attr($layoutClass) . '"'
-            . ($minWidth > 0 ? ' style="--cvm-chart-min-width:' . esc_attr((string) $minWidth) . 'px"' : '')
-            . '>';
-
-        echo '<div class="cvm-chart-yaxis" aria-hidden="true">';
-        echo '<span>' . esc_html(number_format_i18n($scale)) . '</span>';
-        echo '<span>' . esc_html(number_format_i18n((int) ($scale / 2))) . '</span>';
-        echo '<span>0</span>';
-        echo '</div>';
-
-        echo '<div class="cvm-chart-main">';
-        echo '<div class="cvm-chart-plot">';
-        echo '<div class="cvm-chart-cols" role="group" aria-label="Daily page views: one button per day, oldest first">';
+        ?>
+        <div class="cvm-chart-scroll">
+        <div class="<?php echo esc_attr($layoutClass); ?>"<?php echo ($minWidth > 0 ? ' style="--cvm-chart-min-width:' . esc_attr((string) $minWidth) . 'px"' : ''); ?>>
+        <div class="cvm-chart-yaxis" aria-hidden="true">
+        <span><?php echo esc_html(number_format_i18n($scale)); ?></span>
+        <span><?php echo esc_html(number_format_i18n((int) ($scale / 2))); ?></span>
+        <span>0</span></div>
+        <div class="cvm-chart-main">
+        <div class="cvm-chart-plot">
+        <div class="cvm-chart-cols" role="group" aria-label="Daily page views: one button per day, oldest first">
+        <?php
 
         foreach ($daily as $point) {
             $dateLabel = self::utcDate('M j, Y', (int) strtotime($point['date'] . ' UTC'));
@@ -639,18 +681,21 @@ final class AnalyticsPage
                 $isToday ? ' (today, still collecting)' : ''
             );
 
-            echo '<button type="button" class="cvm-chart-col' . ($isToday ? ' is-today' : '') . '"'
-                . ' data-date="' . esc_attr($dateLabel) . '"'
-                . ' data-count="' . esc_attr(number_format_i18n($point['count'])) . '"'
-                . ' aria-label="' . esc_attr($aria) . '">'
-                . '<span class="cvm-chart-bar" style="--cvm-h:' . esc_attr((string) $height) . '%"></span>'
-                . '</button>';
+            ?>
+            <button type="button" class="cvm-chart-col<?php echo ($isToday ? ' is-today' : ''); ?>" data-date="<?php echo esc_attr($dateLabel); ?>" data-count="<?php echo esc_attr(number_format_i18n($point['count'])); ?>" aria-label="<?php echo esc_attr($aria); ?>"><span class="cvm-chart-bar" style="--cvm-h:<?php echo esc_attr((string) $height); ?>%"></span></button>
+            <?php
         }
 
-        echo '</div>'; // .cvm-chart-cols
-        echo '</div>'; // .cvm-chart-plot
+        ?>
+        </div>
+        <?php // .cvm-chart-cols
+        ?>
+        </div>
+        <?php // .cvm-chart-plot
 
-        echo '<div class="cvm-chart-xaxis" aria-hidden="true">';
+        ?>
+        <div class="cvm-chart-xaxis" aria-hidden="true">
+        <?php
         foreach ($daily as $i => $point) {
             $isLast = $i === $count - 1;
             // Step labels stop short of the final label so the two never collide.
@@ -659,29 +704,37 @@ final class AnalyticsPage
                 continue;
             }
             $x = round((($i + 0.5) / max(1, $count)) * 100, 2);
-            echo '<span class="cvm-chart-xlabel" style="--cvm-x:' . esc_attr((string) $x) . '%">'
-                . esc_html(self::utcDate('M j', (int) strtotime($point['date'] . ' UTC'))) . '</span>';
+            ?>
+            <span class="cvm-chart-xlabel" style="--cvm-x:<?php echo esc_attr((string) $x); ?>%"><?php echo esc_html(self::utcDate('M j', (int) strtotime($point['date'] . ' UTC'))); ?></span>
+            <?php
         }
-        echo '</div>'; // .cvm-chart-xaxis
+        ?>
+        </div>
+        <?php // .cvm-chart-xaxis
 
-        echo '</div></div></div>'; // .cvm-chart-main, .cvm-chart-layout, .cvm-chart-scroll
+        ?>
+        </div></div></div>
+        <?php // .cvm-chart-main, .cvm-chart-layout, .cvm-chart-scroll
 
-        echo '<details class="cvm-chart-data">';
-        echo '<summary>View data table</summary>';
-        echo '<div class="cvm-table-scroll">';
-        echo '<table class="wp-list-table widefat striped cvm-chart-data-table">';
-        echo '<caption class="screen-reader-text">Daily page views for the selected period</caption>';
-        echo '<thead><tr><th scope="col">Date</th><th scope="col" class="cvm-num">Page Views</th></tr></thead><tbody>';
+        ?>
+        <details class="cvm-chart-data">
+        <summary>View data table</summary>
+        <div class="cvm-table-scroll">
+        <table class="wp-list-table widefat striped cvm-chart-data-table">
+        <caption class="screen-reader-text">Daily page views for the selected period</caption>
+        <thead><tr><th scope="col">Date</th><th scope="col" class="cvm-num">Page Views</th></tr></thead><tbody>
+        <?php
 
         foreach ($daily as $point) {
             $isToday = $point['date'] === $today;
-            echo '<tr><td>' . esc_html(self::utcDate('M j, Y', (int) strtotime($point['date'] . ' UTC')))
-                . ($isToday ? ' <em>(today, partial)</em>' : '') . '</td>'
-                . '<td class="cvm-num">' . esc_html(number_format_i18n($point['count'])) . '</td></tr>';
+            ?>
+            <tr><td><?php echo esc_html(self::utcDate('M j, Y', (int) strtotime($point['date'] . ' UTC'))); ?><?php echo ($isToday ? ' <em>(today, partial)</em>' : ''); ?></td><td class="cvm-num"><?php echo esc_html(number_format_i18n($point['count'])); ?></td></tr>
+            <?php
         }
 
-        echo '</tbody></table></div></details>';
-        echo '</div>'; // .cvm-chart-frame
+        ?>
+        </tbody></table></div></details></div>
+        <?php // .cvm-chart-frame
     }
 
     /**
@@ -720,14 +773,17 @@ final class AnalyticsPage
      */
     private static function panelStart(string $id, string $title, string $desc = '', bool $open = false): void
     {
-        echo '<details class="cvm-panel" id="cvm-panel-' . esc_attr($id) . '"' . ($open ? ' open' : '') . '>';
-        echo '<summary class="cvm-panel-summary">';
-        echo '<h2>' . esc_html($title) . '</h2>';
-        echo '<span class="cvm-panel-arrow" aria-hidden="true">&#9660;</span>';
-        echo '</summary>';
-        echo '<div class="cvm-panel-body">';
+        ?>
+        <details class="cvm-panel" id="cvm-panel-<?php echo esc_attr($id); ?>"<?php echo ($open ? ' open' : ''); ?>>
+        <summary class="cvm-panel-summary">
+        <h2><?php echo esc_html($title); ?></h2>
+        <span class="cvm-panel-arrow" aria-hidden="true">&#9660;</span></summary>
+        <div class="cvm-panel-body">
+        <?php
         if ($desc !== '') {
-            echo '<p class="cvm-panel-desc">' . esc_html($desc) . '</p>';
+            ?>
+            <p class="cvm-panel-desc"><?php echo esc_html($desc); ?></p>
+            <?php
         }
     }
 
@@ -738,7 +794,9 @@ final class AnalyticsPage
      */
     private static function panelEnd(): void
     {
-        echo '</div></details>';
+        ?>
+        </div></details>
+        <?php
     }
 
     /**
@@ -756,37 +814,58 @@ final class AnalyticsPage
      */
     private static function renderReportTable(string $title, string $desc, array $columns, array $rows, string $empty, bool $wide = false): void
     {
-        echo '<div class="cvm-report' . ($wide ? ' cvm-report--wide' : '') . '">';
-        echo '<h3>' . esc_html($title) . '</h3>';
+        ?>
+        <div class="cvm-report<?php echo ($wide ? ' cvm-report--wide' : ''); ?>">
+        <h3><?php echo esc_html($title); ?></h3>
+        <?php
         if ($desc !== '') {
-            echo '<p class="cvm-report-desc">' . esc_html($desc) . '</p>';
+            ?>
+            <p class="cvm-report-desc"><?php echo esc_html($desc); ?></p>
+            <?php
         }
 
-        echo '<div class="cvm-table-scroll">';
-        echo '<table class="wp-list-table widefat striped">';
+        ?>
+        <div class="cvm-table-scroll">
+        <table class="wp-list-table widefat striped">
+        <?php
         // Named tables let screen-reader users tell "Top Pages" from "Top
         // Referrers" when jumping directly between tables.
-        echo '<caption class="screen-reader-text">' . esc_html($title) . '</caption>';
-        echo '<thead><tr>';
+        ?>
+        <caption class="screen-reader-text"><?php echo esc_html($title); ?></caption>
+        <thead><tr>
+        <?php
         foreach ($columns as $col) {
-            echo '<th scope="col"' . (!empty($col['num']) ? ' class="cvm-num"' : '') . '>'
-                . esc_html($col['label']) . '</th>';
+            ?>
+            <th scope="col"<?php echo (!empty($col['num']) ? ' class="cvm-num"' : ''); ?>><?php echo esc_html($col['label']); ?></th>
+            <?php
         }
-        echo '</tr></thead><tbody>';
+        ?>
+        </tr></thead><tbody>
+        <?php
 
         if ($rows === []) {
-            echo '<tr><td colspan="' . count($columns) . '">' . esc_html($empty) . '</td></tr>';
+            ?>
+            <tr><td colspan="<?php echo count($columns); ?>"><?php echo esc_html($empty); ?></td></tr>
+            <?php
         }
 
         foreach ($rows as $cells) {
-            echo '<tr>';
+            ?>
+            <tr>
+            <?php
             foreach (array_values($cells) as $i => $cell) {
-                echo '<td' . (!empty($columns[$i]['num']) ? ' class="cvm-num"' : '') . '>' . $cell . '</td>';
+                ?>
+                <td<?php echo (!empty($columns[$i]['num']) ? ' class="cvm-num"' : ''); ?>><?php echo $cell; ?></td>
+                <?php
             }
-            echo '</tr>';
+            ?>
+            </tr>
+            <?php
         }
 
-        echo '</tbody></table></div></div>';
+        ?>
+        </tbody></table></div></div>
+        <?php
     }
 
     /**
@@ -803,10 +882,14 @@ final class AnalyticsPage
         try {
             $render();
         } catch (ReportQueryException) {
-            echo '<div class="cvm-report">';
-            echo '<h3>' . esc_html($title) . '</h3>';
+            ?>
+            <div class="cvm-report">
+            <h3><?php echo esc_html($title); ?></h3>
+            <?php
             self::renderErrorNotice();
-            echo '</div>';
+            ?>
+            </div>
+            <?php
         }
     }
 
@@ -818,9 +901,10 @@ final class AnalyticsPage
      */
     private static function renderErrorNotice(): void
     {
-        echo '<div class="notice notice-error inline cvm-report-error"><p>'
-            . 'This section could not be loaded due to a database error. Your data is safe — '
-            . 'try refreshing shortly, or check your site\'s PHP error log if this continues.</p></div>';
+        ?>
+        <div class="notice notice-error inline cvm-report-error"><p>This section could not be loaded due to a database error.
+        Your data is safe — try refreshing shortly, or check your site's PHP error log if this continues.</p></div>
+        <?php
     }
 
     /**

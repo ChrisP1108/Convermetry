@@ -143,15 +143,19 @@ final class SettingsPage
 
         $settings = Options::all();
 
-        echo '<div class="wrap cvm-wrap">';
-        echo '<h1>Convermetry Settings</h1>';
+        ?>
+        <div class="wrap cvm-wrap">
+        <h1>Convermetry Settings</h1>
+        <?php
 
         // WordPress only auto-renders settings errors on options-general.php
         // pages; a custom-menu settings page must print them itself. This
         // also surfaces core's own "Settings saved." confirmation.
         settings_errors();
 
-        echo '<form method="post" action="options.php">';
+        ?>
+        <form method="post" action="options.php">
+        <?php
         settings_fields(self::OPTION_GROUP);
 
         self::renderIdentitySection($settings);
@@ -159,9 +163,9 @@ final class SettingsPage
         self::renderDataSection($settings);
 
         submit_button();
-        echo '</form>';
-
-        echo '</div>';
+        ?>
+        </form></div>
+        <?php
     }
 
     /**
@@ -173,46 +177,30 @@ final class SettingsPage
      */
     private static function renderIdentitySection(array $settings): void
     {
-        echo '<div class="cvm-card">';
-        echo '<h2 class="cvm-card-title">Website &amp; Client</h2>';
-        echo '<p class="description" style="margin-bottom:14px;">Sent as <code>website_info</code> in every webhook '
-            . 'payload — analytics reports and form submissions alike — so downstream systems receiving deliveries from '
-            . 'several installs can identify which site and client a payload belongs to. Every key is always present '
-            . '(empty when not configured), giving consumers a predictable schema.</p>';
-
-        echo '<table class="form-table" role="presentation">';
-
-        echo '<tr><th scope="row">Site name / URL / domain</th><td>';
-        echo '<code>' . esc_html(get_bloginfo('name')) . '</code> &middot; <code>' . esc_html(home_url()) . '</code>'
-            . ' &middot; <code>' . esc_html(WebsiteInfo::domain()) . '</code>';
-        echo '<p class="description">Derived automatically — <code>domain</code> is the home URL host with any leading '
-            . '<code>www.</code> removed.</p>';
-        echo '</td></tr>';
-
-        echo '<tr><th scope="row"><label for="cvm-client-first-name">Client First Name</label></th><td>';
-        echo '<input type="text" id="cvm-client-first-name" class="regular-text" name="'
-            . esc_attr(Options::OPTION_KEY . '[client_first_name]') . '" value="' . esc_attr((string) $settings['client_first_name']) . '">';
-        echo '</td></tr>';
-
-        echo '<tr><th scope="row"><label for="cvm-client-last-name">Client Last Name</label></th><td>';
-        echo '<input type="text" id="cvm-client-last-name" class="regular-text" name="'
-            . esc_attr(Options::OPTION_KEY . '[client_last_name]') . '" value="' . esc_attr((string) $settings['client_last_name']) . '">';
-        echo '</td></tr>';
-
-        echo '<tr><th scope="row"><label for="cvm-client-id">Client ID <span class="description">(optional)</span></label></th><td>';
-        echo '<input type="text" id="cvm-client-id" class="regular-text" name="'
-            . esc_attr(Options::OPTION_KEY . '[client_id]') . '" value="' . esc_attr((string) $settings['client_id']) . '">';
-        echo '<p class="description">Sent as <code>website_info.client.id</code>.</p>';
-        echo '</td></tr>';
-
-        echo '<tr><th scope="row"><label for="cvm-website-id">Website ID <span class="description">(optional)</span></label></th><td>';
-        echo '<input type="text" id="cvm-website-id" class="regular-text" name="'
-            . esc_attr(Options::OPTION_KEY . '[website_id]') . '" value="' . esc_attr((string) $settings['website_id']) . '">';
-        echo '<p class="description">Sent as <code>website_info.id</code>.</p>';
-        echo '</td></tr>';
-
-        echo '</table>';
-        echo '</div>';
+        ?>
+        <div class="cvm-card">
+        <h2 class="cvm-card-title">Website &amp; Client</h2>
+        <p class="description" style="margin-bottom:14px;">Sent as <code>website_info</code> in every webhook payload — analytics
+        reports and form submissions alike — so downstream systems receiving deliveries from several installs can identify which
+        site and client a payload belongs to. Every key is always present (empty when not configured), giving consumers a predictable
+        schema.</p>
+        <table class="form-table" role="presentation">
+        <tr><th scope="row">Site name / URL / domain</th><td>
+        <code><?php echo esc_html(get_bloginfo('name')); ?></code> &middot; <code><?php echo esc_html(home_url()); ?></code>
+        &middot; <code><?php echo esc_html(WebsiteInfo::domain()); ?></code>
+        <p class="description">Derived automatically — <code>domain</code> is the home URL host with any leading <code>www.</code>
+        removed.</p></td></tr>
+        <tr><th scope="row"><label for="cvm-client-first-name">Client First Name</label></th><td>
+        <input type="text" id="cvm-client-first-name" class="regular-text" name="<?php echo esc_attr(Options::OPTION_KEY . '[client_first_name]'); ?>" value="<?php echo esc_attr((string) $settings['client_first_name']); ?>"></td></tr>
+        <tr><th scope="row"><label for="cvm-client-last-name">Client Last Name</label></th><td>
+        <input type="text" id="cvm-client-last-name" class="regular-text" name="<?php echo esc_attr(Options::OPTION_KEY . '[client_last_name]'); ?>" value="<?php echo esc_attr((string) $settings['client_last_name']); ?>"></td></tr>
+        <tr><th scope="row"><label for="cvm-client-id">Client ID <span class="description">(optional)</span></label></th><td>
+        <input type="text" id="cvm-client-id" class="regular-text" name="<?php echo esc_attr(Options::OPTION_KEY . '[client_id]'); ?>" value="<?php echo esc_attr((string) $settings['client_id']); ?>">
+        <p class="description">Sent as <code>website_info.client.id</code>.</p></td></tr>
+        <tr><th scope="row"><label for="cvm-website-id">Website ID <span class="description">(optional)</span></label></th><td>
+        <input type="text" id="cvm-website-id" class="regular-text" name="<?php echo esc_attr(Options::OPTION_KEY . '[website_id]'); ?>" value="<?php echo esc_attr((string) $settings['website_id']); ?>">
+        <p class="description">Sent as <code>website_info.id</code>.</p></td></tr></table></div>
+        <?php
     }
 
     /**
@@ -242,70 +230,58 @@ final class SettingsPage
             'scroll_depth' => 'Scroll depth milestones (50/100%)',
         ];
 
-        echo '<h2>Tracking</h2>';
-        echo '<table class="form-table" role="presentation">';
-
-        echo '<tr><th scope="row">Interactions to track</th><td>';
+        ?>
+        <h2>Tracking</h2>
+        <table class="form-table" role="presentation">
+        <tr><th scope="row">Interactions to track</th><td>
+        <?php
         foreach ($labels as $type => $label) {
             $field = 'track_' . $type;
-            echo '<label style="display:block;margin-bottom:4px;">';
-            echo '<input type="checkbox" name="' . esc_attr(Options::OPTION_KEY . '[' . $field . ']') . '" value="1" '
-                . checked(!empty($settings[$field]), true, false) . '> ' . $label;
-            echo '</label>';
+            ?>
+            <label style="display:block;margin-bottom:4px;">
+            <input type="checkbox" name="<?php echo esc_attr(Options::OPTION_KEY . '[' . $field . ']'); ?>" value="1" <?php echo checked(!empty($settings[$field]), true, false); ?>>
+            <?php echo $label; ?></label>
+            <?php
         }
-        echo '</td></tr>';
-
-        echo '<tr><th scope="row">Conversion goals</th><td>';
-        echo '<label><input type="checkbox" name="' . esc_attr(Options::OPTION_KEY . '[goals_enabled]') . '" value="1" '
-            . checked(!empty($settings['goals_enabled']), true, false) . '> Match tracked activity against configured goals</label>';
-        echo '<p class="description">Goals turn ordinary activity — a phone number tapped, a PDF opened, a '
-            . 'booking link followed — into counted conversions. Matching runs on the server as events arrive, so '
-            . 'turning this off removes that work entirely. Existing goal completions are kept either way; '
-            . 'switching it off pauses collection rather than erasing history. Manage goals under '
-            . '<strong>Convermetry &rarr; Goals</strong>.</p>';
-        echo '</td></tr>';
-
-        echo '<tr><th scope="row">Logged-in users</th><td>';
-        echo '<label><input type="checkbox" name="' . esc_attr(Options::OPTION_KEY . '[exclude_logged_in]') . '" value="1" '
-            . checked(!empty($settings['exclude_logged_in']), true, false) . '> Exclude logged-in users from tracking</label>';
-        echo '<p class="description">Recommended, so admin and editor activity does not skew visitor analytics. '
-            . 'Webhook delivery of form submissions is unaffected.</p>';
-        echo '</td></tr>';
-
-        echo '<tr><th scope="row">Browser privacy signals</th><td>';
-        echo '<label><input type="checkbox" name="' . esc_attr(Options::OPTION_KEY . '[respect_dnt]') . '" value="1" '
-            . checked(!empty($settings['respect_dnt']), true, false) . '> Honor Do Not Track / Global Privacy Control</label>';
-        echo '<p class="description">Visitors whose browser sends these signals are not tracked at all — no analytics '
-            . 'events are recorded and no analytics context accompanies their form submissions. Enabling this typically '
-            . 'reduces recorded traffic. Note DNT/GPC is an opt-out signal, not a consent mechanism.</p>';
-        echo '</td></tr>';
-
-        echo '<tr><th scope="row">IP addresses</th><td>';
-        echo '<label><input type="checkbox" name="' . esc_attr(Options::OPTION_KEY . '[store_ip_address]') . '" value="1" '
-            . checked(!empty($settings['store_ip_address']), true, false) . '> Store visitor IP addresses</label>';
-        echo '<p class="description">On by default. Records the visitor\'s IP with <strong>every analytics event</strong> '
-            . '(page views, clicks, hovers, scroll milestones, conversions) and with <strong>every server-confirmed form '
-            . 'submission</strong> — surfaced in analytics reports and sent as <code>form_submission.ip_address</code> in '
-            . 'webhook payloads. Useful for fraud checks, spam review, and CRM deduplication. Turning this off leaves the '
-            . 'address empty on new rows; rows already stored are unchanged and age out with the retention window. '
-            . 'No IP is ever sent to a geolocation service. Behind a proxy or CDN, map the real address with the '
-            . '<code>convermetry_client_ip</code> filter.</p>';
-        echo '<p class="description"><strong>Privacy note:</strong> in the EU/UK an IP address is personal data. '
-            . 'Storing it for general visitor activity — not just leads someone actively submitted — usually needs to be '
-            . 'disclosed in your privacy policy and to rest on a lawful basis. When <em>Honor Do Not Track / Global '
-            . 'Privacy Control</em> is enabled above, a visitor sending either signal gets no stored IP on either path — '
-            . 'their analytics events are not recorded at all, and a form they submit is still delivered but carries an '
-            . 'empty address.</p>';
-        echo '</td></tr>';
-
-        echo '<tr><th scope="row"><label for="cvm-hover-dwell">Hover dwell time (ms)</label></th><td>';
-        echo '<input type="number" id="cvm-hover-dwell" min="200" max="10000" step="50" name="'
-            . esc_attr(Options::OPTION_KEY . '[hover_dwell_ms]') . '" value="' . esc_attr((string) $settings['hover_dwell_ms']) . '" class="small-text">';
-        echo '<p class="description">How long the pointer must rest on an element before a hover event is recorded. '
-            . 'Add <code>data-cvm-hover</code> to any element — images included — to opt it into hover tracking.</p>';
-        echo '</td></tr>';
-
-        echo '</table>';
+        ?>
+        </td></tr>
+        <tr><th scope="row">Conversion goals</th><td>
+        <label><input type="checkbox" name="<?php echo esc_attr(Options::OPTION_KEY . '[goals_enabled]'); ?>" value="1" <?php echo checked(!empty($settings['goals_enabled']), true, false); ?>>
+        Match tracked activity against configured goals</label>
+        <p class="description">Goals turn ordinary activity — a phone number tapped, a PDF opened, a booking link followed
+        — into counted conversions. Matching runs on the server as events arrive, so turning this off removes that work entirely.
+        Existing goal completions are kept either way; switching it off pauses collection rather than erasing history. Manage goals
+        under <strong>Convermetry &rarr; Goals</strong>.</p></td></tr>
+        <tr><th scope="row">Logged-in users</th><td>
+        <label><input type="checkbox" name="<?php echo esc_attr(Options::OPTION_KEY . '[exclude_logged_in]'); ?>" value="1" <?php echo checked(!empty($settings['exclude_logged_in']), true, false); ?>>
+        Exclude logged-in users from tracking</label>
+        <p class="description">Recommended, so admin and editor activity does not skew visitor analytics. Webhook delivery
+        of form submissions is unaffected.</p></td></tr>
+        <tr><th scope="row">Browser privacy signals</th><td>
+        <label><input type="checkbox" name="<?php echo esc_attr(Options::OPTION_KEY . '[respect_dnt]'); ?>" value="1" <?php echo checked(!empty($settings['respect_dnt']), true, false); ?>>
+        Honor Do Not Track / Global Privacy Control</label>
+        <p class="description">Visitors whose browser sends these signals are not tracked at all — no analytics events are
+        recorded and no analytics context accompanies their form submissions. Enabling this typically reduces recorded traffic. Note
+        DNT/GPC is an opt-out signal, not a consent mechanism.</p></td></tr>
+        <tr><th scope="row">IP addresses</th><td>
+        <label><input type="checkbox" name="<?php echo esc_attr(Options::OPTION_KEY . '[store_ip_address]'); ?>" value="1" <?php echo checked(!empty($settings['store_ip_address']), true, false); ?>>
+        Store visitor IP addresses</label>
+        <p class="description">On by default. Records the visitor's IP with <strong>every analytics event</strong> (page views,
+        clicks, hovers, scroll milestones, conversions) and with <strong>every server-confirmed form submission</strong> — surfaced
+        in analytics reports and sent as <code>form_submission.ip_address</code> in webhook payloads. Useful for fraud checks, spam
+        review, and CRM deduplication. Turning this off leaves the address empty on new rows; rows already stored are unchanged and
+        age out with the retention window. No IP is ever sent to a geolocation service. Behind a proxy or CDN, map the real address
+        with the <code>convermetry_client_ip</code> filter.</p>
+        <p class="description"><strong>Privacy note:</strong> in the EU/UK an IP address is personal data. Storing it for general
+        visitor activity — not just leads someone actively submitted — usually needs to be disclosed in your privacy policy and
+        to rest on a lawful basis. When <em>Honor Do Not Track / Global Privacy Control</em> is enabled above, a visitor sending either
+        signal gets no stored IP on either path — their analytics events are not recorded at all, and a form they submit is still
+        delivered but carries an empty address.</p></td></tr>
+        <tr><th scope="row"><label for="cvm-hover-dwell">Hover dwell time (ms)</label></th><td>
+        <input type="number" id="cvm-hover-dwell" min="200" max="10000" step="50" name="<?php echo esc_attr(Options::OPTION_KEY . '[hover_dwell_ms]'); ?>" value="<?php echo esc_attr((string) $settings['hover_dwell_ms']); ?>" class="small-text">
+        <p class="description">How long the pointer must rest on an element before a hover event is recorded. Add <code>data-cvm-hover</code>
+        to any element — images included — to opt it into hover tracking.</p></td></tr></table>
+        <?php
     }
 
     /**
@@ -316,35 +292,25 @@ final class SettingsPage
      */
     private static function renderDataSection(array $settings): void
     {
-        echo '<h2>Data</h2>';
-        echo '<table class="form-table" role="presentation">';
-
-        echo '<tr><th scope="row"><label for="cvm-retention">Retention period (days)</label></th><td>';
-        echo '<input type="number" id="cvm-retention" min="7" max="365" name="'
-            . esc_attr(Options::OPTION_KEY . '[retention_days]') . '" value="' . esc_attr((string) $settings['retention_days']) . '" class="small-text">';
-        echo '<p class="description">Analytics events, form submission records, goal completions, lead status history, '
-            . 'and activity log entries older than this are deleted by a daily cleanup job. Default is 90 days.</p>';
-        echo '</td></tr>';
-
-        echo '<tr><th scope="row"><label for="cvm-currency">Lead value currency</label></th><td>';
-        echo '<input type="text" id="cvm-currency" maxlength="3" size="5" name="'
-            . esc_attr(Options::OPTION_KEY . '[lead_currency]') . '" value="'
-            . esc_attr((string) ($settings['lead_currency'] ?? '')) . '" class="small-text" '
-            . 'pattern="[A-Za-z]{3}" placeholder="USD">';
-        echo '<p class="description">Three-letter ISO 4217 code (USD, EUR, GBP, AUD&hellip;) used when you record a '
-            . 'value against a lead on the Submissions screen. The code is <strong>saved onto each lead</strong> at the '
-            . 'moment you enter its value, so changing this later never rewrites what is already recorded — and reports '
-            . 'total each currency separately rather than adding different currencies together.</p>';
-        echo '</td></tr>';
-
-        echo '<tr><th scope="row">Activity Log privacy</th><td>';
-        echo '<label><input type="checkbox" name="' . esc_attr(Options::OPTION_KEY . '[log_submission_data]') . '" value="1" '
-            . checked(!empty($settings['log_submission_data']), true, false) . '> Store form submission data in the Activity Log</label>';
-        echo '<p class="description">When disabled, the Activity Log records every delivery\'s metadata but replaces the '
-            . 'visitor\'s field values with a placeholder — useful when compliance rules forbid a second copy of lead '
-            . 'data. The payload actually delivered to endpoints is unaffected.</p>';
-        echo '</td></tr>';
-
-        echo '</table>';
+        ?>
+        <h2>Data</h2>
+        <table class="form-table" role="presentation">
+        <tr><th scope="row"><label for="cvm-retention">Retention period (days)</label></th><td>
+        <input type="number" id="cvm-retention" min="7" max="365" name="<?php echo esc_attr(Options::OPTION_KEY . '[retention_days]'); ?>" value="<?php echo esc_attr((string) $settings['retention_days']); ?>" class="small-text">
+        <p class="description">Analytics events, form submission records, goal completions, lead status history, and activity
+        log entries older than this are deleted by a daily cleanup job. Default is 90 days.</p></td></tr>
+        <tr><th scope="row"><label for="cvm-currency">Lead value currency</label></th><td>
+        <input type="text" id="cvm-currency" maxlength="3" size="5" name="<?php echo esc_attr(Options::OPTION_KEY . '[lead_currency]'); ?>" value="<?php echo esc_attr((string) ($settings['lead_currency'] ?? '')); ?>" class="small-text" pattern="[A-Za-z]{3}" placeholder="USD">
+        <p class="description">Three-letter ISO 4217 code (USD, EUR, GBP, AUD&hellip;) used when you record a value against
+        a lead on the Submissions screen. The code is <strong>saved onto each lead</strong> at the moment you enter its value, so changing
+        this later never rewrites what is already recorded — and reports total each currency separately rather than adding different
+        currencies together.</p></td></tr>
+        <tr><th scope="row">Activity Log privacy</th><td>
+        <label><input type="checkbox" name="<?php echo esc_attr(Options::OPTION_KEY . '[log_submission_data]'); ?>" value="1" <?php echo checked(!empty($settings['log_submission_data']), true, false); ?>>
+        Store form submission data in the Activity Log</label>
+        <p class="description">When disabled, the Activity Log records every delivery's metadata but replaces the visitor's
+        field values with a placeholder — useful when compliance rules forbid a second copy of lead data. The payload actually delivered
+        to endpoints is unaffected.</p></td></tr></table>
+        <?php
     }
 }
