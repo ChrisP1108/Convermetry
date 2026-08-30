@@ -152,7 +152,7 @@ final class PayloadBuilder
             'source'         => 'convermetry',
             'plugin_version' => CVM_VERSION,
             'message_type'   => 'analytics_report',
-            'website_info'   => WebsiteInfoBuilder::build(),
+            'website_info'   => WebsiteInfo::current()->toArray(),
             'generated_at'   => gmdate('c', $endTs),
             'delivery_id'    => '',
             'period'         => [
@@ -202,10 +202,10 @@ final class PayloadBuilder
             'source'         => 'convermetry',
             'plugin_version' => CVM_VERSION,
             'message_type'   => 'form_submission',
-            'website_info'   => WebsiteInfoBuilder::build([
-                'url'   => (string) ($submission['page_url'] ?? ''),
-                'query' => $pageQuery,
-            ]),
+            'website_info'   => WebsiteInfo::current(new PageInfo(
+                url: (string) ($submission['page_url'] ?? ''),
+                query: self::stringMap($pageQuery),
+            ))->toArray(),
             'generated_at'   => $generatedAt,
             'delivery_id'    => '',
             'form_submission' => [
@@ -359,6 +359,29 @@ final class PayloadBuilder
          *                                          ['submission_id' => string] for submissions.
          */
         return (array) apply_filters('convermetry_webhook_payload', $payload, $messageType, $meta);
+    }
+
+    /**
+     * Reduces a decoded JSON object to string keys with string values.
+     *
+     * The page_query column was written from already-sanitized scalars, so
+     * this is a type narrowing rather than a sanitizer — but the column is
+     * still JSON on disk, and a row hand-edited (or written by an older
+     * version) can hold anything.
+     *
+     * @param array<string, mixed> $map Decoded map.
+     * @return array<string, string>
+     */
+    private static function stringMap(array $map): array
+    {
+        $out = [];
+        foreach ($map as $key => $value) {
+            if (is_scalar($value)) {
+                $out[$key] = (string) $value;
+            }
+        }
+
+        return $out;
     }
 
     /**

@@ -12,6 +12,8 @@ use Convermetry\Settings\Options;
 use Convermetry\Support\Errors;
 use Convermetry\Support\Retention;
 use Convermetry\Webhook\DeliveryLog;
+use Convermetry\Webhook\DeliveryState;
+use Convermetry\Webhook\EndpointOutcome;
 use Convermetry\Webhook\FormDeliveryQueue;
 
 /**
@@ -54,7 +56,13 @@ final class FormSubmissions
     private const string TABLE = 'cvm_form_submissions';
 
     /** Recognized webhook delivery states (see {@see classifyDelivery()}). */
-    public const array DELIVERY_STATES = ['delivered', 'partial', 'failed', 'pending', 'not_sent'];
+    public const array DELIVERY_STATES = [
+        DeliveryState::Delivered->value,
+        DeliveryState::Partial->value,
+        DeliveryState::Failed->value,
+        DeliveryState::Pending->value,
+        DeliveryState::NotSent->value,
+    ];
 
     /** Option key storing the installed schema version. */
     private const string DB_VERSION_OPTION = 'cvm_submissions_db_version';
@@ -248,32 +256,11 @@ final class FormSubmissions
      * silently dropped and the caller is told nothing new was stored, so no
      * duplicate webhook deliveries are ever queued.
      *
-     * @param array{
-     *     submission_id: string,
-     *     conversion_id: string,
-     *     session_id: string,
-     *     provider: string,
-     *     form_key: string,
-     *     form_name: string,
-     *     native_form_id: string,
-     *     form_id: string,
-     *     page_url: string,
-     *     ip_address: string,
-     *     channel: string,
-     *     utm_campaign: string,
-     *     utm_source: string,
-     *     utm_medium: string,
-     *     utm_id: string,
-     *     landing_page: string,
-     *     page_query: array<string, string>,
-     *     submission_data: array<string, mixed>,
-     *     context: array<string, mixed>,
-     *     runtime: array<string, array<string, string>>
-     * } $submission Fully sanitized submission record.
+     * @param NewSubmission $submission Fully sanitized submission record.
      * @return int|null The new row id, or null when the insert stored nothing
      *                  (duplicate conversion_id, or a database failure).
      */
-    public static function insert(array $submission): ?int
+    public static function insert(NewSubmission $submission): ?int
     {
         global $wpdb;
 
@@ -289,26 +276,26 @@ final class FormSubmissions
             . ' utm_source, utm_medium, utm_id, landing_page,'
             . ' page_query, submission_data, context, runtime, created_at)'
             . ' VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)',
-            $submission['submission_id'],
-            $submission['conversion_id'],
-            $submission['session_id'],
-            $submission['provider'],
-            $submission['form_key'],
-            $submission['form_name'],
-            $submission['native_form_id'],
-            $submission['form_id'],
-            $submission['page_url'],
-            (string) ($submission['ip_address'] ?? ''),
-            mb_substr((string) ($submission['channel'] ?? ''), 0, 32),
-            mb_substr((string) ($submission['utm_campaign'] ?? ''), 0, 191),
-            mb_substr((string) ($submission['utm_source'] ?? ''), 0, 100),
-            mb_substr((string) ($submission['utm_medium'] ?? ''), 0, 100),
-            mb_substr((string) ($submission['utm_id'] ?? ''), 0, 100),
-            mb_substr((string) ($submission['landing_page'] ?? ''), 0, 255),
-            self::encodeJson($submission['page_query']),
-            self::encodeJson($submission['submission_data']),
-            self::encodeJson($submission['context']),
-            self::encodeJson($submission['runtime'] ?? ['query' => [], 'headers' => []]),
+            $submission->submissionId,
+            $submission->conversionId,
+            $submission->sessionId,
+            $submission->provider,
+            $submission->formKey,
+            $submission->formName,
+            $submission->nativeFormId,
+            $submission->formId,
+            $submission->pageUrl,
+            $submission->ipAddress,
+            mb_substr($submission->channel, 0, 32),
+            mb_substr($submission->utmCampaign, 0, 191),
+            mb_substr($submission->utmSource, 0, 100),
+            mb_substr($submission->utmMedium, 0, 100),
+            mb_substr($submission->utmId, 0, 100),
+            mb_substr($submission->landingPage, 0, 255),
+            self::encodeJson($submission->pageQuery),
+            self::encodeJson($submission->fields),
+            self::encodeJson($submission->context),
+            self::encodeJson($submission->runtime),
             gmdate('Y-m-d H:i:s')
         ));
 
@@ -582,9 +569,9 @@ final class FormSubmissions
         $wpdb->update(
             self::tableName(),
             [
-                'delivery_state' => $state,
+                'delivery_state' => $state->value,
                 'delivery_json'  => (string) wp_json_encode(
-                    $endpoints,
+                    array_map(static fn(EndpointOutcome $e): array => $e->toArray(), $endpoints),
                     JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
                 ),
             ],
@@ -593,7 +580,7 @@ final class FormSubmissions
             ['%s']
         );
 
-        if ($state === $previous) {
+        if ($state->value === $previous) {
             return;
         }
 
@@ -616,7 +603,7 @@ final class FormSubmissions
          * @param string $state        The new delivery state.
          * @param string $previous     The state it replaced ('' for a row with none yet).
          */
-        do_action('convermetry_submission_delivery_state_changed', $submissionId, $state, $previous);
+        do_action('convermetry_submission_delivery_state_changed', $submissionId, $state->value, $previous);
     }
 
     /**
@@ -636,7 +623,7 @@ final class FormSubmissions
      *
      * @param array<int, array<string, mixed>> $logRows   Delivery-log rows, oldest first.
      * @param array<int, array<string, mixed>> $queueRows Undelivered queue rows.
-     * @return list<array<string, mixed>>
+     * @return list<EndpointOutcome>
      */
     public static function buildEndpointOutcomes(array $logRows, array $queueRows): array
     {
@@ -647,29 +634,31 @@ final class FormSubmissions
 
             // Overwrites any earlier attempt against this endpoint; callers
             // pass rows oldest-first, so the newest verdict survives.
-            $endpoints[$url] = [
-                'url'     => $url,
-                'label'   => (string) ($row['endpoint_label'] ?? ''),
-                'ok'      => (int) ($row['success'] ?? 0) === 1,
-                'code'    => (int) ($row['response_code'] ?? 0),
-                'attempt' => (int) ($row['attempt'] ?? 0),
-                'queued'  => false,
-                'at'      => (string) ($row['created_at'] ?? ''),
-            ];
+            $endpoints[$url] = new EndpointOutcome(
+                url: $url,
+                label: (string) ($row['endpoint_label'] ?? ''),
+                ok: (int) ($row['success'] ?? 0) === 1,
+                code: (int) ($row['response_code'] ?? 0),
+                attempt: (int) ($row['attempt'] ?? 0),
+                queued: false,
+                at: (string) ($row['created_at'] ?? ''),
+            );
         }
 
         foreach ($queueRows as $row) {
             $url = (string) ($row['endpoint_url'] ?? '');
 
-            $endpoints[$url] = [
-                'url'     => $url,
-                'label'   => (string) ($endpoints[$url]['label'] ?? ''),
-                'ok'      => false,
-                'code'    => 0,
-                'attempt' => (int) ($row['attempt'] ?? 0),
-                'queued'  => true,
-                'at'      => (string) ($row['next_attempt_at'] ?? ''),
-            ];
+            $endpoints[$url] = new EndpointOutcome(
+                url: $url,
+                // The label the log row recorded, when there is one — a queue
+                // row does not carry it.
+                label: $endpoints[$url]->label ?? '',
+                ok: false,
+                code: 0,
+                attempt: (int) ($row['attempt'] ?? 0),
+                queued: true,
+                at: (string) ($row['next_attempt_at'] ?? ''),
+            );
         }
 
         return array_values($endpoints);
@@ -683,39 +672,39 @@ final class FormSubmissions
      * endpoint today must not retroactively downgrade last month's successful
      * two-endpoint delivery to "partial".
      *
-     * 'not_sent' is a NEUTRAL state, never a failure — it is the ordinary
+     * NotSent is a NEUTRAL state, never a failure — it is the ordinary
      * condition of a site that uses the plugin without webhooks at all. How it
      * is worded (paused vs. never configured) is a display concern and lives
      * in the admin page.
      *
      * Pure: no database, no WordPress state.
      *
-     * @param list<array<string, mixed>> $endpoints Per-endpoint outcomes.
-     * @return string delivered, partial, failed, pending, or not_sent.
+     * @param list<EndpointOutcome> $endpoints Per-endpoint outcomes.
+     * @return DeliveryState
      */
-    public static function classifyDelivery(array $endpoints): string
+    public static function classifyDelivery(array $endpoints): DeliveryState
     {
         if ($endpoints === []) {
-            return 'not_sent';
+            return DeliveryState::NotSent;
         }
 
         foreach ($endpoints as $endpoint) {
-            if (!empty($endpoint['queued'])) {
-                return 'pending';
+            if ($endpoint->queued) {
+                return DeliveryState::Pending;
             }
         }
 
         $ok = 0;
         foreach ($endpoints as $endpoint) {
-            if (!empty($endpoint['ok'])) {
+            if ($endpoint->ok) {
                 $ok++;
             }
         }
 
         return match (true) {
-            $ok === count($endpoints) => 'delivered',
-            $ok > 0                   => 'partial',
-            default                   => 'failed',
+            $ok === count($endpoints) => DeliveryState::Delivered,
+            $ok > 0                   => DeliveryState::Partial,
+            default                   => DeliveryState::Failed,
         };
     }
 
@@ -878,6 +867,22 @@ final class FormSubmissions
     }
 
     /**
+     * Cron callback for the daily cleanup: one budgeted backfill pass, without
+     * re-arming.
+     *
+     * Separate from {@see backfillDerivedColumns()} because that method
+     * reports how many rows it updated and this is a do_action() callback whose
+     * return value WordPress discards. {@see backfillCatchUp()} is the
+     * self-re-arming variant, on its own hook.
+     *
+     * @return void
+     */
+    public static function backfillOnCleanup(): void
+    {
+        self::backfillDerivedColumns();
+    }
+
+    /**
      * Cron callback: runs another budgeted backfill pass and re-arms itself
      * while work remains.
      *
@@ -965,7 +970,7 @@ final class FormSubmissions
      *
      * @param int                        $page    1-based page number.
      * @param int                        $perPage Rows per page (clamp in callers).
-     * @param array<string, string|array> $filters See {@see buildWhereClause()}.
+     * @param array<string, string>       $filters See {@see buildWhereClause()}.
      * @return array<int, array<string, mixed>>
      */
     public static function getPaginated(int $page, int $perPage, array $filters = []): array
@@ -987,7 +992,7 @@ final class FormSubmissions
     /**
      * Returns the total number of rows matching the given filters.
      *
-     * @param array<string, string|array> $filters Same keys as {@see getPaginated()}.
+     * @param array<string, string>       $filters Same keys as {@see getPaginated()}.
      * @return int
      */
     public static function getCount(array $filters = []): int
@@ -1012,7 +1017,7 @@ final class FormSubmissions
      *
      * @param int                        $beforeId Only rows with an id strictly below this value.
      * @param int                        $limit    Maximum rows to return.
-     * @param array<string, string|array> $filters  Optional filters (the export honors them).
+     * @param array<string, string>       $filters  Optional filters (the export honors them).
      * @return array<int, array<string, mixed>>
      */
     public static function getChunk(int $beforeId, int $limit, array $filters = []): array
@@ -1038,7 +1043,7 @@ final class FormSubmissions
      * Returns the distinct calendar years and months that have submissions,
      * for the Submissions page's filter dropdowns.
      *
-     * @param array<string, string|array> $filters Active filters (year/month/search excluded).
+     * @param array<string, string>       $filters Active filters (year/month/search excluded).
      * @return array{years: list<string>, months: list<string>}
      */
     public static function getDistinctDates(array $filters = []): array
@@ -1358,9 +1363,15 @@ final class FormSubmissions
      * Deletes rows older than the plugin's retention window. Runs on the
      * same daily cron as the events-table cleanup, in bounded chunks.
      *
+     * The deleted row count is NOT returned. It reaches listeners through
+     * 'convermetry_retention_cleanup_completed', which is the one place it is
+     * published, and this runs as a do_action() callback whose return value
+     * WordPress discards — so a return here would only invite a reader to
+     * think it went somewhere.
+     *
      * @return void
      */
-    public static function purgeOld(): int
+    public static function purgeOld(): void
     {
         global $wpdb;
 
@@ -1389,10 +1400,8 @@ final class FormSubmissions
         $outcome = Retention::outcome($deleted, self::CLEANUP_CHUNK, $total);
         Retention::completed('form_submissions', $cutoff, $outcome);
 
-        if ($outcome['outcome'] === Retention::QUERY_FAILED) {
+        if ($outcome->queryFailed()) {
             Errors::storage('form_submissions', 'retention_delete', 'delete_failed', ['cutoff' => $cutoff]);
         }
-
-        return $total;
     }
 }

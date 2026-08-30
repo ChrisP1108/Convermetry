@@ -8,6 +8,8 @@ use Brain\Monkey;
 use Brain\Monkey\Functions;
 use Convermetry\Notifications\NotificationDispatcher;
 use Convermetry\Notifications\NotificationMailer;
+use Convermetry\Notifications\NotificationMessage;
+use Convermetry\Notifications\SiteInfo;
 use Convermetry\Notifications\NotificationSettings;
 use PHPUnit\Framework\TestCase;
 
@@ -82,7 +84,7 @@ final class NotificationHookTest extends TestCase
         self::assertNull(NotificationDispatcher::plan(
             $this->settings(),
             ['form_key' => 'elementor:a1', 'provider' => 'elementor', 'form_name' => 'Contact'],
-            ['site_name' => 'Example']
+            new SiteInfo('Example', 'https://example.com/', 'https://example.com/wp-admin/admin.php')
         ));
     }
 
@@ -109,7 +111,7 @@ final class NotificationHookTest extends TestCase
         self::assertNull(NotificationDispatcher::plan(
             $this->settings(['enabled' => false]),
             ['form_key' => 'elementor:a1'],
-            ['site_name' => 'Example']
+            new SiteInfo('Example', 'https://example.com/', 'https://example.com/wp-admin/admin.php')
         ));
         self::assertFalse($consulted, 'The master switch is checked before the filter is consulted.');
     }
@@ -127,7 +129,7 @@ final class NotificationHookTest extends TestCase
         $plan = NotificationDispatcher::plan(
             $this->settings(),
             ['form_key' => 'elementor:a1'],
-            ['site_name' => 'Example']
+            new SiteInfo('Example', 'https://example.com/', 'https://example.com/wp-admin/admin.php')
         );
 
         self::assertNotNull($plan);
@@ -150,7 +152,7 @@ final class NotificationHookTest extends TestCase
         $plan = NotificationDispatcher::plan(
             $this->settings(),
             ['form_key' => 'elementor:a1'],
-            ['site_name' => 'Example']
+            new SiteInfo('Example', 'https://example.com/', 'https://example.com/wp-admin/admin.php')
         );
 
         self::assertNotNull($plan);
@@ -168,23 +170,21 @@ final class NotificationHookTest extends TestCase
         self::assertNull(NotificationDispatcher::plan(
             $this->settings(),
             ['form_key' => 'elementor:a1'],
-            ['site_name' => 'Example']
+            new SiteInfo('Example', 'https://example.com/', 'https://example.com/wp-admin/admin.php')
         ));
     }
 
     // -------------------------------------------------------- message filter
 
-    /**
-     * @return array{recipient: string, subject: string, html: string, headers: list<string>}
-     */
-    private function message(): array
+    /** The pre-filter message one queue row renders. */
+    private function message(): NotificationMessage
     {
-        return [
-            'recipient' => 'ops@example.com',
-            'subject'   => 'New lead from Contact',
-            'html'      => '<div>body</div>',
-            'headers'   => NotificationMailer::headers('s1'),
-        ];
+        return new NotificationMessage(
+            recipient: 'ops@example.com',
+            subject: 'New lead from Contact',
+            html: '<div>body</div>',
+            headers: NotificationMailer::headers('s1'),
+        );
     }
 
     /**
@@ -200,7 +200,7 @@ final class NotificationHookTest extends TestCase
             's1'
         );
 
-        self::assertSame('ops@example.com', $result['recipient']);
+        self::assertSame('ops@example.com', $result->recipient);
     }
 
     public function testAFilteredSubjectIsStrippedOfHeaderInjectionAndCapped(): void
@@ -211,9 +211,9 @@ final class NotificationHookTest extends TestCase
             's1'
         );
 
-        self::assertSame('Hi Bcc: attacker@evil.example X: y', $result['subject']);
-        self::assertStringNotContainsString("\r", $result['subject']);
-        self::assertStringNotContainsString("\n", $result['subject']);
+        self::assertSame('Hi Bcc: attacker@evil.example X: y', $result->subject);
+        self::assertStringNotContainsString("\r", $result->subject);
+        self::assertStringNotContainsString("\n", $result->subject);
     }
 
     public function testAnOverlongFilteredSubjectIsTruncatedToTheConfiguredMaximum(): void
@@ -224,14 +224,14 @@ final class NotificationHookTest extends TestCase
             's1'
         );
 
-        self::assertSame(NotificationSettings::SUBJECT_MAX_LEN, mb_strlen($result['subject']));
+        self::assertSame(NotificationSettings::SUBJECT_MAX_LEN, mb_strlen($result->subject));
     }
 
     public function testAnEmptyFilteredSubjectFallsBackRatherThanSendingBlank(): void
     {
         $result = NotificationMailer::reconcile($this->message(), ['subject' => '   '], 's1');
 
-        self::assertSame('New lead from Contact', $result['subject']);
+        self::assertSame('New lead from Contact', $result->subject);
     }
 
     public function testAnOversizedFilteredBodyIsCappedByTheSameRuleAsARenderedOne(): void
@@ -241,8 +241,8 @@ final class NotificationHookTest extends TestCase
         $huge   = str_repeat('x', 300000);
         $result = NotificationMailer::reconcile($this->message(), ['html' => $huge], 's1');
 
-        self::assertLessThan(strlen($huge), strlen($result['html']));
-        self::assertStringContainsString('truncated', $result['html']);
+        self::assertLessThan(strlen($huge), strlen($result->html));
+        self::assertStringContainsString('truncated', $result->html);
     }
 
     /**
@@ -265,7 +265,7 @@ final class NotificationHookTest extends TestCase
             'X-Auto-Response-Suppress: All',
             'X-Convermetry-Submission: s1',
             'X-Custom: yes',
-        ], $result['headers']);
+        ], $result->headers);
     }
 
     public function testAFilterCannotOverrideAProtectedHeader(): void
@@ -281,11 +281,11 @@ final class NotificationHookTest extends TestCase
             's1'
         );
 
-        self::assertContains('Content-Type: text/html; charset=UTF-8', $result['headers']);
-        self::assertContains('X-Convermetry-Submission: s1', $result['headers']);
-        self::assertNotContains('content-type: text/plain', $result['headers']);
-        self::assertNotContains('X-Convermetry-Submission: forged', $result['headers']);
-        self::assertContains('X-Fine: yes', $result['headers']);
+        self::assertContains('Content-Type: text/html; charset=UTF-8', $result->headers);
+        self::assertContains('X-Convermetry-Submission: s1', $result->headers);
+        self::assertNotContains('content-type: text/plain', $result->headers);
+        self::assertNotContains('X-Convermetry-Submission: forged', $result->headers);
+        self::assertContains('X-Fine: yes', $result->headers);
     }
 
     public function testInjectedNewlinesInAFilteredHeaderAreNeutralized(): void
@@ -296,7 +296,7 @@ final class NotificationHookTest extends TestCase
             's1'
         );
 
-        foreach ($result['headers'] as $header) {
+        foreach ($result->headers as $header) {
             self::assertStringNotContainsString("\r", $header);
             self::assertStringNotContainsString("\n", $header);
         }

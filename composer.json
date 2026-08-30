@@ -7,8 +7,10 @@
         "php": ">=8.3"
     },
     "require-dev": {
+        "brain/monkey": "^2.6",
+        "phpstan/phpstan": "^2.2",
         "phpunit/phpunit": "^10.5",
-        "brain/monkey": "^2.6"
+        "szepeviktor/phpstan-wordpress": "^2.0"
     },
     "config": {
         "platform": {
@@ -27,8 +29,15 @@
         }
     },
     "scripts": {
+        "analyse": "phpstan analyse --memory-limit=1G",
         "test": "phpunit --display-skipped",
         "test:integration": "phpunit -c phpunit.integration.xml --display-skipped",
         "lint": "find src tests convermetry.php uninstall.php -name '*.php' -print0 | xargs -0 -n1 php -l"
+    },
+    "scripts-descriptions": {
+        "analyse": "Static analysis of src/ and both entry points at PHPStan level 8.",
+        "test": "The unit suite (Brain Monkey; no WordPress, no database).",
+        "test:integration": "The integration suite against a real MySQL server; skips cleanly without one.",
+        "lint": "php -l over every tracked PHP file."
     }
 }

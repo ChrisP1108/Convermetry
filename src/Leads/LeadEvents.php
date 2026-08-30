@@ -307,9 +307,15 @@ final class LeadEvents
      * row-by-row, so history is aged out on the same window independently. The
      * two use the same cutoff, so history never outlives the lead it describes.
      *
+     * The deleted row count is NOT returned. It reaches listeners through
+     * 'convermetry_retention_cleanup_completed', which is the one place it is
+     * published, and this runs as a do_action() callback whose return value
+     * WordPress discards — so a return here would only invite a reader to
+     * think it went somewhere.
+     *
      * @return void
      */
-    public static function purgeOld(): int
+    public static function purgeOld(): void
     {
         global $wpdb;
 
@@ -338,10 +344,8 @@ final class LeadEvents
         $outcome = Retention::outcome($deleted, self::CLEANUP_CHUNK, $total);
         Retention::completed('lead_events', $cutoff, $outcome);
 
-        if ($outcome['outcome'] === Retention::QUERY_FAILED) {
+        if ($outcome->queryFailed()) {
             Errors::storage('lead_events', 'retention_delete', 'delete_failed', ['cutoff' => $cutoff]);
         }
-
-        return $total;
     }
 }

@@ -6,6 +6,7 @@ namespace Convermetry\Settings;
 if (!defined('ABSPATH')) exit;
 
 use Convermetry\Notifications\NotificationSettings;
+use Convermetry\Support\KeyValuePairs;
 
 /**
  * Typed read access to the plugin's settings.
@@ -507,7 +508,7 @@ final class Options
      * optional label, an optional per-endpoint signing secret, and two
      * delivery-type flags controlling which message types it receives.
      *
-     * @return array<int, array{url: string, label: string, secret: string, analytics: bool, forms: bool}>
+     * @return list<WebhookEndpoint>
      */
     public static function endpoints(): array
     {
@@ -522,18 +523,10 @@ final class Options
                 continue;
             }
 
-            $url = trim((string) ($entry['url'] ?? ''));
-            if ($url === '') {
-                continue;
+            $endpoint = WebhookEndpoint::fromStoredArray($entry);
+            if ($endpoint !== null) {
+                $out[] = $endpoint;
             }
-
-            $out[] = [
-                'url'       => $url,
-                'label'     => trim((string) ($entry['label'] ?? '')),
-                'secret'    => trim((string) ($entry['secret'] ?? '')),
-                'analytics' => !empty($entry['analytics']),
-                'forms'     => !empty($entry['forms']),
-            ];
         }
 
         return $out;
@@ -542,31 +535,40 @@ final class Options
     /**
      * Endpoints that receive scheduled analytics reports.
      *
-     * @return array<int, array{url: string, label: string, secret: string, analytics: bool, forms: bool}>
+     * @return list<WebhookEndpoint>
      */
     public static function analyticsEndpoints(): array
     {
-        return array_values(array_filter(self::endpoints(), static fn(array $e): bool => $e['analytics']));
+        return array_values(array_filter(
+            self::endpoints(),
+            static fn(WebhookEndpoint $endpoint): bool => $endpoint->analytics
+        ));
     }
 
     /**
      * Endpoints that receive immediate form-submission deliveries.
      *
-     * @return array<int, array{url: string, label: string, secret: string, analytics: bool, forms: bool}>
+     * @return list<WebhookEndpoint>
      */
     public static function formEndpoints(): array
     {
-        return array_values(array_filter(self::endpoints(), static fn(array $e): bool => $e['forms']));
+        return array_values(array_filter(
+            self::endpoints(),
+            static fn(WebhookEndpoint $endpoint): bool => $endpoint->forms
+        ));
     }
 
     /**
      * URLs of endpoints that receive scheduled analytics reports.
      *
-     * @return string[] Zero or more absolute http(s) URLs.
+     * @return list<string> Zero or more absolute http(s) URLs.
      */
     public static function analyticsEndpointUrls(): array
     {
-        return array_values(array_unique(array_column(self::analyticsEndpoints(), 'url')));
+        return array_values(array_unique(array_map(
+            static fn(WebhookEndpoint $endpoint): string => $endpoint->url,
+            self::analyticsEndpoints()
+        )));
     }
 
     /**
@@ -580,8 +582,8 @@ final class Options
     public static function endpointLabel(string $url): string
     {
         foreach (self::endpoints() as $endpoint) {
-            if ($endpoint['url'] === $url) {
-                return $endpoint['label'];
+            if ($endpoint->url === $url) {
+                return $endpoint->label;
             }
         }
 
@@ -631,8 +633,8 @@ final class Options
     public static function secretFor(string $url): string
     {
         foreach (self::endpoints() as $endpoint) {
-            if ($endpoint['url'] === $url && $endpoint['secret'] !== '') {
-                return $endpoint['secret'];
+            if ($endpoint->url === $url && $endpoint->secret !== '') {
+                return $endpoint->secret;
             }
         }
 
@@ -655,25 +657,21 @@ final class Options
      * Custom HTTP headers included on every webhook request to every
      * endpoint (e.g. an Authorization header for a downstream API).
      *
-     * @return array<int, array{key: string, value: string}>
+     * @return list<array{key: string, value: string}>
      */
     public static function globalHeaders(): array
     {
-        $headers = self::webhookAll()['global_headers'];
-
-        return is_array($headers) ? array_values(array_filter($headers, 'is_array')) : [];
+        return KeyValuePairs::normalize(self::webhookAll()['global_headers']);
     }
 
     /**
      * URL query parameters appended to every webhook URL on every request.
      *
-     * @return array<int, array{key: string, value: string}>
+     * @return list<array{key: string, value: string}>
      */
     public static function globalQueryParams(): array
     {
-        $params = self::webhookAll()['global_query'];
-
-        return is_array($params) ? array_values(array_filter($params, 'is_array')) : [];
+        return KeyValuePairs::normalize(self::webhookAll()['global_query']);
     }
 
     /**

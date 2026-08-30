@@ -82,9 +82,9 @@ final class FunnelReport
         }
 
         $cacheKey = self::cacheKey($funnel, $start, $end);
-        $cached   = get_transient($cacheKey);
+        $cached   = self::cachedReport(get_transient($cacheKey));
 
-        if (is_array($cached)) {
+        if ($cached !== null) {
             return $cached;
         }
 
@@ -210,6 +210,41 @@ final class FunnelReport
             'sql'    => 'SELECT ' . implode(', ', $counts) . " FROM ({$sql}) AS {$inner}",
             'params' => $params,
         ];
+    }
+
+    /**
+     * A cached funnel report, or null when the transient holds anything else.
+     *
+     * The shape is checked rather than assumed. A transient is shared, mutable
+     * storage: the value can have been written by a previous plugin version
+     * whose report had different keys, or replaced wholesale by an object cache
+     * or another plugin. Returning it unchecked would hand the view a report
+     * with no 'steps' to iterate, and the failure would surface as a fatal in a
+     * template rather than as a cache miss here.
+     *
+     * @param mixed $cached Whatever get_transient() returned.
+     * @return array{steps: list<array<string, mixed>>, overall_rate: float, error: string}|null
+     */
+    private static function cachedReport(mixed $cached): ?array
+    {
+        if (
+            !is_array($cached)
+            || !isset($cached['steps'], $cached['overall_rate'], $cached['error'])
+            || !is_array($cached['steps'])
+            || !array_is_list($cached['steps'])
+            || !is_float($cached['overall_rate'])
+            || !is_string($cached['error'])
+        ) {
+            return null;
+        }
+
+        foreach ($cached['steps'] as $step) {
+            if (!is_array($step)) {
+                return null;
+            }
+        }
+
+        return $cached;
     }
 
     /**

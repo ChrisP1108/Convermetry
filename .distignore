@@ -13,5 +13,7 @@ composer.json
 composer.lock
 phpunit.xml
 phpunit.integration.xml
+phpstan.neon
+phpstan
 bin
 .DS_Store

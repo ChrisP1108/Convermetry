@@ -25,7 +25,9 @@ use Convermetry\Support\SensitiveKeys;
  * beStrictAboutOutputDuringTests, and a builder that echoed would fail the
  * whole suite from a distance.
  *
- * Everything except {@see self::siteInfo()} is pure.
+ * Every method here is PURE: the site's own details arrive as a
+ * {@see SiteInfo}, built by the caller, so nothing in this class reads
+ * WordPress state and the whole of it is testable without one.
  */
 final class EmailBuilder
 {
@@ -37,23 +39,6 @@ final class EmailBuilder
 
     /** RFC 5737 documentation address — never a real visitor. */
     private const string TEST_IP = '203.0.113.42';
-
-    /**
-     * The site-level values every message needs.
-     *
-     * The one impure method here: it is called once by the caller and passed
-     * in, which is what keeps the rest of the class testable without WordPress.
-     *
-     * @return array{site_name: string, home_url: string, admin_url: string}
-     */
-    public static function siteInfo(): array
-    {
-        return [
-            'site_name' => (string) get_bloginfo('name'),
-            'home_url'  => (string) home_url('/'),
-            'admin_url' => (string) admin_url('admin.php'),
-        ];
-    }
 
     /**
      * Renders the subject line from its template.
@@ -72,15 +57,15 @@ final class EmailBuilder
      * @param string               $template   Subject template with {tokens}.
      * @param array<string, mixed> $submission Submission row.
      * @param array<string, mixed> $context    Decoded, defaulted analytics context.
-     * @param array<string, string> $siteInfo  {@see self::siteInfo()}.
+     * @param SiteInfo              $siteInfo   The site's name and URLs.
      * @return string
      */
-    public static function subject(string $template, array $submission, array $context, array $siteInfo): string
+    public static function subject(string $template, array $submission, array $context, SiteInfo $siteInfo): string
     {
         $attribution = is_array($context['attribution'] ?? null) ? $context['attribution'] : [];
 
         $subject = strtr($template, [
-            '{site_name}'     => (string) ($siteInfo['site_name'] ?? ''),
+            '{site_name}'     => $siteInfo->siteName,
             '{form_name}'     => (string) ($submission['form_name'] ?? ''),
             '{provider}'      => (string) ($submission['provider'] ?? ''),
             '{form_id}'       => (string) ($submission['form_id'] ?? ''),
@@ -103,10 +88,10 @@ final class EmailBuilder
      * @param array<string, mixed>  $submission Submission row.
      * @param array<string, mixed>  $context    Decoded, defaulted analytics context.
      * @param array<string, mixed>  $snapshot   Normalized settings snapshot.
-     * @param array<string, string> $siteInfo   {@see self::siteInfo()}.
+     * @param SiteInfo              $siteInfo   The site's name and URLs.
      * @return string
      */
-    public static function body(array $submission, array $context, array $snapshot, array $siteInfo): string
+    public static function body(array $submission, array $context, array $snapshot, SiteInfo $siteInfo): string
     {
         $include = is_array($snapshot['include'] ?? null) ? $snapshot['include'] : [];
 
@@ -120,7 +105,7 @@ final class EmailBuilder
         $html .= '<p style="margin:0 0 24px;color:#646970;font-size:13px;">'
                . esc_html(sprintf(
                    'New submission on %s · %s',
-                   self::text($siteInfo['site_name'] ?? '', 'your site'),
+                   self::text($siteInfo->siteName, 'your site'),
                    self::localDate($submission, 'F j, Y \a\t g:i a')
                ))
                . '</p>';
@@ -211,16 +196,13 @@ final class EmailBuilder
         $out = [];
 
         foreach (SubmissionFields::fromStoredJson((string) ($submission['submission_data'] ?? '')) as $field) {
-            $id    = (string) ($field['id'] ?? '');
-            $label = (string) ($field['label'] ?? '');
-
-            if (SensitiveKeys::matches($id) || SensitiveKeys::matches($label)) {
+            if (SensitiveKeys::matches($field->id) || SensitiveKeys::matches($field->label)) {
                 continue;
             }
 
             $out[] = [
-                'label' => $label !== '' ? $label : $id,
-                'value' => self::truncate(SubmissionFields::flatten($field['value'] ?? '')),
+                'label' => $field->label !== '' ? $field->label : $field->id,
+                'value' => self::truncate($field->displayValue()),
             ];
         }
 
@@ -302,17 +284,17 @@ final class EmailBuilder
      * this lands on a one-row list rather than the full table.
      *
      * @param array<string, mixed>  $submission Submission row.
-     * @param array<string, string> $siteInfo   {@see self::siteInfo()}.
+     * @param SiteInfo              $siteInfo   The site's name and URLs.
      * @return string
      */
-    public static function detailUrl(array $submission, array $siteInfo): string
+    public static function detailUrl(array $submission, SiteInfo $siteInfo): string
     {
         return (string) add_query_arg(
             [
                 'page'       => SubmissionsPage::MENU_SLUG,
                 'cvm_search' => rawurlencode((string) ($submission['submission_id'] ?? '')),
             ],
-            (string) ($siteInfo['admin_url'] ?? '')
+            $siteInfo->adminUrl
         );
     }
 
@@ -325,10 +307,10 @@ final class EmailBuilder
      * actually visible in what arrives.
      *
      * @param array<string, mixed>  $snapshot Normalized settings snapshot.
-     * @param array<string, string> $siteInfo {@see self::siteInfo()}.
+     * @param SiteInfo              $siteInfo The site's name and URLs.
      * @return array{subject: string, html: string}
      */
-    public static function testMessage(array $snapshot, array $siteInfo): array
+    public static function testMessage(array $snapshot, SiteInfo $siteInfo): array
     {
         $submission = [
             'submission_id'   => 'test-submission',
@@ -336,7 +318,7 @@ final class EmailBuilder
             'provider'        => 'test',
             'form_name'       => 'Convermetry Test Form',
             'form_id'         => 'convermetry-test',
-            'page_url'        => (string) ($siteInfo['home_url'] ?? '') . 'contact/',
+            'page_url'        => $siteInfo->homeUrl . 'contact/',
             'ip_address'      => self::TEST_IP,
             'created_at'      => gmdate('Y-m-d H:i:s'),
             'submission_data' => (string) wp_json_encode([
@@ -353,7 +335,7 @@ final class EmailBuilder
                 'utm_medium'   => 'cpc',
                 'utm_campaign' => 'convermetry-test',
             ],
-            'landing_page'       => ['url' => (string) ($siteInfo['home_url'] ?? '')],
+            'landing_page'       => ['url' => $siteInfo->homeUrl],
             'device'             => 'desktop',
             'pageview_count'     => 3,
             'session_started_at' => gmdate('c', time() - 600),

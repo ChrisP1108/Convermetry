@@ -212,9 +212,9 @@ final class FormDeliveryQueue
                 . " VALUES (%d, %s, %s, %s, %s, 'pending', 0, %s, %s)",
                 $submissionRow,
                 $submissionId,
-                md5($endpoint['url']),
-                $endpoint['url'],
-                self::deliveryId($endpoint['url'], $submissionId),
+                md5($endpoint->url),
+                $endpoint->url,
+                self::deliveryId($endpoint->url, $submissionId),
                 $now,
                 $now
             ));
@@ -238,14 +238,15 @@ final class FormDeliveryQueue
                  *
                  * @param array<string, mixed> $context Credential-free delivery context.
                  */
-                do_action('convermetry_form_delivery_queued', DeliveryContext::build($endpoint['url'], [
-                    'message_type'   => DeliveryContext::FORM,
-                    'kind'           => 'immediate',
-                    'attempt'        => 0,
-                    'delivery_id'    => self::deliveryId($endpoint['url'], $submissionId),
-                    'endpoint_label' => (string) ($endpoint['label'] ?? ''),
-                    'submission_id'  => $submissionId,
-                ]));
+                do_action('convermetry_form_delivery_queued', DeliveryDetails::for(
+                    $endpoint->url,
+                    messageType: MessageType::FormSubmission,
+                    kind: DeliveryKind::Immediate,
+                    attempt: 0,
+                    deliveryId: self::deliveryId($endpoint->url, $submissionId),
+                    endpointLabel: $endpoint->label,
+                    submissionId: $submissionId,
+                )->toArray());
             }
         }
 
@@ -417,9 +418,16 @@ final class FormDeliveryQueue
                 // Unencodable payload (a filter introduced a bad value) — a
                 // failed attempt that enters the normal retry chain; the
                 // payload is rebuilt (and the filter re-run) next attempt.
-                $context = self::logAttempt($row, $submission, $attempt, $endpointUrl, [], '', [
-                    'ok' => false, 'code' => 0, 'message' => 'Payload could not be JSON-encoded', 'body' => '',
-                ], false);
+                $context = self::logAttempt(
+                    $row,
+                    $submission,
+                    $attempt,
+                    $endpointUrl,
+                    [],
+                    '',
+                    TransportResult::failure('Payload could not be JSON-encoded'),
+                    false
+                );
                 self::rescheduleOrAbandon($rowId, $attempt, $submissionId, $context);
                 return;
             }
@@ -477,7 +485,7 @@ final class FormDeliveryQueue
             true
         );
 
-        if ($result['ok']) {
+        if ($result->ok) {
             $wpdb->delete($table, ['id' => $rowId], ['%d']);
 
             // Recorded only after the queue row is gone: while it still exists
@@ -500,22 +508,37 @@ final class FormDeliveryQueue
      * @param array<string, mixed>      $row        Queue row.
      * @param array<string, mixed>|null $submission Submission row, when loaded.
      * @param int                       $attempt    1-based attempt number.
-     * @return array<string, mixed>
+     * @return DeliveryDetails
      */
-    private static function contextFor(array $row, ?array $submission, int $attempt): array
+    private static function contextFor(array $row, ?array $submission, int $attempt): DeliveryDetails
     {
         $endpointUrl = (string) $row['endpoint_url'];
 
-        return DeliveryContext::build($endpointUrl, [
-            'message_type'   => DeliveryContext::FORM,
-            'kind'           => $attempt > 1 ? 'retry' : 'immediate',
-            'attempt'        => $attempt,
-            'delivery_id'    => (string) $row['delivery_id'],
-            'endpoint_label' => Options::endpointLabel($endpointUrl),
-            'submission_id'  => (string) $row['submission_id'],
-            'conversion_id'  => (string) ($submission['conversion_id'] ?? ''),
-            'form_key'       => (string) ($submission['form_key'] ?? ''),
-        ]);
+        return DeliveryDetails::for(
+            $endpointUrl,
+            messageType: MessageType::FormSubmission,
+            kind: self::kindFor($attempt),
+            attempt: $attempt,
+            deliveryId: (string) $row['delivery_id'],
+            submissionId: (string) $row['submission_id'],
+            conversionId: (string) ($submission['conversion_id'] ?? ''),
+            formKey: (string) ($submission['form_key'] ?? ''),
+        );
+    }
+
+    /**
+     * The delivery kind for an attempt number.
+     *
+     * Attempt 1 is the queue's first send, which is 'immediate' — the queue
+     * exists so the visitor's request does not wait, not because the delivery
+     * is a retry of anything. Everything after it is.
+     *
+     * @param int $attempt 1-based attempt number.
+     * @return DeliveryKind
+     */
+    private static function kindFor(int $attempt): DeliveryKind
+    {
+        return $attempt > 1 ? DeliveryKind::Retry : DeliveryKind::Immediate;
     }
 
     /**
@@ -527,9 +550,9 @@ final class FormDeliveryQueue
      * @param string                    $requestUrl Final request URL.
      * @param array<string, string>     $headers    Frozen delivery headers.
      * @param string                    $body       Exact JSON body sent ('' when encoding failed).
-     * @param array<string, mixed>      $result     Http::postJson() result.
+     * @param TransportResult           $result     What the attempt came back with.
      * @param bool                      $transportAttempted Whether a request actually reached the wire.
-     * @return array<string, mixed> The delivery context, for the caller's terminal action.
+     * @return DeliveryDetails The delivery details, for the caller's terminal action.
      */
     private static function logAttempt(
         array $row,
@@ -538,30 +561,27 @@ final class FormDeliveryQueue
         string $requestUrl,
         array $headers,
         string $body,
-        array $result,
+        TransportResult $result,
         bool $transportAttempted
-    ): array {
+    ): DeliveryDetails {
         $endpointUrl = (string) $row['endpoint_url'];
 
-        $logged = DeliveryLog::log([
-            'ok'              => !empty($result['ok']),
-            'endpoint_url'    => $endpointUrl,
-            'endpoint_label'  => Options::endpointLabel($endpointUrl),
-            'delivery_id'     => (string) $row['delivery_id'],
-            'message_type'    => 'form_submission',
-            'kind'            => $attempt > 1 ? 'retry' : 'immediate',
-            'attempt'         => $attempt,
-            'submission_id'   => (string) $row['submission_id'],
-            'conversion_id'   => (string) ($submission['conversion_id'] ?? ''),
-            'form_provider'   => (string) ($submission['provider'] ?? ''),
-            'form_name'       => (string) ($submission['form_name'] ?? ''),
-            'request_url'     => $requestUrl,
-            'request_headers' => $headers,
-            'request_data'    => $body,
-            'response_code'   => (int) ($result['code'] ?? 0),
-            'response_data'   => (string) ($result['body'] ?? ''),
-            'message'         => (string) ($result['message'] ?? ''),
-        ]);
+        $logged = DeliveryLog::log(new DeliveryLogEntry(
+            result: $result,
+            endpointUrl: $endpointUrl,
+            endpointLabel: Options::endpointLabel($endpointUrl),
+            deliveryId: (string) $row['delivery_id'],
+            messageType: MessageType::FormSubmission,
+            kind: self::kindFor($attempt),
+            attempt: $attempt,
+            requestUrl: $requestUrl,
+            requestHeaders: $headers,
+            requestData: $body,
+            submissionId: (string) $row['submission_id'],
+            conversionId: (string) ($submission['conversion_id'] ?? ''),
+            formProvider: (string) ($submission['provider'] ?? ''),
+            formName: (string) ($submission['form_name'] ?? ''),
+        ));
 
         // Both attempt actions are fired here rather than at the call sites:
         // this method wraps exactly one DeliveryLog::log() and is reached from
@@ -582,17 +602,17 @@ final class FormDeliveryQueue
      * schedule, or abandons the delivery once every attempt is spent (each
      * attempt is already in the Activity Log, so nothing is silently lost).
      *
-     * @param int    $rowId        Queue row id.
-     * @param int    $attempt      The attempt number that just failed (1-based).
+     * @param int                  $rowId        Queue row id.
+     * @param int                  $attempt      The attempt number that just failed (1-based).
      * @param string               $submissionId The submission whose recorded delivery state to refresh.
-     * @param array<string, mixed> $context      Delivery context for the terminal lifecycle action.
+     * @param DeliveryDetails|null $context      Delivery details for the terminal lifecycle action.
      * @return void
      */
     private static function rescheduleOrAbandon(
         int $rowId,
         int $attempt,
         string $submissionId = '',
-        array $context = []
+        ?DeliveryDetails $context = null
     ): void {
         global $wpdb;
 
@@ -609,7 +629,7 @@ final class FormDeliveryQueue
 
             // Genuinely terminal, unlike the analytics chain: this row will
             // never be retried, and only the Activity Log remembers it.
-            if ($context !== []) {
+            if ($context !== null) {
                 DeliveryContext::abandoned($context, 'retries_exhausted');
             }
             return;
@@ -629,7 +649,7 @@ final class FormDeliveryQueue
         // Still pending, but the attempt counter the chip shows has moved.
         FormSubmissions::refreshDeliveryState($submissionId);
 
-        if ($context !== []) {
+        if ($context !== null) {
             DeliveryContext::retryScheduled($context, $attempt + 1, $nextAt);
         }
     }
@@ -734,59 +754,60 @@ final class FormDeliveryQueue
      */
     public static function testEndpoint(string $url): array
     {
-        $payload = PayloadBuilder::formSubmissionTest();
-        $payload['delivery_id'] = md5($url . '|form-test|' . time() . '|' . wp_rand());
+        $payload    = PayloadBuilder::formSubmissionTest();
+        $deliveryId = md5($url . '|form-test|' . time() . '|' . wp_rand());
+        $label      = Options::endpointLabel($url);
+
+        $payload['delivery_id'] = $deliveryId;
 
         $encoded = wp_json_encode($payload);
 
-        $context = DeliveryContext::build($url, [
-            'message_type'   => DeliveryContext::FORM,
-            'kind'           => 'test',
-            'attempt'        => 1,
-            'delivery_id'    => (string) $payload['delivery_id'],
-            'endpoint_label' => Options::endpointLabel($url),
-        ]);
+        $context = DeliveryDetails::for(
+            $url,
+            messageType: MessageType::FormSubmission,
+            kind: DeliveryKind::Test,
+            attempt: 1,
+            deliveryId: $deliveryId,
+            endpointLabel: $label,
+        );
 
         $requestUrl = RequestFactory::buildUrl($url, '', [], [], $context);
         $headers    = RequestFactory::buildHeaders('', [], $context);
 
         if (!is_string($encoded) || $encoded === '') {
             $encoded = '';
-            $result  = ['ok' => false, 'code' => 0, 'message' => 'Payload could not be JSON-encoded', 'body' => ''];
+            $result  = TransportResult::failure('Payload could not be JSON-encoded');
         } else {
-            $sendHeaders = RequestFactory::withProtocolHeaders($headers, $url, $encoded, (string) $payload['delivery_id']);
+            $sendHeaders = RequestFactory::withProtocolHeaders($headers, $url, $encoded, $deliveryId);
 
             DeliveryContext::beforeSend($context, $requestUrl, $sendHeaders, $encoded);
             $result = Http::postJson($requestUrl, $encoded, $sendHeaders, $context);
         }
 
-        $logged = DeliveryLog::log([
-            'ok'              => $result['ok'],
-            'endpoint_url'    => $url,
-            'endpoint_label'  => Options::endpointLabel($url),
-            'delivery_id'     => (string) $payload['delivery_id'],
-            'message_type'    => 'form_submission',
-            'kind'            => 'test',
-            'form_provider'   => 'test',
-            'form_name'       => 'Convermetry Test Form',
-            'request_url'     => $requestUrl,
-            'request_headers' => $headers,
-            'request_data'    => $encoded,
-            'response_code'   => $result['code'],
-            'response_data'   => $result['body'],
-            'message'         => $result['message'],
-        ]);
+        $logged = DeliveryLog::log(new DeliveryLogEntry(
+            result: $result,
+            endpointUrl: $url,
+            endpointLabel: $label,
+            deliveryId: $deliveryId,
+            messageType: MessageType::FormSubmission,
+            kind: DeliveryKind::Test,
+            requestUrl: $requestUrl,
+            requestHeaders: $headers,
+            requestData: $encoded,
+            formProvider: 'test',
+            formName: 'Convermetry Test Form',
+        ));
 
         $context = DeliveryContext::attempted($context, $result, $encoded !== '');
         DeliveryContext::attemptLogged($context, $logged);
 
         // A test queues nothing and retries never, so there is no state to
         // commit first and no chain action to follow.
-        if ($result['ok']) {
+        if ($result->ok) {
             DeliveryContext::succeeded($context);
         }
 
-        return ['ok' => $result['ok'], 'code' => $result['code'], 'message' => $result['message']];
+        return $result->toTestSummary();
     }
 
     /**

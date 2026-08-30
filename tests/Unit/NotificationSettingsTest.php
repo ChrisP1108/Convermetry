@@ -8,6 +8,7 @@ use Brain\Monkey;
 use Brain\Monkey\Functions;
 use Convermetry\Notifications\NotificationDispatcher;
 use Convermetry\Notifications\NotificationSettings;
+use Convermetry\Notifications\SiteInfo;
 use Convermetry\Settings\Options;
 use PHPUnit\Framework\TestCase;
 
@@ -235,10 +236,9 @@ final class NotificationSettingsTest extends TestCase
         return ['id' => 1, 'form_key' => 'gravityforms:7', 'provider' => 'gravityforms', 'form_name' => 'Contact'];
     }
 
-    /** @return array<string, string> */
-    private function siteInfo(): array
+    private function siteInfo(): SiteInfo
     {
-        return ['site_name' => 'Example Co', 'home_url' => 'https://example.com/', 'admin_url' => 'https://example.com/wp-admin/admin.php'];
+        return new SiteInfo('Example Co', 'https://example.com/', 'https://example.com/wp-admin/admin.php');
     }
 
     /**

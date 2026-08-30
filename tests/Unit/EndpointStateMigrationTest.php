@@ -108,7 +108,11 @@ final class EndpointStateMigrationTest extends TestCase
 
     private function endpointId(): string
     {
-        return Options::endpoints()[0]['id'];
+        // Property access, not an array offset: Options::endpoints() returns
+        // WebhookEndpoint objects. The durable id this suite is waiting on
+        // (Phase 1a) will be a property on that object, so this is written the
+        // way it will need to read once the feature lands.
+        return Options::endpoints()[0]->id;
     }
 
     /** @return array<int, array<int, mixed>> */

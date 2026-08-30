@@ -1702,6 +1702,55 @@ All tables are created via `dbDelta()` with versioned schema options; migrations
 
 **Schema migrations never run inside a visitor's request.** Adding an index is a table rebuild on every engine, and `ADD COLUMN` is only an instant metadata change on MySQL 8.0.12+. `MigrationRunner` therefore runs migrations only in WP-Cron, WP-CLI, or a genuine admin page view, under an option-row lease so only one runs at a time; a frontend request that notices a pending migration schedules it and touches no DDL. While a migration is outstanding the Goals and Funnels screens say so plainly rather than querying a column that does not exist yet. Large retry state never lives in autoloaded options — the analytics retry-state and last-sent options are stored with `autoload = no`, and form payloads live in the queue table.
 
+## Development setup
+
+The plugin has **no runtime Composer dependencies** — it ships its own PSR-4
+autoloader (`src/Autoloader.php`) and never loads `vendor/autoload.php`. Everything
+in `composer.json` is dev-only, and `.distignore` keeps it out of the release ZIP.
+
+```bash
+composer install           # dev toolchain: PHPUnit, Brain Monkey, PHPStan
+```
+
+---
+
+## Static analysis
+
+```bash
+composer analyse           # PHPStan, level 8, no baseline
+```
+
+Configuration lives in `phpstan.neon`. It analyses `src/`, `convermetry.php`, and
+`uninstall.php` — the production code — with
+[szepeviktor/phpstan-wordpress](https://github.com/szepeviktor/phpstan-wordpress)
+supplying WordPress's own function and class signatures.
+
+**Level 8, and deliberately no `phpstan-baseline.neon`.** A baseline would hide
+exactly the class of defect the analysis exists to surface, so the run is green
+because the code is, not because the errors are listed somewhere. Level 9 is not
+used: it rejects every `mixed` that has not been narrowed, and the ~760 it reports
+are almost entirely `$wpdb` result rows and decoded JSON columns — real boundary
+`mixed` that the code already coerces at the point of use. Narrowing all of it
+would mean inventing types for data whose shape genuinely is not known until it
+is read.
+
+Two supporting files:
+
+* `phpstan/constants.php` declares the `CVM_*` constants. `convermetry.php` defines
+  them inside a PHP-version-guarded `else` branch, which static analysis cannot see
+  as an unconditional definition.
+* `phpstan/stubs/form-plugins.php` declares the third-party form-plugin symbols the
+  bundled providers call (`GFAPI`, `WPCF7_ContactForm`, `FrmForm`, …). Those plugins
+  are optional — every provider feature-detects and registers nothing when its plugin
+  is absent — so there is nothing to `require`. Stubbing them means PHPStan checks
+  the *calls* rather than ignoring them.
+
+`tests/` is not analysed: several suites are written against methods that do not
+exist on `main` yet and skip themselves at runtime, and to PHPStan those are hard
+errors about undefined methods.
+
+---
+
 ## Testing
 
 ```bash
@@ -1727,6 +1776,68 @@ composer test:integration
 What it covers: the DDL producing exactly the columns and indexes each migration verifies; the UNIQUE constraints genuinely deduplicating under `INSERT IGNORE`; the generated funnel SQL including ordering, cross-table goal steps, and the eight-step cap; the abandonment query's correlated `NOT EXISTS`; per-currency lead grouping; the corrected backfill sentinel; and the lead-history cascade.
 
 What it does not cover: there is no WordPress in it, so `dbDelta`, cron, REST, and the provider hooks stay on the manual checklist.
+
+---
+
+## Domain objects and where arrays still belong
+
+Convermetry's own data travels as **typed objects**. Arrays remain at the
+boundaries, and the line between the two is a rule rather than a preference:
+
+```text
+WordPress / $wpdb / HTTP / JSON
+            ↓  arrays and strings
+         Mapper — fromStoredArray() / fromArray() / parse()
+            ↓  typed object
+      application and domain logic
+            ↓  typed object
+        Serializer — toArray()
+            ↓  arrays and strings
+    the wire, an option, a column, a hook argument
+```
+
+**Objects, because the data is a Convermetry concept.** `WebsiteInfo` (with
+`ClientInfo` and `PageInfo`), `DeliveryDetails`, `FrozenDelivery`, `RetryState`,
+`DeliveryLogEntry`, `TransportResult`, `EndpointOutcome`, `WebhookEndpoint`,
+`SubmissionField` / `SubmissionFieldList`, `NewSubmission`, `Attribution`,
+`RetentionOutcome`, `NotificationMessage`, `MailResult`, `SiteInfo`.
+
+**Enums, because the value is a finite state that is also a wire value.**
+`MessageType`, `DeliveryKind`, `DeliveryState`, `LogOutcome`, `RetentionStatus`.
+Each case's `->value` is the exact string already stored in a column, published
+in a payload, or handed to a hook — so the enum constrains what can be produced
+without changing what is emitted. Where a class already exposed the same strings
+as constants (`DeliveryLog::MESSAGE_TYPES`, `Retention::COMPLETED`,
+`FormSubmissions::DELIVERY_STATES`), those constants are kept and now *defined
+from* the enum, so the two can no longer drift.
+
+**Arrays, because an array is what the format actually is:**
+
+* WordPress API arguments, `$wpdb` arguments, `wp_remote_post()` options;
+* **every public hook argument** — a filter or action that has always received an
+  array still receives exactly that array, produced by `toArray()` at the
+  `do_action()` / `apply_filters()` call and nowhere else;
+* JSON payload bodies at the final serialization step;
+* configured header and URL-parameter pairs (`KeyValuePairs`) — a name and a value
+  with no behaviour, edited as rows in the admin UI and stored as rows in an option;
+* `SubmissionResult::$failedDeliveries`, which `convermetry_submit_form()` returns
+  to third-party code as documented, key-indexed entries;
+* raw report rows, which are queried, formatted, and displayed without domain logic
+  in between.
+
+### Two rules for anyone adding to this
+
+1. **`toArray()` output is a contract, not an implementation detail.** It is a wire
+   schema, an option row, a database column, or a hook argument. Renaming or
+   reordering a key is a break a receiver sees before you do.
+2. **`fromStoredArray()` must answer for anything.** It reads values written by any
+   earlier version of the plugin, and options that WP-CLI or a filter can have
+   touched — so it coerces types and supplies defaults rather than trusting a shape.
+   `RetryState::fromStoredArray()` is the worked example: it hydrates state that
+   predates the frozen-request columns without losing the frozen body those retries
+   depend on.
+
+`tests/Unit/DomainObjectsTest.php` covers exactly these two edges.
 
 ---
 
@@ -1804,9 +1915,11 @@ convermetry/
     │                             # ReportQueryException, SubmissionContext
     ├── Api/                     # TrackingController, DeliveryLogController
     ├── Database/                # DatabaseManager (events), FormSubmissions, PreparedEvent,
+    │                             # NewSubmission (the insert record),
     │                             # MigrationRunner (keeps DDL out of visitor requests)
     ├── Forms/                   # FormProviderInterface, FormProviderRegistry, FormSettings,
-    │   │                        # SubmissionService, SubmissionResult, SubmissionFields
+    │   │                        # SubmissionService, SubmissionResult, SubmissionFields,
+    │   │                        # SubmissionField, SubmissionFieldList
     │   └── Providers/           # Elementor, GravityForms, WPForms, ContactForm7,
     │                             # FluentForms, NinjaForms, FormidableForms
     ├── Funnels/                 # FunnelSettings, FunnelRepository, StepCompiler
@@ -1814,12 +1927,19 @@ convermetry/
     │                             # GoalRecorder, GoalCompletions
     ├── Leads/                   # LeadStatus, Money (exact decimals), LeadService, LeadEvents
     ├── Notifications/           # NotificationSettings, NotificationDispatcher,
-    │                             # NotificationQueue, EmailBuilder, NotificationMailer
-    ├── Settings/                # Options (typed settings access)
+    │                             # NotificationQueue, EmailBuilder, NotificationMailer,
+    │                             # NotificationMessage, MailResult, SiteInfo
+    ├── Settings/                # Options (typed settings access), WebhookEndpoint
     ├── Support/                 # Http (the single safe outbound transport),
     │                             # SensitiveKeys (shared credential-name policy),
-    │                             # Url (the one URL-normalization policy)
-    ├── Tracking/                # Channels (the one attribution engine), Correlation, ScriptLoader
-    └── Webhook/                 # WebsiteInfoBuilder, PayloadBuilder, RequestFactory,
-                                 # AnalyticsDispatcher, FormDeliveryQueue, DeliveryLog
+    │                             # Url (the one URL-normalization policy),
+    │                             # KeyValuePairs, Retention, RetentionOutcome, RetentionStatus
+    ├── Tracking/                # Channels (the one attribution engine), Correlation,
+    │                             # Attribution, ScriptLoader
+    └── Webhook/                 # PayloadBuilder, RequestFactory, AnalyticsDispatcher,
+                                 # FormDeliveryQueue, DeliveryLog, DeliveryContext,
+                                 # WebsiteInfo / ClientInfo / PageInfo, DeliveryDetails,
+                                 # DeliveryLogEntry, FrozenDelivery, RetryState,
+                                 # TransportResult, EndpointOutcome,
+                                 # MessageType / DeliveryKind / DeliveryState / LogOutcome
 ```

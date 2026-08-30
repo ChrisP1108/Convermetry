@@ -1119,39 +1119,6 @@ final class AboutPage
     }
 
     /**
-     * Renders a hook's argument table.
-     *
-     * @param array<int, array{0: string, 1: string, 2: string}> $rows Name, type, meaning.
-     * @return void
-     */
-    private static function argTable(array $rows): void
-    {
-        echo '<table class="cvm-about-table cvm-about-args"><thead><tr>'
-            . '<th scope="col">Argument</th><th scope="col">Type</th><th scope="col">Meaning</th>'
-            . '</tr></thead><tbody>';
-
-        foreach ($rows as [$name, $type, $meaning]) {
-            echo '<tr><td><code>' . esc_html($name) . '</code></td>'
-                . '<td>' . wp_kses_post($type) . '</td>'
-                . '<td>' . wp_kses_post($meaning) . '</td></tr>';
-        }
-
-        echo '</tbody></table>';
-    }
-
-    /**
-     * Renders a "what your return value does" note.
-     *
-     * @param string $html Note body (safe inline HTML).
-     * @return void
-     */
-    private static function returns(string $html): void
-    {
-        echo '<p class="cvm-about-returns"><span class="cvm-about-label">Returns</span> '
-            . wp_kses_post($html) . '</p>';
-    }
-
-    /**
      * Renders the About page.
      *
      * @return void
@@ -2521,9 +2488,9 @@ document.dispatchEvent(new CustomEvent('convermetry:conversion', {
 
             self::cardStart($group . ' — ' . count($hooks) . ' hooks');
 
-            if ($blurb !== '') {
-                echo '<p>' . wp_kses_post($blurb) . '</p>';
-            }
+            // Every group in HOOK_GROUPS carries a blurb; the emptiness guard
+            // that used to be here could never be false.
+            echo '<p>' . wp_kses_post($blurb) . '</p>';
 
             foreach ($hooks as [$name, $type, $signature, , $summary]) {
                 self::hookStart($name, $type, $signature, $summary);

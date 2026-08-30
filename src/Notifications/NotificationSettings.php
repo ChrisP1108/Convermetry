@@ -238,15 +238,15 @@ final class NotificationSettings
      *
      * @param array<string, mixed>  $settings Full notification settings.
      * @param string                $formKey  Form key that triggered this.
-     * @param array<string, string> $siteInfo {@see EmailBuilder::siteInfo()}.
+     * @param SiteInfo              $siteInfo The site's name and URLs.
      * @return array<string, mixed>
      */
-    public static function snapshot(array $settings, string $formKey, array $siteInfo): array
+    public static function snapshot(array $settings, string $formKey, SiteInfo $siteInfo): array
     {
         return [
             'v'         => self::SNAPSHOT_VERSION,
             'subject'   => (string) ($settings['subject'] ?? ''),
-            'site_name' => (string) ($siteInfo['site_name'] ?? ''),
+            'site_name' => $siteInfo->siteName,
             'form_key'  => $formKey,
             'include'   => [
                 'fields'    => !empty($settings['include_fields']),

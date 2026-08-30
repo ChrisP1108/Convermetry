@@ -10,6 +10,7 @@ use Convermetry\Notifications\EmailBuilder;
 use Convermetry\Notifications\NotificationMailer;
 use Convermetry\Notifications\NotificationQueue;
 use Convermetry\Notifications\NotificationSettings;
+use Convermetry\Notifications\SiteInfo;
 use Convermetry\Settings\Options;
 
 /**
@@ -118,11 +119,14 @@ final class NotificationsPage
             ? wp_unslash($_POST['cvm_notifications'])
             : [];
 
+        // array_values(): the POST indices carry no meaning — mergeFormRules()
+        // only walks the values — and keeping them made this an array<string>
+        // where a list<string> was declared.
         $rendered = isset($_POST['cvm_rendered_forms']) && is_array($_POST['cvm_rendered_forms'])
-            ? array_map(
+            ? array_values(array_map(
                 static fn(mixed $key): string => sanitize_text_field((string) $key),
                 wp_unslash($_POST['cvm_rendered_forms'])
-            )
+            ))
             : [];
 
         $clean = NotificationSettings::sanitize($raw);
@@ -226,7 +230,7 @@ final class NotificationsPage
         }
 
         $settings = Options::notificationAll();
-        $siteInfo = EmailBuilder::siteInfo();
+        $siteInfo = SiteInfo::current();
         $snapshot = NotificationSettings::normalizeSnapshot(
             NotificationSettings::snapshot($settings, 'convermetry:test', $siteInfo)
         );
@@ -235,12 +239,12 @@ final class NotificationsPage
         $result  = NotificationMailer::send($recipient, $message['subject'], $message['html']);
 
         wp_send_json_success([
-            'ok'      => $result['ok'],
-            'message' => $result['ok']
+            'ok'      => $result->ok,
+            'message' => $result->ok
                 // Deliberately not "delivered": wp_mail() returning true means
                 // the local transport accepted the message, nothing more.
                 ? 'Handed to your site\'s mail system. Check the inbox (and spam folder) to confirm it arrived.'
-                : ($result['message'] !== '' ? $result['message'] : 'Your site\'s mail system rejected the message.'),
+                : ($result->message !== '' ? $result->message : 'Your site\'s mail system rejected the message.'),
         ]);
     }
 

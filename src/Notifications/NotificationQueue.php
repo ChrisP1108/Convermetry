@@ -460,20 +460,22 @@ final class NotificationQueue
             SubmissionContext::decodeJson((string) ($row['settings_json'] ?? ''))
         );
 
-        $siteInfo = EmailBuilder::siteInfo();
-        if (($snapshot['site_name'] ?? '') !== '') {
-            $siteInfo['site_name'] = (string) $snapshot['site_name'];
-        }
+        // The snapshot's site name wins: it is what the site was called when
+        // the lead arrived, and this renders in a worker that may run long
+        // afterwards.
+        $siteInfo = SiteInfo::current()->withName(
+            is_scalar($snapshot['site_name'] ?? null) ? (string) $snapshot['site_name'] : ''
+        );
 
         $context = SubmissionContext::of($submission);
         $attempt = (int) $row['attempt'] + 1;
 
-        $message = [
-            'recipient' => $recipient,
-            'subject'   => EmailBuilder::subject((string) $snapshot['subject'], $submission, $context, $siteInfo),
-            'html'      => EmailBuilder::body($submission, $context, $snapshot, $siteInfo),
-            'headers'   => NotificationMailer::headers($submissionId),
-        ];
+        $message = new NotificationMessage(
+            recipient: $recipient,
+            subject: EmailBuilder::subject((string) $snapshot['subject'], $submission, $context, $siteInfo),
+            html: EmailBuilder::body($submission, $context, $snapshot, $siteInfo),
+            headers: NotificationMailer::headers($submissionId),
+        );
 
         /**
          * Filters one notification message immediately before it is sent.
@@ -502,9 +504,10 @@ final class NotificationQueue
          * @param string $submissionId The submission being notified about.
          * @param int    $attempt      1-based attempt number.
          */
-        $filtered = apply_filters('convermetry_notification_message', $message, $submissionId, $attempt);
+        $asArray  = $message->toArray();
+        $filtered = apply_filters('convermetry_notification_message', $asArray, $submissionId, $attempt);
 
-        if ($filtered !== $message) {
+        if ($filtered !== $asArray) {
             $message = NotificationMailer::reconcile($message, $filtered, $submissionId);
         }
 
@@ -527,14 +530,14 @@ final class NotificationQueue
         do_action('convermetry_notification_before_send', $submissionId, $recipient, $attempt);
 
         $result = NotificationMailer::send(
-            $message['recipient'],
-            $message['subject'],
-            $message['html'],
+            $message->recipient,
+            $message->subject,
+            $message->html,
             $submissionId,
-            $message['headers']
+            $message->headers
         );
 
-        if ($result['ok']) {
+        if ($result->ok) {
             // Accepted by the local transport — not confirmed delivered.
             $wpdb->delete(self::tableName(), ['id' => $rowId], ['%d']);
 
@@ -558,7 +561,7 @@ final class NotificationQueue
             return;
         }
 
-        self::rescheduleOrAbandon($rowId, $attempt, $recipient, $result['message'], $submissionId);
+        self::rescheduleOrAbandon($rowId, $attempt, $recipient, $result->message, $submissionId);
     }
 
     /**

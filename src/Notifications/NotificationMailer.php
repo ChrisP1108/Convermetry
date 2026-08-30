@@ -92,13 +92,16 @@ final class NotificationMailer
      * rows could collapse onto one mailbox, or a retry chain could wander to a
      * different address than the attempt before it.
      *
-     * @param array{recipient: string, subject: string, html: string, headers: list<string>} $original Pre-filter message.
-     * @param mixed                                                                          $filtered Whatever the filter returned.
-     * @param string                                                                         $submissionId Submission id, for the dedup header.
-     * @return array{recipient: string, subject: string, html: string, headers: list<string>}
+     * @param NotificationMessage $original     Pre-filter message.
+     * @param mixed               $filtered     Whatever the filter returned.
+     * @param string              $submissionId Submission id, for the dedup header.
+     * @return NotificationMessage
      */
-    public static function reconcile(array $original, mixed $filtered, string $submissionId = ''): array
-    {
+    public static function reconcile(
+        NotificationMessage $original,
+        mixed $filtered,
+        string $submissionId = ''
+    ): NotificationMessage {
         if (!is_array($filtered)) {
             return $original;
         }
@@ -106,16 +109,16 @@ final class NotificationMailer
         // Subject: header-injection strip and length cap reapplied, exactly as
         // EmailBuilder::subject() does, because a filtered subject has not been
         // through it.
-        $subject = is_scalar($filtered['subject'] ?? null) ? (string) $filtered['subject'] : $original['subject'];
+        $subject = is_scalar($filtered['subject'] ?? null) ? (string) $filtered['subject'] : $original->subject;
         $subject = trim((string) preg_replace('/\s+/', ' ', (string) preg_replace('/[\r\n\t\x00]+/', ' ', $subject)));
         $subject = mb_substr($subject, 0, NotificationSettings::SUBJECT_MAX_LEN);
         if ($subject === '') {
-            $subject = $original['subject'];
+            $subject = $original->subject;
         }
 
         // Body: the size cap is reapplied, so a filter cannot produce a message
         // large enough for the transport to reject or truncate mid-tag.
-        $html = is_string($filtered['html'] ?? null) ? EmailBuilder::capBody($filtered['html']) : $original['html'];
+        $html = is_string($filtered['html'] ?? null) ? EmailBuilder::capBody($filtered['html']) : $original->html;
 
         $headers = [];
         foreach (is_array($filtered['headers'] ?? null) ? $filtered['headers'] : [] as $header) {
@@ -131,13 +134,13 @@ final class NotificationMailer
             }
         }
 
-        return [
-            'recipient' => $original['recipient'],
-            'subject'   => $subject,
-            'html'      => $html,
+        return new NotificationMessage(
+            recipient: $original->recipient,
+            subject: $subject,
+            html: $html,
             // Required headers reinstated at the front, whatever the filter did.
-            'headers'   => array_merge(self::headers($submissionId), $headers),
-        ];
+            headers: array_merge(self::headers($submissionId), $headers),
+        );
     }
 
     /**
@@ -151,7 +154,7 @@ final class NotificationMailer
      * @param string            $html         Rendered HTML body.
      * @param string            $submissionId Submission id, for the dedup header.
      * @param list<string>|null $headers      Reconciled headers; null builds the standard set.
-     * @return array{ok: bool, message: string}
+     * @return MailResult
      */
     public static function send(
         string $to,
@@ -159,7 +162,7 @@ final class NotificationMailer
         string $html,
         string $submissionId = '',
         ?array $headers = null
-    ): array {
+    ): MailResult {
         self::$reported = '';
 
         // Core swallows PHPMailer exceptions and simply returns false after
@@ -205,24 +208,24 @@ final class NotificationMailer
      * @param mixed          $returned What wp_mail() returned.
      * @param Throwable|null $error    A caught mailer exception, if any.
      * @param string         $reported The captured wp_mail_failed message.
-     * @return array{ok: bool, message: string}
+     * @return MailResult
      */
-    public static function interpret(mixed $returned, ?Throwable $error = null, string $reported = ''): array
+    public static function interpret(mixed $returned, ?Throwable $error = null, string $reported = ''): MailResult
     {
         if ($error !== null) {
-            return ['ok' => false, 'message' => self::cap('Mailer error: ' . $error->getMessage())];
+            return MailResult::failed(self::cap('Mailer error: ' . $error->getMessage()));
         }
 
         if ($returned === true) {
             // Accepted by the local transport. NOT delivered.
-            return ['ok' => true, 'message' => ''];
+            return MailResult::accepted();
         }
 
         if ($reported !== '') {
-            return ['ok' => false, 'message' => self::cap($reported)];
+            return MailResult::failed(self::cap($reported));
         }
 
-        return ['ok' => false, 'message' => 'wp_mail() reported a failure.'];
+        return MailResult::failed('wp_mail() reported a failure.');
     }
 
     /**

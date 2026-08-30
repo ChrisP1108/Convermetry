@@ -8,6 +8,7 @@ if (!defined('ABSPATH')) exit;
 use Convermetry\Analytics\SubmissionContext;
 use Convermetry\Database\DatabaseManager;
 use Convermetry\Database\FormSubmissions;
+use Convermetry\Database\NewSubmission;
 use Convermetry\Settings\Options;
 use Convermetry\Support\ClientIp;
 use Convermetry\Support\Extensions;
@@ -15,6 +16,11 @@ use Convermetry\Support\Http;
 use Convermetry\Support\PrivacySignal;
 use Convermetry\Tracking\Correlation;
 use Convermetry\Webhook\DeliveryContext;
+use Convermetry\Webhook\DeliveryDetails;
+use Convermetry\Webhook\DeliveryKind;
+use Convermetry\Webhook\DeliveryLogEntry;
+use Convermetry\Webhook\MessageType;
+use Convermetry\Webhook\TransportResult;
 use Convermetry\Webhook\DeliveryLog;
 use Convermetry\Webhook\FormDeliveryQueue;
 use Convermetry\Webhook\PayloadBuilder;
@@ -192,35 +198,29 @@ final class SubmissionService
         // for a DNT/GPC visitor, it just carries no address.
         $ipAddress = ClientIp::forStorage();
 
-        $rowId = FormSubmissions::insert([
-            'submission_id'   => $submissionId,
-            'conversion_id'   => $correlation->conversionId,
-            'session_id'      => $correlation->sessionId,
-            'provider'        => $provider,
-            'form_key'        => $formKey,
-            'form_name'       => $formName,
-            'native_form_id'  => $nativeId,
-            'form_id'         => FormSettings::effectiveFormId($formKey, $nativeId),
-            'page_url'        => $page['url'],
-            'ip_address'      => $ipAddress,
-            // Denormalized copies of six context values, so the Submissions page
-            // and the campaign / landing-page lead reports can filter and group
-            // on them without decoding every row's JSON blob. Written here at
-            // insert time, so a new row never needs the backfill worker.
-            'channel'         => (string) ($context['channel'] ?? ''),
-            'utm_campaign'    => (string) ($context['attribution']['utm_campaign'] ?? ''),
-            'utm_source'      => (string) ($context['attribution']['utm_source'] ?? ''),
-            'utm_medium'      => (string) ($context['attribution']['utm_medium'] ?? ''),
-            'utm_id'          => (string) ($context['attribution']['utm_id'] ?? ''),
-            'landing_page'    => (string) ($context['landing_page']['url'] ?? ''),
-            'page_query'      => $page['query'],
-            'submission_data' => $submissionData,
-            'context'         => $context,
-            'runtime'         => [
+        // fromContext() derives the six denormalized attribution columns from
+        // $context, so the Submissions page and the campaign / landing-page
+        // lead reports can filter and group without decoding every row's JSON
+        // blob — and so the two copies cannot be written out of step.
+        $rowId = FormSubmissions::insert(NewSubmission::fromContext(
+            submissionId: $submissionId,
+            conversionId: $correlation->conversionId,
+            sessionId: $correlation->sessionId,
+            provider: $provider,
+            formKey: $formKey,
+            formName: $formName,
+            nativeFormId: $nativeId,
+            formId: FormSettings::effectiveFormId($formKey, $nativeId),
+            pageUrl: $page['url'],
+            ipAddress: $ipAddress,
+            pageQuery: $page['query'],
+            fields: $submissionData,
+            context: $context,
+            runtime: [
                 'query'   => $this->scalarMap($runtimeQuery),
                 'headers' => $this->scalarMap($runtimeHeaders),
             ],
-        ]);
+        ));
 
         if ($rowId === null) {
             // Duplicate conversion_id: this exact browser submission was
@@ -412,7 +412,7 @@ final class SubmissionService
         $failedDeliveries = [];
 
         foreach (Options::formEndpoints() as $endpoint) {
-            $deliveryId = FormDeliveryQueue::deliveryId($endpoint['url'], $submissionId);
+            $deliveryId = FormDeliveryQueue::deliveryId($endpoint->url, $submissionId);
 
             $payload['delivery_id'] = $deliveryId;
 
@@ -421,49 +421,47 @@ final class SubmissionService
             // The synchronous path freezes nothing — one attempt per endpoint,
             // no retries — so composition and sending happen together and
             // convermetry_webhook_delivery_frozen never fires here.
-            $context = DeliveryContext::build($endpoint['url'], [
-                'message_type'   => DeliveryContext::FORM,
-                'kind'           => 'immediate',
-                'attempt'        => 1,
-                'delivery_id'    => $deliveryId,
-                'endpoint_label' => $endpoint['label'],
-                'submission_id'  => $submissionId,
-                'conversion_id'  => $conversionId,
-                'form_key'       => $formKey,
-            ]);
+            $context = DeliveryDetails::for(
+                $endpoint->url,
+                messageType: MessageType::FormSubmission,
+                kind: DeliveryKind::Immediate,
+                attempt: 1,
+                deliveryId: $deliveryId,
+                endpointLabel: $endpoint->label,
+                submissionId: $submissionId,
+                conversionId: $conversionId,
+                formKey: $formKey,
+            );
 
-            $requestUrl = RequestFactory::buildUrl($endpoint['url'], $formKey, $pageQuery, $runtime['query'], $context);
+            $requestUrl = RequestFactory::buildUrl($endpoint->url, $formKey, $pageQuery, $runtime['query'], $context);
             $headers    = RequestFactory::buildHeaders($formKey, $runtime['headers'], $context);
 
             if (!is_string($encoded) || $encoded === '') {
-                $result = ['ok' => false, 'code' => 0, 'message' => 'Payload could not be JSON-encoded', 'body' => ''];
                 $encoded = '';
+                $result  = TransportResult::failure('Payload could not be JSON-encoded');
             } else {
-                $sendHeaders = RequestFactory::withProtocolHeaders($headers, $endpoint['url'], $encoded, $deliveryId);
+                $sendHeaders = RequestFactory::withProtocolHeaders($headers, $endpoint->url, $encoded, $deliveryId);
 
                 DeliveryContext::beforeSend($context, $requestUrl, $sendHeaders, $encoded);
                 $result = Http::postJson($requestUrl, $encoded, $sendHeaders, $context);
             }
 
-            $logged = DeliveryLog::log([
-                'ok'              => $result['ok'],
-                'endpoint_url'    => $endpoint['url'],
-                'endpoint_label'  => $endpoint['label'],
-                'delivery_id'     => $deliveryId,
-                'message_type'    => 'form_submission',
-                'kind'            => 'immediate',
-                'attempt'         => 1,
-                'submission_id'   => $submissionId,
-                'conversion_id'   => $conversionId,
-                'form_provider'   => (string) ($submission['provider'] ?? ''),
-                'form_name'       => (string) ($submission['form_name'] ?? ''),
-                'request_url'     => $requestUrl,
-                'request_headers' => $headers,
-                'request_data'    => $encoded,
-                'response_code'   => (int) $result['code'],
-                'response_data'   => (string) $result['body'],
-                'message'         => (string) $result['message'],
-            ]);
+            $logged = DeliveryLog::log(new DeliveryLogEntry(
+                result: $result,
+                endpointUrl: $endpoint->url,
+                endpointLabel: $endpoint->label,
+                deliveryId: $deliveryId,
+                messageType: MessageType::FormSubmission,
+                kind: DeliveryKind::Immediate,
+                attempt: 1,
+                requestUrl: $requestUrl,
+                requestHeaders: $headers,
+                requestData: $encoded,
+                submissionId: $submissionId,
+                conversionId: $conversionId,
+                formProvider: (string) ($submission['provider'] ?? ''),
+                formName: (string) ($submission['form_name'] ?? ''),
+            ));
 
             $context = DeliveryContext::attempted($context, $result, $encoded !== '');
             DeliveryContext::attemptLogged($context, $logged);
@@ -472,23 +470,21 @@ final class SubmissionService
             // commit before announcing success — and no chain action ever
             // follows: a failed synchronous delivery is reported to the caller
             // rather than retried.
-            if ($result['ok']) {
+            if ($result->ok) {
                 DeliveryContext::succeeded($context);
             }
 
-            $lastStatus = (int) $result['code'];
-            $lastData   = $result['body'] !== '' && json_validate((string) $result['body'])
-                ? json_decode((string) $result['body'], true)
-                : ($result['body'] !== '' ? $result['body'] : null);
+            $lastStatus = $result->code;
+            $lastData   = $result->decodedBody();
 
-            if (!$result['ok']) {
+            if (!$result->ok) {
                 $overallOk          = false;
                 $failedDeliveries[] = [
                     'url'          => $requestUrl,
-                    'endpoint_url' => $endpoint['url'],
+                    'endpoint_url' => $endpoint->url,
                     'headers'      => $headers,
                     'body'         => $encoded,
-                    'label'        => $endpoint['label'],
+                    'label'        => $endpoint->label,
                 ];
             }
         }
@@ -546,7 +542,7 @@ final class SubmissionService
             return;
         }
 
-        DatabaseManager::insertEvent('form_success', array_merge($correlation->attribution, [
+        DatabaseManager::insertEvent('form_success', array_merge($correlation->attribution->toArray(), [
             'event_value'      => $correlation->conversionId,
             'session_id'       => $correlation->sessionId,
             'page_url'         => $correlation->pageUrl,

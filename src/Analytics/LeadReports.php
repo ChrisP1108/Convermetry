@@ -298,7 +298,9 @@ final class LeadReports
     /**
      * The time-to-lead buckets, as key => upper bound in seconds (null = open).
      *
-     * @return array<string, int|null>
+     * @return non-empty-array<string, int|null> Ordered, and the last entry's
+     *         ceiling is always null — "everything above" — which is what makes
+     *         {@see bucketFor()} total.
      */
     public static function buckets(): array
     {

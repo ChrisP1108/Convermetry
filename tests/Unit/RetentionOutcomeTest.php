@@ -6,6 +6,7 @@ namespace Convermetry\Tests\Unit;
 
 use Brain\Monkey;
 use Convermetry\Support\Retention;
+use Convermetry\Support\RetentionStatus;
 use PHPUnit\Framework\TestCase;
 
 /**
@@ -40,17 +41,17 @@ final class RetentionOutcomeTest extends TestCase
     {
         $outcome = Retention::outcome(137, 5000, 5137);
 
-        self::assertSame(Retention::COMPLETED, $outcome['outcome']);
-        self::assertFalse($outcome['more_remain']);
-        self::assertSame(5137, $outcome['deleted']);
+        self::assertSame(RetentionStatus::Completed, $outcome->status);
+        self::assertFalse($outcome->moreRemain());
+        self::assertSame(5137, $outcome->deleted);
     }
 
     public function testAnEmptyFinalChunkMeansTheTableIsDrained(): void
     {
         $outcome = Retention::outcome(0, 5000, 0);
 
-        self::assertSame(Retention::COMPLETED, $outcome['outcome']);
-        self::assertFalse($outcome['more_remain']);
+        self::assertSame(RetentionStatus::Completed, $outcome->status);
+        self::assertFalse($outcome->moreRemain());
     }
 
     /**
@@ -62,9 +63,9 @@ final class RetentionOutcomeTest extends TestCase
     {
         $outcome = Retention::outcome(5000, 5000, 200000);
 
-        self::assertSame(Retention::TRUNCATED, $outcome['outcome']);
-        self::assertTrue($outcome['more_remain']);
-        self::assertSame(200000, $outcome['deleted']);
+        self::assertSame(RetentionStatus::Truncated, $outcome->status);
+        self::assertTrue($outcome->moreRemain());
+        self::assertSame(200000, $outcome->deleted);
     }
 
     /**
@@ -78,9 +79,10 @@ final class RetentionOutcomeTest extends TestCase
     {
         $outcome = Retention::outcome($returned, 5000, 12);
 
-        self::assertSame(Retention::QUERY_FAILED, $outcome['outcome']);
-        self::assertTrue($outcome['more_remain']);
-        self::assertSame(12, $outcome['deleted']);
+        self::assertSame(RetentionStatus::QueryFailed, $outcome->status);
+        self::assertTrue($outcome->queryFailed());
+        self::assertTrue($outcome->moreRemain());
+        self::assertSame(12, $outcome->deleted);
     }
 
     /**
@@ -99,9 +101,9 @@ final class RetentionOutcomeTest extends TestCase
     {
         $outcome = Retention::lockLost(4200);
 
-        self::assertSame(Retention::LOCK_LOST, $outcome['outcome']);
-        self::assertTrue($outcome['more_remain']);
-        self::assertSame(4200, $outcome['deleted']);
+        self::assertSame(RetentionStatus::LockLost, $outcome->status);
+        self::assertTrue($outcome->moreRemain());
+        self::assertSame(4200, $outcome->deleted);
     }
 
     public function testTheStartAndCompletionActionsCarryTheStoreAndCutoff(): void
@@ -124,6 +126,28 @@ final class RetentionOutcomeTest extends TestCase
         self::assertSame(
             ['events', '2026-05-28 00:00:00', 5000, true, Retention::TRUNCATED],
             $fired[1][1]
+        );
+    }
+
+    /**
+     * The hook publishes strings, and the constants are what call sites and
+     * third-party listeners compare against. Both are now defined from the
+     * enum, and this pins the two together: a renamed case that did not update
+     * the wire value would be a silent break for every listener.
+     */
+    public function testTheConstantsAndTheEnumCarryTheSameWireValues(): void
+    {
+        self::assertSame(Retention::COMPLETED, RetentionStatus::Completed->value);
+        self::assertSame(Retention::TRUNCATED, RetentionStatus::Truncated->value);
+        self::assertSame(Retention::QUERY_FAILED, RetentionStatus::QueryFailed->value);
+        self::assertSame(Retention::LOCK_LOST, RetentionStatus::LockLost->value);
+    }
+
+    public function testTheArrayFormStillCarriesTheDocumentedThreeKeys(): void
+    {
+        self::assertSame(
+            ['deleted' => 5000, 'outcome' => 'truncated', 'more_remain' => true],
+            Retention::outcome(5000, 5000, 5000)->toArray()
         );
     }
 }

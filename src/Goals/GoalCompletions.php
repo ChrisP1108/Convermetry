@@ -315,9 +315,15 @@ final class GoalCompletions
      * analytics events and submissions — goal completions are analytics data and
      * must not outlive the window a site owner configured.
      *
+     * The deleted row count is NOT returned. It reaches listeners through
+     * 'convermetry_retention_cleanup_completed', which is the one place it is
+     * published, and this runs as a do_action() callback whose return value
+     * WordPress discards — so a return here would only invite a reader to
+     * think it went somewhere.
+     *
      * @return void
      */
-    public static function purgeOld(): int
+    public static function purgeOld(): void
     {
         global $wpdb;
 
@@ -346,11 +352,9 @@ final class GoalCompletions
         $outcome = Retention::outcome($deleted, self::CLEANUP_CHUNK, $total);
         Retention::completed('goal_completions', $cutoff, $outcome);
 
-        if ($outcome['outcome'] === Retention::QUERY_FAILED) {
+        if ($outcome->queryFailed()) {
             Errors::storage('goal_completions', 'retention_delete', 'delete_failed', ['cutoff' => $cutoff]);
         }
-
-        return $total;
     }
 
     /**

@@ -8,10 +8,19 @@ use Brain\Monkey;
 use Brain\Monkey\Functions;
 use Convermetry\Support\Url;
 use Convermetry\Webhook\DeliveryContext;
+use Convermetry\Webhook\DeliveryDetails;
+use Convermetry\Webhook\DeliveryKind;
+use Convermetry\Webhook\LogOutcome;
+use Convermetry\Webhook\MessageType;
+use Convermetry\Webhook\TransportResult;
 use PHPUnit\Framework\TestCase;
 
 /**
  * The context every webhook lifecycle action carries.
+ *
+ * The facts are a typed {@see DeliveryDetails} internally, but what listeners
+ * receive is an ARRAY, and that array is the public contract — so these tests
+ * assert on what comes out of do_action(), not on the object.
  *
  * Two properties matter more than the rest. The first is totality: a listener
  * indexes this array without defensive checks, so every documented key is
@@ -48,6 +57,23 @@ final class DeliveryContextTest extends TestCase
         parent::tearDown();
     }
 
+    /**
+     * The details a delivery path would build, with the two facts every path
+     * knows filled in.
+     */
+    private function details(
+        string $url,
+        DeliveryKind $kind = DeliveryKind::Scheduled,
+        ?string $label = null
+    ): DeliveryDetails {
+        return DeliveryDetails::for(
+            $url,
+            messageType: MessageType::AnalyticsReport,
+            kind: $kind,
+            endpointLabel: $label,
+        );
+    }
+
     // ----------------------------------------------------------------- shape
 
     /**
@@ -56,7 +82,7 @@ final class DeliveryContextTest extends TestCase
      */
     public function testEveryDocumentedKeyIsAlwaysPresentInAFixedOrder(): void
     {
-        $context = DeliveryContext::build('https://hooks.example.com/x');
+        $context = $this->details('https://hooks.example.com/x')->toArray();
 
         self::assertSame([
             'message_type', 'kind', 'attempt', 'delivery_id', 'is_test',
@@ -68,9 +94,11 @@ final class DeliveryContextTest extends TestCase
 
     public function testUnknownValuesAreZeroValuedRatherThanAbsent(): void
     {
-        $context = DeliveryContext::build('https://hooks.example.com/x');
+        $context = $this->details('https://hooks.example.com/x')->toArray();
 
-        self::assertSame('', $context['message_type']);
+        self::assertSame('', $context['delivery_id']);
+        self::assertSame('', $context['submission_id']);
+        self::assertSame('', $context['disposition']);
         self::assertSame(0, $context['attempt']);
         self::assertSame(0, $context['window_start']);
         self::assertFalse($context['is_test']);
@@ -85,7 +113,7 @@ final class DeliveryContextTest extends TestCase
     public function testACredentialBearingEndpointUrlIsReducedToItsOrigin(): void
     {
         $url     = 'https://user:pass@hooks.example.com:8443/ingest/abc?token=SECRET#frag';
-        $context = DeliveryContext::build($url, ['endpoint_label' => 'Prod']);
+        $context = $this->details($url, label: 'Prod')->toArray();
 
         self::assertSame('https://hooks.example.com:8443', $context['endpoint_origin']);
         self::assertSame(md5($url), $context['endpoint_key']);
@@ -99,18 +127,37 @@ final class DeliveryContextTest extends TestCase
 
     public function testIsTestDefaultsFromTheDeliveryKind(): void
     {
-        self::assertTrue(DeliveryContext::build('https://e.test/x', ['kind' => 'test'])['is_test']);
-        self::assertFalse(DeliveryContext::build('https://e.test/x', ['kind' => 'retry'])['is_test']);
+        self::assertTrue($this->details('https://e.test/x', DeliveryKind::Test)->isTest);
+        self::assertFalse($this->details('https://e.test/x', DeliveryKind::Retry)->isTest);
     }
 
-    public function testWithOverridesOnlyKnownKeys(): void
+    /**
+     * The withers copy rather than mutate, and leave every other fact — and
+     * the serialized key set — exactly as it was.
+     */
+    public function testTheWithersReturnCopiesAndChangeNothingElse(): void
     {
-        $context = DeliveryContext::build('https://e.test/x', ['kind' => 'retry']);
-        $updated = DeliveryContext::with($context, ['attempt' => 3, 'not_a_key' => 'ignored']);
+        $context = $this->details('https://e.test/x', DeliveryKind::Retry);
+        $updated = $context->withAttempt(3)->withTransportAttempted(true);
 
-        self::assertSame(3, $updated['attempt']);
-        self::assertArrayNotHasKey('not_a_key', $updated);
-        self::assertSame(array_keys($context), array_keys($updated));
+        self::assertSame(0, $context->attempt);
+        self::assertFalse($context->transportAttempted);
+        self::assertSame(3, $updated->attempt);
+        self::assertTrue($updated->transportAttempted);
+        self::assertSame(array_keys($context->toArray()), array_keys($updated->toArray()));
+        self::assertSame($context->endpointKey, $updated->endpointKey);
+    }
+
+    /**
+     * The two enum-backed fields still serialize to the strings listeners and
+     * the Activity Log have always seen.
+     */
+    public function testTheEnumFieldsSerializeToTheirWireStrings(): void
+    {
+        $context = $this->details('https://e.test/x', DeliveryKind::Retry)->toArray();
+
+        self::assertSame('analytics_report', $context['message_type']);
+        self::assertSame('retry', $context['kind']);
     }
 
     // ---------------------------------------------------------------- firing
@@ -122,7 +169,7 @@ final class DeliveryContextTest extends TestCase
      */
     public function testBeforeSendExposesMetadataButNeitherCredentialsNorBody(): void
     {
-        $context = DeliveryContext::build('https://hooks.example.com/ingest?token=SECRET');
+        $context = $this->details('https://hooks.example.com/ingest?token=SECRET');
 
         DeliveryContext::beforeSend(
             $context,
@@ -139,7 +186,7 @@ final class DeliveryContextTest extends TestCase
 
         [$firedContext, $meta] = $this->fired[0][1];
 
-        self::assertSame($context, $firedContext);
+        self::assertSame($context->toArray(), $firedContext);
         self::assertSame(31, $meta['body_bytes']);
         self::assertSame(hash('sha256', '{"email":"visitor@example.com"}'), $meta['body_sha256']);
         self::assertSame(
@@ -161,40 +208,40 @@ final class DeliveryContextTest extends TestCase
      */
     public function testAttemptedCarriesTheTransportResultWithoutTheResponseBody(): void
     {
-        $context = DeliveryContext::build('https://e.test/x', ['kind' => 'retry']);
+        $context = $this->details('https://e.test/x', DeliveryKind::Retry);
 
         $returned = DeliveryContext::attempted(
             $context,
-            ['ok' => false, 'code' => 500, 'message' => 'Internal Server Error', 'body' => 'echo: visitor@example.com'],
+            new TransportResult(false, 500, 'Internal Server Error', 'echo: visitor@example.com'),
             true
         );
 
         self::assertSame('convermetry_webhook_delivery_attempted', $this->fired[0][0]);
-        self::assertSame([$returned, false, 500, 'Internal Server Error'], $this->fired[0][1]);
-        self::assertTrue($returned['transport_attempted']);
+        self::assertSame([$returned->toArray(), false, 500, 'Internal Server Error'], $this->fired[0][1]);
+        self::assertTrue($returned->transportAttempted);
         self::assertStringNotContainsString('visitor@example.com', (string) json_encode($this->fired[0][1]));
     }
 
     public function testAttemptedReportsWhenNoRequestReachedTheWire(): void
     {
-        $context = DeliveryContext::build('https://e.test/x');
+        $context = $this->details('https://e.test/x');
 
         $returned = DeliveryContext::attempted(
             $context,
-            ['ok' => false, 'code' => 0, 'message' => 'Payload could not be JSON-encoded', 'body' => ''],
+            TransportResult::failure('Payload could not be JSON-encoded'),
             false
         );
 
-        self::assertFalse($returned['transport_attempted']);
+        self::assertFalse($returned->transportAttempted);
         self::assertFalse($this->fired[0][1][3] === '');
     }
 
     public function testEachTerminalHelperFiresItsOwnDistinctlyNamedAction(): void
     {
-        $context = DeliveryContext::build('https://e.test/x');
+        $context = $this->details('https://e.test/x');
 
         DeliveryContext::frozen($context, 'queue_row', 512);
-        DeliveryContext::attemptLogged($context, 'suppressed');
+        DeliveryContext::attemptLogged($context, LogOutcome::Suppressed);
         DeliveryContext::succeeded($context);
         DeliveryContext::retryScheduled($context, 2, 1780000000);
         DeliveryContext::retryChainExhausted($context);
@@ -211,8 +258,11 @@ final class DeliveryContextTest extends TestCase
             'convermetry_webhook_delivery_canceled',
         ], array_column($this->fired, 0));
 
-        self::assertSame([$context, 'queue_row', 512], $this->fired[0][1]);
-        self::assertSame([$context, 2, 1780000000], $this->fired[3][1]);
+        self::assertSame([$context->toArray(), 'queue_row', 512], $this->fired[0][1]);
+        self::assertSame([$context->toArray(), 2, 1780000000], $this->fired[3][1]);
+
+        // The log disposition still crosses the hook boundary as a string.
+        self::assertSame('suppressed', $this->fired[1][1][1]);
     }
 
     // ------------------------------------------------------------ Url::origin

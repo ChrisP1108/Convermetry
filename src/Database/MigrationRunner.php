@@ -365,6 +365,11 @@ final class MigrationRunner
      *
      * @param string $value Lock value ("token|timestamp").
      * @return bool True when this call created the row.
+     *
+     * @phpstan-impure Each call attempts a real INSERT IGNORE, and its result
+     *                 depends on whether the row exists AT THAT MOMENT — the
+     *                 caller retries this after deleting a stale lock row, so
+     *                 two calls with identical arguments legitimately differ.
      */
     private static function insertLockRow(string $value): bool
     {

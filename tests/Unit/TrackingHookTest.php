@@ -175,7 +175,18 @@ final class TrackingHookTest extends TestCase
     public function testTheEventFilterRunsAfterEverySanitizationStep(): void
     {
         $source = (string) file_get_contents(self::PLUGIN_DIR . 'src/Api/TrackingController.php');
-        $method = substr($source, (int) strpos($source, 'private static function sanitizeEvent'), 7000);
+
+        // Bounded by the next class member rather than by a byte count: a
+        // fixed window silently starts excluding the end of the method the
+        // first time somebody adds a comment to it, and a source-contract test
+        // that stops reading the code it is asserting about fails for the
+        // wrong reason.
+        $start  = (int) strpos($source, 'private static function sanitizeEvent');
+        $rest   = substr($source, $start);
+        $next   = preg_match('~\n    (?:private|public|protected)\s~', $rest, $m, PREG_OFFSET_CAPTURE)
+            ? (int) $m[0][1]
+            : strlen($rest);
+        $method = substr($rest, 0, $next);
 
         $filter = strpos($method, "apply_filters('convermetry_should_track_event'");
         self::assertIsInt($filter);

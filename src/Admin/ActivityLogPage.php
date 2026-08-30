@@ -496,8 +496,11 @@ final class ActivityLogPage
             : (string) ($entry['request_data'] ?? '');
 
         $headersDecoded = json_decode((string) ($entry['request_headers'] ?? ''), true);
+        // (string) rather than a bare json_encode(): the call is declared as
+        // able to return false, and false is not '', so the panel would have
+        // rendered an empty <details> block rather than omitting it.
         $prettyHeaders  = is_array($headersDecoded) && $headersDecoded !== []
-            ? json_encode($headersDecoded, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)
+            ? (string) json_encode($headersDecoded, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)
             : '';
 
         // Transport errors are stored as {"error": "..."} with response code 0.
@@ -615,6 +618,15 @@ final class ActivityLogPage
         header('Expires: 0');
 
         $output = fopen('php://output', 'w');
+
+        // php://output does not fail in practice, but fopen() is declared as
+        // able to — and every write below would then be a TypeError inside a
+        // response that has already sent CSV headers, so the browser would save
+        // a file containing a fatal error. Stopping with an empty body is the
+        // honest outcome.
+        if ($output === false) {
+            exit;
+        }
 
         fwrite($output, "\xEF\xBB\xBF");
 

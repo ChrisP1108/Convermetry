@@ -7,6 +7,7 @@ use Convermetry\Analytics\FormEngagementReport;
 use Convermetry\Analytics\GoalReports;
 use Convermetry\Analytics\LeadReports;
 use Convermetry\Database\FormSubmissions;
+use Convermetry\Database\NewSubmission;
 
 /**
  * The engagement, goal, and lead queries, executed against a real server.
@@ -402,34 +403,51 @@ final class ReportQueryTest extends IntegrationTestCase
      */
     public function testFreshSubmissionsNeverNeedBackfilling(): void
     {
-        FormSubmissions::insert([
-            'submission_id'   => 'fresh1',
-            'conversion_id'   => 'freshc1',
-            'session_id'      => 'sess0001',
-            'provider'        => 'gravityforms',
-            'form_key'        => 'gravityforms:7',
-            'form_name'       => 'Contact',
-            'native_form_id'  => '7',
-            'form_id'         => '7',
-            'page_url'        => 'https://example.com/contact/',
-            'ip_address'      => '',
-            'channel'         => 'Paid Search',
-            'utm_campaign'    => 'spring',
-            'utm_source'      => 'google',
-            'utm_medium'      => 'cpc',
-            'utm_id'          => 'cmp-1',
-            'landing_page'    => 'https://example.com/land/',
-            'page_query'      => [],
-            'submission_data' => [],
-            'context'         => [],
-            'runtime'         => ['query' => [], 'headers' => []],
-        ]);
+        // Built through fromContext(), the way SubmissionService builds it:
+        // the six derived attribution columns are DERIVED from the context
+        // rather than passed alongside it, so this exercises the derivation as
+        // well as the INSERT.
+        FormSubmissions::insert(NewSubmission::fromContext(
+            submissionId: 'fresh1',
+            conversionId: 'freshc1',
+            sessionId: 'sess0001',
+            provider: 'gravityforms',
+            formKey: 'gravityforms:7',
+            formName: 'Contact',
+            nativeFormId: '7',
+            formId: '7',
+            pageUrl: 'https://example.com/contact/',
+            ipAddress: '',
+            pageQuery: [],
+            fields: [],
+            context: [
+                'channel'      => 'Paid Search',
+                'attribution'  => [
+                    'utm_campaign' => 'spring',
+                    'utm_source'   => 'google',
+                    'utm_medium'   => 'cpc',
+                    'utm_id'       => 'cmp-1',
+                ],
+                'landing_page' => ['url' => 'https://example.com/land/'],
+            ],
+            runtime: ['query' => [], 'headers' => []],
+        ));
 
         // delivery_state is filled by the delivery pipeline, so only the
         // attribution half is asserted here.
         self::assertNull(
             self::$db->get_var("SELECT landing_page FROM wp_cvm_form_submissions WHERE landing_page IS NULL LIMIT 1"),
             'A freshly inserted submission must carry its landing page already.'
+        );
+
+        self::assertSame(
+            ['Paid Search', 'spring', 'google', 'cpc', 'cmp-1', 'https://example.com/land/'],
+            array_values((array) self::$db->get_row(
+                'SELECT channel, utm_campaign, utm_source, utm_medium, utm_id, landing_page'
+                . " FROM wp_cvm_form_submissions WHERE submission_id = 'fresh1'",
+                ARRAY_A
+            )),
+            'Every derived column is written from the context at insert time.'
         );
     }
 

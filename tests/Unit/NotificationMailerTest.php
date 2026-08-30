@@ -138,7 +138,10 @@ final class NotificationMailerTest extends TestCase
     {
         Functions\when('wp_mail')->justReturn(true);
 
-        self::assertSame(['ok' => true, 'message' => ''], NotificationMailer::send('a@example.com', 's', 'b'));
+        $result = NotificationMailer::send('a@example.com', 's', 'b');
+
+        self::assertTrue($result->ok);
+        self::assertSame('', $result->message);
     }
 
     public function testAFailedSendReportsFailure(): void
@@ -147,8 +150,8 @@ final class NotificationMailerTest extends TestCase
 
         $result = NotificationMailer::send('a@example.com', 's', 'b');
 
-        self::assertFalse($result['ok']);
-        self::assertNotSame('', $result['message']);
+        self::assertFalse($result->ok);
+        self::assertNotSame('', $result->message);
     }
 
     /**
@@ -160,7 +163,7 @@ final class NotificationMailerTest extends TestCase
      */
     public function testANonBooleanReturnIsTreatedAsFailure(mixed $returned): void
     {
-        self::assertFalse(NotificationMailer::interpret($returned)['ok']);
+        self::assertFalse(NotificationMailer::interpret($returned)->ok);
     }
 
     /**
@@ -195,10 +198,10 @@ final class NotificationMailerTest extends TestCase
 
         NotificationMailer::captureFailure($error);
 
-        self::assertSame(
-            ['ok' => false, 'message' => 'SMTP connect() failed'],
-            NotificationMailer::interpret(false, null, 'SMTP connect() failed')
-        );
+        $result = NotificationMailer::interpret(false, null, 'SMTP connect() failed');
+
+        self::assertFalse($result->ok);
+        self::assertSame('SMTP connect() failed', $result->message);
     }
 
     public function testAThrowingMailerOverrideIsCaught(): void
@@ -209,8 +212,8 @@ final class NotificationMailerTest extends TestCase
 
         $result = NotificationMailer::send('a@example.com', 's', 'b');
 
-        self::assertFalse($result['ok']);
-        self::assertStringContainsString('Postmark rejected the request', $result['message']);
+        self::assertFalse($result->ok);
+        self::assertStringContainsString('Postmark rejected the request', $result->message);
     }
 
     /** Leaving the listener attached would leak into every later wp_mail(). */
@@ -239,14 +242,14 @@ final class NotificationMailerTest extends TestCase
     {
         $result = NotificationMailer::interpret(false, null, str_repeat('x', 500));
 
-        self::assertSame(191, mb_strlen($result['message']));
+        self::assertSame(191, mb_strlen($result->message));
     }
 
     public function testFailureMessagesAreCollapsedToASingleLine(): void
     {
         $result = NotificationMailer::interpret(false, null, "line one\nline two");
 
-        self::assertSame('line one line two', $result['message']);
+        self::assertSame('line one line two', $result->message);
     }
 
     // ── Honesty about what "sent" means ──────────────────────────────────────
@@ -259,8 +262,13 @@ final class NotificationMailerTest extends TestCase
     {
         $source = (string) file_get_contents(__DIR__ . '/../../src/Notifications/NotificationMailer.php');
 
-        // Extract single-quoted strings that are returned to callers.
-        preg_match_all("/'message'\s*=>\s*'([^']*)'/", $source, $matches);
+        // Every failure reason this class produces goes through
+        // MailResult::failed(); extract the literal ones. (Interpolated
+        // messages are prefixes like 'Mailer error: ' plus a mailer's own
+        // words, and those are matched here too.)
+        preg_match_all("/MailResult::failed\(\s*(?:self::cap\(\s*)?'([^']*)'/", $source, $matches);
+
+        self::assertNotSame([], $matches[1], 'the extraction must actually find the failure strings');
 
         foreach ($matches[1] as $message) {
             self::assertStringNotContainsStringIgnoringCase(

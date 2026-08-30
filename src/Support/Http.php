@@ -5,7 +5,9 @@ namespace Convermetry\Support;
 
 if (!defined('ABSPATH')) exit;
 
+use Convermetry\Webhook\DeliveryDetails;
 use Convermetry\Webhook\DeliveryLog;
+use Convermetry\Webhook\TransportResult;
 
 /**
  * The single outbound HTTP path for every Convermetry webhook request —
@@ -44,11 +46,15 @@ final class Http
      * @param string                $url     Absolute endpoint URL (may carry query parameters).
      * @param string                $body    JSON-encoded request body, sent byte-for-byte.
      * @param array<string, string> $headers Complete request headers (Content-Type included by caller).
-     * @param array<string, mixed>  $context Delivery context, passed to convermetry_webhook_timeout.
-     * @return array{ok: bool, code: int, message: string, body: string}
+     * @param DeliveryDetails       $context Delivery details, passed to convermetry_webhook_timeout.
+     * @return TransportResult
      */
-    public static function postJson(string $url, string $body, array $headers, array $context = []): array
-    {
+    public static function postJson(
+        string $url,
+        string $body,
+        array $headers,
+        DeliveryDetails $context
+    ): TransportResult {
         /**
          * Filters the HTTP timeout, in seconds, for one webhook request.
          *
@@ -72,7 +78,7 @@ final class Http
          * @param int                  $timeout Seconds. Default 15.
          * @param array<string, mixed> $context Credential-free delivery context.
          */
-        $filtered = (int) apply_filters('convermetry_webhook_timeout', self::TIMEOUT, $context);
+        $filtered = (int) apply_filters('convermetry_webhook_timeout', self::TIMEOUT, $context->toArray());
         $timeout  = ($filtered >= self::MIN_TIMEOUT && $filtered <= self::MAX_TIMEOUT) ? $filtered : self::TIMEOUT;
 
         $response = wp_safe_remote_post($url, [
@@ -84,17 +90,13 @@ final class Http
         ]);
 
         if (is_wp_error($response)) {
-            return ['ok' => false, 'code' => 0, 'message' => $response->get_error_message(), 'body' => ''];
+            return TransportResult::failure($response->get_error_message());
         }
 
-        $code = (int) wp_remote_retrieve_response_code($response);
-        $ok   = $code >= 200 && $code < 300;
-
-        return [
-            'ok'      => $ok,
-            'code'    => $code,
-            'message' => $ok ? 'Delivered' : wp_remote_retrieve_response_message($response),
-            'body'    => (string) wp_remote_retrieve_body($response),
-        ];
+        return TransportResult::fromResponse(
+            (int) wp_remote_retrieve_response_code($response),
+            (string) wp_remote_retrieve_response_message($response),
+            (string) wp_remote_retrieve_body($response)
+        );
     }
 }

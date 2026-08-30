@@ -7,6 +7,8 @@ namespace Convermetry\Tests\Unit;
 use Brain\Monkey;
 use Brain\Monkey\Functions;
 use Convermetry\Database\FormSubmissions;
+use Convermetry\Webhook\DeliveryState;
+use Convermetry\Webhook\EndpointOutcome;
 use PHPUnit\Framework\TestCase;
 use ReflectionMethod;
 
@@ -50,7 +52,7 @@ final class SubmissionStatusTest extends TestCase
      *
      * @param array<int, array<string, mixed>> $logRows   Oldest first.
      * @param array<int, array<string, mixed>> $queueRows
-     * @return array{state: string, endpoints: list<array<string, mixed>>}
+     * @return array{state: DeliveryState, endpoints: list<EndpointOutcome>}
      */
     private function classify(array $logRows, array $queueRows): array
     {
@@ -99,8 +101,8 @@ final class SubmissionStatusTest extends TestCase
     {
         $status = $this->classify([], []);
 
-        self::assertSame('not_sent', $status['state']);
-        self::assertNotSame('failed', $status['state']);
+        self::assertSame(DeliveryState::NotSent, $status['state']);
+        self::assertNotSame(DeliveryState::Failed, $status['state']);
         self::assertSame([], $status['endpoints']);
     }
 
@@ -110,9 +112,9 @@ final class SubmissionStatusTest extends TestCase
     {
         $status = $this->classify([$this->logRow('https://a.example/hook', 1)], []);
 
-        self::assertSame('delivered', $status['state']);
+        self::assertSame(DeliveryState::Delivered, $status['state']);
         self::assertCount(1, $status['endpoints']);
-        self::assertTrue($status['endpoints'][0]['ok']);
+        self::assertTrue($status['endpoints'][0]->ok);
     }
 
     public function testOneOfTwoEndpointsSucceededIsPartial(): void
@@ -122,7 +124,7 @@ final class SubmissionStatusTest extends TestCase
             $this->logRow('https://b.example/hook', 0, 500),
         ], []);
 
-        self::assertSame('partial', $status['state']);
+        self::assertSame(DeliveryState::Partial, $status['state']);
     }
 
     public function testEveryEndpointFailedWithNothingQueuedIsFailed(): void
@@ -132,7 +134,7 @@ final class SubmissionStatusTest extends TestCase
             $this->logRow('https://b.example/hook', 0, 0),
         ], []);
 
-        self::assertSame('failed', $status['state']);
+        self::assertSame(DeliveryState::Failed, $status['state']);
     }
 
     /**
@@ -147,7 +149,7 @@ final class SubmissionStatusTest extends TestCase
             $this->logRow('https://b.example/hook', 1),
         ], []);
 
-        self::assertSame('delivered', $status['state']);
+        self::assertSame(DeliveryState::Delivered, $status['state']);
         self::assertCount(2, $status['endpoints']);
     }
 
@@ -165,11 +167,11 @@ final class SubmissionStatusTest extends TestCase
             $this->logRow('https://a.example/hook', 1, 200, 2),
         ], []);
 
-        self::assertSame('delivered', $status['state']);
+        self::assertSame(DeliveryState::Delivered, $status['state']);
         self::assertCount(1, $status['endpoints'], 'retries collapse into one entry per endpoint');
-        self::assertTrue($status['endpoints'][0]['ok']);
-        self::assertSame(200, $status['endpoints'][0]['code'], 'the code must come from the winning attempt');
-        self::assertSame(2, $status['endpoints'][0]['attempt']);
+        self::assertTrue($status['endpoints'][0]->ok);
+        self::assertSame(200, $status['endpoints'][0]->code, 'the code must come from the winning attempt');
+        self::assertSame(2, $status['endpoints'][0]->attempt);
     }
 
     /**
@@ -183,8 +185,8 @@ final class SubmissionStatusTest extends TestCase
             $this->logRow('https://a.example/hook', 0, 503, 2),
         ], []);
 
-        self::assertSame('failed', $status['state']);
-        self::assertSame(503, $status['endpoints'][0]['code']);
+        self::assertSame(DeliveryState::Failed, $status['state']);
+        self::assertSame(503, $status['endpoints'][0]->code);
     }
 
     // ── pending ──────────────────────────────────────────────────────────────
@@ -200,10 +202,10 @@ final class SubmissionStatusTest extends TestCase
             [$this->queueRow('https://a.example/hook', 2)]
         );
 
-        self::assertSame('pending', $status['state']);
+        self::assertSame(DeliveryState::Pending, $status['state']);
         self::assertCount(1, $status['endpoints']);
-        self::assertTrue($status['endpoints'][0]['queued']);
-        self::assertFalse($status['endpoints'][0]['ok']);
+        self::assertTrue($status['endpoints'][0]->queued);
+        self::assertFalse($status['endpoints'][0]->ok);
     }
 
     /**
@@ -217,10 +219,14 @@ final class SubmissionStatusTest extends TestCase
             [$this->queueRow('https://b.example/hook', 1)]
         );
 
-        self::assertSame('pending', $status['state']);
+        self::assertSame(DeliveryState::Pending, $status['state']);
         self::assertCount(2, $status['endpoints']);
 
-        $byUrl = array_column($status['endpoints'], null, 'url');
+        $byUrl = array_column(
+            array_map(static fn(EndpointOutcome $e): array => $e->toArray(), $status['endpoints']),
+            null,
+            'url'
+        );
         self::assertTrue($byUrl['https://a.example/hook']['ok']);
         self::assertTrue($byUrl['https://b.example/hook']['queued']);
     }

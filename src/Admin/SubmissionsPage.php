@@ -7,10 +7,13 @@ if (!defined('ABSPATH')) exit;
 
 use Convermetry\Analytics\SubmissionContext;
 use Convermetry\Database\FormSubmissions;
+use Convermetry\Forms\SubmissionFieldList;
 use Convermetry\Forms\SubmissionFields;
 use Convermetry\Leads\LeadEvents;
 use Convermetry\Leads\LeadService;
 use Convermetry\Leads\LeadStatus;
+use Convermetry\Webhook\DeliveryState;
+use Convermetry\Webhook\EndpointOutcome;
 use Convermetry\Leads\Money;
 use Convermetry\Settings\Options;
 
@@ -442,7 +445,8 @@ final class SubmissionsPage
      * the Activity Log, which meant clearing the log rewrote history.
      *
      * @param array<int, array<string, mixed>> $rows Submission rows.
-     * @return array<string, array<string, mixed>> Status arrays keyed by submission_id.
+     * @return array<string, array{state: DeliveryState, label: string, endpoints: list<EndpointOutcome>}>
+     *         Statuses keyed by submission_id.
      */
     private static function deliveryStatuses(array $rows): array
     {
@@ -464,21 +468,20 @@ final class SubmissionsPage
      * The display status for one submission row.
      *
      * @param array<string, mixed> $row Submission row.
-     * @return array{state: string, label: string, endpoints: array<int, array<string, mixed>>}
+     * @return array{state: DeliveryState, label: string, endpoints: list<EndpointOutcome>}
      */
     private static function deliveryStatus(array $row): array
     {
-        $endpoints = self::decodeJson((string) ($row['delivery_json'] ?? ''));
-        $endpoints = array_values(array_filter($endpoints, 'is_array'));
-
-        $state = (string) ($row['delivery_state'] ?? '');
+        $endpoints = array_map(
+            EndpointOutcome::fromStoredArray(...),
+            array_values(array_filter(self::decodeJson((string) ($row['delivery_json'] ?? '')), 'is_array'))
+        );
 
         // A row whose state has not been recorded yet (pre-1.3.0, awaiting
         // backfill) is classified from whatever detail it does carry, so the
         // list stays correct while the migration drains.
-        if (!in_array($state, FormSubmissions::DELIVERY_STATES, true)) {
-            $state = FormSubmissions::classifyDelivery($endpoints);
-        }
+        $state = DeliveryState::tryFromMixed($row['delivery_state'] ?? null)
+            ?? FormSubmissions::classifyDelivery($endpoints);
 
         return [
             'state'     => $state,
@@ -490,21 +493,22 @@ final class SubmissionsPage
     /**
      * Human wording for a delivery state.
      *
-     * @param array<int, array<string, mixed>> $endpoints Per-endpoint outcomes.
+     * @param DeliveryState         $state     The recorded (or derived) state.
+     * @param list<EndpointOutcome>  $endpoints Per-endpoint outcomes.
      * @return string
      */
-    private static function statusLabel(string $state, array $endpoints): string
+    private static function statusLabel(DeliveryState $state, array $endpoints): string
     {
         $count = count($endpoints);
 
-        if ($state === 'pending') {
-            $attempts = array_map(static fn(array $e): int => (int) ($e['attempt'] ?? 0), $endpoints);
+        if ($state === DeliveryState::Pending) {
+            $attempts = array_map(static fn(EndpointOutcome $e): int => $e->attempt, $endpoints);
             $attempt  = $attempts === [] ? 0 : max($attempts);
 
             return $attempt > 0 ? sprintf('Queued · retry %d', $attempt) : 'Queued';
         }
 
-        if ($state === 'not_sent') {
+        if ($state === DeliveryState::NotSent) {
             return match (self::webhookPosture()) {
                 'none'   => 'Not sent — no form webhook',
                 'paused' => 'Not sent — webhooks paused',
@@ -512,12 +516,12 @@ final class SubmissionsPage
             };
         }
 
-        $ok = count(array_filter($endpoints, static fn(array $e): bool => !empty($e['ok'])));
+        $ok = count(array_filter($endpoints, static fn(EndpointOutcome $e): bool => $e->ok));
 
         return match ($state) {
-            'delivered' => $count > 1 ? sprintf('Delivered (%d)', $count) : 'Delivered',
-            'partial'   => sprintf('Partial (%d/%d)', $ok, $count),
-            default     => 'Failed',
+            DeliveryState::Delivered => $count > 1 ? sprintf('Delivered (%d)', $count) : 'Delivered',
+            DeliveryState::Partial   => sprintf('Partial (%d/%d)', $ok, $count),
+            default                  => 'Failed',
         };
     }
 
@@ -630,8 +634,9 @@ final class SubmissionsPage
      * Renders one collapsed submission row (the accordion header plus the
      * empty body its detail is lazily loaded into).
      *
-     * @param array<string, mixed>      $row    Submission row.
-     * @param array<string, mixed>|null $status Delivery status, or null when unknown.
+     * @param array<string, mixed> $row Submission row.
+     * @param array{state: DeliveryState, label: string, endpoints: list<EndpointOutcome>}|null $status
+     *        Delivery status, or null when unknown.
      * @return string
      */
     private static function renderRowHtml(array $row, ?array $status): string
@@ -646,8 +651,8 @@ final class SubmissionsPage
         $pageUrl  = (string) ($row['page_url'] ?? '');
         $lead     = self::leadLabel(SubmissionFields::fromStoredJson((string) ($row['submission_data'] ?? '')));
 
-        $state      = (string) ($status['state'] ?? 'not_sent');
-        $stateLabel = (string) ($status['label'] ?? 'Not sent');
+        $state      = ($status['state'] ?? DeliveryState::NotSent)->value;
+        $stateLabel = $status['label'] ?? 'Not sent';
         $bodyId     = 'cvm-sub-body-' . $rowId;
 
         $leadStatus = LeadStatus::normalize($row['lead_status'] ?? null);
@@ -762,8 +767,9 @@ final class SubmissionsPage
     /**
      * Renders one submission's expanded detail panel.
      *
-     * @param array<string, mixed>      $row    Submission row (context already enriched).
-     * @param array<string, mixed>|null $status Delivery status.
+     * @param array<string, mixed> $row Submission row (context already enriched).
+     * @param array{state: DeliveryState, label: string, endpoints: list<EndpointOutcome>}|null $status
+     *        Delivery status.
      * @return string
      */
     private static function renderDetailHtml(array $row, ?array $status): string
@@ -872,13 +878,13 @@ final class SubmissionsPage
 
             <div class="cvm-detail-block">
                 <h4>Submitted fields</h4>
-                <?php if ($fields === []): ?>
+                <?php if ($fields->isEmpty()): ?>
                     <p class="cvm-empty-msg">This submission recorded no field values.</p>
                 <?php else: ?>
                     <div class="cvm-field-table-wrap">
                         <table class="cvm-field-table">
                             <tbody>
-                            <?php foreach (SubmissionFields::toDisplayPairs($fields) as $pair): ?>
+                            <?php foreach ($fields->toDisplayPairs() as $pair): ?>
                                 <tr>
                                     <th scope="row"><?php echo esc_html($pair['label']); ?></th>
                                     <td><?php echo esc_html($pair['value']); ?></td>
@@ -1046,18 +1052,19 @@ final class SubmissionsPage
      * Renders the per-endpoint delivery results, with deep links into the
      * Activity Log.
      *
-     * @param array<string, mixed>|null $status       Delivery status.
-     * @param string                    $submissionId The submission's id.
+     * @param array{state: DeliveryState, label: string, endpoints: list<EndpointOutcome>}|null $status
+     *        Delivery status.
+     * @param string $submissionId The submission's id.
      * @return string
      */
     private static function renderDeliveryBlock(?array $status, string $submissionId): string
     {
-        $state     = (string) ($status['state'] ?? 'not_sent');
-        $endpoints = is_array($status['endpoints'] ?? null) ? $status['endpoints'] : [];
+        $state     = $status['state'] ?? DeliveryState::NotSent;
+        $endpoints = $status['endpoints'] ?? [];
 
         ob_start();
 
-        if ($state === 'not_sent') {
+        if ($state === DeliveryState::NotSent) {
             ?>
             <p class="cvm-empty-msg">
                 <?php switch (self::webhookPosture()):
@@ -1082,10 +1089,10 @@ final class SubmissionsPage
         <ul class="cvm-delivery-list">
             <?php foreach ($endpoints as $endpoint): ?>
                 <?php
-                $label = (string) ($endpoint['label'] ?? '');
-                $url   = (string) ($endpoint['url'] ?? '');
-                $ok    = !empty($endpoint['ok']);
-                $queued = !empty($endpoint['queued']);
+                $label  = $endpoint->label;
+                $url    = $endpoint->url;
+                $ok     = $endpoint->ok;
+                $queued = $endpoint->queued;
                 ?>
                 <li class="cvm-delivery-row">
                     <span class="cvm-delivery-mark <?php echo esc_attr($queued ? 'queued' : ($ok ? 'ok' : 'fail')); ?>" aria-hidden="true">
@@ -1094,16 +1101,16 @@ final class SubmissionsPage
                     <span class="cvm-delivery-name"><?php echo esc_html($label !== '' ? $label : $url); ?></span>
                     <span class="cvm-delivery-result">
                         <?php if ($queued): ?>
-                            Queued<?php echo (int) ($endpoint['attempt'] ?? 0) > 0
-                                ? esc_html(sprintf(' · %d failed attempt(s)', (int) $endpoint['attempt']))
+                            Queued<?php echo $endpoint->attempt > 0
+                                ? esc_html(sprintf(' · %d failed attempt(s)', $endpoint->attempt))
                                 : ''; ?>
                         <?php elseif ($ok): ?>
-                            Delivered<?php echo (int) ($endpoint['code'] ?? 0) !== 0
-                                ? esc_html(sprintf(' (%d)', (int) $endpoint['code']))
+                            Delivered<?php echo $endpoint->code !== 0
+                                ? esc_html(sprintf(' (%d)', $endpoint->code))
                                 : ''; ?>
                         <?php else: ?>
-                            Failed<?php echo (int) ($endpoint['code'] ?? 0) !== 0
-                                ? esc_html(sprintf(' (%d)', (int) $endpoint['code']))
+                            Failed<?php echo $endpoint->code !== 0
+                                ? esc_html(sprintf(' (%d)', $endpoint->code))
                                 : ''; ?>
                         <?php endif; ?>
                     </span>
@@ -1179,6 +1186,15 @@ final class SubmissionsPage
         header('Expires: 0');
 
         $output = fopen('php://output', 'w');
+
+        // php://output does not fail in practice, but fopen() is declared as
+        // able to — and every write below would then be a TypeError inside a
+        // response that has already sent CSV headers, so the browser would save
+        // a file containing a fatal error. Stopping with an empty body is the
+        // honest outcome.
+        if ($output === false) {
+            exit;
+        }
 
         fwrite($output, "\xEF\xBB\xBF");
 
@@ -1339,7 +1355,7 @@ final class SubmissionsPage
             'lead_value'      => $row['lead_value'] === null ? '' : (string) $row['lead_value'],
             'lead_currency'   => (string) ($row['lead_currency'] ?? ''),
             'submission_data' => (string) wp_json_encode(
-                SubmissionFields::fromStoredJson((string) ($row['submission_data'] ?? '')),
+                SubmissionFields::fromStoredJson((string) ($row['submission_data'] ?? ''))->toArray(),
                 JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
             ),
         ];
@@ -1415,10 +1431,10 @@ final class SubmissionsPage
      * old label-keyed map, Elementor leads had nothing to match on at all and
      * routinely rendered as "(no contact details)".
      *
-     * @param list<array{id: string, label: string, value: string|list<string>}> $fields Normalized submission fields.
+     * @param SubmissionFieldList $fields Normalized submission fields.
      * @return string
      */
-    private static function leadLabel(array $fields): string
+    private static function leadLabel(SubmissionFieldList $fields): string
     {
         $email = '';
         $name  = '';
@@ -1427,13 +1443,13 @@ final class SubmissionsPage
         $phone = '';
 
         foreach ($fields as $field) {
-            $flat = SubmissionFields::flatten($field['value'] ?? '');
+            $flat = $field->displayValue();
             if ($flat === '') {
                 continue;
             }
 
-            $id    = strtolower((string) ($field['id'] ?? ''));
-            $label = strtolower((string) ($field['label'] ?? ''));
+            $id    = strtolower($field->id);
+            $label = strtolower($field->label);
 
             $matches = static function (string ...$needles) use ($id, $label): bool {
                 foreach ($needles as $needle) {

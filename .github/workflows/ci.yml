@@ -42,6 +42,39 @@ jobs:
       - name: Unit suite
         run: composer test
 
+  analyse:
+    name: Static analysis (PHPStan level 8)
+    runs-on: ubuntu-latest
+
+    # Its own job rather than a step in the matrix: the analysis is a property
+    # of the code, not of the runtime, so running it on three PHP versions
+    # would report the same errors three times. It runs on the 8.3 floor
+    # because that is the version composer.json's platform config pins.
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up PHP 8.3
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          coverage: none
+          tools: composer:v2
+
+      - name: Install dependencies
+        run: composer install --no-interaction --no-progress
+
+      # No baseline exists, and none should be added: a baseline would hide
+      # exactly the class of defect this job is here to catch.
+      - name: Assert no PHPStan baseline was introduced
+        run: |
+          if [ -f phpstan-baseline.neon ]; then
+            echo "::error::A PHPStan baseline was added. Fix the errors instead."
+            exit 1
+          fi
+
+      - name: PHPStan
+        run: composer analyse
+
   integration:
     name: Integration (real MySQL)
     runs-on: ubuntu-latest

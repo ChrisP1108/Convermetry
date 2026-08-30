@@ -1,0 +1,39 @@
+# Static analysis for the plugin's production code.
+#
+#     composer analyse           # the whole of src/ plus both root entry points
+#     composer analyse -- --debug
+#
+# Level 8 is the working level: every type is checked, including nullability,
+# and `mixed` may not be used as though it were something narrower. The
+# codebase reaches it without a baseline — there is deliberately no
+# phpstan-baseline.neon, because a baseline would hide exactly the class of
+# defect this configuration exists to surface.
+#
+# tests/ is not analysed. Several suites are written against methods that do
+# not exist on main yet and skip themselves at runtime (see
+# EndpointStateMigrationTest, DateRangeTest); to PHPStan those are hard errors
+# about calls to undefined methods, and silencing them would mean silencing
+# the pending work they document.
+includes:
+    - vendor/szepeviktor/phpstan-wordpress/extension.neon
+
+parameters:
+    level: 8
+
+    paths:
+        - src
+        - convermetry.php
+        - uninstall.php
+
+    bootstrapFiles:
+        - phpstan/constants.php
+
+    # Third-party form plugins Convermetry integrates with but does not depend
+    # on. Each provider feature-detects and registers nothing when its plugin is
+    # absent, so there is no package to require — see the stub file's header.
+    scanFiles:
+        - phpstan/stubs/form-plugins.php
+
+    # `global $wpdb;` is annotated at each use site rather than being declared
+    # here, so the type is visible to IDEs as well as to PHPStan.
+    treatPhpDocTypesAsCertain: false

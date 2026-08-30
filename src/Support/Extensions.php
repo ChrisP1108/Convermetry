@@ -71,7 +71,9 @@ final class Extensions
      *
      * @param array<string, mixed> $target   The array to attach to.
      * @param string               $property Property name to attach under (e.g. 'extensions').
-     * @param string               $filter   Filter hook name.
+     * @param non-empty-string     $filter   Filter hook name. Every call site passes a literal;
+     *                                       apply_filters() requires a non-empty name, and an
+     *                                       empty one would silently register nothing.
      * @param int                  $maxBytes Encoded-size cap for this surface.
      * @param int                  $maxKeys  Top-level key cap for this surface.
      * @param mixed                ...$args  Extra arguments passed to the filter after the seed.
@@ -195,11 +197,9 @@ final class Extensions
             return false;
         }
 
-        foreach ($value as $key => $item) {
-            if (!is_string($key) && !is_int($key)) {
-                return false;
-            }
-
+        // No key-type check: PHP array keys are int|string by construction, so
+        // there is no third case to reject. The value is what needs checking.
+        foreach ($value as $item) {
             if (!self::isJsonSafe($item, $depth + 1)) {
                 return false;
             }

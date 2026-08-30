@@ -6,7 +6,7 @@ namespace Convermetry\Admin;
 if (!defined('ABSPATH')) exit;
 
 use Convermetry\Settings\Options;
-use Convermetry\Webhook\WebsiteInfoBuilder;
+use Convermetry\Webhook\WebsiteInfo;
 
 /**
  * The "Convermetry → Settings" submenu page.
@@ -184,7 +184,7 @@ final class SettingsPage
 
         echo '<tr><th scope="row">Site name / URL / domain</th><td>';
         echo '<code>' . esc_html(get_bloginfo('name')) . '</code> &middot; <code>' . esc_html(home_url()) . '</code>'
-            . ' &middot; <code>' . esc_html(WebsiteInfoBuilder::domain()) . '</code>';
+            . ' &middot; <code>' . esc_html(WebsiteInfo::domain()) . '</code>';
         echo '<p class="description">Derived automatically — <code>domain</code> is the home URL host with any leading '
             . '<code>www.</code> removed.</p>';
         echo '</td></tr>';

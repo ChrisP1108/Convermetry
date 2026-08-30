@@ -51,11 +51,11 @@ final class Correlation
     private const int MAX_CONTEXT_BYTES = 4096;
 
     /**
-     * @param string                $conversionId    Validated conversion id (always non-empty).
-     * @param string                $sessionId       Validated session id, or ''.
-     * @param bool                  $fromTracker     Whether the browser actually supplied correlation fields.
-     * @param array<string, string> $attribution     utm_source/medium/campaign/id/term/content + click_id_type.
-     * @param string                $sessionReferrer The session's entrance referrer, or ''.
+     * @param string      $conversionId    Validated conversion id (always non-empty).
+     * @param string      $sessionId       Validated session id, or ''.
+     * @param bool        $fromTracker     Whether the browser actually supplied correlation fields.
+     * @param Attribution $attribution     The visit's campaign attribution.
+     * @param string      $sessionReferrer The session's entrance referrer, or ''.
      * @param bool                  $sessionDirect   Explicit "verified Direct" marker from the tracker.
      * @param string                $landingPage     The session's landing page URL, or ''.
      * @param string                $pageUrl         The submitting page URL (same-host validated), or ''.
@@ -64,7 +64,7 @@ final class Correlation
         public readonly string $conversionId,
         public readonly string $sessionId,
         public readonly bool $fromTracker,
-        public readonly array $attribution,
+        public readonly Attribution $attribution,
         public readonly string $sessionReferrer,
         public readonly bool $sessionDirect,
         public readonly string $landingPage,
@@ -148,7 +148,7 @@ final class Correlation
      */
     public function toAnalyticsContext(string $device): array
     {
-        $channelRow = array_merge($this->attribution, [
+        $channelRow = array_merge($this->attribution->toArray(), [
             'referrer'         => $this->sessionReferrer,
             'session_referrer' => $this->sessionReferrer,
             'session_direct'   => $this->sessionDirect ? '1' : '',
@@ -157,15 +157,7 @@ final class Correlation
         return [
             'session_id'        => $this->sessionId,
             'channel'           => $this->fromTracker ? Channels::classify($channelRow, 'form_success') : '',
-            'attribution'       => [
-                'utm_source'    => $this->attribution['utm_source'],
-                'utm_medium'    => $this->attribution['utm_medium'],
-                'utm_campaign'  => $this->attribution['utm_campaign'],
-                'utm_id'        => $this->attribution['utm_id'],
-                'utm_term'      => $this->attribution['utm_term'],
-                'utm_content'   => $this->attribution['utm_content'],
-                'click_id_type' => $this->attribution['click_id_type'],
-            ],
+            'attribution'       => $this->attribution->toArray(),
             'entrance_referrer' => $this->sessionReferrer,
             'landing_page'      => ['url' => $this->landingPage],
             'device'            => $device,
@@ -214,16 +206,12 @@ final class Correlation
      * and the page URL must belong to this site's host.
      *
      * @param mixed $raw Raw field value.
-     * @return array{attribution: array<string, string>, session_referrer: string, session_direct: bool, landing_page: string, page_url: string}
+     * @return array{attribution: Attribution, session_referrer: string, session_direct: bool, landing_page: string, page_url: string}
      */
     private static function parseContext(mixed $raw): array
     {
         $empty = [
-            'attribution'      => [
-                'utm_source' => '', 'utm_medium' => '', 'utm_campaign' => '',
-                'utm_id' => '', 'utm_term' => '', 'utm_content' => '',
-                'click_id_type' => '',
-            ],
+            'attribution'      => new Attribution(),
             'session_referrer' => '',
             'session_direct'   => false,
             'landing_page'     => '',
@@ -241,6 +229,10 @@ final class Correlation
 
         $out = $empty;
 
+        // Collected into a map first, then narrowed into the value object in
+        // one step — the seven fields share one validation rule and differ only
+        // in their storage width.
+        $utm = [];
         foreach (['utm_source', 'utm_medium', 'utm_campaign', 'utm_id', 'utm_term', 'utm_content'] as $param) {
             $value = $decoded[$param] ?? '';
             if (!is_scalar($value)) {
@@ -253,16 +245,22 @@ final class Correlation
                 continue;
             }
             $max = in_array($param, ['utm_source', 'utm_medium', 'utm_id'], true) ? 100 : 191;
-            $out['attribution'][$param] = mb_substr($value, 0, $max);
+            $utm[$param] = mb_substr($value, 0, $max);
         }
-
-        $out['attribution']['utm_source'] = Channels::normalizeSource($out['attribution']['utm_source']);
-        $out['attribution']['utm_medium'] = strtolower($out['attribution']['utm_medium']);
 
         $clickId = $decoded['click_id_type'] ?? '';
-        if (is_string($clickId) && in_array(sanitize_key($clickId), Channels::CLICK_ID_TYPES, true)) {
-            $out['attribution']['click_id_type'] = sanitize_key($clickId);
-        }
+
+        $out['attribution'] = new Attribution(
+            utmSource: Channels::normalizeSource($utm['utm_source'] ?? ''),
+            utmMedium: strtolower($utm['utm_medium'] ?? ''),
+            utmCampaign: $utm['utm_campaign'] ?? '',
+            utmId: $utm['utm_id'] ?? '',
+            utmTerm: $utm['utm_term'] ?? '',
+            utmContent: $utm['utm_content'] ?? '',
+            clickIdType: is_string($clickId) && in_array(sanitize_key($clickId), Channels::CLICK_ID_TYPES, true)
+                ? sanitize_key($clickId)
+                : '',
+        );
 
         $out['session_referrer'] = self::normalizeUrl($decoded['session_referrer'] ?? '', false);
         $out['session_direct']   = !empty($decoded['session_direct']);

@@ -5,9 +5,6 @@ namespace Convermetry\Webhook;
 
 if (!defined('ABSPATH')) exit;
 
-use Convermetry\Settings\Options;
-use Convermetry\Support\Url;
-
 /**
  * The lifecycle vocabulary shared by every webhook delivery path.
  *
@@ -15,9 +12,15 @@ use Convermetry\Support\Url;
  * retries, the analytics test button, the background form queue, synchronous
  * form delivery, and the form test button — and each used to describe itself
  * only through the Activity Log row it happened to write. Integrations need the
- * same events from all six, in the same shape, so both the context array and the
- * firing helpers live here rather than being reassembled slightly differently at
- * each site.
+ * same events from all six, in the same shape, so the firing helpers live here
+ * rather than being reassembled slightly differently at each site.
+ *
+ * The facts themselves live in {@see DeliveryDetails}, a typed value object the
+ * delivery paths pass around. This class is purely the announcer: every method
+ * below serializes those details with {@see DeliveryDetails::toArray()} at the
+ * do_action() call and nowhere else, so listeners keep receiving the identical
+ * fifteen-key array they always have while the plugin's own code stops indexing
+ * it by string.
  *
  * **What the context never contains.** No signing secret, no Authorization
  * header, no credential-bearing endpoint URL, no request body, no submitted
@@ -60,76 +63,27 @@ use Convermetry\Support\Url;
  */
 final class DeliveryContext
 {
-    /** Message type for scheduled/retried/tested analytics reports. */
-    public const string ANALYTICS = 'analytics_report';
+    /**
+     * Message type for scheduled/retried/tested analytics reports.
+     *
+     * Kept as a constant because call sites and integrations already use it;
+     * defined from {@see MessageType} so the constant and the enum cannot
+     * drift apart.
+     */
+    public const string ANALYTICS = MessageType::AnalyticsReport->value;
 
     /** Message type for form-submission deliveries. */
-    public const string FORM = 'form_submission';
-
-    /**
-     * Builds the canonical context array for one delivery.
-     *
-     * Every documented key is always present, in a fixed order, so a listener
-     * can index the array without defensive checks. Values the calling path
-     * cannot know are zero-valued rather than absent.
-     *
-     * @param string               $endpointUrl Configured endpoint URL (never exposed; used for key/label/origin).
-     * @param array<string, mixed> $parts       Whatever the calling path knows.
-     * @return array<string, mixed>
-     */
-    public static function build(string $endpointUrl, array $parts = []): array
-    {
-        $kind = (string) ($parts['kind'] ?? '');
-
-        return [
-            'message_type'        => (string) ($parts['message_type'] ?? ''),
-            'kind'                => $kind,
-            'attempt'             => (int) ($parts['attempt'] ?? 0),
-            'delivery_id'         => (string) ($parts['delivery_id'] ?? ''),
-            'is_test'             => array_key_exists('is_test', $parts) ? (bool) $parts['is_test'] : $kind === 'test',
-            'endpoint_key'        => $endpointUrl !== '' ? md5($endpointUrl) : '',
-            'endpoint_label'      => array_key_exists('endpoint_label', $parts)
-                ? (string) $parts['endpoint_label']
-                : Options::endpointLabel($endpointUrl),
-            'endpoint_origin'     => Url::origin($endpointUrl),
-            'submission_id'       => (string) ($parts['submission_id'] ?? ''),
-            'conversion_id'       => (string) ($parts['conversion_id'] ?? ''),
-            'form_key'            => (string) ($parts['form_key'] ?? ''),
-            'window_start'        => (int) ($parts['window_start'] ?? 0),
-            'window_end'          => (int) ($parts['window_end'] ?? 0),
-            'transport_attempted' => (bool) ($parts['transport_attempted'] ?? false),
-            'disposition'         => (string) ($parts['disposition'] ?? ''),
-        ];
-    }
-
-    /**
-     * Returns a copy of $context with $parts overridden — for the per-attempt
-     * fields a composition-time context cannot know.
-     *
-     * @param array<string, mixed> $context Context from {@see build()}.
-     * @param array<string, mixed> $parts   Fields to override.
-     * @return array<string, mixed>
-     */
-    public static function with(array $context, array $parts): array
-    {
-        foreach ($parts as $key => $value) {
-            if (array_key_exists($key, $context)) {
-                $context[$key] = $value;
-            }
-        }
-
-        return $context;
-    }
+    public const string FORM = MessageType::FormSubmission->value;
 
     /**
      * Announces that a delivery's body, URL, and headers are now fixed.
      *
-     * @param array<string, mixed> $context Delivery context.
-     * @param string               $storage 'memory' (analytics) or 'queue_row' (form queue).
-     * @param int                  $bodyBytes Frozen body length in bytes.
+     * @param DeliveryDetails $context   Delivery details.
+     * @param string          $storage   'memory' (analytics) or 'queue_row' (form queue).
+     * @param int             $bodyBytes Frozen body length in bytes.
      * @return void
      */
-    public static function frozen(array $context, string $storage, int $bodyBytes): void
+    public static function frozen(DeliveryDetails $context, string $storage, int $bodyBytes): void
     {
         /**
          * Fires once per newly frozen logical delivery, when its body, URL, and
@@ -155,7 +109,7 @@ final class DeliveryContext
          * @param string               $storage   'memory' or 'queue_row'.
          * @param int                  $bodyBytes Frozen body length in bytes.
          */
-        do_action('convermetry_webhook_delivery_frozen', $context, $storage, $bodyBytes);
+        do_action('convermetry_webhook_delivery_frozen', $context->toArray(), $storage, $bodyBytes);
     }
 
     /**
@@ -165,13 +119,13 @@ final class DeliveryContext
      * here — a listener receives sizes, a digest, and header *names*, never the
      * URL, the header values, or the body.
      *
-     * @param array<string, mixed>  $context    Delivery context.
+     * @param DeliveryDetails       $context    Delivery details.
      * @param string                $requestUrl Full request URL (not exposed).
      * @param array<string, string> $headers    Full request headers (only names are exposed).
      * @param string                $body       Exact body bytes (only length/digest are exposed).
      * @return void
      */
-    public static function beforeSend(array $context, string $requestUrl, array $headers, string $body): void
+    public static function beforeSend(DeliveryDetails $context, string $requestUrl, array $headers, string $body): void
     {
         $meta = [
             'body_bytes'   => strlen($body),
@@ -205,20 +159,23 @@ final class DeliveryContext
          * @param array<string, mixed> $context Credential-free delivery context.
          * @param array{body_bytes: int, body_sha256: string, header_names: list<string>, signed: bool} $meta
          */
-        do_action('convermetry_webhook_before_send', $context, $meta);
+        do_action('convermetry_webhook_before_send', $context->toArray(), $meta);
     }
 
     /**
      * Announces the transport result of one attempt.
      *
-     * @param array<string, mixed>                                     $context            Delivery context.
-     * @param array{ok: bool, code: int, message: string, body: string} $result            Transport result.
-     * @param bool                                                     $transportAttempted Whether a request was made.
-     * @return array<string, mixed> The context with transport_attempted applied.
+     * @param DeliveryDetails $context            Delivery details.
+     * @param TransportResult $result             Transport result.
+     * @param bool            $transportAttempted Whether a request was made.
+     * @return DeliveryDetails The details with transport_attempted applied.
      */
-    public static function attempted(array $context, array $result, bool $transportAttempted): array
-    {
-        $context = self::with($context, ['transport_attempted' => $transportAttempted]);
+    public static function attempted(
+        DeliveryDetails $context,
+        TransportResult $result,
+        bool $transportAttempted
+    ): DeliveryDetails {
+        $context = $context->withTransportAttempted($transportAttempted);
 
         /**
          * Fires once per delivery attempt, after the transport has returned (or
@@ -247,10 +204,10 @@ final class DeliveryContext
          */
         do_action(
             'convermetry_webhook_delivery_attempted',
-            $context,
-            (bool) ($result['ok'] ?? false),
-            (int) ($result['code'] ?? 0),
-            (string) ($result['message'] ?? '')
+            $context->toArray(),
+            $result->ok,
+            $result->code,
+            $result->message
         );
 
         return $context;
@@ -259,11 +216,11 @@ final class DeliveryContext
     /**
      * Announces the outcome of writing one Activity Log row.
      *
-     * @param array<string, mixed> $context     Delivery context.
-     * @param string               $disposition 'stored', 'suppressed', or 'failed'.
+     * @param DeliveryDetails $context     Delivery details.
+     * @param LogOutcome      $disposition What became of the log row.
      * @return void
      */
-    public static function attemptLogged(array $context, string $disposition): void
+    public static function attemptLogged(DeliveryDetails $context, LogOutcome $disposition): void
     {
         /**
          * Fires immediately after Convermetry writes (or declines to write) one
@@ -283,16 +240,16 @@ final class DeliveryContext
          * @param array<string, mixed> $context     Credential-free delivery context.
          * @param string               $disposition 'stored', 'suppressed', or 'failed'.
          */
-        do_action('convermetry_delivery_attempt_logged', $context, $disposition);
+        do_action('convermetry_delivery_attempt_logged', $context->toArray(), $disposition->value);
     }
 
     /**
      * Announces a delivery that succeeded and whose bookkeeping has committed.
      *
-     * @param array<string, mixed> $context Delivery context.
+     * @param DeliveryDetails $context Delivery details.
      * @return void
      */
-    public static function succeeded(array $context): void
+    public static function succeeded(DeliveryDetails $context): void
     {
         /**
          * Fires after an endpoint accepted a delivery AND Convermetry finished
@@ -311,18 +268,18 @@ final class DeliveryContext
          *
          * @param array<string, mixed> $context Credential-free delivery context.
          */
-        do_action('convermetry_webhook_delivery_succeeded', $context);
+        do_action('convermetry_webhook_delivery_succeeded', $context->toArray());
     }
 
     /**
      * Announces a retry whose next attempt has been persisted.
      *
-     * @param array<string, mixed> $context       Delivery context.
-     * @param int                  $nextAttempt   Attempt number that will run next.
-     * @param int                  $nextAttemptAt Unix timestamp of the next attempt.
+     * @param DeliveryDetails $context       Delivery details.
+     * @param int             $nextAttempt   Attempt number that will run next.
+     * @param int             $nextAttemptAt Unix timestamp of the next attempt.
      * @return void
      */
-    public static function retryScheduled(array $context, int $nextAttempt, int $nextAttemptAt): void
+    public static function retryScheduled(DeliveryDetails $context, int $nextAttempt, int $nextAttemptAt): void
     {
         /**
          * Fires after a failed delivery's next attempt has been persisted —
@@ -338,16 +295,16 @@ final class DeliveryContext
          * @param int                  $nextAttempt   Attempt number that will run next.
          * @param int                  $nextAttemptAt Unix timestamp of the next attempt.
          */
-        do_action('convermetry_webhook_retry_scheduled', $context, $nextAttempt, $nextAttemptAt);
+        do_action('convermetry_webhook_retry_scheduled', $context->toArray(), $nextAttempt, $nextAttemptAt);
     }
 
     /**
      * Announces an analytics retry chain that has given up but is resumable.
      *
-     * @param array<string, mixed> $context Delivery context.
+     * @param DeliveryDetails $context Delivery details.
      * @return void
      */
-    public static function retryChainExhausted(array $context): void
+    public static function retryChainExhausted(DeliveryDetails $context): void
     {
         /**
          * Fires after an ANALYTICS delivery's retry chain has been exhausted and
@@ -366,17 +323,17 @@ final class DeliveryContext
          *
          * @param array<string, mixed> $context Credential-free delivery context.
          */
-        do_action('convermetry_webhook_retry_chain_exhausted', $context);
+        do_action('convermetry_webhook_retry_chain_exhausted', $context->toArray());
     }
 
     /**
      * Announces a form delivery that will never be attempted again.
      *
-     * @param array<string, mixed> $context Delivery context.
-     * @param string               $reason  Stable reason code.
+     * @param DeliveryDetails $context Delivery details.
+     * @param string          $reason  Stable reason code.
      * @return void
      */
-    public static function abandoned(array $context, string $reason): void
+    public static function abandoned(DeliveryDetails $context, string $reason): void
     {
         /**
          * Fires after a queued FORM delivery has been given up on permanently
@@ -391,17 +348,17 @@ final class DeliveryContext
          * @param array<string, mixed> $context Credential-free delivery context.
          * @param string               $reason  Stable reason code, currently 'retries_exhausted'.
          */
-        do_action('convermetry_webhook_delivery_abandoned', $context, $reason);
+        do_action('convermetry_webhook_delivery_abandoned', $context->toArray(), $reason);
     }
 
     /**
      * Announces a queued delivery removed before it could be sent.
      *
-     * @param array<string, mixed> $context Delivery context.
-     * @param string               $reason  Stable reason code.
+     * @param DeliveryDetails $context Delivery details.
+     * @param string          $reason  Stable reason code.
      * @return void
      */
-    public static function canceled(array $context, string $reason): void
+    public static function canceled(DeliveryDetails $context, string $reason): void
     {
         /**
          * Fires after a queued delivery was removed without ever being sent —
@@ -415,6 +372,6 @@ final class DeliveryContext
          * @param array<string, mixed> $context Credential-free delivery context.
          * @param string               $reason  Stable reason code, currently 'submission_deleted'.
          */
-        do_action('convermetry_webhook_delivery_canceled', $context, $reason);
+        do_action('convermetry_webhook_delivery_canceled', $context->toArray(), $reason);
     }
 }

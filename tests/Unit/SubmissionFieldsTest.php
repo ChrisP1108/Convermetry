@@ -249,14 +249,17 @@ final class SubmissionFieldsTest extends TestCase
         self::assertSame([
             ['id' => 'Email', 'label' => 'Email', 'value' => 'a@b.com'],
             ['id' => 'Phone', 'label' => 'Phone', 'value' => '555'],
-        ], $out);
+        ], $out->toArray());
+        self::assertCount(2, $out);
+        self::assertSame('a@b.com', $out->byId('Email')?->displayValue());
     }
 
     public function testFromStoredJsonReadsADescriptorList(): void
     {
         $out = SubmissionFields::fromStoredJson('[{"id":"email","label":"Email address","value":"a@b.com"}]');
 
-        self::assertSame([['id' => 'email', 'label' => 'Email address', 'value' => 'a@b.com']], $out);
+        self::assertSame([['id' => 'email', 'label' => 'Email address', 'value' => 'a@b.com']], $out->toArray());
+        self::assertSame('Email address', $out->all()[0]->label);
     }
 
     /**
@@ -264,7 +267,10 @@ final class SubmissionFieldsTest extends TestCase
      */
     public function testFromStoredJsonToleratesUnusableColumns(string $json): void
     {
-        self::assertSame([], SubmissionFields::fromStoredJson($json));
+        $out = SubmissionFields::fromStoredJson($json);
+
+        self::assertTrue($out->isEmpty());
+        self::assertSame([], $out->toArray());
     }
 
     /**
@@ -309,10 +315,10 @@ final class SubmissionFieldsTest extends TestCase
 
     public function testToDisplayPairsKeepsDuplicateLabelsAsSeparateRows(): void
     {
-        $pairs = SubmissionFields::toDisplayPairs([
+        $pairs = SubmissionFields::parse([
             ['id' => '1', 'label' => 'Name', 'value' => 'Ada'],
             ['id' => '2', 'label' => 'Name', 'value' => 'Grace'],
-        ]);
+        ])->toDisplayPairs();
 
         self::assertSame([
             ['label' => 'Name', 'value' => 'Ada'],
@@ -322,9 +328,9 @@ final class SubmissionFieldsTest extends TestCase
 
     public function testToDisplayPairsFlattensListValues(): void
     {
-        $pairs = SubmissionFields::toDisplayPairs([
+        $pairs = SubmissionFields::parse([
             ['id' => 'i', 'label' => 'Interests', 'value' => ['Tax planning', 'Retirement']],
-        ]);
+        ])->toDisplayPairs();
 
         self::assertSame('Tax planning, Retirement', $pairs[0]['value']);
     }

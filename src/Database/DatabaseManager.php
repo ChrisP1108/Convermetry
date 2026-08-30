@@ -698,9 +698,15 @@ final class DatabaseManager
             // not a stored column, so it never reaches the INSERT. Likewise
             // session_direct, the companion marker for a session that
             // entered with no referrer at all.
+            // '1'/'' rather than a bool: Channels::classify() documents its
+            // $row — and the convermetry_channel filter's — as
+            // array<string, string>, and Correlation builds the same row that
+            // way. Passing a bool from this one caller made the two disagree
+            // about a value a third-party callback is handed. Both are falsy
+            // when unset, so classification is unchanged.
             $context = $row;
             $context['session_referrer'] = self::truncate(esc_url_raw((string) ($data['session_referrer'] ?? '')), 255);
-            $context['session_direct']   = !empty($data['session_direct']);
+            $context['session_direct']   = empty($data['session_direct']) ? '' : '1';
 
             $row['channel'] = self::truncate(Channels::classify($context, $type), 24);
         }
@@ -968,6 +974,11 @@ final class DatabaseManager
      *
      * @param string $value Lock value ("token|timestamp|counter").
      * @return bool True when this call created the row.
+     *
+     * @phpstan-impure Each call attempts a real INSERT IGNORE, and its result
+     *                 depends on whether the row exists AT THAT MOMENT — the
+     *                 caller retries this after deleting a stale lock row, so
+     *                 two calls with identical arguments legitimately differ.
      */
     private static function insertCleanupLockRow(string $value): bool
     {

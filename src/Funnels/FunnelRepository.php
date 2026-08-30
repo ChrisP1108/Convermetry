@@ -23,7 +23,11 @@ use Convermetry\Settings\Options;
  */
 final class FunnelRepository
 {
-    /** Memoized decode of the stored option, per request. */
+    /**
+     * Memoized decode of the stored option, per request.
+     *
+     * @var array<int, array<string, mixed>>|null
+     */
     private static ?array $cache = null;
 
     /**

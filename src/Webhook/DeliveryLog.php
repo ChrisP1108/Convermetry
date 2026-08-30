@@ -57,11 +57,31 @@ final class DeliveryLog
     /** Maximum stored bytes for the request payload and response body. */
     public const int MAX_BODY_BYTES = 65536;
 
-    /** Valid message_type values. */
-    public const array MESSAGE_TYPES = ['analytics_report', 'form_submission'];
+    /**
+     * Valid message_type values.
+     *
+     * Kept as a constant — the Activity Log page, the REST controller, and
+     * this class's own filter builder all read it — but derived from
+     * {@see MessageType} so the validation list and the enum cannot disagree.
+     *
+     * @var list<string>
+     */
+    public const array MESSAGE_TYPES = [
+        MessageType::AnalyticsReport->value,
+        MessageType::FormSubmission->value,
+    ];
 
-    /** Valid kind values. */
-    public const array KINDS = ['scheduled', 'immediate', 'retry', 'test'];
+    /**
+     * Valid kind values.
+     *
+     * @var list<string>
+     */
+    public const array KINDS = [
+        DeliveryKind::Scheduled->value,
+        DeliveryKind::Immediate->value,
+        DeliveryKind::Retry->value,
+        DeliveryKind::Test->value,
+    ];
 
     /** Rows deleted per statement during retention cleanup. */
     private const int CLEANUP_CHUNK = 5000;
@@ -188,70 +208,52 @@ final class DeliveryLog
      *
      * Transport errors (no HTTP response at all) are stored as a JSON object
      * {"error": "..."} in response_data, so the UI and API can distinguish
-     * "endpoint said no" from "endpoint unreachable".
+     * "endpoint said no" from "endpoint unreachable" — see
+     * {@see DeliveryLogEntry::responseData()}.
      *
-     * Expected $entry keys (missing keys default sensibly):
-     *  - endpoint_url, endpoint_label, delivery_id, message_type, kind,
-     *    attempt, submission_id, conversion_id, form_provider, form_name,
-     *    request_url, request_headers (array), request_data (string JSON),
-     *    ok (bool), response_code (int), response_data (string),
-     *    message (string, used for transport errors).
+     * This method owns everything about STORAGE: header and body redaction,
+     * the 64 KB cap, the column widths, the optional stripping of the
+     * visitor's field values, and the 'convermetry_delivery_log_row' veto.
+     * {@see DeliveryLogEntry} owns only what happened.
      *
-     * @param array<string, mixed> $entry Delivery attempt details.
-     * @return string What became of the row: 'stored', 'suppressed' (a
-     *                convermetry_delivery_log_row callback returned false), or
-     *                'failed' (the INSERT itself failed). Callers that only log
-     *                may ignore it; convermetry_delivery_attempt_logged reports it.
+     * @param DeliveryLogEntry $entry The attempt to record.
+     * @return LogOutcome What became of the row: Stored, Suppressed (a
+     *                    convermetry_delivery_log_row callback returned false),
+     *                    or Failed (the INSERT itself failed). Callers that
+     *                    only log may ignore it;
+     *                    convermetry_delivery_attempt_logged reports it.
      */
-    public static function log(array $entry): string
+    public static function log(DeliveryLogEntry $entry): LogOutcome
     {
         global $wpdb;
 
-        $ok           = !empty($entry['ok']);
-        $code         = (int) ($entry['response_code'] ?? 0);
-        $responseBody = (string) ($entry['response_data'] ?? '');
-        $message      = (string) ($entry['message'] ?? '');
-        $messageType  = (string) ($entry['message_type'] ?? '');
-        $kind         = (string) ($entry['kind'] ?? 'scheduled');
-
-        if ($code === 0 && $responseBody === '') {
-            $responseBody = (string) wp_json_encode(['error' => $message]);
-        }
-
-        if (!in_array($messageType, self::MESSAGE_TYPES, true)) {
-            $messageType = '';
-        }
-        if (!in_array($kind, self::KINDS, true)) {
-            $kind = 'scheduled';
-        }
-
-        $requestData = (string) ($entry['request_data'] ?? '');
+        $requestData = $entry->requestData;
 
         // Optionally strip the visitor's field values from the stored copy
         // of a form-submission payload — delivery metadata remains, the
         // second copy of the lead data does not. The payload actually SENT
         // is unaffected.
-        if ($messageType === 'form_submission' && !Options::logSubmissionData()) {
+        if ($entry->messageType === MessageType::FormSubmission && !Options::logSubmissionData()) {
             $requestData = self::stripSubmissionData($requestData);
         }
 
         $row = [
-            'success'         => $ok ? 1 : 0,
-            'endpoint_url'    => (string) ($entry['endpoint_url'] ?? ''),
-            'endpoint_label'  => mb_substr((string) ($entry['endpoint_label'] ?? ''), 0, 100),
-            'delivery_id'     => (string) ($entry['delivery_id'] ?? ''),
-            'message_type'    => $messageType,
-            'kind'            => $kind,
-            'attempt'         => max(0, min(255, (int) ($entry['attempt'] ?? 0))),
-            'submission_id'   => (string) ($entry['submission_id'] ?? ''),
-            'conversion_id'   => (string) ($entry['conversion_id'] ?? ''),
-            'form_provider'   => mb_substr((string) ($entry['form_provider'] ?? ''), 0, 32),
-            'form_name'       => mb_substr((string) ($entry['form_name'] ?? ''), 0, 191),
-            'request_url'     => (string) ($entry['request_url'] ?? ($entry['endpoint_url'] ?? '')),
-            'request_headers' => (string) wp_json_encode(self::redactHeaders((array) ($entry['request_headers'] ?? []))),
+            'success'         => $entry->result->ok ? 1 : 0,
+            'endpoint_url'    => $entry->endpointUrl,
+            'endpoint_label'  => mb_substr($entry->endpointLabel, 0, 100),
+            'delivery_id'     => $entry->deliveryId,
+            'message_type'    => $entry->messageType->value,
+            'kind'            => $entry->kind->value,
+            'attempt'         => max(0, min(255, $entry->attempt)),
+            'submission_id'   => $entry->submissionId,
+            'conversion_id'   => $entry->conversionId,
+            'form_provider'   => mb_substr($entry->formProvider, 0, 32),
+            'form_name'       => mb_substr($entry->formName, 0, 191),
+            'request_url'     => $entry->requestUrl !== '' ? $entry->requestUrl : $entry->endpointUrl,
+            'request_headers' => (string) wp_json_encode(self::redactHeaders($entry->requestHeaders)),
             'request_data'    => self::capBody(self::redactSensitiveJson($requestData)),
-            'response_code'   => $code,
-            'response_data'   => self::capBody(self::redactSensitiveJson($responseBody)),
+            'response_code'   => $entry->result->code,
+            'response_data'   => self::capBody(self::redactSensitiveJson($entry->responseData())),
             'created_at'      => gmdate('Y-m-d H:i:s'),
         ];
 
@@ -265,7 +267,7 @@ final class DeliveryLog
          */
         $row = apply_filters('convermetry_delivery_log_row', $row);
         if (!is_array($row)) {
-            return 'suppressed';
+            return LogOutcome::Suppressed;
         }
 
         $inserted = $wpdb->insert(
@@ -274,7 +276,7 @@ final class DeliveryLog
             ['%d', '%s', '%s', '%s', '%s', '%s', '%d', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%d', '%s', '%s']
         );
 
-        return $inserted === false ? 'failed' : 'stored';
+        return $inserted === false ? LogOutcome::Failed : LogOutcome::Stored;
     }
 
     /**
@@ -618,9 +620,15 @@ final class DeliveryLog
      * Deletes rows older than the plugin's retention window. Runs on the same
      * daily cron as the events-table cleanup, in bounded chunks.
      *
+     * The deleted row count is NOT returned. It reaches listeners through
+     * 'convermetry_retention_cleanup_completed', which is the one place it is
+     * published, and this runs as a do_action() callback whose return value
+     * WordPress discards — so a return here would only invite a reader to
+     * think it went somewhere.
+     *
      * @return void
      */
-    public static function purgeOld(): int
+    public static function purgeOld(): void
     {
         global $wpdb;
 
@@ -651,11 +659,9 @@ final class DeliveryLog
         $outcome = Retention::outcome($deleted, self::CLEANUP_CHUNK, $total);
         Retention::completed('delivery_log', $cutoff, $outcome);
 
-        if ($outcome['outcome'] === Retention::QUERY_FAILED) {
+        if ($outcome->queryFailed()) {
             Errors::storage('delivery_log', 'retention_delete', 'delete_failed', ['cutoff' => $cutoff]);
         }
-
-        return $total;
     }
 
     /**

@@ -8,6 +8,7 @@ use Brain\Monkey;
 use Brain\Monkey\Functions;
 use Convermetry\Analytics\SubmissionContext;
 use Convermetry\Notifications\EmailBuilder;
+use Convermetry\Notifications\SiteInfo;
 use Convermetry\Notifications\NotificationSettings;
 use PHPUnit\Framework\TestCase;
 
@@ -49,14 +50,13 @@ final class NotificationEmailBuilderTest extends TestCase
         parent::tearDown();
     }
 
-    /** @return array<string, string> */
-    private function siteInfo(): array
+    private function siteInfo(): SiteInfo
     {
-        return [
-            'site_name' => 'Example Co',
-            'home_url'  => 'https://example.com/',
-            'admin_url' => 'https://example.com/wp-admin/admin.php',
-        ];
+        return new SiteInfo(
+            siteName: 'Example Co',
+            homeUrl: 'https://example.com/',
+            adminUrl: 'https://example.com/wp-admin/admin.php',
+        );
     }
 
     /**

@@ -5,6 +5,8 @@ namespace Convermetry\Forms;
 
 if (!defined('ABSPATH')) exit;
 
+use Convermetry\Support\KeyValuePairs;
+
 /**
  * Per-form configuration store.
  *
@@ -47,7 +49,7 @@ final class FormSettings
      * callers never guard against missing sub-keys.
      *
      * @param string $formKey Provider-scoped form key.
-     * @return array{form_id: string, excluded: bool, include_page_params: bool, query_params: array<int, array{key: string, value: string}>, headers: array<int, array{key: string, value: string}>}
+     * @return array{form_id: string, excluded: bool, include_page_params: bool, query_params: list<array{key: string, value: string}>, headers: list<array{key: string, value: string}>}
      */
     public static function forForm(string $formKey): array
     {
@@ -57,12 +59,8 @@ final class FormSettings
             'form_id'             => (string) ($entry['form_id'] ?? ''),
             'excluded'            => !empty($entry['excluded']),
             'include_page_params' => !empty($entry['include_page_params']),
-            'query_params'        => is_array($entry['query_params'] ?? null)
-                ? array_values(array_filter($entry['query_params'], 'is_array'))
-                : [],
-            'headers'             => is_array($entry['headers'] ?? null)
-                ? array_values(array_filter($entry['headers'], 'is_array'))
-                : [],
+            'query_params'        => KeyValuePairs::normalize($entry['query_params'] ?? null),
+            'headers'             => KeyValuePairs::normalize($entry['headers'] ?? null),
         ];
     }
 

@@ -29,12 +29,19 @@ final readonly class SubmissionResult
      *                                 early exits and background deliveries. Not for public display.
      * @param bool   $queued           True when deliveries were queued for background processing
      *                                 rather than sent synchronously.
-     * @param array  $failedDeliveries One entry per endpoint whose SYNCHRONOUS dispatch failed, each
-     *                                 array{url: string, endpoint_url: string, headers: array<string,string>, body: string, label: string}
-     *                                 — the exact request that was sent, so external callers can
-     *                                 implement their own retry logic. Always empty for early exits
-     *                                 and for background (queued) deliveries, whose retries
-     *                                 Convermetry manages itself.
+     * @param list<array{url: string, endpoint_url: string, headers: array<string, string>, body: string, label: string}> $failedDeliveries
+     *                                 One entry per endpoint whose SYNCHRONOUS dispatch failed — the
+     *                                 exact request that was sent, so external callers can implement
+     *                                 their own retry logic. Always empty for early exits and for
+     *                                 background (queued) deliveries, whose retries Convermetry
+     *                                 manages itself.
+     *
+     *                                 DELIBERATELY ARRAYS, not objects. convermetry_submit_form()
+     *                                 returns this result to third-party code, and the entry shape
+     *                                 is documented API that callers already index by key. A typed
+     *                                 object here would be a nicer internal representation and a
+     *                                 breaking change for every consumer, which is a bad trade for
+     *                                 a value that is read once and re-sent.
      */
     public function __construct(
         public bool $ok,

@@ -31,17 +31,17 @@ if (!defined('ABSPATH')) exit;
  */
 final class Retention
 {
-    /** The pruned table is fully drained down to the cutoff. */
-    public const string COMPLETED = 'completed';
-
-    /** The pass stopped on its chunk or time budget with rows still older than the cutoff. */
-    public const string TRUNCATED = 'truncated';
-
-    /** A delete query failed; how many rows remain is unknown. */
-    public const string QUERY_FAILED = 'query_failed';
-
-    /** The pass lost its cleanup lease to another worker and stopped early. */
-    public const string LOCK_LOST = 'lock_lost';
+    /**
+     * The four outcome codes, as the constants call sites and tests use.
+     *
+     * Defined from {@see RetentionStatus} rather than repeated as literals, so
+     * the constant a caller compares against and the value the hook publishes
+     * are the same string by construction.
+     */
+    public const string COMPLETED = RetentionStatus::Completed->value;
+    public const string TRUNCATED = RetentionStatus::Truncated->value;
+    public const string QUERY_FAILED = RetentionStatus::QueryFailed->value;
+    public const string LOCK_LOST = RetentionStatus::LockLost->value;
 
     /**
      * Derives a pass's outcome from the state its loop already holds on exit.
@@ -49,30 +49,30 @@ final class Retention
      * @param mixed $lastDeleted  What the final $wpdb->query() delete returned (int|false|null).
      * @param int   $chunk        The pass's per-query LIMIT.
      * @param int   $deletedTotal Rows deleted across the whole pass.
-     * @return array{deleted: int, outcome: string, more_remain: bool}
+     * @return RetentionOutcome
      */
-    public static function outcome(mixed $lastDeleted, int $chunk, int $deletedTotal): array
+    public static function outcome(mixed $lastDeleted, int $chunk, int $deletedTotal): RetentionOutcome
     {
         if (!is_int($lastDeleted)) {
-            return ['deleted' => $deletedTotal, 'outcome' => self::QUERY_FAILED, 'more_remain' => true];
+            return new RetentionOutcome($deletedTotal, RetentionStatus::QueryFailed);
         }
 
         if ($lastDeleted < $chunk) {
-            return ['deleted' => $deletedTotal, 'outcome' => self::COMPLETED, 'more_remain' => false];
+            return new RetentionOutcome($deletedTotal, RetentionStatus::Completed);
         }
 
-        return ['deleted' => $deletedTotal, 'outcome' => self::TRUNCATED, 'more_remain' => true];
+        return new RetentionOutcome($deletedTotal, RetentionStatus::Truncated);
     }
 
     /**
      * The outcome for a pass that lost its cleanup lease mid-run.
      *
      * @param int $deletedTotal Rows deleted before the lease was lost.
-     * @return array{deleted: int, outcome: string, more_remain: bool}
+     * @return RetentionOutcome
      */
-    public static function lockLost(int $deletedTotal): array
+    public static function lockLost(int $deletedTotal): RetentionOutcome
     {
-        return ['deleted' => $deletedTotal, 'outcome' => self::LOCK_LOST, 'more_remain' => true];
+        return new RetentionOutcome($deletedTotal, RetentionStatus::LockLost);
     }
 
     /**
@@ -104,12 +104,12 @@ final class Retention
     /**
      * Announces the end of one store's retention pass.
      *
-     * @param string                                                  $store   Store that was pruned.
-     * @param string                                                  $cutoff  UTC cutoff used.
-     * @param array{deleted: int, outcome: string, more_remain: bool} $outcome Result from {@see outcome()}.
+     * @param string           $store   Store that was pruned.
+     * @param string           $cutoff  UTC cutoff used.
+     * @param RetentionOutcome $outcome Result from {@see outcome()}.
      * @return void
      */
-    public static function completed(string $store, string $cutoff, array $outcome): void
+    public static function completed(string $store, string $cutoff, RetentionOutcome $outcome): void
     {
         /**
          * Fires after one store's retention pass has finished, whether it
@@ -131,9 +131,9 @@ final class Retention
             'convermetry_retention_cleanup_completed',
             $store,
             $cutoff,
-            (int) $outcome['deleted'],
-            (bool) $outcome['more_remain'],
-            (string) $outcome['outcome']
+            $outcome->deleted,
+            $outcome->moreRemain(),
+            $outcome->status->value
         );
     }
 }

@@ -323,10 +323,10 @@ final class DeliveryLogController
         if ($endpointParam !== '') {
             foreach (Options::endpoints() as $endpoint) {
                 if (
-                    md5($endpoint['url']) === $endpointParam
-                    || ($endpoint['label'] !== '' && $endpoint['label'] === $endpointParam)
+                    md5($endpoint->url) === $endpointParam
+                    || ($endpoint->label !== '' && $endpoint->label === $endpointParam)
                 ) {
-                    $filters['endpoint'] = $endpoint['url'];
+                    $filters['endpoint'] = $endpoint->url;
                     break;
                 }
             }

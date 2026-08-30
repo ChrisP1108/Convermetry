@@ -60,7 +60,7 @@ final class NotificationDispatcher
             return;
         }
 
-        $plan = self::plan(Options::notificationAll(), $identity, EmailBuilder::siteInfo());
+        $plan = self::plan(Options::notificationAll(), $identity, SiteInfo::current());
         if ($plan === null) {
             return;
         }
@@ -79,10 +79,10 @@ final class NotificationDispatcher
      *
      * @param array<string, mixed>  $settings Full notification settings.
      * @param array<string, mixed>  $identity Submission identity columns.
-     * @param array<string, string> $siteInfo {@see EmailBuilder::siteInfo()}.
+     * @param SiteInfo              $siteInfo The site's name and URLs.
      * @return array{recipients: list<string>, snapshot: array<string, mixed>}|null Null when nothing should be queued.
      */
-    public static function plan(array $settings, array $identity, array $siteInfo): ?array
+    public static function plan(array $settings, array $identity, SiteInfo $siteInfo): ?array
     {
         if (empty($settings['enabled'])) {
             return null;

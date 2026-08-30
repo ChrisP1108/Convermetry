@@ -183,7 +183,7 @@ final class Plugin
         // 1.2.0, delivery_state from 1.3.0); a no-op once every row is
         // populated. The catch-up hook drains large tables sooner than the
         // daily run would, re-arming itself while work remains.
-        add_action('cvm_cleanup_old_events', [FormSubmissions::class, 'backfillDerivedColumns']);
+        add_action('cvm_cleanup_old_events', [FormSubmissions::class, 'backfillOnCleanup']);
         add_action(FormSubmissions::BACKFILL_CATCHUP_HOOK, [FormSubmissions::class, 'backfillCatchUp']);
         add_action('cvm_cleanup_old_events', [FormDeliveryQueue::class, 'ensureWorkerScheduled']);
         add_action('cvm_cleanup_old_events', [NotificationQueue::class, 'ensureWorkerScheduled']);

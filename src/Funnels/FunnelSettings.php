@@ -86,14 +86,17 @@ final class FunnelSettings
             return null;
         }
 
+        // Read once: the ?? in a condition does not carry over to a second
+        // access in the branch, so the original re-read the offset without a
+        // guard on a value that can be null.
+        $createdAt = (string) ($existing['created_at'] ?? '');
+
         $funnel = array_merge(self::blank(), [
             'funnel_id'  => self::immutableId($existing),
             'name'       => $name,
             'enabled'    => !empty($raw['enabled']),
             'steps'      => $steps,
-            'created_at' => (string) ($existing['created_at'] ?? '') !== ''
-                ? (string) $existing['created_at']
-                : $now,
+            'created_at' => $createdAt !== '' ? $createdAt : $now,
             'updated_at' => $now,
             'deleted_at' => null,
         ]);

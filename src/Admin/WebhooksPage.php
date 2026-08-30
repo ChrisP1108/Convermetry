@@ -6,6 +6,7 @@ namespace Convermetry\Admin;
 if (!defined('ABSPATH')) exit;
 
 use Convermetry\Settings\Options;
+use Convermetry\Settings\WebhookEndpoint;
 use Convermetry\Webhook\AnalyticsDispatcher;
 use Convermetry\Webhook\FormDeliveryQueue;
 
@@ -351,9 +352,19 @@ final class WebhooksPage
         $settings  = Options::webhookAll();
         $endpoints = Options::endpoints();
         if ($endpoints === []) {
-            $endpoints = [['url' => '', 'label' => '', 'secret' => '', 'analytics' => true, 'forms' => true]];
+            // One blank block so a site with nothing configured still gets a
+            // form to fill in. Both delivery types default on, which is what an
+            // administrator adding their first endpoint almost always wants.
+            $endpoints = [new WebhookEndpoint(url: '', analytics: true, forms: true)];
         }
-        $hasAnyUrl = (bool) array_filter(array_column($endpoints, 'url'));
+
+        $hasAnyUrl = false;
+        foreach ($endpoints as $endpoint) {
+            if ($endpoint->url !== '') {
+                $hasAnyUrl = true;
+                break;
+            }
+        }
 
         echo '<div class="wrap cvm-wrap">';
         echo '<h1>Convermetry Webhooks</h1>';
@@ -392,11 +403,11 @@ final class WebhooksPage
         foreach ($endpoints as $idx => $endpoint) {
             self::renderEndpointBlock(
                 $idx,
-                (string) $endpoint['url'],
-                (string) $endpoint['label'],
-                (string) ($endpoint['secret'] ?? ''),
-                !empty($endpoint['analytics']),
-                !empty($endpoint['forms'])
+                $endpoint->url,
+                $endpoint->label,
+                $endpoint->secret,
+                $endpoint->analytics,
+                $endpoint->forms
             );
         }
         echo '</div>';

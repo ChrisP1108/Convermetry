@@ -44,6 +44,14 @@ if (!defined('ABSPATH')) exit;
  *     shape as (2); each key becomes both the id and the label.
  *
  * Detection between (1) and (2/3) is strict: see {@see self::isDescriptorList()}.
+ *
+ * TYPED OR ARRAY, AND WHEN. {@see parse()} produces a
+ * {@see SubmissionFieldList} and is what the plugin's own code uses once a
+ * submission is in hand. {@see normalize()} produces the descriptor ARRAY and
+ * is what the boundaries use: the 'convermetry_submission_fields' filter has
+ * always been handed one, the submission row stores one, and receivers get one
+ * as submission_data. The array form is the published schema, so it is
+ * produced at those boundaries rather than replaced.
  */
 final class SubmissionFields
 {
@@ -54,16 +62,33 @@ final class SubmissionFields
     private const string INTERNAL_PREFIX = 'cvm_';
 
     /**
+     * Normalizes any accepted input shape into typed fields.
+     *
+     * @param array<mixed> $fields Descriptor list, or a historical/custom-API map.
+     * @return SubmissionFieldList
+     */
+    public static function parse(array $fields): SubmissionFieldList
+    {
+        return SubmissionFieldList::of(
+            self::isDescriptorList($fields)
+                ? self::fromDescriptors($fields)
+                : self::fromLegacyMap($fields)
+        );
+    }
+
+    /**
      * Normalizes any accepted input shape into the canonical descriptor list.
+     *
+     * The array-returning counterpart to {@see parse()}, kept because the
+     * descriptor array is the storage and wire format and the shape the
+     * 'convermetry_submission_fields' filter receives.
      *
      * @param array<mixed> $fields Descriptor list, or a historical/custom-API map.
      * @return list<array{id: string, label: string, value: string|list<string>}>
      */
     public static function normalize(array $fields): array
     {
-        return self::isDescriptorList($fields)
-            ? self::fromDescriptors($fields)
-            : self::fromLegacyMap($fields);
+        return self::parse($fields)->toArray();
     }
 
     /**
@@ -118,38 +143,17 @@ final class SubmissionFields
      * demand, never rewritten in bulk.
      *
      * @param string $json Stored submission_data column.
-     * @return list<array{id: string, label: string, value: string|list<string>}>
+     * @return SubmissionFieldList
      */
-    public static function fromStoredJson(string $json): array
+    public static function fromStoredJson(string $json): SubmissionFieldList
     {
         if ($json === '' || !json_validate($json)) {
-            return [];
+            return SubmissionFieldList::empty();
         }
 
         $decoded = json_decode($json, true);
 
-        return is_array($decoded) ? self::normalize($decoded) : [];
-    }
-
-    /**
-     * Ordered label/value pairs for display surfaces.
-     *
-     * Returns a LIST, not a map, so two fields sharing a label stay two rows.
-     *
-     * @param list<array{id: string, label: string, value: string|list<string>}> $descriptors Normalized fields.
-     * @return list<array{label: string, value: string}>
-     */
-    public static function toDisplayPairs(array $descriptors): array
-    {
-        $out = [];
-        foreach ($descriptors as $field) {
-            $out[] = [
-                'label' => (string) ($field['label'] ?? ''),
-                'value' => self::flatten($field['value'] ?? ''),
-            ];
-        }
-
-        return $out;
+        return is_array($decoded) ? self::parse($decoded) : SubmissionFieldList::empty();
     }
 
     /**
@@ -185,13 +189,17 @@ final class SubmissionFields
      * Normalizes an already-structured descriptor list.
      *
      * @param array<mixed> $fields Descriptor list.
-     * @return list<array{id: string, label: string, value: string|list<string>}>
+     * @return list<SubmissionField>
      */
     private static function fromDescriptors(array $fields): array
     {
         $out = [];
 
         foreach ($fields as $entry) {
+            if (!is_array($entry) || !isset($entry['id']) || !is_scalar($entry['id'])) {
+                continue;
+            }
+
             $id = sanitize_text_field((string) $entry['id']);
             if ($id === '' || self::isInternalId($id)) {
                 continue;
@@ -201,13 +209,13 @@ final class SubmissionFields
                 ? sanitize_text_field((string) $entry['label'])
                 : '';
 
-            $out[] = [
-                'id'    => $id,
+            $out[] = new SubmissionField(
+                id: $id,
                 // No distinct label available (or a blank one) means the id is
                 // the most honest thing to show a human.
-                'label' => $rawLabel !== '' ? $rawLabel : $id,
-                'value' => self::sanitizeValue($entry['value'] ?? ''),
-            ];
+                label: $rawLabel !== '' ? $rawLabel : $id,
+                value: self::sanitizeValue($entry['value'] ?? ''),
+            );
         }
 
         return $out;
@@ -221,7 +229,7 @@ final class SubmissionFields
      * convermetry_submit_form(['email' => $email]) working unchanged.
      *
      * @param array<mixed> $fields Associative field map.
-     * @return list<array{id: string, label: string, value: string|list<string>}>
+     * @return list<SubmissionField>
      */
     private static function fromLegacyMap(array $fields): array
     {
@@ -233,11 +241,7 @@ final class SubmissionFields
                 continue;
             }
 
-            $out[] = [
-                'id'    => $id,
-                'label' => $id,
-                'value' => self::sanitizeValue($value),
-            ];
+            $out[] = new SubmissionField(id: $id, label: $id, value: self::sanitizeValue($value));
         }
 
         return $out;

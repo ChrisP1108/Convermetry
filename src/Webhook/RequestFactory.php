@@ -7,6 +7,7 @@ if (!defined('ABSPATH')) exit;
 
 use Convermetry\Forms\FormSettings;
 use Convermetry\Settings\Options;
+use Convermetry\Support\KeyValuePairs;
 
 /**
  * Builds the final request URL and headers for one webhook delivery — the
@@ -79,7 +80,8 @@ final class RequestFactory
      * @param string                $formKey     Provider-scoped form key ('' for analytics deliveries).
      * @param array<string, string> $pageQuery   Query parameters from the submitting page.
      * @param array<string, mixed>  $runtime     Runtime query parameters (highest precedence).
-     * @param array<string, mixed>  $context     Composition context passed to the filter.
+     * @param DeliveryDetails|null   $context     Composition context passed to the filter; null passes an
+     *                                            empty array, as the recovery paths and tests do.
      * @return string
      */
     public static function buildUrl(
@@ -87,7 +89,7 @@ final class RequestFactory
         string $formKey = '',
         array $pageQuery = [],
         array $runtime = [],
-        array $context = []
+        ?DeliveryDetails $context = null
     ): string {
         $merged = self::mergeQueryParams($formKey, $pageQuery, $runtime);
 
@@ -111,7 +113,7 @@ final class RequestFactory
          * @param array<string, mixed>  $context Credential-free composition context. Has no
          *                                       'attempt' — composition happens once per delivery.
          */
-        $filtered = apply_filters('convermetry_webhook_query_args', $merged, $context);
+        $filtered = apply_filters('convermetry_webhook_query_args', $merged, $context?->toArray() ?? []);
 
         // Identity fast path: with no callback registered the filter hands back
         // the exact array it was given, and the URL is composed from the same
@@ -126,11 +128,15 @@ final class RequestFactory
      *
      * @param string                $formKey Provider-scoped form key ('' for analytics deliveries).
      * @param array<string, string> $runtime Runtime headers (highest precedence).
-     * @param array<string, mixed>  $context Composition context passed to the filter.
+     * @param DeliveryDetails|null  $context Composition context passed to the filter; null passes an
+     *                                       empty array, as the recovery paths and tests do.
      * @return array<string, string>
      */
-    public static function buildHeaders(string $formKey = '', array $runtime = [], array $context = []): array
-    {
+    public static function buildHeaders(
+        string $formKey = '',
+        array $runtime = [],
+        ?DeliveryDetails $context = null
+    ): array {
         $merged = self::mergeHeaders($formKey, $runtime);
 
         /**
@@ -161,7 +167,7 @@ final class RequestFactory
          * @param array<string, mixed>  $context Credential-free composition context. Has no
          *                                       'attempt' — composition happens once per delivery.
          */
-        $filtered = apply_filters('convermetry_webhook_headers', $merged, $context);
+        $filtered = apply_filters('convermetry_webhook_headers', $merged, $context?->toArray() ?? []);
 
         if ($filtered === $merged) {
             return $merged;
@@ -234,7 +240,7 @@ final class RequestFactory
      */
     private static function mergeQueryParams(string $formKey = '', array $pageQuery = [], array $runtime = []): array
     {
-        $params = self::pairsToMap(Options::globalQueryParams());
+        $params = KeyValuePairs::toMap(Options::globalQueryParams());
 
         if ($formKey !== '') {
             $config = FormSettings::forForm($formKey);
@@ -243,7 +249,7 @@ final class RequestFactory
                 $params = array_merge($params, $pageQuery);
             }
 
-            $params = array_merge($params, self::pairsToMap($config['query_params']));
+            $params = array_merge($params, KeyValuePairs::toMap($config['query_params']));
         }
 
         foreach ($runtime as $key => $value) {
@@ -266,20 +272,10 @@ final class RequestFactory
     {
         $headers = ['Content-Type' => 'application/json; charset=utf-8'];
 
-        foreach (Options::globalHeaders() as $header) {
-            $key = trim((string) ($header['key'] ?? ''));
-            if ($key !== '') {
-                $headers[$key] = (string) ($header['value'] ?? '');
-            }
-        }
+        $headers = array_merge($headers, KeyValuePairs::toMap(Options::globalHeaders()));
 
         if ($formKey !== '') {
-            foreach (FormSettings::forForm($formKey)['headers'] as $header) {
-                $key = trim((string) ($header['key'] ?? ''));
-                if ($key !== '') {
-                    $headers[$key] = (string) ($header['value'] ?? '');
-                }
-            }
+            $headers = array_merge($headers, KeyValuePairs::toMap(FormSettings::forForm($formKey)['headers']));
         }
 
         foreach ($runtime as $key => $value) {
@@ -361,25 +357,5 @@ final class RequestFactory
     private static function isProtected(string $name): bool
     {
         return in_array(strtolower(trim($name)), self::PROTECTED_HEADERS, true);
-    }
-
-    /**
-     * Flattens a stored {key, value} pair list into an associative map,
-     * skipping empty keys. Later duplicate keys override earlier ones.
-     *
-     * @param array<int, array{key?: string, value?: string}> $pairs Stored pair rows.
-     * @return array<string, string>
-     */
-    private static function pairsToMap(array $pairs): array
-    {
-        $map = [];
-        foreach ($pairs as $pair) {
-            $key = trim((string) ($pair['key'] ?? ''));
-            if ($key !== '') {
-                $map[$key] = (string) ($pair['value'] ?? '');
-            }
-        }
-
-        return $map;
     }
 }

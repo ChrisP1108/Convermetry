@@ -75,17 +75,6 @@ final class TrackingController
     private const array CAMPAIGN_PARAMS = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_id', 'utm_term', 'utm_content'];
 
     /**
-     * @var string[] Event types that carry campaign attribution fields — all
-     *      of them: clicks, form attempts, hovers, and scroll milestones carry
-     *      the session's attribution snapshot too, so intermediate funnel
-     *      steps can be segmented by campaign.
-     */
-    private const array ATTRIBUTED_TYPES = [
-        'pageview', 'click', 'form_submit', 'form_success', 'hover', 'scroll_depth',
-        'form_view', 'form_start', 'form_error', 'custom_event',
-    ];
-
-    /**
      * Registers the rest_api_init hook.
      *
      * @return void
@@ -264,7 +253,7 @@ final class TrackingController
      *
      * @param mixed  $event  Raw event entry from the JSON body.
      * @param string $device Device bucket derived from the request's user agent.
-     * @return array{type: string, data: array<string, string|bool>}|null Null when the
+     * @return array{type: string, data: array<string, string|bool|list<string>>}|null Null when the
      *         event is malformed, of an unknown or disabled type, or claims a
      *         page_url that does not belong to this site.
      */
@@ -356,20 +345,27 @@ final class TrackingController
             }
         }
 
-        // Campaign attribution rides on every tracker event. Only the
-        // ad-click identifier's TYPE is accepted — the value itself is never
-        // sent or stored. session_referrer is the referrer the session
+        // Campaign attribution rides on EVERY tracker event — clicks, form
+        // attempts, hovers, and scroll milestones are all segmentable by
+        // channel, not just pageviews and conversions — so this is
+        // unconditional. It used to be guarded by a private list of
+        // "attributed types" that was a verbatim copy of Options::EVENT_TYPES;
+        // the guard could therefore never be false, and the copy was one more
+        // list to forget when a type is added. Which types get a CHANNEL
+        // derived is a separate, still-guarded decision, and it belongs to the
+        // storage layer: see DatabaseManager::ATTRIBUTED_TYPES.
+        //
+        // Only the ad-click identifier's TYPE is accepted — the value itself is
+        // never sent or stored. session_referrer is the referrer the session
         // ENTERED through; session_direct is the explicit "verified Direct"
         // marker. Neither is stored as its own column — they feed channel
         // classification only.
-        if (in_array($type, self::ATTRIBUTED_TYPES, true)) {
-            foreach (self::CAMPAIGN_PARAMS as $param) {
-                $data[$param] = self::campaignValue(self::scalarString($event[$param] ?? ''));
-            }
-            $data['click_id_type']    = sanitize_key(self::scalarString($event['click_id_type'] ?? ''));
-            $data['session_referrer'] = self::normalizeReferrer(self::scalarString($event['session_referrer'] ?? ''));
-            $data['session_direct']   = self::scalarString($event['session_direct'] ?? '') === '1';
+        foreach (self::CAMPAIGN_PARAMS as $param) {
+            $data[$param] = self::campaignValue(self::scalarString($event[$param] ?? ''));
         }
+        $data['click_id_type']    = sanitize_key(self::scalarString($event['click_id_type'] ?? ''));
+        $data['session_referrer'] = self::normalizeReferrer(self::scalarString($event['session_referrer'] ?? ''));
+        $data['session_direct']   = self::scalarString($event['session_direct'] ?? '') === '1';
 
         /**
          * Filters whether to record one tracked event.
