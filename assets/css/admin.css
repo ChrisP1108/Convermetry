@@ -412,7 +412,7 @@ html {
 /* Hook "Learn More" accordions -------------------------------------------- */
 
 .cvm-about-hook-toggle {
-    display: inline-flex;
+    display: -webkit-flex;
     align-items: center;
     gap: 6px;
     background: #f6f7f7;
@@ -436,8 +436,9 @@ html {
 
 .cvm-about-hook-toggle::after {
     content: "\25BE";
-    font-size: 10px;
+    font-size: 1.5em;
     line-height: 1;
+    margin-top: -0.125em;
 }
 
 .cvm-about-hook-toggle[aria-expanded="true"]::after {
