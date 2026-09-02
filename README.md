@@ -22,7 +22,7 @@ Was the lead successfully delivered to external systems?
 
 Convermetry works standalone — full analytics dashboard, form integrations, and webhook delivery inside one WordPress install — and is architected so a future Convermetry SaaS can receive `analytics_report` and `form_submission` messages from many installations, keyed by a shared, versioned payload schema.
 
-- **Version:** 0.5.0
+- **Version:** 0.6.0
 - **Requires WordPress:** 6.3+
 - **Requires PHP:** 8.3+
 - **License:** GPL-2.0-or-later
@@ -58,8 +58,9 @@ Convermetry works standalone — full analytics dashboard, form integrations, an
 22. [Privacy](#privacy)
 23. [Database tables](#database-tables)
 24. [Testing](#testing)
-25. [Upgrading to 0.5.0](#upgrading-to-050)
-26. [Uninstall behavior](#uninstall-behavior)
+25. [Upgrading to 0.6.0](#upgrading-to-060)
+26. [Upgrading to 0.5.0](#upgrading-to-050)
+27. [Uninstall behavior](#uninstall-behavior)
 
 ---
 
@@ -263,6 +264,8 @@ Goals are matched **server-side**, at ingestion, against data the tracker alread
 - A visitor cannot manufacture a conversion by claiming one. They can only report the same raw activity any visitor reports; the server decides what it means.
 
 The single exception is a **CSS selector**, which genuinely cannot be evaluated without the DOM. Only those selectors are sent to the tracker, and the goal ids it reports back are re-validated against your enabled selector goals before anything is recorded — so that channel can at most claim a goal that really is an enabled selector goal, and cannot reach a URL or custom-event goal at all.
+
+Because that map is the one piece of goal configuration a visitor page load needs, it is mirrored into a small autoloaded option (`cvm_goal_selectors`, capped at 25 entries) rather than read from the non-autoloaded goal list on every request. It is derived state — rebuilt automatically on any write to `cvm_goals`, whoever makes it, and never edited directly.
 
 ### Goal types
 
@@ -506,6 +509,16 @@ A single dependency-free script (`assets/js/tracker.js`) is enqueued deferred on
 **Endpoint defenses** — whitelisted, currently-enabled event types only; tracked page URLs must be `http(s)` on this site's host and are canonicalized to scheme+host+path; foreign `Origin`/`Referer` rejected; bots and empty user agents ignored; DNT/GPC enforced server-side when enabled; request bodies and batch sizes capped; scalar-only field values, sanitized and truncated; rate limits charged **per event** — 300/IP/minute plus 3,000/minute site-wide (`convermetry_rate_limits` filter) — via atomic object-cache counters, falling back (and failing **closed**) to an atomic single-statement database counter. The per-IP check runs first so a flooding IP never consumes the site-wide budget. A dashboard warning appears for 24 hours after the site-wide cap is hit. The rate-limit key itself is a hashed, short-lived derivative of the IP; the address is separately stored on each event row when IP storage is enabled (see [Privacy](#privacy)).
 
 **Tracked events** (each individually toggleable): `pageview`, `click`, `form_submit` (attempts), `form_success` (confirmed conversions), `hover` (configurable dwell, opt-in via `data-cvm-hover`), `scroll_depth` (50/100%). Custom server-side events via `cvm_track_event()`.
+
+**Form attributes** — three opt-in/opt-out hooks on any `<form>`:
+
+| Attribute | Effect |
+|---|---|
+| `data-cvm-ignore` | Excludes the form from tracking entirely: no `form_view`, `form_start`, `form_error`, `form_submit` or `form_success`, and no correlation fields injected. |
+| `data-cvm-form-key` | Declares the form's reporting identity (e.g. `mysite:contact`), and marks a hand-built form as one the correlation fields belong on. Authoritative — it overrides provider auto-detection. |
+| `data-cvm-form-name` | A readable label for report rows. |
+
+**Correlation fields** — `cvm_conversion_id`, `cvm_session_id` and `cvm_context` are injected as hidden inputs so a submission can be joined to its analytics session. Only into forms that actually read them: a supported provider or a `data-cvm-form-key` form, posting via `POST` to this site's own origin, not marked `data-cvm-ignore`. Your search, login, comment and third-party forms are left untouched — see [Upgrading to 0.6.0](#upgrading-to-060).
 
 **Sessions** are cookie-free: the id lives in `localStorage` and rotates after 30 minutes of inactivity.
 
@@ -972,7 +985,7 @@ Every outbound message shares one versioned envelope:
 {
     "schema_version": "1.0 | 2.0",
     "source": "convermetry",
-    "plugin_version": "0.5.0",
+    "plugin_version": "0.6.0",
     "message_type": "analytics_report | form_submission",
     "website_info": { },
     "generated_at": "2026-08-22T14:00:00+00:00",
@@ -1000,7 +1013,7 @@ Every outbound message shares one versioned envelope:
 {
     "schema_version": "1.1",
     "source": "convermetry",
-    "plugin_version": "0.5.0",
+    "plugin_version": "0.6.0",
     "message_type": "analytics_report",
     "website_info": {
         "name": "Example Financial", "url": "https://example.com", "domain": "example.com",
@@ -1120,7 +1133,7 @@ Every outbound message shares one versioned envelope:
 {
     "schema_version": "2.0",
     "source": "convermetry",
-    "plugin_version": "0.5.0",
+    "plugin_version": "0.6.0",
     "message_type": "form_submission",
     "website_info": {
         "name": "Example Financial", "url": "https://example.com", "domain": "example.com",
@@ -1841,6 +1854,49 @@ from* the enum, so the two can no longer drift.
 
 ---
 
+## Upgrading to 0.6.0
+
+**No schema migrations, no settings changes.** Upgrade in place. One frontend behaviour does change, and it is worth reading if you correlate a hand-built form.
+
+### Correlation fields are now only added to forms that read them
+
+The tracker injects three hidden fields — `cvm_conversion_id`, `cvm_session_id`, `cvm_context` — so a submission can be joined to its analytics session. Through 0.5.0 those went into **every** `<form>` on the page except the admin bar's.
+
+They now go only into a form that is all of:
+
+- recognized as one of the supported providers (Contact Form 7, Elementor, Fluent Forms, Formidable, Gravity Forms, Ninja Forms, WPForms) by its own markup **or its wrapper's**, or carrying an explicit `data-cvm-form-key` attribute;
+- submitted with `method="post"`;
+- posting to this site's own origin;
+- not marked `data-cvm-ignore`.
+
+Everything else — your search form, the login and comment forms, WooCommerce's cart forms, any third-party widget — is left alone. Previously a `GET` form put the session id and attribution snapshot into the URL (and so into browser history and server logs), a form with an external `action` disclosed them to that third party, and a strict handler could reject the submission over fields it did not expect.
+
+**If you use `Correlation::fromFields()` or `convermetry_submit_form()` with your own markup**, add `data-cvm-form-key` to the form so it keeps receiving the fields:
+
+```html
+<form method="post" data-cvm-form-key="mysite:contact">
+```
+
+Without it the submission still records and delivers — it simply has no session attribution, exactly as when JavaScript is unavailable.
+
+### `data-cvm-ignore` now means ignore
+
+It suppressed `form_view`, `form_start` and `form_error` but was not consulted for `form_submit`, `form_success`, or field injection. A form marked with it is now excluded from all of them.
+
+### Other changes
+
+| Area | Change |
+|---|---|
+| Page-exit beacons | An accepted exit beacon is no longer kept in `sessionStorage` and replayed on the next page, and `visibilitychange`/`pagehide` no longer send the same batch twice. Counts were always correct (the server deduplicates), but the wasted requests were charged against the rate limits. |
+| Form tracking when disabled | The observers and listeners are no longer installed at all when the relevant event types are off, and DOM mutations are scanned per added node instead of re-scanning the whole document. |
+| Funnel editor | Renders its first two step rows server-side, so it works with JavaScript blocked. |
+| Goal selectors | Mirrored into a small autoloaded option, removing an uncached `cvm_goals` query from every visitor page load. Derived state — it is rebuilt automatically whenever goals change, and removed on uninstall. |
+| Admin screens | Attribute-context escaping hardened in the funnel, submissions and activity-log editors. The Activity Log no longer strands you on an empty page after deleting the last row on it. |
+
+Payload schemas are unchanged: form submissions stay `2.0`, analytics reports stay `1.1`.
+
+---
+
 ## Upgrading to 0.5.0
 
 **Nothing you have configured changes, and no existing behaviour is altered.** Upgrade in place; there is no need to deactivate and reactivate.
@@ -1933,7 +1989,9 @@ convermetry/
     ├── Support/                 # Http (the single safe outbound transport),
     │                             # SensitiveKeys (shared credential-name policy),
     │                             # Url (the one URL-normalization policy),
-    │                             # KeyValuePairs, Retention, RetentionOutcome, RetentionStatus
+    │                             # KeyValuePairs, Pagination (the shared list-screen
+    │                             # paging clamp), Retention, RetentionOutcome,
+    │                             # RetentionStatus
     ├── Tracking/                # Channels (the one attribution engine), Correlation,
     │                             # Attribution, ScriptLoader
     └── Webhook/                 # PayloadBuilder, RequestFactory, AnalyticsDispatcher,

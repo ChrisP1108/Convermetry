@@ -138,9 +138,52 @@ final class GoalRepository
      */
     public static function browserSelectors(): array
     {
+        if (!Options::goalsEnabled()) {
+            return [];
+        }
+
+        // Served from a small AUTOLOADED mirror rather than by reading the goal
+        // list. The script loader asks for these on every tracked frontend
+        // request, but cvm_goals is deliberately non-autoloaded (see persist()),
+        // so without a persistent object cache that was an extra uncached SELECT
+        // plus a normalize-every-goal pass on every visitor page — even on the
+        // overwhelming majority of sites with no selector goals at all.
+        //
+        // An empty array is a valid cached answer ("no selector goals"), which
+        // is why the default is false rather than [].
+        $cached = get_option(Options::GOAL_SELECTORS_OPTION_KEY, false);
+        if (is_array($cached)) {
+            return $cached;
+        }
+
+        // Not built yet — a site upgrading into this. Fall back to reading the
+        // goals, which is correct, just the extra query the mirror exists to
+        // avoid. Deliberately NOT written from here: this is usually an
+        // anonymous frontend page load, and those must not write (the same rule
+        // MigrationRunner enforces for schema work). ensureSelectorMirror()
+        // seeds it on the next admin request instead.
+        return self::buildBrowserSelectors();
+    }
+
+    /**
+     * Computes the browser selector map from the stored goals.
+     *
+     * Deliberately filters on the goal's own active state rather than calling
+     * active(), which also gates on the goals-enabled setting. The mirror must
+     * describe the GOALS only — the setting is applied when it is read, so
+     * toggling goals off and on again cannot leave a stale empty mirror behind.
+     *
+     * @return array<string, string>
+     */
+    private static function buildBrowserSelectors(): array
+    {
         $out = [];
 
-        foreach (self::active() as $goal) {
+        foreach (self::all() as $goal) {
+            if (!GoalSettings::isActive($goal)) {
+                continue;
+            }
+
             if ((string) $goal['operator'] !== GoalSettings::BROWSER_OPERATOR) {
                 continue;
             }
@@ -161,6 +204,71 @@ final class GoalRepository
     }
 
     /**
+     * Rebuilds the autoloaded selector mirror from the stored goals.
+     *
+     * Wired to WordPress's own option-write actions rather than called from
+     * persist(), for the same reason SettingsEvents listens there: those fire on
+     * every real write — the admin screen, WP-CLI, a migration, another plugin —
+     * not only on the ones that went through this class.
+     *
+     * @return void
+     */
+    public static function refreshSelectorMirror(): void
+    {
+        self::$cache = null;
+        update_option(Options::GOAL_SELECTORS_OPTION_KEY, self::buildBrowserSelectors(), true);
+    }
+
+    /**
+     * Registers the selector-mirror invalidation listeners.
+     *
+     * @return void
+     */
+    public static function init(): void
+    {
+        $option = Options::GOALS_OPTION_KEY;
+
+        add_action("update_option_{$option}", [self::class, 'refreshSelectorMirror'], 10, 0);
+        add_action("add_option_{$option}", [self::class, 'refreshSelectorMirror'], 10, 0);
+
+        // 'deleted_option', not "delete_option_{$option}" — the latter fires
+        // BEFORE the row is removed, so a rebuild from there would re-mirror the
+        // goals that are about to disappear.
+        add_action('deleted_option', [self::class, 'onOptionDeleted'], 10, 1);
+
+        // Seed it for sites upgrading into this, in a request that can afford a
+        // write. Until that happens browserSelectors() just reads the goals.
+        if (is_admin()) {
+            add_action('admin_init', [self::class, 'ensureSelectorMirror']);
+        }
+    }
+
+    /**
+     * Builds the selector mirror if it does not exist yet.
+     *
+     * @return void
+     */
+    public static function ensureSelectorMirror(): void
+    {
+        if (!is_array(get_option(Options::GOAL_SELECTORS_OPTION_KEY, false))) {
+            self::refreshSelectorMirror();
+        }
+    }
+
+    /**
+     * Rebuilds the mirror when the goal option itself is deleted.
+     *
+     * @param string $option The option that was deleted.
+     * @return void
+     */
+    public static function onOptionDeleted(string $option): void
+    {
+        if ($option === Options::GOALS_OPTION_KEY) {
+            self::refreshSelectorMirror();
+        }
+    }
+
+    /**
      * Maximum selectors sent to the tracker.
      *
      * Every one of these is evaluated with Element.closest() on every click, and
@@ -173,8 +281,9 @@ final class GoalRepository
     /**
      * Whether any enabled goal needs a given event type to be tracked.
      *
-     * Used by the Goals screen to warn that a goal cannot fire, and by the
-     * script loader to decide whether the tracker is needed at all.
+     * Used by the Goals screen to warn that a goal cannot fire. (The script
+     * loader decides whether the tracker is needed from browserSelectors(),
+     * not from this.)
      *
      * @param string $eventType An Options::EVENT_TYPES value.
      * @return bool

@@ -7,6 +7,7 @@ if (!defined('ABSPATH')) exit;
 
 use Convermetry\Api\DeliveryLogController;
 use Convermetry\Settings\Options;
+use Convermetry\Support\Pagination;
 use Convermetry\Webhook\AnalyticsDispatcher;
 use Convermetry\Webhook\DeliveryLog;
 
@@ -179,8 +180,7 @@ final class ActivityLogPage
             wp_send_json_error(['message' => 'Unauthorized.']);
         }
 
-        $page    = max(1, (int) ($_POST['page'] ?? 1));
-        $perPage = min(100, max(5, (int) ($_POST['per_page'] ?? 10)));
+        $perPage = Pagination::perPage($_POST['per_page'] ?? Pagination::DEFAULT_PER_PAGE);
 
         $status = sanitize_key((string) ($_POST['status'] ?? ''));
 
@@ -195,8 +195,16 @@ final class ActivityLogPage
             'form_name'    => sanitize_text_field(wp_unslash($_POST['form_name'] ?? '')),
         ];
 
+        // Clamped BEFORE the query — see Pagination::resolve(). Without it,
+        // deleting the last row on the last page left this screen showing
+        // "Showing 11-10 of 10" with no navigation to get back.
+        $total  = DeliveryLog::getLogCount($filters);
+        $paging = Pagination::resolve($_POST['page'] ?? 1, $perPage, $total);
+
+        $page       = $paging['page'];
+        $totalPages = $paging['totalPages'];
+
         $logs  = DeliveryLog::getLogsPaginated($page, $perPage, $filters);
-        $total = DeliveryLog::getLogCount($filters);
         $dates = DeliveryLog::getDistinctDates(['status' => $filters['status'], 'endpoint' => $filters['endpoint']]);
 
         $html = '';
@@ -207,7 +215,7 @@ final class ActivityLogPage
         wp_send_json_success([
             'html'        => $html,
             'total'       => $total,
-            'totalPages'  => max(1, (int) ceil($total / $perPage)),
+            'totalPages'  => $totalPages,
             'currentPage' => $page,
             'years'       => $dates['years'],
             'months'      => $dates['months'],

@@ -43,6 +43,20 @@ final class Options
     public const string GOALS_OPTION_KEY = 'cvm_goals';
 
     /**
+     * The wp_options key holding the browser selector map derived from the goals.
+     *
+     * The one piece of goal configuration the tracker needs on an ordinary page
+     * load, mirrored out of cvm_goals so that read does not have to pull the
+     * whole non-autoloaded goal list on every visitor request. Deliberately
+     * AUTOLOADED — it is capped at GoalRepository::MAX_BROWSER_SELECTORS
+     * entries, and is empty on the vast majority of sites.
+     *
+     * Derived state, never edited directly: GoalRepository rebuilds it from
+     * cvm_goals on every write to that option.
+     */
+    public const string GOAL_SELECTORS_OPTION_KEY = 'cvm_goal_selectors';
+
+    /**
      * The wp_options key holding funnel definitions.
      *
      * Also NON-AUTOLOADED, and read even less often than goals: funnels are pure

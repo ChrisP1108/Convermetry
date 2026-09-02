@@ -42,6 +42,7 @@ function cvm_uninstall_current_site(): void
     delete_option('cvm_form_settings');
     delete_option('cvm_notification_settings');
     delete_option('cvm_goals');
+    delete_option('cvm_goal_selectors');
     delete_option('cvm_funnels');
     delete_option('cvm_db_version');
     delete_option('cvm_delivery_db_version');

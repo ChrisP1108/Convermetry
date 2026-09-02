@@ -27,6 +27,7 @@
     const goals = cfg.goals || {};
     const operators = cfg.operators || ['equals', 'contains', 'starts_with', 'ends_with'];
     const maxSteps = cfg.maxSteps || 8;
+    const minSteps = cfg.minSteps || 2;
 
     const rows = form.querySelector('.cvm-funnel-step-rows');
     const addBtn = form.querySelector('.cvm-funnel-add-step');
@@ -50,11 +51,26 @@
         return node.innerHTML;
     }
 
+    /**
+     * For interpolation into a QUOTED ATTRIBUTE value.
+     *
+     * escapeHtml() serializes a text node, and the HTML serializer escapes
+     * quotes only in attribute context — so its output is safe as element
+     * content and unsafe inside value="…". Step values reach here straight
+     * from the database via data-funnel, and sanitize_text_field() on the
+     * server preserves quotes, so a stored value of  " onmouseover=…  used to
+     * break out of the attribute when another user clicked Edit.
+     */
+    function escapeAttr(text) {
+        // escapeHtml handles & first, so these replacements cannot double-encode.
+        return escapeHtml(text).replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    }
+
     function optionsHtml(map, selected) {
         let html = '';
         for (const key in map) {
             if (Object.prototype.hasOwnProperty.call(map, key)) {
-                html += '<option value="' + escapeHtml(key) + '"' +
+                html += '<option value="' + escapeAttr(key) + '"' +
                         (key === selected ? ' selected' : '') + '>' +
                         escapeHtml(map[key]) + '</option>';
             }
@@ -94,9 +110,9 @@
                     : '<option value="">No goals configured yet</option>') +
             '</select>' +
             '<input type="text" class="cvm-step-value" name="funnel[steps][' + index + '][value]" ' +
-                'value="' + escapeHtml(step.value || '') + '" placeholder="/services/">' +
+                'value="' + escapeAttr(step.value || '') + '" placeholder="/services/">' +
             '<input type="text" class="cvm-step-label" name="funnel[steps][' + index + '][label]" ' +
-                'value="' + escapeHtml(step.label || '') + '" placeholder="Label (optional)">' +
+                'value="' + escapeAttr(step.label || '') + '" placeholder="Label (optional)">' +
             '<button type="button" class="button-link cvm-btn-danger-link cvm-step-remove" ' +
                 'aria-label="Remove step ' + (index + 1) + '">Remove</button>';
 
@@ -205,9 +221,7 @@
     function resetForm() {
         form.reset();
         idField.value = '';
-        rows.innerHTML = '';
-        addRow(null);
-        addRow(null);
+        resetRows();
         if (title) {
             title.textContent = 'Add a funnel';
         }
@@ -235,8 +249,34 @@
         cancelBtn.addEventListener('click', resetForm);
     }
 
-    // Two empty rows to start: a funnel needs at least two steps, and an editor
-    // that opens with one implies otherwise.
-    addRow(null);
-    addRow(null);
+    /** The baseline the editor opens with: MIN_STEPS empty rows, because a
+     *  funnel needs at least two steps and an editor that opens with one
+     *  implies otherwise. PHP renders these so the form still works with the
+     *  script blocked; here we adopt them rather than replace them. */
+    function resetRows() {
+        const existing = rows.querySelectorAll('.cvm-funnel-step-row');
+
+        // Drop anything past the baseline, blank what remains.
+        for (let i = existing.length - 1; i >= minSteps; i--) {
+            existing[i].remove();
+        }
+        for (let i = 0; i < existing.length && i < minSteps; i++) {
+            const row = existing[i];
+            row.querySelector('.cvm-step-type').value = 'page';
+            row.querySelector('.cvm-step-operator').value = 'equals';
+            row.querySelector('.cvm-step-value').value = '';
+            row.querySelector('.cvm-step-label').value = '';
+            syncRow(row);
+        }
+
+        // Only if the server rendered fewer than the minimum. Bounded rather
+        // than a while: addRow() silently declines past maxSteps, which would
+        // spin forever if the two bounds were ever misconfigured.
+        for (let i = existing.length; i < minSteps; i++) {
+            addRow(null);
+        }
+        renumber();
+    }
+
+    resetRows();
 })();

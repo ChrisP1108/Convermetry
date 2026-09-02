@@ -16,6 +16,7 @@ use Convermetry\Webhook\DeliveryState;
 use Convermetry\Webhook\EndpointOutcome;
 use Convermetry\Leads\Money;
 use Convermetry\Settings\Options;
+use Convermetry\Support\Pagination;
 
 /**
  * The "Convermetry → Submissions" admin page.
@@ -217,21 +218,16 @@ final class SubmissionsPage
     {
         self::authorize('cvm_get_submissions', Capability::SUBMISSIONS_VIEW);
 
-        $page    = max(1, (int) ($_POST['page'] ?? 1));
-        $perPage = min(100, max(5, (int) ($_POST['per_page'] ?? 10)));
+        $perPage = Pagination::perPage($_POST['per_page'] ?? Pagination::DEFAULT_PER_PAGE);
 
         $filters = self::filtersFromRequest($_POST);
 
-        $total      = FormSubmissions::getCount($filters);
-        $totalPages = max(1, (int) ceil($total / $perPage));
+        // Clamped BEFORE the query — see Pagination::resolve().
+        $total  = FormSubmissions::getCount($filters);
+        $paging = Pagination::resolve($_POST['page'] ?? 1, $perPage, $total);
 
-        // Clamp before querying. A page can fall off the end for several
-        // reasons — the last row on it was just deleted, a filter narrowed the
-        // set, retention pruned it, a bookmarked page number went stale — and
-        // an unclamped request answers with an empty list plus a nonsensical
-        // "Showing 11-10 of 10" and no way back. Fixing it here covers every
-        // cause at once; the client syncs to the currentPage it gets back.
-        $page = min($page, $totalPages);
+        $page       = $paging['page'];
+        $totalPages = $paging['totalPages'];
 
         $rows  = FormSubmissions::getPaginated($page, $perPage, $filters);
         $dates = FormSubmissions::getDistinctDates($filters);

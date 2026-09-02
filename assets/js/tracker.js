@@ -120,6 +120,14 @@
     const INTERACTIVE = 'a, button, input[type="button"], input[type="submit"], [role="button"]';
     const PENDING_KEY = 'cvm_pending';
 
+    /* Declared up here rather than beside formIdentity() because the tracker is
+     * enqueued deferred: document.readyState is already 'interactive' when this
+     * IIFE runs, so seedCorrelationFields() executes synchronously below and
+     * reaches formIdentity() long before the form-engagement section is
+     * evaluated. A const declared down there would still be in its temporal
+     * dead zone at that point. */
+    const FORM_ATTR = 'data-cvm-form-key';
+
     // Retry/backoff timing — internal reliability constants, not exposed as
     // site-owner settings. RETRY_BASE_MS matches the normal flush cadence (a
     // batch's first retry isn't penalized beyond it); RETRY_BASE_MS_429 starts
@@ -740,18 +748,25 @@
             root = readStore();
         }
 
+        const paused = isPaused(id, root);
         const bypassGate = !alreadyPersisted && mode === 'lifecycle-exit';
 
-        if (!bypassGate && isPaused(id, root)) {
+        if (!bypassGate && paused) {
             return; // Gated — already durably persisted above if this was fresh; a later flush retries it.
         }
 
-        if (bypassGate) {
+        if (bypassGate && paused) {
             // This fresh batch is being sent despite an active pause; the
             // beacon path below gives no visibility into whether the server
             // actually accepts it, so treat it as already-failed-once up
             // front — it stays persisted rather than being wrongly unstashed
             // on an accepted-but-unconfirmed hand-off.
+            //
+            // Only when a pause is genuinely being overridden. Marking EVERY
+            // fresh exit batch retry-pending kept it stashed after an accepted
+            // beacon, so the next page resent it and visibilitychange/pagehide
+            // each sent it once — the exact replay the contract at the top of
+            // this file rules out.
             retryPending[id] = true;
         }
 
@@ -981,13 +996,97 @@
         return token;
     }
 
-    /** Seeds correlation fields into every form currently in the DOM, so
-     *  non-AJAX submissions (and plugins that serialize early) carry them
-     *  even if the submit-capture refresh never runs. */
+    /* Markup signatures of the form plugins whose server side reads the
+     * correlation fields — SubmissionService::record() resolves a Correlation
+     * for every registered provider, so all seven need them.
+     *
+     * Matched against the form OR an ancestor: several of these plugins put
+     * their identifying class on a wrapper rather than on the form element, and
+     * formIdentity() alone (which keys off the form's own id/fields) would miss
+     * those. Erring toward a slightly wider match is the right way to be wrong
+     * here — a form that gets the fields and does not need them is harmless,
+     * whereas a provider form that silently stops getting them loses session
+     * attribution with nothing to show for it. */
+    const PROVIDER_FORM_SELECTOR = [
+        '.gform_wrapper', 'form[id^="gform_"]',
+        '.wpforms-container', 'form[id^="wpforms-form-"]',
+        '.wpcf7', 'form.wpcf7-form',
+        '.fluentform', 'form[data-form_id]',
+        '.nf-form-cont', 'form[id^="nf-form-"]',
+        '.frm_forms', 'form.frm-show-form',
+        '.elementor-form', '.elementor-widget-form'
+    ].join(',');
+
+    /**
+     * Whether a form should carry the correlation fields at all.
+     *
+     * These fields are read by exactly one thing: the server-side form-provider
+     * integrations, via Correlation::fromCurrentRequest(). Injecting them into
+     * every form on the page put a session id and an attribution snapshot into
+     * search, login, comment, and third-party forms that never read them —
+     * disclosed to other origins on external actions, written into URLs and
+     * server logs on GET, and liable to trip strict handlers that reject
+     * unexpected fields.
+     *
+     * So the rule is: a form the server actually correlates, submitted as a
+     * same-origin POST, that the site owner has not opted out.
+     *
+     * Note Elementor is matched here but deliberately absent from
+     * formIdentity(), which answers a different question: its server side still
+     * keys per-form settings by form NAME, so a derived REPORTING key would
+     * never join. It does read the correlation fields, and its jQuery success
+     * event correlates through tokenFor(), so it must still be seeded.
+     */
+    function correlatableForm(form) {
+        if (!form || form.tagName !== 'FORM') {
+            return false;
+        }
+        if (inAdminBar(form) || form.hasAttribute('data-cvm-ignore')) {
+            return false;
+        }
+
+        // A form the server correlates: a supported provider, or one the site
+        // declared for the custom-form API with data-cvm-form-key.
+        let recognized = formIdentity(form) !== '';
+        if (!recognized) {
+            try {
+                recognized = form.matches(PROVIDER_FORM_SELECTOR) ||
+                    form.closest(PROVIDER_FORM_SELECTOR) !== null;
+            } catch (e) {
+                recognized = false; // No matches/closest — leave the form alone.
+            }
+        }
+        if (!recognized) {
+            return false;
+        }
+
+        // Never put correlation data in a query string. The form.method IDL
+        // attribute normalizes to 'get' when unset or unrecognized.
+        if ((form.method || '').toLowerCase() !== 'post') {
+            return false;
+        }
+
+        // Never hand it to another origin. An empty action posts to the current
+        // URL; form.action resolves relative values against the document.
+        try {
+            const action = form.getAttribute('action');
+            if (action && new URL(form.action, location.href).origin !== location.origin) {
+                return false;
+            }
+        } catch (e) {
+            return false; // Unparseable action — treat as untrusted.
+        }
+
+        return true;
+    }
+
+    /** Seeds correlation fields into every correlatable form currently in the
+     *  DOM, so non-AJAX submissions (and plugins that serialize early) carry
+     *  them even if the submit-capture refresh never runs. */
     function seedCorrelationFields() {
         const forms = document.querySelectorAll('form');
         for (let i = 0; i < forms.length; i++) {
-            if (!inAdminBar(forms[i])) {
+            if (correlatableForm(forms[i])) {
                 ensureCorrelationFields(forms[i], false);
             }
         }
@@ -1008,15 +1107,20 @@
 
     document.addEventListener('submit', function (e) {
         const form = e.target;
-        if (!form || form.tagName !== 'FORM' || inAdminBar(form)) {
+        // data-cvm-ignore means ignore: it already suppresses view/start/error
+        // via trackableForm(), and honoring it only there left an opted-out
+        // form still emitting form_submit and still carrying injected fields.
+        if (!trackableForm(form)) {
             return;
         }
 
         // Refresh the correlation fields with a fresh conversion token for
         // THIS attempt — capture phase runs before the form plugin's own
         // submit handler serializes the form, so the AJAX request carries
-        // the fields.
-        ensureCorrelationFields(form, true);
+        // the fields. Only for forms the server actually correlates.
+        if (correlatableForm(form)) {
+            ensureCorrelationFields(form, true);
+        }
 
         track('form_submit', {
             element_tag: 'form',
@@ -1155,7 +1259,6 @@
      *  to another.
      * ------------------------------------------------------------------ */
 
-    const FORM_ATTR = 'data-cvm-form-key';
     const MAX_ERRORS_PER_FORM = 10;
 
     /** Per-form state for this page view: {viewed, started, errors}. */
@@ -1265,7 +1368,7 @@
      * ever scrolled to, and the number would look alarming for no reason.
      * Browsers without IntersectionObserver simply record no views (rather than
      * recording every render), so the rate stays honest where it exists. */
-    const formObserver = (typeof IntersectionObserver === 'function')
+    const formObserver = (typeof IntersectionObserver === 'function' && config.events.form_view)
         ? new IntersectionObserver(function (entries) {
             for (let i = 0; i < entries.length; i++) {
                 const entry = entries[i];
@@ -1283,19 +1386,28 @@
         }, { threshold: 0.25 })
         : null;
 
-    /** Begins observing every form currently in the DOM. Idempotent. */
+    /** Begins observing one form, if it is one this tracker should watch. */
+    function observeForm(form) {
+        if (!trackableForm(form)) {
+            return;
+        }
+        const state = stateFor(form);
+        if (state && !state.viewed && !state.observed) {
+            state.observed = true;
+            formObserver.observe(form);
+        }
+    }
+
+    /** Begins observing every form currently in the DOM. Idempotent.
+     *  Only for the initial passes — mutations are handled per-record below,
+     *  so an animating page does not pay for a document-wide scan each frame. */
     function observeForms() {
+        if (!formObserver) {
+            return;
+        }
         const forms = document.querySelectorAll('form');
         for (let i = 0; i < forms.length; i++) {
-            const form = forms[i];
-            if (!trackableForm(form)) {
-                continue;
-            }
-            const state = stateFor(form);
-            if (formObserver && state && !state.viewed && !state.observed) {
-                state.observed = true;
-                formObserver.observe(form);
-            }
+            observeForm(forms[i]);
         }
     }
 
@@ -1323,19 +1435,25 @@
         track('form_start', formEventData(form));
     }
 
-    document.addEventListener('input', function (e) {
-        const form = e.target && e.target.form;
-        if (trackableForm(form)) {
-            markStarted(form);
-        }
-    }, true);
+    /* Gated at INSTALL time, not just at emit time. track() discards a disabled
+     * event type, but that is the last step: without these guards a site with
+     * form tracking switched off still registered every listener and observer
+     * and did all the identity work, only to throw the result away. */
+    if (config.events.form_start) {
+        document.addEventListener('input', function (e) {
+            const form = e.target && e.target.form;
+            if (trackableForm(form)) {
+                markStarted(form);
+            }
+        }, true);
 
-    document.addEventListener('change', function (e) {
-        const form = e.target && e.target.form;
-        if (trackableForm(form)) {
-            markStarted(form);
-        }
-    }, true);
+        document.addEventListener('change', function (e) {
+            const form = e.target && e.target.form;
+            if (trackableForm(form)) {
+                markStarted(form);
+            }
+        }, true);
+    }
 
     /* form_error — the native constraint-validation event. It reports WHICH
      * flag failed and nothing about the value, which is exactly the boundary
@@ -1372,44 +1490,97 @@
         return String(field.getAttribute('name') || field.id || '').slice(0, 64);
     }
 
-    document.addEventListener('invalid', function (e) {
-        const field = e.target;
-        const form = field && field.form;
-        if (!trackableForm(form)) {
-            return;
-        }
-
-        const state = stateFor(form);
-        if (state) {
-            if (state.errors >= MAX_ERRORS_PER_FORM) {
+    if (config.events.form_error) {
+        document.addEventListener('invalid', function (e) {
+            const field = e.target;
+            const form = field && field.form;
+            if (!trackableForm(form)) {
                 return;
             }
-            state.errors++;
-        }
 
-        track('form_error', {
-            element_tag: 'form',
-            form_key: formIdentity(form),
-            field_id: fieldIdentifier(field),
-            field_type: String(field.type || field.tagName || '').toLowerCase().slice(0, 32),
-            error_type: errorCategory(field)
-        });
-    }, true);
+            const state = stateFor(form);
+            if (state) {
+                if (state.errors >= MAX_ERRORS_PER_FORM) {
+                    return;
+                }
+                state.errors++;
+            }
+
+            track('form_error', {
+                element_tag: 'form',
+                form_key: formIdentity(form),
+                field_id: fieldIdentifier(field),
+                field_type: String(field.type || field.tagName || '').toLowerCase().slice(0, 32),
+                error_type: errorCategory(field)
+            });
+        }, true);
+    }
 
     /* Forms arrive late on plenty of sites — a modal, a tabbed layout, an
      * Elementor popup, an AJAX-rendered step. Re-observing on DOM mutations
-     * catches those; the per-form state means nothing is double-counted. */
-    observeForms();
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', observeForms);
-    }
-    window.addEventListener('load', observeForms);
+     * catches those; the per-form state means nothing is double-counted.
+     *
+     * formObserver is null when form_view is off or IntersectionObserver is
+     * missing, and stateFor() returns null without WeakMap. In either case
+     * observeForms() provably cannot do anything, so none of this is installed
+     * — it used to run a document-wide querySelectorAll('form') on every
+     * mutation batch regardless, forever, on pages that could never record a
+     * view. */
+    if (formObserver && formState) {
+        observeForms();
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', observeForms);
+        }
+        window.addEventListener('load', observeForms);
 
-    if (typeof MutationObserver === 'function') {
-        const domObserver = new MutationObserver(function () {
-            observeForms();
-        });
-        domObserver.observe(document.documentElement, { childList: true, subtree: true });
+        if (typeof MutationObserver === 'function') {
+            let scanScheduled = false;
+            let pendingRoots = [];
+
+            /* Scan only what was actually added, coalesced to one frame. The
+             * old callback ignored its records and re-scanned the whole
+             * document, which on an animation-heavy or app-like page is
+             * O(document) work per mutation batch — and the tracker triggered
+             * it against itself, since setHiddenField() appends inputs into
+             * the observed subtree. */
+            function runScan() {
+                scanScheduled = false;
+                const roots = pendingRoots;
+                pendingRoots = [];
+                for (let i = 0; i < roots.length; i++) {
+                    const node = roots[i];
+                    if (node.tagName === 'FORM') {
+                        observeForm(node);
+                    } else if (node.querySelectorAll) {
+                        const forms = node.querySelectorAll('form');
+                        for (let j = 0; j < forms.length; j++) {
+                            observeForm(forms[j]);
+                        }
+                    }
+                }
+            }
+
+            const domObserver = new MutationObserver(function (records) {
+                for (let i = 0; i < records.length; i++) {
+                    const added = records[i].addedNodes;
+                    for (let j = 0; j < added.length; j++) {
+                        // Element nodes only — text/comment nodes hold no forms.
+                        if (added[j].nodeType === 1) {
+                            pendingRoots.push(added[j]);
+                        }
+                    }
+                }
+                if (pendingRoots.length && !scanScheduled) {
+                    scanScheduled = true;
+                    if (typeof requestAnimationFrame === 'function') {
+                        requestAnimationFrame(runScan);
+                    } else {
+                        setTimeout(runScan, 0);
+                    }
+                }
+            });
+            domObserver.observe(document.documentElement, { childList: true, subtree: true });
+        }
     }
 
     /* ------------------------------------------------------------------ *

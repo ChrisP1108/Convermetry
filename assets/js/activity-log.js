@@ -25,6 +25,20 @@
         return node.innerHTML;
     }
 
+    /**
+     * For interpolation into a QUOTED ATTRIBUTE value. escapeHtml() serializes
+     * a text node, and the HTML serializer escapes quotes only in attribute
+     * context — so its output is safe as element content but lets a quote in a
+     * form name, provider or endpoint label break out of value="…".
+     *
+     * @param {*} text
+     * @returns {string}
+     */
+    function escapeAttr(text) {
+        // escapeHtml handles & first, so these replacements cannot double-encode.
+        return escapeHtml(text).replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    }
+
     function cfg(key) {
         return (typeof CVM_LOG !== 'undefined' && CVM_LOG[key]) ? CVM_LOG[key] : '';
     }
@@ -211,6 +225,15 @@
                         }
                         const data = resp.data;
 
+                        // The server clamps the requested page into range, so
+                        // adopt what it actually answered with — otherwise a
+                        // page that fell off the end (last row deleted, filter
+                        // narrowed) would stay in state and every later request
+                        // would re-ask for it.
+                        if (typeof data.currentPage === 'number') {
+                            state.page = data.currentPage;
+                        }
+
                         if (!initialized) {
                             updateFilterOptions(controls, data.years || [], data.months || [], data.endpoints || []);
                             updateListOptions(controls, '.cvm-filter-provider', data.providers || [], 'All Providers');
@@ -260,13 +283,13 @@
 
         yearSelect.innerHTML = '<option value="">All Years</option>';
         years.forEach(function (y) {
-            yearSelect.innerHTML += '<option value="' + escapeHtml(y) + '">' + escapeHtml(y) + '</option>';
+            yearSelect.innerHTML += '<option value="' + escapeAttr(y) + '">' + escapeHtml(y) + '</option>';
         });
 
         monthSelect.innerHTML = '<option value="">All Months</option>';
         months.forEach(function (m) {
             const name = MONTH_NAMES[parseInt(m, 10) - 1] || m;
-            monthSelect.innerHTML += '<option value="' + escapeHtml(m) + '">' + escapeHtml(name) + '</option>';
+            monthSelect.innerHTML += '<option value="' + escapeAttr(m) + '">' + escapeHtml(name) + '</option>';
         });
 
         updateEndpointOptions(controls, endpoints);

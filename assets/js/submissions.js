@@ -29,6 +29,20 @@
         return node.innerHTML;
     }
 
+    /**
+     * For interpolation into a QUOTED ATTRIBUTE value. escapeHtml() serializes
+     * a text node, and the HTML serializer escapes quotes only in attribute
+     * context — so its output is safe as element content but lets a quote in a
+     * form name, provider or endpoint label break out of value="…".
+     *
+     * @param {*} text
+     * @returns {string}
+     */
+    function escapeAttr(text) {
+        // escapeHtml handles & first, so these replacements cannot double-encode.
+        return escapeHtml(text).replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    }
+
     function cfg(key) {
         return (typeof CVM_SUB !== 'undefined' && CVM_SUB[key]) ? CVM_SUB[key] : '';
     }
@@ -260,7 +274,7 @@
             const cell = item.querySelector('.cvm-sub-lead-status');
             if (!cell) return;
 
-            let html = '<span class="cvm-status-chip ' + escapeHtml(data.chipClass) + '">' +
+            let html = '<span class="cvm-status-chip ' + escapeAttr(data.chipClass) + '">' +
                        escapeHtml(data.statusLabel) + '</span>';
 
             if (data.valueLabel) {
@@ -466,13 +480,13 @@
 
         yearSelect.innerHTML = '<option value="">All Years</option>';
         years.forEach(function (y) {
-            yearSelect.innerHTML += '<option value="' + escapeHtml(y) + '">' + escapeHtml(y) + '</option>';
+            yearSelect.innerHTML += '<option value="' + escapeAttr(y) + '">' + escapeHtml(y) + '</option>';
         });
 
         monthSelect.innerHTML = '<option value="">All Months</option>';
         months.forEach(function (m) {
             const name = MONTH_NAMES[parseInt(m, 10) - 1] || m;
-            monthSelect.innerHTML += '<option value="' + escapeHtml(m) + '">' + escapeHtml(name) + '</option>';
+            monthSelect.innerHTML += '<option value="' + escapeAttr(m) + '">' + escapeHtml(name) + '</option>';
         });
     }
 
@@ -535,7 +549,7 @@
 
         for (const machine in statuses) {
             if (Object.prototype.hasOwnProperty.call(statuses, machine)) {
-                html += '<option value="' + escapeHtml(machine) + '">' +
+                html += '<option value="' + escapeAttr(machine) + '">' +
                         escapeHtml(statuses[machine]) + '</option>';
             }
         }

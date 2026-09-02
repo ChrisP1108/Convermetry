@@ -23,6 +23,7 @@ use Convermetry\Database\MigrationRunner;
 use Convermetry\Forms\FormProviderRegistry;
 use Convermetry\Forms\SubmissionService;
 use Convermetry\Goals\GoalCompletions;
+use Convermetry\Goals\GoalRepository;
 use Convermetry\Leads\LeadEvents;
 use Convermetry\Notifications\NotificationDispatcher;
 use Convermetry\Notifications\NotificationQueue;
@@ -131,6 +132,11 @@ final class Plugin
         // handlers, so convermetry_settings_saved fires on a real write and
         // never on a form submitted without edits.
         SettingsEvents::init();
+
+        // Same idea, one option: keeps the autoloaded browser-selector mirror in
+        // step with cvm_goals no matter who writes it, so the tracker never has
+        // to pull the non-autoloaded goal list on a visitor page load.
+        GoalRepository::init();
 
         // Listens on 'convermetry_submission_recorded', which fires before the
         // webhook-endpoint check in SubmissionService::record() — so internal

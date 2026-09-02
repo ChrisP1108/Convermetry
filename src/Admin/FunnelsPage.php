@@ -89,6 +89,7 @@ final class FunnelsPage
 
         wp_localize_script('cvm-funnels', 'CVM_FUNNEL', [
             'maxSteps'  => FunnelSettings::MAX_STEPS,
+            'minSteps'  => FunnelSettings::MIN_STEPS,
             'stepTypes' => self::stepTypeLabels(),
             'goals'     => self::goalOptions(),
             'operators' => StepCompiler::PAGE_OPERATORS,
@@ -483,7 +484,11 @@ final class FunnelsPage
                     <tr>
                         <th scope="row">Steps</th>
                         <td>
-                            <div class="cvm-funnel-step-rows"></div>
+                            <div class="cvm-funnel-step-rows">
+                                <?php for ($i = 0; $i < FunnelSettings::MIN_STEPS; $i++) {
+                                    self::renderStepRow($i);
+                                } ?>
+                            </div>
                             <button type="button" class="button button-secondary cvm-funnel-add-step">Add step</button>
                             <p class="description">
                                 Between <?php echo esc_html((string) FunnelSettings::MIN_STEPS); ?> and
@@ -505,6 +510,72 @@ final class FunnelsPage
                     <button type="button" class="button button-secondary cvm-funnel-cancel" hidden>Cancel</button>
                 </p>
             </form>
+        </div>
+        <?php
+    }
+
+    /**
+     * Renders one empty step row.
+     *
+     * The editor needs MIN_STEPS rows before it can be submitted at all, and
+     * they used to be created only by funnels.js — so with the script blocked
+     * or erroring, the container rendered empty and every save failed the
+     * server-side minimum with no way for the user to add a row.
+     *
+     * KEEP IN SYNC with buildRow() in assets/js/funnels.js, which renders the
+     * identical markup for rows added after these. The class names are the
+     * contract: syncRow() and renumber() query them, and the JS adopts these
+     * rows rather than replacing them.
+     *
+     * @param int $index Zero-based row index, used for the field names.
+     * @return void
+     */
+    private static function renderStepRow(int $index): void
+    {
+        $operatorLabels = [
+            'equals'      => 'is exactly',
+            'contains'    => 'contains',
+            'starts_with' => 'starts with',
+            'ends_with'   => 'ends with',
+        ];
+        $goals = self::goalOptions();
+        ?>
+        <div class="cvm-funnel-step-row">
+            <span class="cvm-funnel-step-num"><?php echo esc_html((string) ($index + 1)); ?></span>
+            <select class="cvm-step-type" name="funnel[steps][<?php echo esc_attr((string) $index); ?>][type]">
+                <?php foreach (self::stepTypeLabels() as $key => $label) { ?>
+                    <option value="<?php echo esc_attr($key); ?>"<?php selected($key, 'page'); ?>>
+                        <?php echo esc_html($label); ?>
+                    </option>
+                <?php } ?>
+            </select>
+            <select class="cvm-step-operator" name="funnel[steps][<?php echo esc_attr((string) $index); ?>][operator]">
+                <?php foreach (StepCompiler::PAGE_OPERATORS as $operator) { ?>
+                    <option value="<?php echo esc_attr($operator); ?>"<?php selected($operator, 'equals'); ?>>
+                        <?php echo esc_html($operatorLabels[$operator]); ?>
+                    </option>
+                <?php } ?>
+            </select>
+            <?php /* Not hidden here: without JavaScript the row degrades to
+                     showing every control at once, which is noisy but usable.
+                     syncRow() hides the irrelevant ones as soon as JS runs. */ ?>
+            <select class="cvm-step-goal">
+                <?php if ($goals === []) { ?>
+                    <option value="">No goals configured yet</option>
+                <?php } else {
+                    foreach ($goals as $goalId => $goalName) { ?>
+                        <option value="<?php echo esc_attr($goalId); ?>"><?php echo esc_html($goalName); ?></option>
+                    <?php }
+                } ?>
+            </select>
+            <input type="text" class="cvm-step-value"
+                   name="funnel[steps][<?php echo esc_attr((string) $index); ?>][value]"
+                   value="" placeholder="/services/">
+            <input type="text" class="cvm-step-label"
+                   name="funnel[steps][<?php echo esc_attr((string) $index); ?>][label]"
+                   value="" placeholder="Label (optional)">
+            <button type="button" class="button-link cvm-btn-danger-link cvm-step-remove"
+                    aria-label="Remove step <?php echo esc_attr((string) ($index + 1)); ?>">Remove</button>
         </div>
         <?php
     }
