@@ -958,6 +958,957 @@ final class AboutPage
     ];
 
     /**
+     * The credential-free delivery `$context` every webhook lifecycle hook
+     * receives. Written once because all twelve of them share it exactly.
+     */
+    private const string DELIVERY_CONTEXT =
+        'Always the same fifteen keys, always all present: <code>message_type</code> '
+        . '(<code>analytics_report</code>/<code>form_submission</code>), <code>kind</code> '
+        . '(<code>scheduled</code>/<code>immediate</code>/<code>retry</code>/<code>test</code>), '
+        . '<code>attempt</code>, <code>delivery_id</code>, <code>is_test</code>, <code>endpoint_key</code>, '
+        . '<code>endpoint_label</code>, <code>endpoint_origin</code> (scheme + host only), '
+        . '<code>submission_id</code>, <code>conversion_id</code>, <code>form_key</code>, '
+        . '<code>window_start</code>, <code>window_end</code>, <code>transport_attempted</code>, '
+        . '<code>disposition</code>. Never a full URL, a header value, a body, or a signing secret';
+
+    /**
+     * What each argument actually holds, keyed by hook name then by the
+     * argument as it appears in the signature.
+     *
+     * Separate from {@see HOOKS} rather than widening that tuple: the entries
+     * there are one line of prose each and stay readable as a catalogue, while
+     * these are paragraphs. Anything absent here simply renders no argument
+     * table.
+     *
+     * @var array<string, array<string, string>>
+     */
+    private const array HOOK_ARGS = [
+        'convermetry_webhook_payload' => [
+            'array $payload' => 'The complete payload about to be encoded — <code>schema_version</code>, '
+                . '<code>source</code>, <code>plugin_version</code>, <code>message_type</code>, '
+                . '<code>website_info</code>, <code>generated_at</code>, and then either <code>analytics</code> or '
+                . '<code>submission</code>. Return it modified',
+            'string $messageType' => '<code>\'analytics_report\'</code> or <code>\'form_submission\'</code>',
+            'array $meta' => '<code>[\'start\', \'end\']</code> (Y-m-d) for reports, '
+                . '<code>[\'submission_id\']</code> for submissions',
+        ],
+        'convermetry_webhook_payload_extensions' => [
+            'array $extensions' => 'Namespaced blocks to publish as the payload\'s <code>extensions</code> '
+                . 'property. Keys <strong>must</strong> be <code>vendor/thing</code>; the whole structure is bounded '
+                . 'to 32 KB, 50 keys, and JSON primitives. Return it empty and no property is added at all',
+            'string $messageType' => '<code>\'analytics_report\'</code> or <code>\'form_submission\'</code>',
+            'array $meta' => 'As above: report window, or the submission id',
+        ],
+        'convermetry_webhook_query_args' => [
+            'array $params' => 'Query parameters to append to the endpoint URL, already merged global → page → '
+                . 'per-form → runtime. Re-normalized after you return it to bounded scalar keys and values, order '
+                . 'preserved',
+            'array $context' => self::DELIVERY_CONTEXT,
+        ],
+        'convermetry_webhook_headers' => [
+            'array $headers' => 'Non-protocol request headers, already merged global → per-form → runtime. '
+                . '<code>Content-Type</code>, <code>Host</code>, <code>Content-Length</code>, '
+                . '<code>Transfer-Encoding</code>, <code>Connection</code>, <code>User-Agent</code>, '
+                . '<code>Idempotency-Key</code> and <code>X-Convermetry-Signature</code> are restored to their '
+                . 'pre-filter state afterwards, so touching them has no effect',
+            'array $context' => self::DELIVERY_CONTEXT,
+        ],
+        'convermetry_webhook_timeout' => [
+            'int $timeout' => 'Seconds for one attempt; default 15. A return outside 1–30 is '
+                . '<strong>ignored, not clamped</strong> — the default stands',
+            'array $context' => self::DELIVERY_CONTEXT,
+        ],
+        'convermetry_form_delivery_queued' => [
+            'array $context' => self::DELIVERY_CONTEXT,
+        ],
+        'convermetry_webhook_delivery_frozen' => [
+            'array $context' => self::DELIVERY_CONTEXT,
+            'string $storage' => '<code>\'memory\'</code> for analytics (persisted only if a retry follows) or '
+                . '<code>\'queue_row\'</code> for a form delivery (verified written to the queue table)',
+            'int $bodyBytes' => 'Size of the frozen body. These exact bytes are what every retry re-sends',
+        ],
+        'convermetry_webhook_before_send' => [
+            'array $context' => self::DELIVERY_CONTEXT,
+            'array $meta' => 'Metadata only — <code>body_bytes</code>, <code>body_sha256</code>, '
+                . '<code>header_names</code> (names, not values) and <code>signed</code>. Deliberately no URL, no '
+                . 'header values, no body',
+        ],
+        'convermetry_webhook_delivery_attempted' => [
+            'array $context' => self::DELIVERY_CONTEXT,
+            'bool $ok' => 'Whether the transport succeeded. Not whether the delivery is finished — nothing has '
+                . 'decided a retry or queue disposition yet',
+            'int $code' => 'HTTP status, or <code>0</code> when nothing reached the wire',
+            'string $message' => 'Short transport-level reason; empty on success',
+        ],
+        'convermetry_delivery_attempt_logged' => [
+            'array $context' => self::DELIVERY_CONTEXT,
+            'string $disposition' => '<code>\'stored\'</code>, <code>\'suppressed\'</code> (a '
+                . '<code>convermetry_delivery_log_row</code> callback returned false) or <code>\'failed\'</code>',
+        ],
+        'convermetry_webhook_delivery_succeeded' => [
+            'array $context' => self::DELIVERY_CONTEXT,
+        ],
+        'convermetry_webhook_retry_scheduled' => [
+            'array $context' => self::DELIVERY_CONTEXT,
+            'int $nextAttempt' => 'The attempt number that will run next (1-based)',
+            'int $nextAttemptAt' => 'Unix timestamp it becomes due — already persisted, never speculative',
+        ],
+        'convermetry_webhook_retry_chain_exhausted' => [
+            'array $context' => self::DELIVERY_CONTEXT,
+        ],
+        'convermetry_webhook_delivery_abandoned' => [
+            'array $context' => self::DELIVERY_CONTEXT,
+            'string $reason' => 'Why it was given up on. Terminal: the queue row is deleted',
+        ],
+        'convermetry_webhook_delivery_canceled' => [
+            'array $context' => self::DELIVERY_CONTEXT,
+            'string $reason' => 'Currently <code>\'submission_deleted\'</code> — the submission went away '
+                . 'before the worker reached its row',
+        ],
+        'convermetry_retry_schedule' => [
+            'int[] $delays' => 'Seconds to wait before each retry; default '
+                . '<code>[300, 1800, 7200, 21600, 57600]</code>. Each entry is clamped to a minimum of 60, and an '
+                . 'empty or fully invalid list falls back to the default. <strong>The list length is the attempt '
+                . 'count</strong> — a three-entry list means three retries',
+        ],
+        'convermetry_webhook_report_limit' => [
+            'int $limit' => 'Max rows per <code>top_*</code> list in an analytics payload; default 200, '
+                . 'clamped to a minimum of 1. Does not apply to <code>conversions.recent[]</code>',
+        ],
+        'convermetry_delivery_log_row' => [
+            'array|false $row' => 'The Activity Log row about to be written: endpoint, status, timing, and '
+                . 'already-redacted request/response bodies capped at 64 KB. Return an array to store it, or '
+                . '<code>false</code> (or anything non-array) to skip logging this attempt. Skipping affects the log '
+                . 'only — the delivery still happens',
+        ],
+        'convermetry_allow_insecure_webhooks' => [
+            'bool $allow' => 'Whether an <code>http://</code> endpoint may be saved. Evaluated when endpoints '
+                . 'are <strong>saved</strong>, not at send time',
+        ],
+        'convermetry_allowed_hosts' => [
+            'string[] $hosts' => 'Lowercase hostnames, no scheme or path. Defaults to the hosts of '
+                . '<code>home_url()</code> and <code>site_url()</code>. <strong>Memoized per request.</strong> This '
+                . 'widens what the public ingestion endpoint accepts — add only hosts you control',
+        ],
+
+        'convermetry_should_enqueue_tracker' => [
+            'bool $should' => 'Whether to enqueue the tracker on this request. Runs after the configured '
+                . 'exclusions, so returning <code>true</code> cannot resurrect a suppressed load — you can only '
+                . 'narrow',
+            'array $enabled' => 'Event types currently switched on, as <code>type => true</code>',
+        ],
+        'convermetry_tracker_config_extensions' => [
+            'array $extensions' => 'Namespaced data for <code>window.ConvermetryConfig.extensions</code>. '
+                . 'Smallest budget in the plugin — 8 KB, 20 keys — because it is inlined into every page view. '
+                . '<strong>Public to every visitor</strong>: never a key, a token, or anything visitor-specific',
+            'array $enabled' => 'Event types currently switched on, as <code>type => true</code>',
+        ],
+        'convermetry_should_track_event' => [
+            'bool $should' => 'Whether to record this one event. <code>false</code> drops it and nothing else',
+            'string $type' => 'Event type — <code>pageview</code>, <code>click</code>, '
+                . '<code>form_submit</code>, <code>form_success</code>, <code>form_view</code>, '
+                . '<code>form_start</code>, <code>form_error</code>, <code>hover</code>, '
+                . '<code>scroll_depth</code>, <code>custom_event</code>',
+            'array $data' => 'The sanitized event. Runs <strong>last</strong> in sanitization, so this is '
+                . 'already whitelisted, bounded and scalar — raw anonymous input never reaches a hook',
+        ],
+        'convermetry_tracked_event' => [
+            'array $row' => 'The database row about to be inserted: <code>event_type</code>, '
+                . '<code>page_url</code>, <code>target_url</code>, <code>session_id</code>, '
+                . '<code>element_label</code>, <code>form_key</code>, <code>event_value</code>, the campaign '
+                . 'columns, and <code>ip_address</code> when IP storage is on. Return <code>false</code> to drop it',
+            'string $type' => 'The event type, for convenience',
+        ],
+        'convermetry_client_ip' => [
+            'string $ip' => 'Defaults to <code>REMOTE_ADDR</code>. Must return something that validates as '
+                . 'IPv4/IPv6 or the address stores empty. <strong>Memoized per request.</strong> A comma-joined '
+                . '<code>X-Forwarded-For</code> chain is not an address — pick the hop your proxy guarantees. '
+                . 'Pseudonymize in <code>convermetry_stored_ip</code>, not here: this value is also the rate-limit '
+                . 'identity',
+        ],
+        'convermetry_stored_ip' => [
+            'string $ip' => 'The address about to be <strong>persisted</strong>, after the privacy gates. '
+                . 'Truncate, hash, or return <code>\'\'</code> to store nothing. Must be a valid IPv4/IPv6 address '
+                . 'or <code>\'\'</code>. Does not affect the rate-limit identity, which would collapse every visitor '
+                . 'into one bucket',
+        ],
+        'convermetry_tracking_batch_recorded' => [
+            'int $stored' => 'Rows that survived deduplication and were written',
+            'int $accepted' => 'Events that survived sanitization',
+            'int $offered' => 'Events the batch arrived with. <code>offered ≥ accepted ≥ stored</code>',
+            '?string $batchId' => 'The client\'s batch id, or <code>null</code> when it sent none',
+        ],
+        'convermetry_tracking_rate_limited' => [
+            'int $events' => 'How many events the rejected batch carried',
+            'int $window' => 'The limiter window in seconds (60)',
+        ],
+        'convermetry_rate_limits' => [
+            'array $defaults' => '<code>[\'per_ip\' => 300, \'site_wide\' => 3000]</code>, in events per '
+                . 'minute. Both clamped to a minimum of 1; a non-array return or a missing key falls back to the '
+                . 'default. Charged <strong>per event</strong>, so one 20-event batch costs 20',
+        ],
+        'convermetry_source_aliases' => [
+            'array $aliases' => 'Raw lowercase <code>utm_source</code> value => canonical name. '
+                . '<strong>Add to the map, do not replace it</strong> — a fresh array loses every default. A source '
+                . 'with no entry is stored exactly as submitted',
+        ],
+        'convermetry_channel' => [
+            'string $channel' => 'The channel classified at ingestion — <code>direct</code>, '
+                . '<code>organic</code>, <code>paid</code>, <code>social</code>, <code>email</code>, '
+                . '<code>referral</code>, <code>other</code>',
+            'array $row' => 'The event row being classified, including its campaign columns and referrer',
+            'string $type' => 'The event type being classified',
+        ],
+
+        'convermetry_analytics_sections' => [
+            'array $sections' => '<code>AnalyticsSectionInterface</code> adapters, keyed by a namespaced key. '
+                . 'Each adds a dashboard panel <strong>and</strong> contributes to <code>analytics.extensions</code> '
+                . 'on the wire. A typed registry, never SQL — there is deliberately no way to hand a query fragment '
+                . 'or table name to a path that runs unattended on cron. A section that throws is dropped, not '
+                . 'propagated',
+        ],
+        'convermetry_analytics_extensions' => [
+            'array $extensions' => 'Extension data for this summary, pre-populated from registered sections. '
+                . 'Bounded to 32 KB / 50 keys. Computed once per delivery at freeze time — a retry never rebuilds it',
+            'string $start' => 'Window start, <code>Y-m-d</code>',
+            'string $end' => 'Window end, <code>Y-m-d</code>',
+            'int $limit' => 'The effective <code>top_*</code> row limit for this report',
+        ],
+        'convermetry_analytics_periods' => [
+            'int[] $periods' => 'Reporting periods in days offered on the dashboard; default '
+                . '<code>[7, 30, 90]</code>. Validated, deduplicated, sorted, and <strong>clamped to the retention '
+                . 'window</strong> — a period longer than the data would draw a chart that looks like a traffic '
+                . 'collapse',
+        ],
+        'convermetry_analytics_report_failed' => [
+            'string $component' => 'Which subsystem was building the report',
+            'string $reportKey' => 'The specific report that failed',
+            'string $start' => 'Window start, <code>Y-m-d</code>',
+            'string $end' => 'Window end, <code>Y-m-d</code>',
+            'string $error' => 'The exception <strong>class name</strong> — never a message, because a database '
+                . 'error message quotes the failing statement',
+        ],
+        'convermetry_analytics_admin_panels' => [
+            'string $start' => 'Window start of the dashboard\'s current period, <code>Y-m-d</code>',
+            'string $end' => 'Window end, <code>Y-m-d</code>',
+        ],
+
+        'convermetry_should_record_submission' => [
+            'bool $should' => 'Whether to record at all. <code>false</code> skips the conversion event, the '
+                . 'row, the queue and the notifications — and the visitor still sees success, because returning a '
+                . 'failure would make Elementor\'s synchronous mode reject a valid form',
+            'string $formKey' => 'Provider-qualified form identity, e.g. <code>gravityforms:7</code>',
+            'string $provider' => 'Provider key, e.g. <code>gravityforms</code>',
+            'array $fields' => 'Normalized <code>[\'id\', \'label\', \'value\']</code> descriptors, so spam '
+                . 'rules can read them. <strong>Contains PII</strong>',
+        ],
+        'convermetry_submission_fields' => [
+            'array $fields' => 'Normalized <code>[\'id\', \'label\', \'value\']</code> descriptors. A '
+                . '<strong>changed</strong> result is re-normalized, so <code>cvm_*</code> stays stripped and the '
+                . 'descriptor shape holds. <strong>Contains PII</strong>',
+            'string $formKey' => 'Provider-qualified form identity',
+            'string $provider' => 'Provider key',
+        ],
+        'convermetry_submission_context_extensions' => [
+            'array $extensions' => 'Namespaced data added to the stored analytics context. Attached once '
+                . 'before persistence, so every endpoint and every retry sees the same thing. Cannot replace '
+                . 'conversion id, session id, attribution, timestamps or form identity',
+            'string $formKey' => 'Provider-qualified form identity',
+            'string $provider' => 'Provider key',
+        ],
+        'convermetry_submission_recorded' => [
+            '$submissionId' => 'The public submission id (string)',
+            '$conversionId' => 'The conversion id shared with the tracker\'s own <code>form_success</code> '
+                . 'event, so the two can never double-count',
+            '$context' => 'The stored analytics context — session id, channel, attribution, entrance referrer, '
+                . 'landing page, device',
+        ],
+        'convermetry_submission_recorded_details' => [
+            'int $rowId' => 'Database row id',
+            'string $submissionId' => 'The public submission id',
+            'array $form' => '<code>{provider, form_key, form_name, native_id}</code>',
+            'array $fields' => 'The stored field descriptors. <strong>Contains PII</strong> — use '
+                . '<code>convermetry_submission_recorded</code> if you only need to know a submission happened',
+        ],
+        'convermetry_submission_duplicate' => [
+            'string $submissionId' => 'The id of the submission already recorded',
+            'string $conversionId' => 'Its conversion id',
+            'string $formKey' => 'Provider-qualified form identity',
+        ],
+        'convermetry_submission_delivery_state_changed' => [
+            'string $submissionId' => 'The public submission id',
+            'string $state' => 'The new state — <code>pending</code>, <code>delivered</code>, '
+                . '<code>failed</code>, <code>abandoned</code> or <code>not_configured</code>',
+            'string $previous' => 'The state it moved from. Fires only on a genuine transition; the state is '
+                . 'recomputed several times per delivery and most recomputations are silent',
+        ],
+        'convermetry_submission_deleted' => [
+            'int $id' => 'The database row id that was removed',
+            'string $submissionId' => 'The public submission id. Ids only — the data is what is being erased',
+        ],
+        'convermetry_form_settings_saved' => [
+            'string[] $formKeys' => 'The form keys whose settings were written. Fires from the storage layer '
+                . 'on a real write, so WP-CLI callers raise it too',
+        ],
+        'convermetry_discovered_forms' => [
+            'array $forms' => 'Forms found for this provider. Runs <strong>before</strong> the 5-minute cache '
+                . 'is written, and the result is normalized back to <code>{native_id, name}</code> with empty ids '
+                . 'dropped and duplicates collapsed',
+            'string $providerKey' => 'Which provider was asked, e.g. <code>wpforms</code>',
+        ],
+        'convermetry_form_providers' => [
+            'FormProviderInterface[] $providers' => 'Adapters keyed by <code>getKey()</code>. Entries that are '
+                . 'not instances of the interface are silently discarded, and an adapter reusing a bundled key '
+                . '<strong>replaces</strong> it. <strong>Memoized on first use</strong> — register at plugin load '
+                . 'time, not on <code>init</code>',
+        ],
+        'convermetry_submission_csv_columns' => [
+            'array $columns' => 'Ordered <code>key => header label</code> map for the export. Paired with the '
+                . 'values filter <strong>by key, never by position</strong>, so the two cannot drift apart',
+        ],
+        'convermetry_submission_csv_values' => [
+            'array $values' => 'One row as <code>key => value</code>. Values must be scalar or null, and go '
+                . 'through the same formula-injection escaping as the core ones. <strong>Contains PII</strong>',
+            'array $row' => 'The full submission row being exported. Runs per row while streaming — keep it '
+                . 'cheap',
+        ],
+        'convermetry_submissions_columns' => [
+            'array $columns' => 'Extra cells for this list row, as <code>key => already-escaped HTML</code>. '
+                . '<strong>Printed verbatim — escape it yourself</strong>',
+            'array $row' => 'The submission row. <strong>Contains PII</strong>',
+        ],
+        'convermetry_submission_detail_sections' => [
+            'array $row' => 'The submission being displayed. Runs after the nonce and capability checks; '
+                . '<strong>escape your own output</strong>. <strong>Contains PII</strong>',
+        ],
+        'convermetry_submission_row_actions' => [
+            'array $row' => 'The submission whose action bar is rendering. Nonce-protect anything that acts. '
+                . '<strong>Contains PII</strong>',
+        ],
+        'convermetry_form_submission' => [
+            'array $formIdentifier' => '<code>[\'form_name\' => ..., \'form_id\' => ...]</code>. '
+                . '<code>form_id</code> is your own stable identifier for this form',
+            'array $fields' => 'Either a list of <code>[\'id\', \'label\', \'value\']</code> descriptors '
+                . '(preferred — <code>value</code> may be an array for multi-selects) <strong>or</strong> the '
+                . 'historical <code>name => value</code> map',
+            'array $context = []' => 'Optional. <code>url_query</code> and <code>headers</code> maps merged '
+                . 'into this delivery only',
+        ],
+
+        'convermetry_should_record_goal_completion' => [
+            'bool $should' => 'Whether to record this matched completion',
+            'array $row' => 'The completion row, <strong>for inspection only</strong> — nothing you return '
+                . 'changes it. Its completion id, definition hash, event uid, dedupe key and timestamp are identity, '
+                . 'and a gate that could rewrite them could silently defeat once-per-session goals',
+            'array $goal' => 'The goal definition that matched',
+        ],
+        'convermetry_goal_completion' => [
+            'array $row' => 'The completion row about to be written — completion id, goal id, definition '
+                . 'hash, session id, event uid, dedupe key, value, timestamp',
+            'array $goal' => 'The goal definition that matched',
+        ],
+        'convermetry_goal_matched' => [
+            'int $stored' => 'How many completions were actually written',
+            'array $rows' => 'The completion rows that were offered',
+        ],
+        'convermetry_goal_completions_recorded' => [
+            'int $stored' => 'Rows written after <code>INSERT IGNORE</code> against the dedupe key',
+            'int $offered' => 'Rows attempted. The two differ whenever a completion was already recorded',
+            'array $completionIds' => 'The ids <strong>offered</strong>, not the ids stored',
+        ],
+        'convermetry_goal_saved' => [
+            'string $goalId' => 'Immutable goal id',
+            'array $goal' => 'The definition as stored',
+            '?array $previous' => 'The definition before this write, or <code>null</code> for a new goal',
+        ],
+        'convermetry_goal_deleted' => [
+            'string $goalId' => 'Immutable goal id. The deletion is soft: completions and the name survive so '
+                . 'historical reports keep working',
+            'string $now' => 'UTC <code>Y-m-d H:i:s</code> deletion timestamp',
+        ],
+        'convermetry_funnel_saved' => [
+            'string $funnelId' => 'Immutable funnel id',
+            'array $funnel' => 'The definition as stored, including its ordered steps',
+            '?array $previous' => 'The definition before this write, or <code>null</code> for a new funnel. '
+                . 'Editing a funnel changes what every past report says, retroactively',
+        ],
+        'convermetry_funnel_deleted' => [
+            'string $funnelId' => 'Immutable funnel id',
+            'string $now' => 'UTC <code>Y-m-d H:i:s</code> deletion timestamp',
+        ],
+        'convermetry_lead_status_updated' => [
+            '$submissionId' => 'The submission whose lead changed (string)',
+            '$toStatus' => 'The new status — <code>new</code>, <code>contacted</code>, '
+                . '<code>qualified</code>, <code>won</code>, <code>lost</code>',
+            '$fromStatus' => 'The status it moved from',
+            '?string $value' => 'Exact decimal <strong>string</strong>, never a float. <code>null</code> means '
+                . 'no value — which is not <code>\'0.00\'</code>',
+            'string $currency' => 'ISO 4217 code, stamped at the time of the change and never converted',
+        ],
+        'convermetry_lead_updated' => [
+            'string $submissionId' => 'The submission whose lead changed',
+            'array $to' => '<code>{status, value, currency}</code> after the change',
+            'array $from' => '<code>{status, value, currency}</code> before it',
+            'int $userId' => 'Who made the change',
+            'string $leadEventId' => 'The history row this change wrote. Fires <strong>after</strong> the '
+                . 'transaction commits',
+        ],
+
+        'convermetry_should_queue_notification' => [
+            'bool $should' => 'Whether to queue notifications for this submission. Runs after the configured '
+                . 'rules already said yes, so it can only narrow',
+            'string $formKey' => 'Provider-qualified form identity',
+            'array $identity' => 'Identity columns only — <strong>never field values</strong>',
+        ],
+        'convermetry_notification_recipients' => [
+            'array $recipients' => 'Addresses to queue. Each becomes its own row with its own retry chain. '
+                . 'Re-validated through <code>sanitize_email()</code>/<code>is_email()</code>, deduplicated, and '
+                . 'capped at 20. Runs once at <strong>queue</strong> time',
+            'string $formKey' => 'Provider-qualified form identity',
+            'array $identity' => 'Identity columns only',
+        ],
+        'convermetry_notification_message' => [
+            'array $message' => '<code>subject</code>, <code>html</code> and <code>headers</code>. The '
+                . '<strong>recipient is not changeable</strong> — one row is one address, and a per-attempt rewrite '
+                . 'could collapse two rows onto one mailbox. Subject gets header-injection stripping and a 200-char '
+                . 'cap, the body a 256 KB cap, and the four required headers are reinstated. '
+                . '<strong><code>html</code> contains PII</strong>',
+            'string $submissionId' => 'The submission being notified about',
+            'int $attempt' => 'Which attempt this is — the filter runs per attempt',
+        ],
+        'convermetry_notification_queued' => [
+            'string $submissionId' => 'The submission being notified about',
+            'string $recipient' => 'The address this row will mail',
+            'int $attempt' => 'Attempt number, 1 on first queue',
+        ],
+        'convermetry_notification_before_send' => [
+            'string $submissionId' => 'The submission being notified about',
+            'string $recipient' => 'The address about to be mailed. No subject, no body, no fields',
+            'int $attempt' => 'Which attempt is about to run',
+        ],
+        'convermetry_notification_accepted' => [
+            'string $submissionId' => 'The submission being notified about',
+            'string $recipient' => 'The address that was mailed',
+            'int $attempt' => 'Which attempt succeeded. "Accepted", never "delivered" — the local transport '
+                . 'took the message, which is not receipt',
+        ],
+        'convermetry_notification_retry_scheduled' => [
+            'string $submissionId' => 'The submission being notified about',
+            'string $recipient' => 'The address that will be retried',
+            'int $nextAttempt' => 'The attempt number that will run next',
+            'int $nextAttemptAt' => 'Unix timestamp it becomes due',
+        ],
+        'convermetry_notification_abandoned' => [
+            'string $submissionId' => 'The submission that will never be notified about',
+            'string $recipient' => 'The address that will never be mailed',
+            'int $attempt' => 'The attempt that exhausted the chain',
+            'string $error' => 'Why the last attempt failed',
+        ],
+        'convermetry_notification_canceled' => [
+            'string $submissionId' => 'The submission whose notifications were dropped',
+            'string $recipient' => 'The address — <strong>empty on a bulk clear</strong>, which fires one '
+                . 'aggregate action rather than reading addresses back purely to emit a hook',
+            'string $reason' => '<code>\'expired\'</code>, <code>\'submission_deleted\'</code> or '
+                . '<code>\'admin_clear\'</code>',
+            'int $count' => 'How many rows were cancelled — 1 per row from the worker, N for a bulk clear',
+        ],
+        'convermetry_notification_retry_schedule' => [
+            'int[] $delays' => 'Seconds before each email retry; default <code>[300, 900, 3600]</code>. '
+                . 'Entries clamped to a minimum of 60, non-numeric entries discarded, an empty list falls back. '
+                . 'Deliberately separate from the webhook schedule, and the hard two-hour TTL sits above it '
+                . 'regardless',
+        ],
+        'convermetry_sensitive_keys' => [
+            'string[] $patterns' => 'The <strong>effective</strong> list of credential-looking names redacted '
+                . 'from the Activity Log and omitted from notification emails — so extend it; a shorter list weakens '
+                . 'both surfaces. Matched as substrings of a canonical form (lowercased, non-alphanumeric runs '
+                . 'collapsed to <code>_</code>), so <code>API Key</code>, <code>x-api-key</code> and '
+                . '<code>API_KEY</code> all match <code>api_key</code>',
+        ],
+
+        'convermetry_retention_cleanup_started' => [
+            'string $store' => 'Which store is being pruned',
+            'string $cutoff' => 'UTC <code>Y-m-d H:i:s</code>; rows older than this go. Observational — a '
+                . 'listener cannot cancel the pass, change the cutoff, or extend retention',
+        ],
+        'convermetry_retention_cleanup_completed' => [
+            'string $store' => 'Which store was pruned',
+            'string $cutoff' => 'The cutoff that was applied',
+            'int $deleted' => 'Rows removed in this pass',
+            'bool $moreRemain' => 'Whether rows past the cutoff are still there. Convermetry schedules any '
+                . 'follow-up pass itself',
+            'string $outcome' => '<code>completed</code>, <code>truncated</code>, <code>query_failed</code> '
+                . 'or <code>lock_lost</code>',
+        ],
+        'convermetry_migration_started' => [
+            'string $context' => '<code>\'cli\'</code>, <code>\'cron\'</code> or <code>\'admin\'</code>. The '
+                . 'lease is held while this runs — <strong>do not throw</strong>, or it stays held until it expires. '
+                . 'No SQL is passed to any migration hook',
+        ],
+        'convermetry_migration_completed' => [
+            'string $context' => '<code>\'cli\'</code>, <code>\'cron\'</code> or <code>\'admin\'</code>',
+            'bool $pending' => 'Whether migrations remain. Fires after the lease is released and after the '
+                . 'reschedule decision, so this is settled. Pending mid-migration is normal, not an error',
+        ],
+        'convermetry_migration_failed' => [
+            'string $context' => '<code>\'cli\'</code>, <code>\'cron\'</code> or <code>\'admin\'</code>',
+            'string $error' => 'The exception <strong>class name</strong>. Fires after the lease is released '
+                . 'and before the failure continues to the caller. A migration that merely did not land is not a '
+                . 'failure',
+        ],
+        'convermetry_storage_error' => [
+            'string $subsystem' => 'Which subsystem needed the write',
+            'string $operation' => 'What it was doing',
+            'string $code' => 'A stable short code for the failure',
+            'array $context' => 'Identifying ids and counts. Never SQL, never '
+                . '<code>$wpdb->last_error</code>, never submitted fields, IPs or secrets. Reserved for '
+                . '<em>verified</em> failures: a duplicate <code>INSERT IGNORE</code>, an abandoned notification or '
+                . 'a still-pending migration do not fire it',
+        ],
+        'convermetry_settings_saved' => [
+            'string $section' => '<code>general</code>, <code>webhooks</code>, <code>notifications</code>, '
+                . '<code>goals</code> or <code>funnels</code>',
+            'string[] $changedKeys' => '<strong>Key names only, never values</strong> — two of these sections '
+                . 'hold signing secrets and token-bearing endpoint URLs. Listens on WordPress\'s own option-write '
+                . 'hooks, so it fires on a real write only and catches CLI and migration writers too',
+        ],
+        'convermetry_admin_capability' => [
+            'string $capability' => 'The capability required, defaulting to <code>manage_options</code>. Must '
+                . 'be a non-empty lowercase <code>[a-z0-9_]</code> name; anything else falls back, because '
+                . '<code>current_user_can(\'\')</code> would lock the owner out',
+            'string $scope' => 'Which surface — <code>analytics.view</code>, <code>submissions.view</code>, '
+                . '<code>submissions.export</code>, <code>submissions.delete</code>, <code>leads.edit</code>, '
+                . '<code>goals.manage</code>, <code>funnels.manage</code>, <code>forms.manage</code>, '
+                . '<code>notifications.manage</code>, <code>webhooks.manage</code>, <code>activity.view</code>, '
+                . '<code>activity.manage</code>, <code>api.manage</code>, <code>settings.manage</code>. Applied to '
+                . 'menu visibility <strong>and</strong> every handler behind it',
+        ],
+        'convermetry_delivery_log_api_item' => [
+            'array $extensions' => 'Namespaced additions for this REST item, bounded to 4 KB / 10 keys',
+            'array $item' => 'The item as it will be returned, after endpoint-URL redaction and body decoding. '
+                . 'Its core keys are <strong>immutable</strong> — a filter that could rewrite <code>success</code> '
+                . 'would let a plugin lie to a monitoring dashboard',
+        ],
+    ];
+
+    /**
+     * A short, runnable example per hook.
+     *
+     * Each one is a complete registration a reader can paste into an mu-plugin
+     * and adjust — the priority and argument count are always shown, because
+     * the commonest hook mistake in WordPress is a callback that silently never
+     * receives its later arguments.
+     *
+     * @var array<string, string>
+     */
+    private const array HOOK_EXAMPLES = [
+        'convermetry_webhook_payload' => "add_filter('convermetry_webhook_payload', function (array \$payload, string \$messageType, array \$meta): array {\n"
+            . "    if (\$messageType === 'form_submission') {\n"
+            . "        \$payload['submission']['received_by'] = get_bloginfo('name');\n"
+            . "    }\n\n"
+            . "    return \$payload;\n"
+            . "}, 10, 3);",
+        'convermetry_webhook_payload_extensions' => "add_filter('convermetry_webhook_payload_extensions', function (array \$extensions, string \$messageType, array \$meta): array {\n"
+            . "    \$extensions['acme/crm'] = ['tenant' => get_option('acme_tenant_id'), 'source' => 'wordpress'];\n\n"
+            . "    return \$extensions;\n"
+            . "}, 10, 3);",
+        'convermetry_webhook_query_args' => "add_filter('convermetry_webhook_query_args', function (array \$params, array \$context): array {\n"
+            . "    \$params['env'] = wp_get_environment_type();\n\n"
+            . "    return \$params;\n"
+            . "}, 10, 2);",
+        'convermetry_webhook_headers' => "add_filter('convermetry_webhook_headers', function (array \$headers, array \$context): array {\n"
+            . "    // Content-Type, Host, User-Agent, Idempotency-Key and the signature\n"
+            . "    // header are restored afterwards — setting them here does nothing.\n"
+            . "    \$headers['X-Acme-Tenant'] = get_option('acme_tenant_id');\n\n"
+            . "    return \$headers;\n"
+            . "}, 10, 2);",
+        'convermetry_webhook_timeout' => "add_filter('convermetry_webhook_timeout', function (int \$timeout, array \$context): int {\n"
+            . "    // Outside 1-30 the return is ignored, not clamped.\n"
+            . "    return \$context['message_type'] === 'analytics_report' ? 25 : \$timeout;\n"
+            . "}, 10, 2);",
+        'convermetry_form_delivery_queued' => "add_action('convermetry_form_delivery_queued', function (array \$context): void {\n"
+            . "    error_log(sprintf('queued %s for %s', \$context['delivery_id'], \$context['endpoint_label']));\n"
+            . "});",
+        'convermetry_webhook_delivery_frozen' => "add_action('convermetry_webhook_delivery_frozen', function (array \$context, string \$storage, int \$bodyBytes): void {\n"
+            . "    if (\$bodyBytes > 512000) {\n"
+            . "        error_log(\"large payload frozen ({\$bodyBytes} bytes) for {\$context['endpoint_label']}\");\n"
+            . "    }\n"
+            . "}, 10, 3);",
+        'convermetry_webhook_before_send' => "add_action('convermetry_webhook_before_send', function (array \$context, array \$meta): void {\n"
+            . "    // Do not throw here — the request this announces would not happen.\n"
+            . "    error_log(sprintf('sending %s attempt %d, %d bytes, signed: %s',\n"
+            . "        \$context['delivery_id'], \$context['attempt'], \$meta['body_bytes'],\n"
+            . "        \$meta['signed'] ? 'yes' : 'no'));\n"
+            . "}, 10, 2);",
+        'convermetry_webhook_delivery_attempted' => "add_action('convermetry_webhook_delivery_attempted', function (array \$context, bool \$ok, int \$code, string \$message): void {\n"
+            . "    if (!\$ok) {\n"
+            . "        error_log(\"delivery {\$context['delivery_id']} failed: {\$code} {\$message}\");\n"
+            . "    }\n"
+            . "}, 10, 4);",
+        'convermetry_delivery_attempt_logged' => "add_action('convermetry_delivery_attempt_logged', function (array \$context, string \$disposition): void {\n"
+            . "    if (\$disposition === 'failed') {\n"
+            . "        error_log(\"could not log attempt for {\$context['delivery_id']}\");\n"
+            . "    }\n"
+            . "}, 10, 2);",
+        'convermetry_webhook_delivery_succeeded' => "add_action('convermetry_webhook_delivery_succeeded', function (array \$context): void {\n"
+            . "    if (\$context['message_type'] === 'form_submission') {\n"
+            . "        do_action('acme/crm_synced', \$context['submission_id']);\n"
+            . "    }\n"
+            . "});",
+        'convermetry_webhook_retry_scheduled' => "add_action('convermetry_webhook_retry_scheduled', function (array \$context, int \$nextAttempt, int \$nextAttemptAt): void {\n"
+            . "    error_log(sprintf('retry %d for %s due at %s', \$nextAttempt, \$context['endpoint_label'],\n"
+            . "        gmdate('c', \$nextAttemptAt)));\n"
+            . "}, 10, 3);",
+        'convermetry_webhook_retry_chain_exhausted' => "add_action('convermetry_webhook_retry_chain_exhausted', function (array \$context): void {\n"
+            . "    // \"This endpoint is failing\", not \"this data is gone\" — the frozen\n"
+            . "    // body stays in the retry state and the next dispatch resumes it.\n"
+            . "    wp_mail(get_option('admin_email'), 'Webhook endpoint failing',\n"
+            . "        \$context['endpoint_label'] . ' has exhausted its retry chain.');\n"
+            . "});",
+        'convermetry_webhook_delivery_abandoned' => "add_action('convermetry_webhook_delivery_abandoned', function (array \$context, string \$reason): void {\n"
+            . "    error_log(\"abandoned {\$context['submission_id']} to {\$context['endpoint_label']}: {\$reason}\");\n"
+            . "}, 10, 2);",
+        'convermetry_webhook_delivery_canceled' => "add_action('convermetry_webhook_delivery_canceled', function (array \$context, string \$reason): void {\n"
+            . "    error_log(\"canceled {\$context['delivery_id']}: {\$reason}\");\n"
+            . "}, 10, 2);",
+        'convermetry_retry_schedule' => "add_filter('convermetry_retry_schedule', function (array \$delays): array {\n"
+            . "    // Three retries instead of five; each entry is clamped to >= 60.\n"
+            . "    return [300, 3600, 21600];\n"
+            . "});",
+        'convermetry_webhook_report_limit' => "add_filter('convermetry_webhook_report_limit', function (int \$limit): int {\n"
+            . "    return 50; // Smaller top_* lists in analytics payloads.\n"
+            . "});",
+        'convermetry_delivery_log_row' => "add_filter('convermetry_delivery_log_row', function (\$row) {\n"
+            . "    if (!is_array(\$row)) {\n"
+            . "        return \$row;\n"
+            . "    }\n\n"
+            . "    // Skip logging successful test pings entirely.\n"
+            . "    if (!empty(\$row['is_test']) && !empty(\$row['success'])) {\n"
+            . "        return false;\n"
+            . "    }\n\n"
+            . "    return \$row;\n"
+            . "});",
+        'convermetry_allow_insecure_webhooks' => "add_filter('convermetry_allow_insecure_webhooks', function (bool \$allow): bool {\n"
+            . "    // Development only. Evaluated when an endpoint is SAVED, not at send time.\n"
+            . "    return wp_get_environment_type() === 'local';\n"
+            . "});",
+        'convermetry_allowed_hosts' => "add_filter('convermetry_allowed_hosts', function (array \$hosts): array {\n"
+            . "    \$hosts[] = 'cdn.example.com'; // Lowercase host only, no scheme or path.\n\n"
+            . "    return \$hosts;\n"
+            . "});",
+
+        'convermetry_should_enqueue_tracker' => "add_filter('convermetry_should_enqueue_tracker', function (bool \$should, array \$enabled): bool {\n"
+            . "    // Can only suppress — returning true cannot resurrect a suppressed load.\n"
+            . "    return \$should && !is_page('internal-tools');\n"
+            . "}, 10, 2);",
+        'convermetry_tracker_config_extensions' => "add_filter('convermetry_tracker_config_extensions', function (array \$extensions, array \$enabled): array {\n"
+            . "    // PUBLIC to every visitor. Never a key, token, or anything per-visitor.\n"
+            . "    \$extensions['acme/site'] = ['locale' => get_locale()];\n\n"
+            . "    return \$extensions;\n"
+            . "}, 10, 2);",
+        'convermetry_should_track_event' => "add_filter('convermetry_should_track_event', function (bool \$should, string \$type, array \$data): bool {\n"
+            . "    if (\$type === 'scroll_depth') {\n"
+            . "        return false; // Drop this event type only.\n"
+            . "    }\n\n"
+            . "    return \$should;\n"
+            . "}, 10, 3);",
+        'convermetry_tracked_event' => "add_filter('convermetry_tracked_event', function (\$row, string \$type) {\n"
+            . "    if (str_contains((string) \$row['page_url'], '/staging/')) {\n"
+            . "        return false; // Drop the row entirely.\n"
+            . "    }\n\n"
+            . "    return \$row;\n"
+            . "}, 10, 2);",
+        'convermetry_client_ip' => "// Register in an mu-plugin: this runs on every request, and it is memoized.\n"
+            . "add_filter('convermetry_client_ip', function (string \$ip): string {\n"
+            . "    // Trust only the hop your proxy guarantees — a joined XFF chain is not an address.\n"
+            . "    \$forwarded = \$_SERVER['HTTP_CF_CONNECTING_IP'] ?? '';\n\n"
+            . "    return filter_var(\$forwarded, FILTER_VALIDATE_IP) ? \$forwarded : \$ip;\n"
+            . "});",
+        'convermetry_stored_ip' => "add_filter('convermetry_stored_ip', function (string \$ip): string {\n"
+            . "    // Pseudonymize here, not in convermetry_client_ip: that one is also\n"
+            . "    // the rate-limit identity, and hashing it collapses every visitor into one bucket.\n"
+            . "    \$packed = @inet_pton(\$ip);\n"
+            . "    if (\$packed === false) {\n"
+            . "        return '';\n"
+            . "    }\n\n"
+            . "    // Zero the last octet of an IPv4 address.\n"
+            . "    return strlen(\$packed) === 4 ? inet_ntop(substr(\$packed, 0, 3) . chr(0)) : \$ip;\n"
+            . "});",
+        'convermetry_tracking_batch_recorded' => "add_action('convermetry_tracking_batch_recorded', function (int \$stored, int \$accepted, int \$offered, ?string \$batchId): void {\n"
+            . "    // One action per BATCH, on the hottest path in the plugin. Keep it cheap.\n"
+            . "    if (\$offered !== \$stored) {\n"
+            . "        error_log(\"batch {\$batchId}: offered {\$offered}, accepted {\$accepted}, stored {\$stored}\");\n"
+            . "    }\n"
+            . "}, 10, 4);",
+        'convermetry_tracking_rate_limited' => "add_action('convermetry_tracking_rate_limited', function (int \$events, int \$window): void {\n"
+            . "    error_log(\"tracking rate limit hit: {\$events} events in a {\$window}s window\");\n"
+            . "}, 10, 2);",
+        'convermetry_rate_limits' => "// Register in an mu-plugin — this runs on the public ingestion path.\n"
+            . "add_filter('convermetry_rate_limits', function (array \$defaults): array {\n"
+            . "    // Charged PER EVENT, so one 20-event batch costs 20.\n"
+            . "    return ['per_ip' => 600, 'site_wide' => 6000];\n"
+            . "});",
+        'convermetry_source_aliases' => "add_filter('convermetry_source_aliases', function (array \$aliases): array {\n"
+            . "    // ADD to the map — returning a fresh array loses every default.\n"
+            . "    \$aliases['fb'] = 'facebook';\n"
+            . "    \$aliases['ig'] = 'instagram';\n\n"
+            . "    return \$aliases;\n"
+            . "});",
+        'convermetry_channel' => "add_filter('convermetry_channel', function (string \$channel, array \$row, string \$type): string {\n"
+            . "    if ((\$row['utm_source'] ?? '') === 'partner-portal') {\n"
+            . "        return 'referral';\n"
+            . "    }\n\n"
+            . "    return \$channel;\n"
+            . "}, 10, 3);",
+
+        'convermetry_analytics_sections' => "add_filter('convermetry_analytics_sections', function (array \$sections): array {\n"
+            . "    // Must implement AnalyticsSectionInterface. A section that throws is dropped.\n"
+            . "    \$sections['acme/revenue'] = new Acme_Revenue_Section();\n\n"
+            . "    return \$sections;\n"
+            . "});",
+        'convermetry_analytics_extensions' => "add_filter('convermetry_analytics_extensions', function (array \$extensions, string \$start, string \$end, int \$limit): array {\n"
+            . "    \$extensions['acme/orders'] = ['count' => acme_orders_between(\$start, \$end)];\n\n"
+            . "    return \$extensions;\n"
+            . "}, 10, 4);",
+        'convermetry_analytics_periods' => "add_filter('convermetry_analytics_periods', function (array \$periods): array {\n"
+            . "    // Clamped to the retention window afterwards, then sorted and deduplicated.\n"
+            . "    return [7, 14, 30, 90];\n"
+            . "});",
+        'convermetry_analytics_report_failed' => "add_action('convermetry_analytics_report_failed', function (string \$component, string \$reportKey, string \$start, string \$end, string \$error): void {\n"
+            . "    error_log(\"report {\$component}/{\$reportKey} failed for {\$start}..{\$end}: {\$error}\");\n"
+            . "}, 10, 5);",
+        'convermetry_analytics_admin_panels' => "add_action('convermetry_analytics_admin_panels', function (string \$start, string \$end): void {\n"
+            . "    // Runs after this screen's capability check. ESCAPE YOUR OWN OUTPUT.\n"
+            . "    printf('<div class=\"cvm-card\"><h3>%s</h3><p>%s</p></div>',\n"
+            . "        esc_html__('Revenue', 'acme'),\n"
+            . "        esc_html(acme_revenue_between(\$start, \$end)));\n"
+            . "}, 10, 2);",
+
+        'convermetry_should_record_submission' => "add_filter('convermetry_should_record_submission', function (bool \$should, string \$formKey, string \$provider, array \$fields): bool {\n"
+            . "    foreach (\$fields as \$field) {\n"
+            . "        if (\$field['id'] === 'email' && str_ends_with((string) \$field['value'], '@spam.test')) {\n"
+            . "            return false; // Visitor still sees success.\n"
+            . "        }\n"
+            . "    }\n\n"
+            . "    return \$should;\n"
+            . "}, 10, 4);",
+        'convermetry_submission_fields' => "add_filter('convermetry_submission_fields', function (array \$fields, string \$formKey, string \$provider): array {\n"
+            . "    foreach (\$fields as &\$field) {\n"
+            . "        if (\$field['id'] === 'phone') {\n"
+            . "            \$field['value'] = preg_replace('/\\D+/', '', (string) \$field['value']);\n"
+            . "        }\n"
+            . "    }\n\n"
+            . "    return \$fields; // Re-normalized after you return it.\n"
+            . "}, 10, 3);",
+        'convermetry_submission_context_extensions' => "add_filter('convermetry_submission_context_extensions', function (array \$extensions, string \$formKey, string \$provider): array {\n"
+            . "    \$extensions['acme/ab'] = ['variant' => \$_COOKIE['ab_variant'] ?? 'control'];\n\n"
+            . "    return \$extensions;\n"
+            . "}, 10, 3);",
+        'convermetry_submission_recorded' => "add_action('convermetry_submission_recorded', function (\$submissionId, \$conversionId, \$context): void {\n"
+            . "    // Fires before webhook delivery is considered, so it runs even with\n"
+            . "    // no endpoints configured.\n"
+            . "    acme_crm_enqueue(\$submissionId, \$context['session_id'] ?? '');\n"
+            . "}, 10, 3);",
+        'convermetry_submission_recorded_details' => "add_action('convermetry_submission_recorded_details', function (int \$rowId, string \$submissionId, array \$form, array \$fields): void {\n"
+            . "    // \$fields contains PII — use convermetry_submission_recorded if you\n"
+            . "    // only need to know that a submission happened.\n"
+            . "    error_log(sprintf('%s via %s (%d fields)', \$form['form_name'], \$form['provider'], count(\$fields)));\n"
+            . "}, 10, 4);",
+        'convermetry_submission_duplicate' => "add_action('convermetry_submission_duplicate', function (string \$submissionId, string \$conversionId, string \$formKey): void {\n"
+            . "    // Nothing was written or re-queued. DO NOT re-send anything.\n"
+            . "    error_log(\"duplicate submission suppressed for {\$formKey}\");\n"
+            . "}, 10, 3);",
+        'convermetry_submission_delivery_state_changed' => "add_action('convermetry_submission_delivery_state_changed', function (string \$submissionId, string \$state, string \$previous): void {\n"
+            . "    if (\$state === 'failed') {\n"
+            . "        error_log(\"submission {\$submissionId} moved {\$previous} -> {\$state}\");\n"
+            . "    }\n"
+            . "}, 10, 3);",
+        'convermetry_submission_deleted' => "add_action('convermetry_submission_deleted', function (int \$id, string \$submissionId): void {\n"
+            . "    acme_crm_forget(\$submissionId);\n"
+            . "}, 10, 2);",
+        'convermetry_submissions_cleared' => "add_action('convermetry_submissions_cleared', function (): void {\n"
+            . "    // Once for the whole operation; rows are dropped without being loaded.\n"
+            . "    acme_crm_forget_all();\n"
+            . "});",
+        'convermetry_form_settings_saved' => "add_action('convermetry_form_settings_saved', function (array \$formKeys): void {\n"
+            . "    error_log('form settings written for: ' . implode(', ', \$formKeys));\n"
+            . "});",
+        'convermetry_discovered_forms' => "add_filter('convermetry_discovered_forms', function (array \$forms, string \$providerKey): array {\n"
+            . "    // Normalized back to {native_id, name} after you return it.\n"
+            . "    \$forms[] = ['native_id' => 'custom-1', 'name' => 'Booking widget'];\n\n"
+            . "    return \$forms;\n"
+            . "}, 10, 2);",
+        'convermetry_form_providers' => "// Memoized on first use — register at plugin load time, not on init.\n"
+            . "add_filter('convermetry_form_providers', function (array \$providers): array {\n"
+            . "    // Keyed by getKey(); reusing a bundled key REPLACES that provider.\n"
+            . "    \$providers[] = new Acme_Form_Provider();\n\n"
+            . "    return \$providers;\n"
+            . "});",
+        'convermetry_submission_csv_columns' => "add_filter('convermetry_submission_csv_columns', function (array \$columns): array {\n"
+            . "    \$columns['acme_score'] = 'Lead score'; // Paired with the values filter BY KEY.\n\n"
+            . "    return \$columns;\n"
+            . "});",
+        'convermetry_submission_csv_values' => "add_filter('convermetry_submission_csv_values', function (array \$values, array \$row): array {\n"
+            . "    // Runs per row while streaming — keep it cheap. Scalars or null only.\n"
+            . "    \$values['acme_score'] = acme_score_for(\$row['submission_id']);\n\n"
+            . "    return \$values;\n"
+            . "}, 10, 2);",
+        'convermetry_submissions_columns' => "add_filter('convermetry_submissions_columns', function (array \$columns, array \$row): array {\n"
+            . "    // PRINTED VERBATIM — escape it yourself.\n"
+            . "    \$columns['acme_score'] = esc_html(acme_score_for(\$row['submission_id']));\n\n"
+            . "    return \$columns;\n"
+            . "}, 10, 2);",
+        'convermetry_submission_detail_sections' => "add_action('convermetry_submission_detail_sections', function (array \$row): void {\n"
+            . "    // After the nonce and capability checks. ESCAPE YOUR OWN OUTPUT.\n"
+            . "    printf('<h4>%s</h4><p>%s</p>',\n"
+            . "        esc_html__('CRM', 'acme'),\n"
+            . "        esc_html(acme_crm_link(\$row['submission_id'])));\n"
+            . "});",
+        'convermetry_submission_row_actions' => "add_action('convermetry_submission_row_actions', function (array \$row): void {\n"
+            . "    printf('<a class=\"button\" href=\"%s\">%s</a>',\n"
+            . "        esc_url(wp_nonce_url(admin_url('admin-post.php?action=acme_push&id=' . rawurlencode(\$row['submission_id'])), 'acme_push')),\n"
+            . "        esc_html__('Push to CRM', 'acme'));\n"
+            . "});",
+        'convermetry_forms_admin_sections' => "add_action('convermetry_forms_admin_sections', function (): void {\n"
+            . "    // Outside the settings form — post your own form to admin-post.php.\n"
+            . "    echo '<div class=\"cvm-card\"><h3>' . esc_html__('Acme sync', 'acme') . '</h3></div>';\n"
+            . "});",
+        'convermetry_form_submission' => "do_action('convermetry_form_submission',\n"
+            . "    ['form_name' => 'Booking Widget', 'form_id' => 'booking-1'],\n"
+            . "    [\n"
+            . "        ['id' => 'email',     'label' => 'Email address',        'value' => \$email],\n"
+            . "        ['id' => 'interests', 'label' => 'Services of interest', 'value' => ['Tax planning', 'Retirement']],\n"
+            . "    ],\n"
+            . "    ['url_query' => ['channel' => 'widget'], 'headers' => ['X-Source' => 'booking']] // optional\n"
+            . ");",
+
+        'convermetry_should_record_goal_completion' => "add_filter('convermetry_should_record_goal_completion', function (bool \$should, array \$row, array \$goal): bool {\n"
+            . "    // A decision only — \$row is for inspection; nothing you return changes it.\n"
+            . "    return \$should && (\$goal['name'] ?? '') !== 'Internal test';\n"
+            . "}, 10, 3);",
+        'convermetry_goal_completion' => "add_filter('convermetry_goal_completion', function (array \$row, array \$goal): array {\n"
+            . "    \$row['value'] = \$row['value'] ?: '25.00';\n\n"
+            . "    return \$row;\n"
+            . "}, 10, 2);",
+        'convermetry_goal_matched' => "add_action('convermetry_goal_matched', function (int \$stored, array \$rows): void {\n"
+            . "    error_log(sprintf('%d of %d goal completions stored', \$stored, count(\$rows)));\n"
+            . "}, 10, 2);",
+        'convermetry_goal_completions_recorded' => "add_action('convermetry_goal_completions_recorded', function (int \$stored, int \$offered, array \$completionIds): void {\n"
+            . "    // \$completionIds are the ids OFFERED, not the ids stored.\n"
+            . "    if (\$stored < \$offered) {\n"
+            . "        error_log(sprintf('%d duplicate completions suppressed', \$offered - \$stored));\n"
+            . "    }\n"
+            . "}, 10, 3);",
+        'convermetry_goal_saved' => "add_action('convermetry_goal_saved', function (string \$goalId, array \$goal, ?array \$previous): void {\n"
+            . "    error_log((\$previous === null ? 'created' : 'updated') . \" goal {\$goal['name']}\");\n"
+            . "}, 10, 3);",
+        'convermetry_goal_deleted' => "add_action('convermetry_goal_deleted', function (string \$goalId, string \$now): void {\n"
+            . "    // Soft: completions and the name survive so historical reports keep working.\n"
+            . "    error_log(\"goal {\$goalId} retired at {\$now}\");\n"
+            . "}, 10, 2);",
+        'convermetry_funnel_saved' => "add_action('convermetry_funnel_saved', function (string \$funnelId, array \$funnel, ?array \$previous): void {\n"
+            . "    // Editing a funnel changes what every past report says, retroactively.\n"
+            . "    error_log(\"funnel {\$funnel['name']} now has \" . count(\$funnel['steps']) . ' steps');\n"
+            . "}, 10, 3);",
+        'convermetry_funnel_deleted' => "add_action('convermetry_funnel_deleted', function (string \$funnelId, string \$now): void {\n"
+            . "    error_log(\"funnel {\$funnelId} deleted at {\$now}\");\n"
+            . "}, 10, 2);",
+        'convermetry_lead_status_updated' => "add_action('convermetry_lead_status_updated', function (\$submissionId, \$toStatus, \$fromStatus, ?string \$value, string \$currency): void {\n"
+            . "    if (\$toStatus === 'won') {\n"
+            . "        // \$value is an exact decimal STRING or null — never a float.\n"
+            . "        acme_crm_close(\$submissionId, \$value, \$currency);\n"
+            . "    }\n"
+            . "}, 10, 5);",
+        'convermetry_lead_updated' => "add_action('convermetry_lead_updated', function (string \$submissionId, array \$to, array \$from, int \$userId, string \$leadEventId): void {\n"
+            . "    // Fires AFTER the transaction commits.\n"
+            . "    error_log(sprintf('%s: %s -> %s by user %d', \$submissionId, \$from['status'], \$to['status'], \$userId));\n"
+            . "}, 10, 5);",
+
+        'convermetry_should_queue_notification' => "add_filter('convermetry_should_queue_notification', function (bool \$should, string \$formKey, array \$identity): bool {\n"
+            . "    // Runs after the configured rules said yes, so it can only narrow.\n"
+            . "    return \$should && \$formKey !== 'gravityforms:9';\n"
+            . "}, 10, 3);",
+        'convermetry_notification_recipients' => "add_filter('convermetry_notification_recipients', function (array \$recipients, string \$formKey, array \$identity): array {\n"
+            . "    // Each address becomes its own row with its own retry chain. Capped at 20.\n"
+            . "    \$recipients[] = 'sales@example.com';\n\n"
+            . "    return \$recipients;\n"
+            . "}, 10, 3);",
+        'convermetry_notification_message' => "add_filter('convermetry_notification_message', function (array \$message, string \$submissionId, int \$attempt): array {\n"
+            . "    // The recipient is deliberately not changeable here.\n"
+            . "    \$message['subject'] = '[Lead] ' . \$message['subject'];\n\n"
+            . "    return \$message;\n"
+            . "}, 10, 3);",
+        'convermetry_notification_queued' => "add_action('convermetry_notification_queued', function (string \$submissionId, string \$recipient, int \$attempt): void {\n"
+            . "    error_log(\"notification queued for {\$recipient}\");\n"
+            . "}, 10, 3);",
+        'convermetry_notification_before_send' => "add_action('convermetry_notification_before_send', function (string \$submissionId, string \$recipient, int \$attempt): void {\n"
+            . "    // No subject, no body, no fields.\n"
+            . "    error_log(\"mailing {\$recipient}, attempt {\$attempt}\");\n"
+            . "}, 10, 3);",
+        'convermetry_notification_accepted' => "add_action('convermetry_notification_accepted', function (string \$submissionId, string \$recipient, int \$attempt): void {\n"
+            . "    // \"Accepted\" by the local transport — that is not receipt.\n"
+            . "    error_log(\"mail accepted for {\$recipient}\");\n"
+            . "}, 10, 3);",
+        'convermetry_notification_retry_scheduled' => "add_action('convermetry_notification_retry_scheduled', function (string \$submissionId, string \$recipient, int \$nextAttempt, int \$nextAttemptAt): void {\n"
+            . "    error_log(sprintf('retry %d for %s at %s', \$nextAttempt, \$recipient, gmdate('c', \$nextAttemptAt)));\n"
+            . "}, 10, 4);",
+        'convermetry_notification_abandoned' => "add_action('convermetry_notification_abandoned', function (string \$submissionId, string \$recipient, int \$attempt, string \$error): void {\n"
+            . "    error_log(\"gave up mailing {\$recipient} for {\$submissionId}: {\$error}\");\n"
+            . "}, 10, 4);",
+        'convermetry_notification_canceled' => "add_action('convermetry_notification_canceled', function (string \$submissionId, string \$recipient, string \$reason, int \$count): void {\n"
+            . "    // \$recipient is empty on a bulk clear, where \$count is the total.\n"
+            . "    error_log(\"cancelled {\$count} notification(s): {\$reason}\");\n"
+            . "}, 10, 4);",
+        'convermetry_notification_retry_schedule' => "add_filter('convermetry_notification_retry_schedule', function (array \$delays): array {\n"
+            . "    // The hard two-hour TTL still sits above this regardless.\n"
+            . "    return [600, 1800];\n"
+            . "});",
+        'convermetry_sensitive_keys' => "add_filter('convermetry_sensitive_keys', function (array \$patterns): array {\n"
+            . "    // The returned list IS the effective list — extend it, never shorten it.\n"
+            . "    \$patterns[] = 'ssn';\n"
+            . "    \$patterns[] = 'national_id';\n\n"
+            . "    return \$patterns;\n"
+            . "});",
+
+        'convermetry_retention_cleanup_started' => "add_action('convermetry_retention_cleanup_started', function (string \$store, string \$cutoff): void {\n"
+            . "    // Observational — you cannot cancel the pass or change the cutoff.\n"
+            . "    error_log(\"pruning {\$store} older than {\$cutoff}\");\n"
+            . "}, 10, 2);",
+        'convermetry_retention_cleanup_completed' => "add_action('convermetry_retention_cleanup_completed', function (string \$store, string \$cutoff, int \$deleted, bool \$moreRemain, string \$outcome): void {\n"
+            . "    error_log(\"{\$store}: {\$deleted} deleted, outcome {\$outcome}\" . (\$moreRemain ? ', more remain' : ''));\n"
+            . "}, 10, 5);",
+        'convermetry_migration_started' => "add_action('convermetry_migration_started', function (string \$context): void {\n"
+            . "    // The lease is held here. DO NOT THROW.\n"
+            . "    error_log(\"migrations started via {\$context}\");\n"
+            . "});",
+        'convermetry_migration_completed' => "add_action('convermetry_migration_completed', function (string \$context, bool \$pending): void {\n"
+            . "    // \$pending is settled by now. Pending mid-migration is normal, not an error.\n"
+            . "    error_log(\"migrations finished via {\$context}\" . (\$pending ? ' (more pending)' : ''));\n"
+            . "}, 10, 2);",
+        'convermetry_migration_failed' => "add_action('convermetry_migration_failed', function (string \$context, string \$error): void {\n"
+            . "    // \$error is a class name, never a message.\n"
+            . "    wp_mail(get_option('admin_email'), 'Convermetry migration failed', \"{\$context}: {\$error}\");\n"
+            . "}, 10, 2);",
+        'convermetry_storage_error' => "add_action('convermetry_storage_error', function (string \$subsystem, string \$operation, string \$code, array \$context): void {\n"
+            . "    // Verified failures only — never SQL, fields, IPs or secrets.\n"
+            . "    error_log(\"storage error {\$code} in {\$subsystem}/{\$operation}\");\n"
+            . "}, 10, 4);",
+        'convermetry_settings_saved' => "add_action('convermetry_settings_saved', function (string \$section, array \$changedKeys): void {\n"
+            . "    // Key names only — two sections hold secrets and token-bearing URLs.\n"
+            . "    error_log(\"{\$section} settings changed: \" . implode(', ', \$changedKeys));\n"
+            . "}, 10, 2);",
+        'convermetry_admin_capability' => "add_filter('convermetry_admin_capability', function (string \$capability, string \$scope): string {\n"
+            . "    // Grant deliberately: submissions.export is every lead's name and email in one file.\n"
+            . "    return \$scope === 'analytics.view' ? 'edit_posts' : \$capability;\n"
+            . "}, 10, 2);",
+        'convermetry_delivery_log_api_item' => "add_filter('convermetry_delivery_log_api_item', function (array \$extensions, array \$item): array {\n"
+            . "    // The item's core keys are immutable; only extensions are yours.\n"
+            . "    \$extensions['acme/trace'] = ['id' => acme_trace_for(\$item['delivery_id'] ?? '')];\n\n"
+            . "    return \$extensions;\n"
+            . "}, 10, 2);",
+    ];
+
+    /**
      * Registers the menu and asset hooks.
      *
      * @return void
@@ -1103,7 +2054,16 @@ final class AboutPage
     }
 
     /**
-     * Renders one hook's heading and signature.
+     * Renders one hook's heading, signature, and collapsed detail panel.
+     *
+     * The per-argument breakdown and the worked example live behind a
+     * "Learn More" toggle rather than inline. With eighty-five hooks, showing
+     * them all would make a already-long page unreadable — and the detail is
+     * reference material a reader wants for the one hook they are wiring up,
+     * not something to scroll past eighty-four times.
+     *
+     * The panel is a sibling of the button rather than a nested element so the
+     * button keeps its position when the panel opens.
      *
      * @param string $name      Hook name.
      * @param string $type      'action' or 'filter'.
@@ -1113,12 +2073,43 @@ final class AboutPage
      */
     private static function hookStart(string $name, string $type, string $signature, string $summary): void
     {
+        $args     = self::HOOK_ARGS[$name] ?? [];
+        $example  = self::HOOK_EXAMPLES[$name] ?? '';
+        $detailId = 'hook-detail-' . $name;
         ?>
         <div class="cvm-about-hook" id="hook-<?php echo esc_attr($name); ?>">
         <h4 class="cvm-about-hook-name"><code><?php echo esc_html($name); ?></code><span class="cvm-about-hook-type cvm-about-hook-type-<?php echo esc_attr($type); ?>"><?php echo esc_html($type); ?></span></h4>
         <p class="cvm-about-hook-summary"><?php echo wp_kses_post($summary); ?></p>
         <?php
         self::code($signature);
+
+        if ($args === [] && $example === '') {
+            return;
+        }
+        ?>
+        <button type="button" class="cvm-about-hook-toggle" aria-expanded="false"
+                aria-controls="<?php echo esc_attr($detailId); ?>">Learn More</button>
+        <div class="cvm-about-hook-detail" id="<?php echo esc_attr($detailId); ?>" hidden>
+            <?php if ($args !== []) { ?>
+            <p class="cvm-about-hook-detail-title">Arguments</p>
+            <table class="cvm-about-hook-args">
+            <tbody>
+            <?php foreach ($args as $arg => $note) { ?>
+                <tr>
+                <th scope="row"><code><?php echo esc_html($arg); ?></code></th>
+                <td><?php echo wp_kses_post($note); ?></td>
+                </tr>
+            <?php } ?>
+            </tbody>
+            </table>
+            <?php } ?>
+
+            <?php if ($example !== '') { ?>
+            <p class="cvm-about-hook-detail-title">Example</p>
+            <?php self::code($example); ?>
+            <?php } ?>
+        </div>
+        <?php
     }
 
     /**
@@ -2381,10 +3372,24 @@ document.dispatchEvent(new CustomEvent('convermetry:conversion', {
     {
         self::sectionStart('hooks');
 
+        /* Every detail panel below is rendered collapsed, which depends on
+         * about.js to open it. With scripting off the toggle is useless, so the
+         * panels are simply shown instead — the page gets long, but nothing
+         * becomes unreachable. */
+        ?>
+        <noscript><style>
+            .cvm-about-hook-toggle { display: none; }
+            .cvm-about-hook-detail[hidden] { display: block; }
+        </style></noscript>
+        <?php
+
         self::cardStart('How the hook API behaves');
         ?>
         <p>Convermetry exposes a public hook API for plugins and code snippets — <strong><?php echo count(self::HOOKS); ?>
         hooks</strong> in all. Two rules hold across every one of them.</p>
+        <p>Each entry below lists its name, type, purpose and signature. <strong>Learn More</strong> expands what every
+        argument actually holds — including the keys of the array ones — plus a runnable example you can paste into an
+        mu-plugin.</p>
         <ul class="cvm-about-features">
         <li><strong>Nothing registered means nothing changes.</strong> With no callbacks, payload bytes, request URLs and headers,
         delivery ids, signatures, retry schedules, analytics results, admin HTML, REST output, CSV files, and tracker configuration

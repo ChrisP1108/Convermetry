@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Convermetry
  * Description: Visitor analytics, campaign attribution, and server-confirmed form conversion tracking with reliable webhook delivery. Connects every lead to its analytics session, traffic source, and campaign, and delivers analytics reports and form submissions to any number of webhook endpoints with signing, retries, and idempotency.
- * Version:     0.6.0
+ * Version:     0.7.0
  * Requires at least: 6.3
  * Requires PHP: 8.3
  * Author:      Chris Paschall
@@ -39,7 +39,7 @@ if (version_compare(PHP_VERSION, '8.3', '<')) {
  */
 } else {
 
-    define('CVM_VERSION', '0.6.0');
+    define('CVM_VERSION', '0.7.0');
     define('CVM_PLUGIN_FILE', __FILE__);
     define('CVM_PLUGIN_DIR', plugin_dir_path(__FILE__));
     define('CVM_PLUGIN_URL', plugin_dir_url(__FILE__));

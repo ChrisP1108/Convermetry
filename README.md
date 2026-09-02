@@ -22,7 +22,7 @@ Was the lead successfully delivered to external systems?
 
 Convermetry works standalone — full analytics dashboard, form integrations, and webhook delivery inside one WordPress install — and is architected so a future Convermetry SaaS can receive `analytics_report` and `form_submission` messages from many installations, keyed by a shared, versioned payload schema.
 
-- **Version:** 0.6.0
+- **Version:** 0.7.0
 - **Requires WordPress:** 6.3+
 - **Requires PHP:** 8.3+
 - **License:** GPL-2.0-or-later
@@ -985,7 +985,7 @@ Every outbound message shares one versioned envelope:
 {
     "schema_version": "1.0 | 2.0",
     "source": "convermetry",
-    "plugin_version": "0.6.0",
+    "plugin_version": "0.7.0",
     "message_type": "analytics_report | form_submission",
     "website_info": { },
     "generated_at": "2026-08-22T14:00:00+00:00",
@@ -1013,7 +1013,7 @@ Every outbound message shares one versioned envelope:
 {
     "schema_version": "1.1",
     "source": "convermetry",
-    "plugin_version": "0.6.0",
+    "plugin_version": "0.7.0",
     "message_type": "analytics_report",
     "website_info": {
         "name": "Example Financial", "url": "https://example.com", "domain": "example.com",
@@ -1133,7 +1133,7 @@ Every outbound message shares one versioned envelope:
 {
     "schema_version": "2.0",
     "source": "convermetry",
-    "plugin_version": "0.6.0",
+    "plugin_version": "0.7.0",
     "message_type": "form_submission",
     "website_info": {
         "name": "Example Financial", "url": "https://example.com", "domain": "example.com",
@@ -1328,7 +1328,7 @@ Pagination metadata returns in `X-WP-Total`, `X-WP-TotalPages`, and `X-CVM-Page`
 
 ## Developer hooks
 
-Convermetry exposes a public hook API for plugins and code snippets. Two rules hold across all of it:
+Convermetry exposes a public hook API for plugins and code snippets. The same catalogue is rendered in wp-admin under **Convermetry → About → Hooks**, where each entry has a **Learn More** toggle that expands a per-argument breakdown — including the keys of the array arguments — and a runnable example. Two rules hold across all of it:
 
 - **Nothing registered means nothing changes.** With no callbacks, payload bytes, request URLs and headers, delivery ids, signatures, retry schedules, analytics results, admin HTML, REST output, CSV files, and tracker configuration are all exactly what they were. No `extensions` property appears anywhere until something fills it.
 - **Filters that customize data may see that data; observers may not.** A filter whose job is to change an email body necessarily sees the email body. The observational actions deliberately carry ids, counts, and outcomes — never submitted fields, rendered emails, request bodies, response bodies, signing secrets, credential-bearing URLs, or raw IP addresses. Where an argument does carry personal data it is called out below.

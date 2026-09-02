@@ -1,11 +1,45 @@
 /**
  * Convermetry — About page.
  *
- * Highlights the sticky nav link for whichever section is currently in view.
- * Pure progressive enhancement: the nav is plain anchor links, so with this
- * file blocked every jump still works — only the active-link highlight is
- * lost.
+ * Two independent enhancements, deliberately in separate IIFEs: the sticky-nav
+ * highlighter bails early on browsers without IntersectionObserver, and the
+ * hook accordion must keep working when it does.
+ *
+ * Pure progressive enhancement throughout. The nav is plain anchor links, so
+ * with this file blocked every jump still works; the hook detail panels are
+ * revealed by a <noscript> rule, so their content stays reachable too.
  */
+
+/* Hook reference — "Learn More" / "Collapse" accordions.
+ *
+ * Delegated from the document rather than bound per button: the hook reference
+ * renders eighty-five of these, and one listener is cheaper than eighty-five
+ * both to attach and to keep in sync. */
+(function () {
+    'use strict';
+
+    document.addEventListener('click', function (e) {
+        var button = e.target.closest && e.target.closest('.cvm-about-hook-toggle');
+        if (!button) {
+            return;
+        }
+
+        var panel = document.getElementById(button.getAttribute('aria-controls'));
+        if (!panel) {
+            return;
+        }
+
+        // aria-expanded is the single source of truth, so the button label and
+        // the panel can never disagree about which state they are in.
+        var expanded = button.getAttribute('aria-expanded') === 'true';
+
+        button.setAttribute('aria-expanded', expanded ? 'false' : 'true');
+        button.textContent = expanded ? 'Learn More' : 'Collapse';
+        panel.hidden = expanded;
+    });
+})();
+
+/* Sticky nav — highlights the section currently in view. */
 (function () {
     'use strict';
 

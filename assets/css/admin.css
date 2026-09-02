@@ -409,6 +409,119 @@ html {
     width: 170px;
 }
 
+/* Hook "Learn More" accordions -------------------------------------------- */
+
+.cvm-about-hook-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: #f6f7f7;
+    border: 1px solid #c3c4c7;
+    border-radius: 3px;
+    color: #2271b1;
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1.4;
+    padding: 5px 12px;
+    margin: 2px 0 0;
+}
+
+.cvm-about-hook-toggle:hover,
+.cvm-about-hook-toggle:focus {
+    background: #f0f0f1;
+    border-color: #8c8f94;
+    color: #135e96;
+}
+
+.cvm-about-hook-toggle::after {
+    content: "\25BE";
+    font-size: 10px;
+    line-height: 1;
+}
+
+.cvm-about-hook-toggle[aria-expanded="true"]::after {
+    content: "\25B4";
+}
+
+.cvm-about-hook-detail {
+    border-left: 3px solid #dcdcde;
+    margin: 12px 0 4px;
+    padding: 2px 0 2px 14px;
+    max-width: 900px;
+}
+
+.cvm-about-hook-detail-title {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #646970;
+    margin: 12px 0 6px;
+}
+
+.cvm-about-hook-detail-title:first-child {
+    margin-top: 4px;
+}
+
+.cvm-about-hook-args {
+    border-collapse: collapse;
+    width: 100%;
+}
+
+.cvm-about-hook-args th,
+.cvm-about-hook-args td {
+    border-top: 1px solid #f0f0f1;
+    font-size: 13px;
+    line-height: 1.65;
+    padding: 7px 0;
+    text-align: left;
+    vertical-align: top;
+}
+
+.cvm-about-hook-args tr:first-child th,
+.cvm-about-hook-args tr:first-child td {
+    border-top: 0;
+}
+
+.cvm-about-hook-args th {
+    /* Wide enough for the longest signature fragment
+       ("FormProviderInterface[] $providers") without wrapping mid-token. */
+    width: 240px;
+    padding-right: 18px;
+    font-weight: 400;
+    white-space: nowrap;
+}
+
+.cvm-about-hook-args th code {
+    background: #f0f0f1;
+    border-radius: 3px;
+    color: #1d2327;
+    font-size: 12px;
+    padding: 2px 6px;
+}
+
+.cvm-about-hook-args td {
+    color: #3c434a;
+}
+
+@media screen and (max-width: 782px) {
+    /* Stack the argument table: a 240px label column plus prose does not fit,
+       and a horizontally scrolling reference table is worse than no table. */
+    .cvm-about-hook-args th,
+    .cvm-about-hook-args td {
+        display: block;
+        width: auto;
+        padding-right: 0;
+        white-space: normal;
+    }
+
+    .cvm-about-hook-args td {
+        border-top: 0;
+        padding-top: 0;
+    }
+}
+
 .cvm-about-returns {
     background: #f6f7f7;
     border-left: 4px solid #c3c4c7;
