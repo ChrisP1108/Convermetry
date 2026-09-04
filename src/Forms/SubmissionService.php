@@ -326,13 +326,19 @@ final class SubmissionService
             return $this->dispatchSync($rowId, $submissionId, $correlation->conversionId);
         }
 
-        FormDeliveryQueue::enqueue($rowId, $submissionId);
+        // The outcome is VERIFIED, not assumed. This used to discard the return
+        // value and report queued: true unconditionally, so a submission whose
+        // queue rows failed to persist was reported as on its way and the
+        // webhook was simply never sent — a silently lost lead. A partial
+        // failure was worse: two of three destinations delivered while the third
+        // disappeared without a trace.
+        $outcome = FormDeliveryQueue::enqueue($rowId, $submissionId);
 
         return new SubmissionResult(
             ok: true,
             submissionId: $submissionId,
             conversionId: $correlation->conversionId,
-            queued: true
+            queued: $outcome->queuedAnything()
         );
     }
 

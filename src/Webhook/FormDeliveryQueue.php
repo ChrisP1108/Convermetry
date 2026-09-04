@@ -9,7 +9,9 @@ use Convermetry\Analytics\SubmissionContext;
 use Convermetry\Database\DatabaseManager;
 use Convermetry\Database\FormSubmissions;
 use Convermetry\Settings\Options;
+use Convermetry\Support\Errors;
 use Convermetry\Support\Http;
+use Convermetry\Support\QueueOutcome;
 
 /**
  * Database-backed background delivery queue for form-submission webhooks.
@@ -58,6 +60,9 @@ final class FormDeliveryQueue
 
     /** Cron hook name for the queue worker. */
     public const string WORKER_HOOK = 'cvm_process_form_queue';
+
+    /** Cron hook that repairs queue rows which failed to persist. */
+    public const string RECONCILE_HOOK = 'cvm_reconcile_form_queue';
 
     /** Maximum queue rows one worker pass may claim. */
     private const int BATCH_SIZE = 10;
@@ -159,6 +164,7 @@ final class FormDeliveryQueue
     public static function init(): void
     {
         add_action(self::WORKER_HOOK, [self::class, 'processDue']);
+        add_action(self::RECONCILE_HOOK, [self::class, 'reconcile'], 10, 2);
     }
 
     /**
@@ -188,23 +194,38 @@ final class FormDeliveryQueue
      * (a duplicate provider callback that slipped past submission dedup)
      * harmless.
      *
+     * Returns a VERIFIED outcome rather than a bare count. INSERT IGNORE
+     * reports "0 rows affected" both for a row the unique index suppressed
+     * (already queued, which is fine) and for a row it declined to write
+     * (not fine), and $wpdb->query() returns false outright on error. The old
+     * count incremented only on a genuine insert, so a failed write was
+     * indistinguishable from a duplicate — and the caller reported the
+     * submission as queued either way, losing the lead in silence.
+     *
+     * Every ambiguous result is now resolved by reading the row back, so
+     * "durable" means the row was observed to exist, not assumed to.
+     *
      * @param int    $submissionRow Row id in the form submissions table.
      * @param string $submissionId  Globally unique submission id.
-     * @return int Number of endpoint deliveries queued.
+     * @return QueueOutcome Verified per-endpoint result.
      */
-    public static function enqueue(int $submissionRow, string $submissionId): int
+    public static function enqueue(int $submissionRow, string $submissionId): QueueOutcome
     {
         global $wpdb;
 
         $endpoints = Options::formEndpoints();
         if ($endpoints === []) {
-            return 0;
+            return QueueOutcome::nothingToQueue();
         }
 
-        $now    = gmdate('Y-m-d H:i:s');
-        $queued = 0;
+        $now        = gmdate('Y-m-d H:i:s');
+        $queued     = 0;
+        $duplicate  = 0;
+        $failedKeys = [];
 
         foreach ($endpoints as $endpoint) {
+            $endpointKey = md5($endpoint->url);
+
             $inserted = $wpdb->query($wpdb->prepare(
                 'INSERT IGNORE INTO ' . self::tableName()
                 . ' (submission_row, submission_id, endpoint_key, endpoint_url, delivery_id,'
@@ -212,42 +233,75 @@ final class FormDeliveryQueue
                 . " VALUES (%d, %s, %s, %s, %s, 'pending', 0, %s, %s)",
                 $submissionRow,
                 $submissionId,
-                md5($endpoint->url),
+                $endpointKey,
                 $endpoint->url,
                 self::deliveryId($endpoint->url, $submissionId),
                 $now,
                 $now
             ));
 
-            if ($inserted === 1) {
-                $queued++;
+            if ($inserted !== 1) {
+                // Ambiguous or failed. A read-back is the only thing that can
+                // tell "already queued" apart from "never written".
+                if ($inserted !== false && self::rowExists($submissionId, $endpointKey)) {
+                    $duplicate++;
+                } else {
+                    $failedKeys[] = $endpointKey;
+                }
 
-                /**
-                 * Fires when a form submission is genuinely queued for delivery
-                 * to one endpoint.
-                 *
-                 * Fires once per endpoint per submission, and ONLY when the
-                 * INSERT IGNORE actually created a row. A re-enqueue that the
-                 * unique (submission_id, endpoint_key) index suppressed does not
-                 * fire it, so a listener can count these as real work rather
-                 * than as attempts at work.
-                 *
-                 * Nothing has been sent at this point and nothing is frozen: the
-                 * payload is built on the worker's first attempt. Never fires on
-                 * the synchronous delivery path, which sends without queuing.
-                 *
-                 * @param array<string, mixed> $context Credential-free delivery context.
-                 */
-                do_action('convermetry_form_delivery_queued', DeliveryDetails::for(
-                    $endpoint->url,
-                    messageType: MessageType::FormSubmission,
-                    kind: DeliveryKind::Immediate,
-                    attempt: 0,
-                    deliveryId: self::deliveryId($endpoint->url, $submissionId),
-                    endpointLabel: $endpoint->label,
-                    submissionId: $submissionId,
-                )->toArray());
+                continue;
             }
+
+            $queued++;
+
+            /**
+             * Fires when a form submission is genuinely queued for delivery
+             * to one endpoint.
+             *
+             * Fires once per endpoint per submission, and ONLY when the
+             * INSERT IGNORE actually created a row. A re-enqueue that the
+             * unique (submission_id, endpoint_key) index suppressed does not
+             * fire it, so a listener can count these as real work rather
+             * than as attempts at work.
+             *
+             * Nothing has been sent at this point and nothing is frozen: the
+             * payload is built on the worker's first attempt. Never fires on
+             * the synchronous delivery path, which sends without queuing.
+             *
+             * @param array<string, mixed> $context Credential-free delivery context.
+             */
+            do_action('convermetry_form_delivery_queued', DeliveryDetails::for(
+                $endpoint->url,
+                messageType: MessageType::FormSubmission,
+                kind: DeliveryKind::Immediate,
+                attempt: 0,
+                deliveryId: self::deliveryId($endpoint->url, $submissionId),
+                endpointLabel: $endpoint->label,
+                submissionId: $submissionId,
+            )->toArray());
+        }
+
+        $outcome = new QueueOutcome(
+            expected: count($endpoints),
+            inserted: $queued,
+            duplicate: $duplicate,
+            failed: count($failedKeys),
+            failedKeys: $failedKeys,
+        );
+
+        if (!$outcome->isComplete()) {
+            // Verified evidence that a row the plugin needed does not exist.
+            Errors::storage(
+                'form_delivery_queue',
+                'insert',
+                'queue_row_not_persisted',
+                $outcome->telemetry() + ['submission_id' => $submissionId]
+            );
+
+            // Repair exactly the endpoints whose rows are known to be absent.
+            // Re-queuing anything broader could re-send a delivery a worker had
+            // already completed and deleted.
+            self::scheduleReconciliation($submissionId, $outcome->failedKeys);
         }
 
         if ($queued > 0) {
@@ -265,7 +319,139 @@ final class FormDeliveryQueue
             }
         }
 
-        return $queued;
+        return $outcome;
+    }
+
+    /**
+     * Whether a queue row for this (submission, endpoint) pair exists.
+     *
+     * Impure by nature: it reads a table other requests — and the INSERT
+     * immediately before each call site — are concurrently changing, so two
+     * calls with the same arguments legitimately return different answers.
+     *
+     * @phpstan-impure
+     *
+     * @param string $submissionId Globally unique submission id.
+     * @param string $endpointKey  md5 of the endpoint URL.
+     * @return bool
+     */
+    private static function rowExists(string $submissionId, string $endpointKey): bool
+    {
+        global $wpdb;
+
+        return (int) $wpdb->get_var($wpdb->prepare(
+            'SELECT COUNT(*) FROM ' . self::tableName()
+            . ' WHERE submission_id = %s AND endpoint_key = %s',
+            $submissionId,
+            $endpointKey
+        )) > 0;
+    }
+
+    /**
+     * Schedules a repair pass for queue rows that failed to persist.
+     *
+     * @param string       $submissionId Globally unique submission id.
+     * @param list<string> $endpointKeys Endpoint keys known to have no row.
+     * @return void
+     */
+    private static function scheduleReconciliation(string $submissionId, array $endpointKeys): void
+    {
+        if ($submissionId === '' || $endpointKeys === []) {
+            return;
+        }
+
+        wp_schedule_single_event(time() + 30, self::RECONCILE_HOOK, [$submissionId, $endpointKeys]);
+
+        if (function_exists('spawn_cron')) {
+            spawn_cron();
+        }
+    }
+
+    /**
+     * Cron callback: re-creates queue rows that failed to persist.
+     *
+     * Deliberately narrow. It re-inserts ONLY the endpoint keys the failing
+     * enqueue recorded as absent, and only for endpoints that are still
+     * configured to receive form submissions. It never scans for "missing"
+     * rows generally, because a row that is absent because the worker
+     * delivered it and deleted it is indistinguishable from one that was never
+     * written — and re-queuing the former would re-send a delivered webhook.
+     *
+     * Idempotent: INSERT IGNORE against the UNIQUE (submission_id,
+     * endpoint_key) index, and the delivery id is a pure function of the
+     * endpoint and submission, so even a re-created row carries the original
+     * Idempotency-Key.
+     *
+     * @param string       $submissionId Globally unique submission id.
+     * @param list<string> $endpointKeys Endpoint keys to repair.
+     * @return void
+     */
+    public static function reconcile(string $submissionId, array $endpointKeys): void
+    {
+        global $wpdb;
+
+        if ($submissionId === '' || $endpointKeys === []) {
+            return;
+        }
+
+        $submission = FormSubmissions::getBySubmissionId($submissionId);
+
+        // The submission was deleted (retention, or an erasure request) between
+        // the failed enqueue and this pass. Erasure wins: nothing is re-created.
+        if ($submission === null) {
+            return;
+        }
+
+        $wanted   = array_flip($endpointKeys);
+        $now      = gmdate('Y-m-d H:i:s');
+        $repaired = 0;
+        $stillBad = 0;
+
+        foreach (Options::formEndpoints() as $endpoint) {
+            $endpointKey = md5($endpoint->url);
+
+            if (!isset($wanted[$endpointKey]) || self::rowExists($submissionId, $endpointKey)) {
+                continue;
+            }
+
+            $inserted = $wpdb->query($wpdb->prepare(
+                'INSERT IGNORE INTO ' . self::tableName()
+                . ' (submission_row, submission_id, endpoint_key, endpoint_url, delivery_id,'
+                . " status, attempt, next_attempt_at, created_at)"
+                . " VALUES (%d, %s, %s, %s, %s, 'pending', 0, %s, %s)",
+                (int) $submission['id'],
+                $submissionId,
+                $endpointKey,
+                $endpoint->url,
+                self::deliveryId($endpoint->url, $submissionId),
+                $now,
+                $now
+            ));
+
+            if ($inserted === 1 || self::rowExists($submissionId, $endpointKey)) {
+                $repaired++;
+                continue;
+            }
+
+            $stillBad++;
+        }
+
+        if ($stillBad > 0) {
+            Errors::storage('form_delivery_queue', 'reconcile', 'queue_repair_failed', [
+                'submission_id' => $submissionId,
+                'repaired'      => $repaired,
+                'failed'        => $stillBad,
+            ]);
+        }
+
+        if ($repaired > 0) {
+            FormSubmissions::refreshDeliveryState($submissionId);
+            self::scheduleWorker(time() + 1);
+
+            if (function_exists('spawn_cron')) {
+                spawn_cron();
+            }
+        }
     }
 
     /**

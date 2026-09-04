@@ -8,6 +8,7 @@ if (!defined('ABSPATH')) exit;
 use Convermetry\Database\DatabaseManager;
 use Convermetry\Settings\Options;
 use Convermetry\Support\ClientIp;
+use Convermetry\Support\Errors;
 use Convermetry\Support\Url;
 
 /**
@@ -632,6 +633,13 @@ final class TrackingController
     /**
      * Adds $events to one rolling counter and reports whether it is under $max.
      *
+     * FAILS CLOSED. Every step is checked: a refused counter write, a counter
+     * that cannot be read back, a malformed value, and a stale window all
+     * REJECT the request and emit sanitized telemetry. The result of the
+     * charge used to be discarded, and an unreadable counter fell back to this
+     * request's own event count — which is below any sane cap — so a broken
+     * counter waved every request through while reporting nothing.
+     *
      * Uses an atomic object-cache increment when a persistent object cache is
      * available; otherwise — and whenever the cache increment fails — an
      * atomic single-statement counter in the options table
@@ -668,7 +676,7 @@ final class TrackingController
         // resets the row for a new window, all inside one statement. These
         // rows are written directly (never through get_option/update_option)
         // so they bypass — and can never pollute — WordPress's option caches.
-        $wpdb->query($wpdb->prepare(
+        $charged = $wpdb->query($wpdb->prepare(
             "INSERT INTO {$wpdb->options} (option_name, option_value, autoload)
              VALUES (%s, %s, 'off')
              ON DUPLICATE KEY UPDATE option_value = IF(
@@ -683,19 +691,66 @@ final class TrackingController
             $events
         ));
 
-        $value = (string) $wpdb->get_var($wpdb->prepare(
+        // The charge itself failed, so this request's events were never counted
+        // against the window. Continuing would let EVERY request through for as
+        // long as the counter stays unwritable, which is precisely when a limiter
+        // matters most. The documented intent is to fail CLOSED, so do that.
+        if ($charged === false) {
+            Errors::storage('tracking', 'rate_limit_charge', 'counter_write_failed', [
+                'events' => $events,
+            ]);
+
+            return false;
+        }
+
+        $value = $wpdb->get_var($wpdb->prepare(
             "SELECT option_value FROM {$wpdb->options} WHERE option_name = %s",
             $key
         ));
+
+        if (!is_string($value) || $value === '') {
+            Errors::storage('tracking', 'rate_limit_verify', 'counter_unreadable', [
+                'events' => $events,
+            ]);
+
+            return false;
+        }
+
+        $parts = explode('|', $value);
+
+        if (count($parts) !== 2 || !ctype_digit($parts[0]) || !ctype_digit($parts[1])) {
+            Errors::storage('tracking', 'rate_limit_verify', 'counter_malformed', [
+                'events' => $events,
+            ]);
+
+            return false;
+        }
+
+        $storedWindow = (int) $parts[0];
+        $storedCount  = (int) $parts[1];
 
         // The read runs after the increment, so under heavy concurrency it
         // may see later charges too — the count is >= this request's true
         // position, which can only over-reject at the margin, never let the
         // stored volume exceed the cap.
-        $parts = explode('|', $value);
-        $count = (count($parts) === 2 && $parts[0] === $window) ? (int) $parts[1] : $events;
+        if ($storedWindow === (int) $window) {
+            return $storedCount <= $max;
+        }
 
-        return $count <= $max;
+        // The minute rolled over between the charge and the read, and another
+        // request reset the row. Not a failure: the previous window is closed
+        // and the fresh one legitimately starts from that request's own charge.
+        if ($storedWindow > (int) $window) {
+            return $storedCount <= $max;
+        }
+
+        // A window OLDER than the one just written means the charge did not
+        // land — the row cannot have gone backwards on its own.
+        Errors::storage('tracking', 'rate_limit_verify', 'counter_stale', [
+            'events' => $events,
+        ]);
+
+        return false;
     }
 
     /**

@@ -8,6 +8,8 @@ if (!defined('ABSPATH')) exit;
 use Convermetry\Analytics\SubmissionContext;
 use Convermetry\Database\DatabaseManager;
 use Convermetry\Database\FormSubmissions;
+use Convermetry\Support\Errors;
+use Convermetry\Support\QueueOutcome;
 
 /**
  * The database-backed queue for internal email notifications.
@@ -271,6 +273,30 @@ final class NotificationQueue
     }
 
     /**
+     * Whether a queue row for this (submission, recipient) pair exists.
+     *
+     * Impure by nature: it reads a table other requests — and the INSERT
+     * immediately before the call site — are concurrently changing.
+     *
+     * @phpstan-impure
+     *
+     * @param string $submissionId  The submission's globally unique id.
+     * @param string $recipientKey  Hashed recipient key.
+     * @return bool
+     */
+    private static function rowExists(string $submissionId, string $recipientKey): bool
+    {
+        global $wpdb;
+
+        return (int) $wpdb->get_var($wpdb->prepare(
+            'SELECT COUNT(*) FROM ' . self::tableName()
+            . ' WHERE submission_id = %s AND recipient_key = %s',
+            $submissionId,
+            $recipientKey
+        )) > 0;
+    }
+
+    /**
      * Queues one notification per recipient for a submission.
      *
      * INSERT IGNORE against UNIQUE(submission_id, recipient_key) is the
@@ -280,22 +306,34 @@ final class NotificationQueue
      *
      * @param string               $submissionId The submission's globally unique id.
      * @param list<string>         $recipients   Validated recipient addresses.
+     * Returns a VERIFIED outcome. INSERT IGNORE reports "0 rows affected" both
+     * for a duplicate the unique index suppressed and for a row it declined to
+     * write, and $wpdb->query() returns false on error, so a bare count of
+     * genuine inserts could not tell a refused write from an idempotent no-op.
+     * Ambiguous results are resolved by reading the row back.
+     *
+     * @param string               $submissionId The submission's globally unique id.
+     * @param list<string>         $recipients   Validated recipient addresses.
      * @param array<string, mixed> $snapshot     Frozen settings for these messages.
-     * @return int Rows actually queued.
+     * @return QueueOutcome Verified per-recipient result.
      */
-    public static function enqueue(string $submissionId, array $recipients, array $snapshot): int
+    public static function enqueue(string $submissionId, array $recipients, array $snapshot): QueueOutcome
     {
         global $wpdb;
 
         if ($submissionId === '' || $recipients === []) {
-            return 0;
+            return QueueOutcome::nothingToQueue();
         }
 
-        $now      = gmdate('Y-m-d H:i:s');
-        $settings = (string) wp_json_encode($snapshot);
-        $queued   = 0;
+        $now        = gmdate('Y-m-d H:i:s');
+        $settings   = (string) wp_json_encode($snapshot);
+        $queued     = 0;
+        $duplicate  = 0;
+        $failedKeys = [];
 
         foreach ($recipients as $recipient) {
+            $recipientKey = self::recipientKey($recipient);
+
             $inserted = $wpdb->query($wpdb->prepare(
                 'INSERT IGNORE INTO ' . self::tableName()
                 . ' (submission_id, recipient, recipient_key, settings_json, status, attempt,'
@@ -303,34 +341,61 @@ final class NotificationQueue
                 . " VALUES (%s, %s, %s, %s, 'pending', 0, %s, %s)",
                 $submissionId,
                 $recipient,
-                self::recipientKey($recipient),
+                $recipientKey,
                 $settings,
                 $now,
                 $now
             ));
 
-            if ($inserted === 1) {
-                $queued++;
+            if ($inserted !== 1) {
+                if ($inserted !== false && self::rowExists($submissionId, $recipientKey)) {
+                    $duplicate++;
+                } else {
+                    $failedKeys[] = $recipientKey;
+                }
 
-                /**
-                 * Fires when a notification is genuinely queued for one
-                 * recipient.
-                 *
-                 * Fires once per recipient per submission, and ONLY when the
-                 * INSERT IGNORE actually created a row — a duplicate suppressed
-                 * by the unique (submission_id, recipient_key) index does not
-                 * fire it. Nothing has been rendered or sent at this point; the
-                 * subject and body are built by the worker on each attempt.
-                 *
-                 * $recipient is an administrator-configured address from the
-                 * Notifications settings page, never a visitor's.
-                 *
-                 * @param string $submissionId The submission being notified about.
-                 * @param string $recipient    Recipient address.
-                 * @param int    $attempt      Always 0 — no attempt has been made yet.
-                 */
-                do_action('convermetry_notification_queued', $submissionId, (string) $recipient, 0);
+                continue;
             }
+
+            $queued++;
+
+            /**
+             * Fires when a notification is genuinely queued for one
+             * recipient.
+             *
+             * Fires once per recipient per submission, and ONLY when the
+             * INSERT IGNORE actually created a row — a duplicate suppressed
+             * by the unique (submission_id, recipient_key) index does not
+             * fire it. Nothing has been rendered or sent at this point; the
+             * subject and body are built by the worker on each attempt.
+             *
+             * $recipient is an administrator-configured address from the
+             * Notifications settings page, never a visitor's.
+             *
+             * @param string $submissionId The submission being notified about.
+             * @param string $recipient    Recipient address.
+             * @param int    $attempt      Always 0 — no attempt has been made yet.
+             */
+            do_action('convermetry_notification_queued', $submissionId, (string) $recipient, 0);
+        }
+
+        $outcome = new QueueOutcome(
+            expected: count($recipients),
+            inserted: $queued,
+            duplicate: $duplicate,
+            failed: count($failedKeys),
+            failedKeys: $failedKeys,
+        );
+
+        if (!$outcome->isComplete()) {
+            // A recipient the site configured will not be emailed about this
+            // submission unless this is surfaced; nothing else would notice.
+            Errors::storage(
+                'notification_queue',
+                'insert',
+                'queue_row_not_persisted',
+                $outcome->telemetry() + ['submission_id' => $submissionId]
+            );
         }
 
         if ($queued > 0) {
@@ -341,7 +406,7 @@ final class NotificationQueue
             }
         }
 
-        return $queued;
+        return $outcome;
     }
 
     /**

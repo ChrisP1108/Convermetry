@@ -98,6 +98,35 @@ identity, and correct delivery-log date filtering.
 
 ### Fixed
 
+- **A submission could be reported as queued when nothing was queued.**
+  `FormDeliveryQueue::enqueue()` counted only rows whose `INSERT IGNORE`
+  reported one affected row. That statement reports zero both for a duplicate
+  the unique index suppressed and for a row it declined to write, and
+  `$wpdb->query()` returns `false` outright on error — so a refused write was
+  indistinguishable from an idempotent no-op. `SubmissionService` then discarded
+  the count entirely and reported `queued: true` regardless. A submission could
+  be recorded, its delivery row could fail to persist, and the caller was told
+  the webhook was on its way. A partial failure was worse: two of three
+  destinations received the lead while the third disappeared without a trace.
+
+  Both queues now return a verified `QueueOutcome` distinguishing inserted,
+  duplicate and failed rows, resolving every ambiguous result by reading the row
+  back. `SubmissionResult::$queued` reflects what is durably present, failures
+  emit sanitized `convermetry_storage_error` telemetry, and a repair pass is
+  scheduled for exactly the endpoints whose rows are known to be absent —
+  never a broader re-queue, which could re-send a delivery a worker had already
+  completed and deleted.
+
+- **The database-backed tracking rate limiter failed open.** The counter's
+  write result was never checked, and when the read-back did not produce the
+  expected `window|count` value the code fell back to treating the current
+  request's own event count as the counter — a number far below any cap. A
+  counter that could not be written or read therefore admitted every request,
+  silently. Each step is now checked and every failure rejects the request and
+  reports sanitized telemetry, matching the documented intent. A window
+  rollover between the charge and the read is correctly treated as legitimate
+  rather than as a failure.
+
 - All 32 known-defect PHPUnit skips are implemented and passing: `DateRangeTest`
   (17), `ElementorIdentityTest` (6), `EndpointStateMigrationTest` (6) and
   `FrozenRetryTest` (3). The suite runs 847 tests with zero skips.
