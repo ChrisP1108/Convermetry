@@ -6,6 +6,8 @@ namespace Convermetry\Forms\Providers;
 if (!defined('ABSPATH')) exit;
 
 use Convermetry\Forms\FormProviderInterface;
+use Convermetry\Forms\FormProviderRegistry;
+use Convermetry\Forms\FormSettings;
 use Convermetry\Forms\SubmissionService;
 use Convermetry\Settings\Options;
 
@@ -16,9 +18,13 @@ use Convermetry\Settings\Options;
  * that fires after a submission passed validation and was processed — and
  * feeds the record into the shared submission pipeline.
  *
- * Identity: per-form settings are keyed by the form NAME (the identity the
- * legacy Forms Webhook Integrator used, stable across widget copies), while
- * the Elementor widget id travels in payloads as native_form_id.
+ * Identity: per-form settings are keyed by the Elementor WIDGET ID, which is
+ * stable across renames and unique per widget. They used to be keyed by form
+ * NAME, which meant two widgets both left at the default "New Form" shared one
+ * configuration, and renaming a form orphaned its settings. Sites upgrading
+ * from the name-keyed layout keep working through
+ * {@see FormSettings::resolveKey()}, which falls back to the legacy name key
+ * until the next save migrates the entry across.
  *
  * Failure modes: in the default 'background' mode the visitor always sees
  * the normal success state and failed webhook deliveries retry in the
@@ -49,7 +55,10 @@ final class ElementorProvider implements FormProviderInterface
     }
 
     /**
-     * Discovers every Elementor form widget on the site by name.
+     * Discovers every Elementor form widget on the site.
+     *
+     * Keyed by widget id so two widgets sharing a name stay distinct; the
+     * form name is carried alongside for display and legacy-key fallback.
      *
      * @return array<int, array{native_id: string, name: string}>
      */
@@ -57,7 +66,7 @@ final class ElementorProvider implements FormProviderInterface
     {
         global $wpdb;
 
-        $names = [];
+        $forms = [];
 
         /** @var string[] $postIds */
         $postIds = $wpdb->get_col($wpdb->prepare(
@@ -77,13 +86,12 @@ final class ElementorProvider implements FormProviderInterface
                 continue;
             }
 
-            $this->extractFormNames($elements, $names);
+            $this->extractForms($elements, $forms);
         }
 
-        return array_map(
-            static fn(string $name): array => ['native_id' => $name, 'name' => $name],
-            array_values(array_unique($names))
-        );
+        // Keyed by widget id while collecting, so the same widget found on
+        // several posts (a template reused across pages) appears once.
+        return array_values($forms);
     }
 
     public function registerHooks(SubmissionService $service): void
@@ -120,6 +128,24 @@ final class ElementorProvider implements FormProviderInterface
 
         $widgetId = (string) $record->get_form_settings('id');
 
+        // Current identity is the widget id. A site that has not re-saved its
+        // form settings since upgrading still has them under the name key, so
+        // resolve against what is actually stored before recording.
+        $providerKey = $this->getKey();
+        $identity    = $widgetId !== '' ? $widgetId : $formName;
+
+        if ($widgetId !== '' && $widgetId !== $formName) {
+            $legacyKey = FormProviderRegistry::legacyFormKey($providerKey, $formName);
+            $resolved  = FormSettings::resolveKey(
+                FormProviderRegistry::formKey($providerKey, $widgetId),
+                $legacyKey
+            );
+
+            if ($resolved === $legacyKey && $legacyKey !== '') {
+                $identity = $formName;
+            }
+        }
+
         $rawFields = $record->get('fields');
         $fields    = [];
 
@@ -142,12 +168,12 @@ final class ElementorProvider implements FormProviderInterface
         $sync = Options::formFailureMode() === 'show_error';
 
         $result = $service->record(
-            provider: $this->getKey(),
+            provider: $providerKey,
             nativeId: $widgetId,
             formName: $formName,
             fields: $fields,
             sync: $sync,
-            identity: $formName
+            identity: $identity
         );
 
         // Only the synchronous mode surfaces failures to the visitor —
@@ -168,13 +194,13 @@ final class ElementorProvider implements FormProviderInterface
     }
 
     /**
-     * Recursively walks Elementor element trees to find form widget names.
+     * Recursively walks Elementor element trees collecting form widgets.
      *
-     * @param array<int|string, mixed> $elements Element tree.
-     * @param string[]                 $names    Collected form names (by reference).
+     * @param array<int|string, mixed>                                $elements Element tree.
+     * @param array<string, array{native_id: string, name: string}>   $forms    Collected forms, keyed by widget id (by reference).
      * @return void
      */
-    private function extractFormNames(array $elements, array &$names): void
+    private function extractForms(array $elements, array &$forms): void
     {
         foreach ($elements as $element) {
             if (!is_array($element)) {
@@ -186,11 +212,20 @@ final class ElementorProvider implements FormProviderInterface
                 && is_string($element['settings']['form_name'] ?? null)
                 && $element['settings']['form_name'] !== ''
             ) {
-                $names[] = $element['settings']['form_name'];
+                $name = $element['settings']['form_name'];
+
+                // Elementor always assigns a widget id; fall back to the name
+                // only for hand-edited or malformed element trees, which keeps
+                // the form visible rather than dropping it from the admin list.
+                $widgetId = is_string($element['id'] ?? null) && $element['id'] !== ''
+                    ? $element['id']
+                    : $name;
+
+                $forms[$widgetId] = ['native_id' => $widgetId, 'name' => $name];
             }
 
             if (!empty($element['elements']) && is_array($element['elements'])) {
-                $this->extractFormNames($element['elements'], $names);
+                $this->extractForms($element['elements'], $forms);
             }
         }
     }

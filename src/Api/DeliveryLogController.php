@@ -269,6 +269,9 @@ final class DeliveryLogController
         $perPage = min(self::MAX_PER_PAGE, max(1, (int) $request->get_param('per_page')));
 
         $filters = self::requestFilters($request);
+        if ($filters instanceof \WP_Error) {
+            return $filters;
+        }
 
         $total      = DeliveryLog::getLogCount($filters);
         $totalPages = max(1, (int) ceil($total / $perPage));
@@ -282,11 +285,62 @@ final class DeliveryLogController
         $output = array_map([self::class, 'formatEntry'], $logs);
 
         $response = new \WP_REST_Response($output, 200);
+
+        // Authenticated delivery rows carry endpoint and submission context.
+        // Keep them out of shared proxy caches and browser back/forward stores.
+        $response->header('Cache-Control', 'no-store, no-cache, must-revalidate, private, max-age=0');
+        $response->header('Pragma', 'no-cache');
+        $response->header('Expires', '0');
+
         $response->header('X-WP-Total', (string) $total);
         $response->header('X-WP-TotalPages', (string) $totalPages);
         $response->header('X-CVM-Page', (string) $page);
 
         return $response;
+    }
+
+    /**
+     * Parses a strict YYYY-MM-DD UTC calendar date.
+     *
+     * Format matching alone is not enough: '2026-99-99' satisfies
+     * ^\d{4}-\d{2}-\d{2}$ but is not a date, and PHP's lenient parser rolls
+     * it years forward instead of rejecting it. checkdate() settles that, and
+     * the '!' format resets every unspecified field so the result is exactly
+     * midnight UTC rather than "midnight plus the current time".
+     *
+     * @param string $value Raw parameter value.
+     * @return \DateTimeImmutable|null Midnight UTC, or null when not a real date.
+     */
+    private static function parseDateParam(string $value): ?\DateTimeImmutable
+    {
+        if (preg_match('~^(\d{4})-(\d{2})-(\d{2})$~', $value, $m) !== 1) {
+            return null;
+        }
+
+        if (!checkdate((int) $m[2], (int) $m[3], (int) $m[1])) {
+            return null;
+        }
+
+        $parsed = \DateTimeImmutable::createFromFormat('!Y-m-d', $value, new \DateTimeZone('UTC'));
+
+        return $parsed === false ? null : $parsed;
+    }
+
+    /**
+     * @param string $param The offending parameter name.
+     * @param string $value The rejected value, echoed back for debuggability.
+     */
+    private static function invalidDate(string $param, string $value): \WP_Error
+    {
+        return new \WP_Error(
+            'invalid_date',
+            sprintf(
+                "The '%s' parameter must be a real UTC calendar date in YYYY-MM-DD format; got '%s'.",
+                $param,
+                $value
+            ),
+            ['status' => 400]
+        );
     }
 
     /**
@@ -297,10 +351,13 @@ final class DeliveryLogController
      * URL, so credentials embedded in endpoint URLs are never required (or
      * echoed) to filter.
      *
+     * The after/before bounds are strict UTC calendar dates. Anything else is
+     * a client error rather than a silently ignored parameter.
+     *
      * @param \WP_REST_Request $request The incoming request.
-     * @return array<string, string>
+     * @return array<string, string>|\WP_Error Filters, or a 400 for a bad range.
      */
-    private static function requestFilters(\WP_REST_Request $request): array
+    private static function requestFilters(\WP_REST_Request $request)
     {
         $filters = [
             'status'       => (string) $request->get_param('status'),
@@ -309,14 +366,48 @@ final class DeliveryLogController
             'form_name'    => (string) $request->get_param('form_id'),
         ];
 
-        // Date range: after/before (YYYY-MM-DD) are mapped to the log's
-        // year/month filters when they describe one calendar month; broader
-        // ranges are served page-by-page by created_at ordering. Kept
-        // simple and index-friendly.
-        $after = (string) $request->get_param('after');
-        if (preg_match('~^(\d{4})-(\d{2})$~', $after, $m) || preg_match('~^(\d{4})-(\d{2})-\d{2}$~', $after, $m)) {
-            $filters['year']  = $m[1];
-            $filters['month'] = $m[2];
+        // Date range. 'after' used to collapse to a year+month filter, so
+        // after=2026-08-15 returned the whole of August, and 'before' was
+        // registered but never read at all. Both are now parsed strictly and
+        // turned into a half-open [from, before) window on created_at, which
+        // an index on that column can actually serve.
+        $rawAfter  = trim((string) $request->get_param('after'));
+        $rawBefore = trim((string) $request->get_param('before'));
+
+        $after  = null;
+        $before = null;
+
+        if ($rawAfter !== '') {
+            $after = self::parseDateParam($rawAfter);
+            if ($after === null) {
+                return self::invalidDate('after', $rawAfter);
+            }
+        }
+
+        if ($rawBefore !== '') {
+            $before = self::parseDateParam($rawBefore);
+            if ($before === null) {
+                return self::invalidDate('before', $rawBefore);
+            }
+        }
+
+        if ($after !== null && $before !== null && $before < $after) {
+            return new \WP_Error(
+                'invalid_date_range',
+                "The 'before' date must not be earlier than the 'after' date.",
+                ['status' => 400]
+            );
+        }
+
+        if ($after !== null) {
+            $filters['created_from'] = $after->format('Y-m-d H:i:s');
+        }
+
+        if ($before !== null) {
+            // 'before' is documented as INCLUSIVE, so the exclusive upper bound
+            // is midnight on the following day. modify() handles month, year
+            // and leap-day rollover.
+            $filters['created_before'] = $before->modify('+1 day')->format('Y-m-d H:i:s');
         }
 
         $endpointParam = (string) $request->get_param('endpoint');

@@ -211,18 +211,24 @@ final class RequestFactory
      * and — when a signing secret is configured for the endpoint — the
      * X-Convermetry-Signature HMAC header computed over the exact body bytes.
      *
+     * The endpoint is identified by its DURABLE id, not its URL. Resolving the
+     * secret by URL meant an edited URL matched no endpoint and silently fell
+     * through to the shared secret, producing a signature a receiver could not
+     * distinguish from a forgery — and a deleted endpoint's in-flight retry got
+     * one too. A reference that resolves to no endpoint now sends NO signature.
+     *
      * @param array<string, string> $headers     Frozen delivery headers.
-     * @param string                $endpointUrl Configured endpoint URL (secret lookup key).
+     * @param string                $endpointRef Durable endpoint id (legacy: URL).
      * @param string                $body        Exact JSON body bytes being sent.
      * @param string                $deliveryId  The delivery's idempotency id.
      * @return array<string, string>
      */
-    public static function withProtocolHeaders(array $headers, string $endpointUrl, string $body, string $deliveryId): array
+    public static function withProtocolHeaders(array $headers, string $endpointRef, string $body, string $deliveryId): array
     {
         $headers['User-Agent']      = 'WordPress/Convermetry ' . CVM_VERSION;
         $headers['Idempotency-Key'] = $deliveryId;
 
-        $secret = Options::secretFor($endpointUrl);
+        $secret = Options::secretForEndpointRef($endpointRef);
         if ($secret !== '') {
             $headers['X-Convermetry-Signature'] = 'sha256=' . hash_hmac('sha256', $body, $secret);
         }

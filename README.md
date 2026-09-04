@@ -22,7 +22,7 @@ Was the lead successfully delivered to external systems?
 
 Convermetry works standalone — full analytics dashboard, form integrations, and webhook delivery inside one WordPress install — and is architected so a future Convermetry SaaS can receive `analytics_report` and `form_submission` messages from many installations, keyed by a shared, versioned payload schema.
 
-- **Version:** 0.7.0
+- **Version:** 0.8.0
 - **Requires WordPress:** 6.3+
 - **Requires PHP:** 8.3+
 - **License:** GPL-2.0-or-later
@@ -73,7 +73,7 @@ Convermetry works standalone — full analytics dashboard, form integrations, an
 | Form plugins | Optional — feature-detected (see [Supported form providers](#supported-form-providers)) |
 
 1. Copy the `convermetry` folder into `wp-content/plugins/`.
-2. Activate **Convermetry** on the Plugins screen. Activation creates the four custom tables and schedules the cleanup and webhook cron events.
+2. Activate **Convermetry** on the Plugins screen. Activation creates the seven custom tables and schedules the cleanup and webhook cron events.
 3. Visit **Convermetry** in the admin menu for analytics; configure endpoints under **Convermetry → Webhooks**, form behavior under **Convermetry → Forms**, and tracking/identity under **Convermetry → Settings**.
 
 Activation never fatals when no third-party form plugin is installed — every provider integration is feature-detected at runtime.
@@ -985,7 +985,7 @@ Every outbound message shares one versioned envelope:
 {
     "schema_version": "1.0 | 2.0",
     "source": "convermetry",
-    "plugin_version": "0.7.0",
+    "plugin_version": "0.8.0",
     "message_type": "analytics_report | form_submission",
     "website_info": { },
     "generated_at": "2026-08-22T14:00:00+00:00",
@@ -1013,7 +1013,7 @@ Every outbound message shares one versioned envelope:
 {
     "schema_version": "1.1",
     "source": "convermetry",
-    "plugin_version": "0.7.0",
+    "plugin_version": "0.8.0",
     "message_type": "analytics_report",
     "website_info": {
         "name": "Example Financial", "url": "https://example.com", "domain": "example.com",
@@ -1133,7 +1133,7 @@ Every outbound message shares one versioned envelope:
 {
     "schema_version": "2.0",
     "source": "convermetry",
-    "plugin_version": "0.7.0",
+    "plugin_version": "0.8.0",
     "message_type": "form_submission",
     "website_info": {
         "name": "Example Financial", "url": "https://example.com", "domain": "example.com",

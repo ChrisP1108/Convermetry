@@ -641,6 +641,12 @@ final class Options
      * Per-endpoint secrets mean one compromised receiver never learns the
      * key that authenticates payloads to every other receiver.
      *
+     * @deprecated Resolve by durable id with {@see secretForId()} instead. A URL
+     *             is mutable identity: after an edit this matches no endpoint and
+     *             silently returns the SHARED secret, producing a signature the
+     *             receiver cannot distinguish from a forgery. Retained only for
+     *             stored state written before endpoint ids existed.
+     *
      * @param string $url Endpoint URL (exact match against saved endpoints).
      * @return string Secret to sign with, or '' when signing is not configured.
      */
@@ -653,6 +659,190 @@ final class Options
         }
 
         return self::sharedSecret();
+    }
+
+    /**
+     * The signing secret for an endpoint resolved by its DURABLE id.
+     *
+     * The distinction that matters, and the reason this is not secretFor():
+     *
+     *  - endpoint found, own secret  → that secret
+     *  - endpoint found, no secret   → the shared secret (unchanged, intentional)
+     *  - endpoint NOT found          → '' — sign with nothing
+     *
+     * The last case is the security fix. A deleted endpoint whose frozen retry
+     * is still in flight must not fall through to the shared secret: that would
+     * hand a destination the site owner deliberately removed a signature valid
+     * under the key every other receiver trusts.
+     *
+     * @param string $id Durable endpoint id.
+     * @return string Secret to sign with, or '' to send no signature at all.
+     */
+    public static function secretForId(string $id): string
+    {
+        if ($id === '') {
+            return '';
+        }
+
+        foreach (self::endpoints() as $endpoint) {
+            if ($endpoint->id === $id) {
+                return $endpoint->secret !== '' ? $endpoint->secret : self::sharedSecret();
+            }
+        }
+
+        return '';
+    }
+
+    /**
+     * Resolves the signing secret for an endpoint REFERENCE.
+     *
+     * A reference is a durable id. It may also be a raw URL, because state
+     * frozen before ids existed — queued rows and pending retry payloads —
+     * recorded the URL and can still be in flight across the upgrade. Ids are
+     * tried first so a URL can never shadow one.
+     *
+     * An unresolvable reference returns '' (send no signature). It must never
+     * fall through to the shared secret: see {@see secretForId()}.
+     *
+     * @param string $ref Durable endpoint id, or a legacy endpoint URL.
+     * @return string Secret to sign with, or '' to send no signature.
+     */
+    public static function secretForEndpointRef(string $ref): string
+    {
+        if ($ref === '') {
+            return '';
+        }
+
+        $endpoints = self::endpoints();
+
+        foreach ($endpoints as $endpoint) {
+            if ($endpoint->id !== '' && $endpoint->id === $ref) {
+                return $endpoint->secret !== '' ? $endpoint->secret : self::sharedSecret();
+            }
+        }
+
+        foreach ($endpoints as $endpoint) {
+            if ($endpoint->url === $ref) {
+                return $endpoint->secret !== '' ? $endpoint->secret : self::sharedSecret();
+            }
+        }
+
+        return '';
+    }
+
+    /**
+     * The endpoint carrying a given durable id, or null.
+     *
+     * @param string $id Durable endpoint id.
+     * @return WebhookEndpoint|null
+     */
+    public static function endpointById(string $id): ?WebhookEndpoint
+    {
+        if ($id === '') {
+            return null;
+        }
+
+        foreach (self::endpoints() as $endpoint) {
+            if ($endpoint->id === $id) {
+                return $endpoint;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * The durable id of the endpoint currently configured at a URL, or ''.
+     *
+     * The bridge for code paths that still hold only a URL (queued rows and
+     * frozen payloads written before the migration). A URL that matches no
+     * configured endpoint returns '', which callers must treat as "deleted",
+     * never as "use the shared secret".
+     *
+     * @param string $url Endpoint URL.
+     * @return string Durable id, or '' when no endpoint is configured at that URL.
+     */
+    public static function endpointIdForUrl(string $url): string
+    {
+        if ($url === '') {
+            return '';
+        }
+
+        foreach (self::endpoints() as $endpoint) {
+            if ($endpoint->url === $url) {
+                return $endpoint->id;
+            }
+        }
+
+        return '';
+    }
+
+    /**
+     * Assigns a durable id to every configured endpoint that lacks one, and
+     * replaces any duplicate id, then persists only if something changed.
+     *
+     * Idempotent and safe to run repeatedly: an endpoint that already has a
+     * unique id is left exactly as it is, so a routine settings save can never
+     * regenerate an id and strand the state keyed by it. Safe to run after an
+     * interruption, because a partially-assigned list simply gets the missing
+     * ids filled in on the next pass.
+     *
+     * @return bool Whether any id was assigned (i.e. whether the option was written).
+     */
+    public static function ensureEndpointIds(): bool
+    {
+        $settings = self::webhookAll();
+        $raw      = $settings['endpoints'] ?? [];
+
+        if (!is_array($raw)) {
+            return false;
+        }
+
+        $changed = false;
+        $seen    = [];
+
+        foreach ($raw as $index => $entry) {
+            if (!is_array($entry)) {
+                continue;
+            }
+
+            // A row with no URL is a half-filled form, not an endpoint. It is
+            // skipped everywhere else, so it must not consume an id here.
+            if (trim((string) ($entry['url'] ?? '')) === '') {
+                continue;
+            }
+
+            $id = trim((string) ($entry['id'] ?? ''));
+
+            if ($id === '' || isset($seen[$id])) {
+                $id                    = self::generateEndpointId();
+                $raw[$index]['id']     = $id;
+                $changed               = true;
+            }
+
+            $seen[$id] = true;
+        }
+
+        if ($changed) {
+            $settings['endpoints'] = $raw;
+            update_option(self::WEBHOOK_OPTION_KEY, $settings);
+        }
+
+        return $changed;
+    }
+
+    /**
+     * Mints one durable endpoint id.
+     *
+     * A v4 UUID: collision-resistant without coordination, and carrying no
+     * information about the URL it was minted for, so the id never has to
+     * change when the URL does.
+     *
+     * @return string
+     */
+    private static function generateEndpointId(): string
+    {
+        return wp_generate_uuid4();
     }
 
     /**

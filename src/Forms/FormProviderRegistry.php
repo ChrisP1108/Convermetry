@@ -210,4 +210,31 @@ final class FormProviderRegistry
     {
         return $providerKey . ':' . $nativeId;
     }
+
+    /**
+     * The key a form's settings were stored under BEFORE its provider changed
+     * identity, or '' when that provider never re-keyed.
+     *
+     * Only Elementor has re-keyed. Its settings were keyed by form NAME, so two
+     * widgets both left at the default "New Form" shared one configuration and
+     * renaming a form orphaned its settings; 0.8.0 moved it to the stable widget
+     * id. Everything that reads per-form configuration passes this to
+     * {@see FormSettings::resolveKey()} so a site that has not re-saved since
+     * upgrading still finds its settings.
+     *
+     * Centralised here rather than spread across callers: the historical mapping
+     * is one fact about one provider, and it has to stay consistent between the
+     * admin screen that reads a form's configuration and the submission path
+     * that applies it.
+     *
+     * @param string $providerKey Provider key.
+     * @param string $name        The form's display name.
+     * @return string Legacy provider-scoped key, or ''.
+     */
+    public static function legacyFormKey(string $providerKey, string $name): string
+    {
+        return ($providerKey === 'elementor' && $name !== '')
+            ? self::formKey($providerKey, $name)
+            : '';
+    }
 }

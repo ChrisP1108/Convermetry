@@ -495,9 +495,20 @@ final class FormsPage
      */
     private static function renderFormBlock(array $form): void
     {
-        $formKey = FormProviderRegistry::formKey($form['provider'], $form['native_id']);
-        $config  = FormSettings::forForm($formKey);
-        $hash    = md5($formKey);
+        // READ through the legacy fallback so a site upgrading from name-keyed
+        // Elementor settings sees its existing configuration rather than blank
+        // defaults. WRITE to the CURRENT key: posting the legacy key back would
+        // keep two same-named widgets sharing one entry forever, which is the
+        // exact defect the widget-id change exists to fix. Saving therefore
+        // migrates the entry across, and the legacy entry is left in place for
+        // queued deliveries that still reference it.
+        $formKey   = FormProviderRegistry::formKey($form['provider'], $form['native_id']);
+        $readKey   = FormSettings::resolveKey(
+            $formKey,
+            FormProviderRegistry::legacyFormKey($form['provider'], $form['name'])
+        );
+        $config    = FormSettings::forForm($readKey);
+        $hash      = md5($formKey);
         $name    = 'cvm_forms[' . $hash . ']';
 
         ?>

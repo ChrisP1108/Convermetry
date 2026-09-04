@@ -1,10 +1,20 @@
 <?xml version="1.0" encoding="UTF-8"?>
+<!--
+    Unit suite: Brain Monkey stubs, no WordPress and no database.
+
+    failOnSkipped is deliberate. Four suites used to guard themselves with
+    markTestSkipped() while the behaviour they specify was unimplemented, which
+    meant 32 tests reported green without asserting anything. A skip is now a
+    build failure, so a known defect cannot be parked in the suite again.
+-->
 <phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:noNamespaceSchemaLocation="vendor/phpunit/phpunit/phpunit.xsd"
          bootstrap="tests/bootstrap.php"
          colors="true"
          failOnWarning="true"
          failOnRisky="true"
+         failOnSkipped="true"
+         failOnIncomplete="true"
          beStrictAboutOutputDuringTests="true"
          cacheDirectory=".phpunit.cache">
     <testsuites>

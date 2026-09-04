@@ -433,7 +433,8 @@ final class DeliveryLog
      *
      * @param int                   $page    1-based page number.
      * @param int                   $perPage Rows per page (clamp in callers).
-     * @param array<string, string> $filters status, year, month, search, endpoint,
+     * @param array<string, string> $filters status, year, month, created_from,
+     *                                       created_before, search, endpoint,
      *                                       message_type, provider, form_name.
      * @return array<int, array<string, mixed>>
      */
@@ -511,7 +512,7 @@ final class DeliveryLog
     {
         global $wpdb;
 
-        [$where, $values] = self::buildWhereClause(array_diff_key($filters, ['year' => 0, 'month' => 0, 'search' => 0]));
+        [$where, $values] = self::buildWhereClause(array_diff_key($filters, ['year' => 0, 'month' => 0, 'search' => 0, 'created_from' => 0, 'created_before' => 0]));
 
         $sql = "SELECT DISTINCT DATE_FORMAT(created_at, '%%Y-%%m') FROM " . self::tableName() . " {$where} ORDER BY 1 DESC";
 
@@ -689,8 +690,9 @@ final class DeliveryLog
      * Builds a SQL WHERE clause and its ordered values from the filters.
      *
      * @param array<string, string> $filters status ('success'|'error'), year,
-     *                                       month, search, endpoint,
-     *                                       message_type, provider, form_name.
+     *                                       month, created_from, created_before,
+     *                                       search, endpoint, message_type,
+     *                                       provider, form_name.
      * @return array{0: string, 1: list<mixed>}
      */
     private static function buildWhereClause(array $filters): array
@@ -700,6 +702,8 @@ final class DeliveryLog
         $status      = (string) ($filters['status'] ?? '');
         $filterYear  = (string) ($filters['year'] ?? '');
         $filterMonth = (string) ($filters['month'] ?? '');
+        $createdFrom = (string) ($filters['created_from'] ?? '');
+        $createdTo   = (string) ($filters['created_before'] ?? '');
         $search      = (string) ($filters['search'] ?? '');
         $endpoint    = (string) ($filters['endpoint'] ?? '');
         $messageType = (string) ($filters['message_type'] ?? '');
@@ -713,14 +717,50 @@ final class DeliveryLog
             $conditions[] = 'success = ' . ($status === 'success' ? '1' : '0');
         }
 
-        if ($filterYear !== '' && ctype_digit($filterYear) && strlen($filterYear) === 4) {
-            $conditions[] = 'YEAR(created_at) = %d';
-            $values[]     = (int) $filterYear;
-        }
+        // Calendar filters are expressed as half-open created_at ranges rather
+        // than YEAR()/MONTH() calls. Wrapping the column in a function makes the
+        // predicate non-sargable, so the KEY created_at index could never be
+        // used and every filtered page became a full scan.
+        $yearValid  = $filterYear !== '' && ctype_digit($filterYear) && strlen($filterYear) === 4;
+        $monthValid = $filterMonth !== '' && ctype_digit($filterMonth)
+            && (int) $filterMonth >= 1 && (int) $filterMonth <= 12;
 
-        if ($filterMonth !== '' && ctype_digit($filterMonth) && (int) $filterMonth >= 1 && (int) $filterMonth <= 12) {
+        if ($yearValid) {
+            $year  = (int) $filterYear;
+            $month = $monthValid ? (int) $filterMonth : 0;
+
+            if ($month > 0) {
+                $start = sprintf('%04d-%02d-01 00:00:00', $year, $month);
+                $end   = $month === 12
+                    ? sprintf('%04d-01-01 00:00:00', $year + 1)
+                    : sprintf('%04d-%02d-01 00:00:00', $year, $month + 1);
+            } else {
+                $start = sprintf('%04d-01-01 00:00:00', $year);
+                $end   = sprintf('%04d-01-01 00:00:00', $year + 1);
+            }
+
+            $conditions[] = 'created_at >= %s';
+            $values[]     = $start;
+            $conditions[] = 'created_at < %s';
+            $values[]     = $end;
+        } elseif ($monthValid) {
+            // A month with no year means "this month across all years", which
+            // has no contiguous range. The only genuinely non-sargable case,
+            // and it is not reachable from the REST date parameters.
             $conditions[] = 'MONTH(created_at) = %d';
             $values[]     = (int) $filterMonth;
+        }
+
+        // Explicit bounds from the REST after/before parameters, already
+        // normalised to a half-open [from, before) window in UTC.
+        if ($createdFrom !== '') {
+            $conditions[] = 'created_at >= %s';
+            $values[]     = $createdFrom;
+        }
+
+        if ($createdTo !== '') {
+            $conditions[] = 'created_at < %s';
+            $values[]     = $createdTo;
         }
 
         if ($search !== '') {

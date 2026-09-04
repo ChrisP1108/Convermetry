@@ -89,14 +89,33 @@ final class AnalyticsDispatcher
      */
     private const array RETRY_DELAYS = [300, 1800, 7200, 21600, 57600];
 
-    /** Option key mapping md5(endpoint URL) → last-success unix timestamp. */
+    /**
+     * Option key mapping DURABLE ENDPOINT ID → last-success unix timestamp.
+     *
+     * Keyed by md5(endpoint URL) before 0.8.0, which meant editing a URL reset
+     * the endpoint's delivery window and re-sent already-delivered data.
+     * {@see migrateEndpointState()} re-keys existing installations.
+     */
     private const string LAST_SENT_OPTION = 'cvm_webhook_last_sent';
 
-    /** Option key mapping md5(endpoint URL) → pending retry state. */
+    /**
+     * Option key mapping DURABLE ENDPOINT ID → pending retry state.
+     *
+     * Keyed by md5(endpoint URL) before 0.8.0, so a URL edit orphaned the
+     * frozen payload and pruneStaleState() then discarded it as belonging to a
+     * deleted endpoint. {@see migrateEndpointState()} re-keys existing
+     * installations.
+     */
     private const string RETRY_STATE_OPTION = 'cvm_webhook_retry_state';
 
     /** Option key for the fallback dispatch mutex (when GET_LOCK is unavailable). */
     private const string LOCK_OPTION = 'cvm_webhook_dispatch_lock';
+
+    /** Option key recording which per-endpoint state migrations have run. */
+    private const string STATE_VERSION_OPTION = 'cvm_webhook_state_version';
+
+    /** Bumped when per-endpoint state needs re-keying. 1: md5(url) -> durable id. */
+    private const int STATE_VERSION = 1;
 
     /**
      * Transient key throttling repeated "report query failed" error_log()
@@ -149,6 +168,11 @@ final class AnalyticsDispatcher
     {
         add_action(self::CRON_HOOK, [self::class, 'dispatch']);
         add_action(self::RETRY_HOOK, [self::class, 'retry'], 10, 1);
+
+        // Cheap on every request after the first (one autoloaded option read),
+        // and the only thing that moves an upgraded site's per-endpoint state
+        // off md5(url) keys.
+        add_action('init', [self::class, 'maybeMigrateEndpointState'], 5);
         add_action('update_option_' . Options::WEBHOOK_OPTION_KEY, [self::class, 'onSettingsSaved'], 10, 2);
     }
 
@@ -334,22 +358,31 @@ final class AnalyticsDispatcher
      * happens while holding the dispatch mutex; a retry that finds the lock
      * taken only re-schedules its own cron event and returns.
      *
-     * @param string $url The endpoint URL this retry targets.
+     * The argument is the endpoint's DURABLE ID. Events scheduled before the
+     * 0.8.0 migration carry the URL instead, and can still be in the cron array
+     * when this upgrade lands, so a reference that is not a known id is
+     * resolved as a URL.
+     *
+     * @param string $endpointRef Durable endpoint id, or a legacy endpoint URL.
      * @return void
      */
-    public static function retry(string $url): void
+    public static function retry(string $endpointRef): void
     {
         $lock = self::acquireLock();
         if ($lock === null) {
-            wp_schedule_single_event(time() + MINUTE_IN_SECONDS, self::RETRY_HOOK, [$url]);
+            wp_schedule_single_event(time() + MINUTE_IN_SECONDS, self::RETRY_HOOK, [$endpointRef]);
             return;
         }
 
         try {
+            $url = self::urlForRef($endpointRef);
+
             // The endpoint was removed from settings after this retry was
             // scheduled. Checked under the lock, like every state mutation.
-            if (!in_array($url, Options::analyticsEndpointUrls(), true)) {
-                self::clearRetry($url);
+            // Cleared by KEY, because after migration the state row is keyed by
+            // the durable id and the deleted URL no longer derives it.
+            if ($url === null || !in_array($url, Options::analyticsEndpointUrls(), true)) {
+                self::clearRetryByKey($endpointRef, $url);
                 return;
             }
 
@@ -425,6 +458,11 @@ final class AnalyticsDispatcher
             return false;
         }
 
+        if (wp_next_scheduled(self::RETRY_HOOK, [self::stateKeyFor($url)]) !== false) {
+            return true;
+        }
+
+        // An event scheduled before the migration still carries the URL.
         if (wp_next_scheduled(self::RETRY_HOOK, [$url]) !== false) {
             return true;
         }
@@ -605,7 +643,7 @@ final class AnalyticsDispatcher
         try {
             foreach (self::getRetryStates() as $key => $state) {
                 if ($key === $urlKey) {
-                    self::clearRetry($state->url);
+                    self::clearRetryByKey($key, $state->url);
                     break;
                 }
             }
@@ -678,7 +716,8 @@ final class AnalyticsDispatcher
         $lastSent = get_option(self::LAST_SENT_OPTION, []);
         $lastSent = is_array($lastSent) ? $lastSent : [];
 
-        $startTs = isset($lastSent[md5($url)]) ? (int) $lastSent[md5($url)] : $fallback;
+        $key     = self::stateKeyFor($url);
+        $startTs = isset($lastSent[$key]) ? (int) $lastSent[$key] : $fallback;
 
         return max($startTs, $maxAge);
     }
@@ -885,7 +924,7 @@ final class AnalyticsDispatcher
             $lastSent = get_option(self::LAST_SENT_OPTION, []);
             $lastSent = is_array($lastSent) ? $lastSent : [];
 
-            $key = md5($url);
+            $key = self::stateKeyFor($url);
             $lastSent[$key] = max((int) ($lastSent[$key] ?? 0), $delivery->windowEnd);
 
             update_option(self::LAST_SENT_OPTION, $lastSent, false);
@@ -951,7 +990,7 @@ final class AnalyticsDispatcher
 
         $when = time() + $delays[$attempt - 1];
 
-        if (wp_schedule_single_event($when, self::RETRY_HOOK, [$url]) === false) {
+        if (wp_schedule_single_event($when, self::RETRY_HOOK, [self::stateKeyFor($url)]) === false) {
             self::storeRetryState($url, max(1, $attempt - 1), 0, $delivery, true);
             DeliveryContext::retryChainExhausted(
                 self::contextFor($url, $delivery, DeliveryKind::Retry, max(1, $attempt - 1))
@@ -989,7 +1028,7 @@ final class AnalyticsDispatcher
         bool $exhausted
     ): void {
         $states = self::getRetryStates();
-        $key    = md5($url);
+        $key    = self::stateKeyFor($url);
 
         // frozen_at marks when this DELIVERY first froze, not when the state
         // row was last rewritten — later attempts in the same chain must not
@@ -1015,15 +1054,38 @@ final class AnalyticsDispatcher
      */
     private static function clearRetry(string $url): void
     {
-        $states = self::getRetryStates();
-        $key    = md5($url);
+        self::clearRetryByKey(self::stateKeyFor($url), $url);
+    }
 
-        if (!isset($states[$key])) {
+    /**
+     * Cancels a retry addressed by its STATE KEY.
+     *
+     * Needed because a deleted endpoint's URL no longer derives its state key:
+     * once the endpoint is gone from settings, stateKeyFor() falls back to the
+     * legacy md5 while the stored row is keyed by the durable id, so clearing
+     * by URL would silently leak the row and its frozen personal data.
+     *
+     * @param string      $key State-map key (durable endpoint id, or legacy md5).
+     * @param string|null $url Endpoint URL when known, for unscheduling legacy events.
+     * @return void
+     */
+    private static function clearRetryByKey(string $key, ?string $url = null): void
+    {
+        $states = self::getRetryStates();
+
+        if ($key === '' || !isset($states[$key])) {
             return;
         }
 
         if ($states[$key]->scheduledFor > 0) {
-            wp_unschedule_event($states[$key]->scheduledFor, self::RETRY_HOOK, [$url]);
+            wp_unschedule_event($states[$key]->scheduledFor, self::RETRY_HOOK, [$key]);
+
+            // Events scheduled before the migration are keyed by URL, and
+            // wp_unschedule_event() matches on exact arguments.
+            $legacy = $url ?? $states[$key]->url;
+            if ($legacy !== '' && $legacy !== $key) {
+                wp_unschedule_event($states[$key]->scheduledFor, self::RETRY_HOOK, [$legacy]);
+            }
         }
 
         unset($states[$key]);
@@ -1215,6 +1277,224 @@ final class AnalyticsDispatcher
     }
 
     /**
+     * The state-map key for an endpoint, derived from DURABLE identity.
+     *
+     * Returns the endpoint's durable id when it is configured. Falls back to
+     * the legacy md5(url) only for a URL that matches no configured endpoint,
+     * which is what lets state written before the migration still be found and
+     * cleaned up.
+     *
+     * @param string $url Endpoint URL.
+     * @return string Durable endpoint id, or the legacy md5 key.
+     */
+    private static function stateKeyFor(string $url): string
+    {
+        $id = Options::endpointIdForUrl($url);
+
+        return $id !== '' ? $id : md5($url);
+    }
+
+    /**
+     * Resolves a cron argument back to a configured endpoint URL.
+     *
+     * @param string $ref Durable endpoint id, or a legacy endpoint URL.
+     * @return string|null The URL, or null when no endpoint matches.
+     */
+    private static function urlForRef(string $ref): ?string
+    {
+        if ($ref === '') {
+            return null;
+        }
+
+        $endpoint = Options::endpointById($ref);
+        if ($endpoint !== null) {
+            return $endpoint->url;
+        }
+
+        foreach (Options::endpoints() as $candidate) {
+            if ($candidate->url === $ref) {
+                return $candidate->url;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Moves per-endpoint analytics state from md5(URL) keys onto durable
+     * endpoint ids, and re-points pending retry cron events at those ids.
+     *
+     * Run on upgrade. Safe to run repeatedly and safe to resume after an
+     * interruption:
+     *
+     *  - ids are assigned by {@see Options::ensureEndpointIds()}, which never
+     *    regenerates an existing one, so a half-finished pass simply completes;
+     *  - an entry already keyed by a configured id always wins over a legacy
+     *    entry that maps to the same id, so a second pass cannot overwrite
+     *    migrated state with a stale copy;
+     *  - a cron event is only re-pointed when the legacy event was actually
+     *    unscheduled, so a re-run cannot schedule a duplicate;
+     *  - state whose endpoint is no longer configured is dropped, which is the
+     *    same rule pruneStaleState() applies.
+     *
+     * Legacy state is not read again after the rekeyed map is written, and the
+     * write is a single update_option() per option — the option either holds
+     * the old map or the new one, never a partial merge.
+     *
+     * @return bool True when every rekey landed and was verified.
+     */
+    public static function migrateEndpointState(): bool
+    {
+        Options::ensureEndpointIds();
+
+        $idByLegacyKey = [];
+        $urlById       = [];
+        $validIds      = [];
+
+        foreach (Options::endpoints() as $endpoint) {
+            if ($endpoint->id === '') {
+                continue;
+            }
+
+            $idByLegacyKey[md5($endpoint->url)] = $endpoint->id;
+            $urlById[$endpoint->id]             = $endpoint->url;
+            $validIds[$endpoint->id]            = true;
+        }
+
+        $lastSent = self::rekeyStateOption(self::LAST_SENT_OPTION, $idByLegacyKey, $validIds);
+        if ($lastSent === null) {
+            return false;
+        }
+
+        $retryStates = self::rekeyStateOption(self::RETRY_STATE_OPTION, $idByLegacyKey, $validIds);
+        if ($retryStates === null) {
+            // The retry map is still the legacy one. Re-pointing cron events at
+            // ids nothing is keyed by would leave events that fire and find no
+            // state, so stop and let the next pass retry the whole thing.
+            return false;
+        }
+
+        self::migratePendingRetryCron($retryStates, $urlById);
+
+        return true;
+    }
+
+    /**
+     * Runs {@see migrateEndpointState()} once per install, on upgrade.
+     *
+     * The version marker is stamped only after the migration reports success,
+     * so an interrupted or failed pass simply runs again on the next request.
+     * The migration itself is idempotent, so a repeat pass after a crash
+     * between the rekey and the stamp is harmless.
+     *
+     * @return void
+     */
+    public static function maybeMigrateEndpointState(): void
+    {
+        if ((int) get_option(self::STATE_VERSION_OPTION, 0) >= self::STATE_VERSION) {
+            return;
+        }
+
+        if (self::migrateEndpointState()) {
+            update_option(self::STATE_VERSION_OPTION, self::STATE_VERSION);
+        }
+    }
+
+    /**
+     * Re-keys one state option from legacy md5(URL) keys onto durable ids.
+     *
+     * @param string                $option        Option name.
+     * @param array<string, string> $idByLegacyKey md5(url) => durable id.
+     * @param array<string, bool>   $validIds      Set of configured durable ids.
+     * @return array<string, mixed>|null The resulting map, or null when the write could not be verified.
+     */
+    private static function rekeyStateOption(string $option, array $idByLegacyKey, array $validIds): ?array
+    {
+        $stored = get_option($option, []);
+        if (!is_array($stored)) {
+            return [];
+        }
+
+        $migrated = [];
+
+        // Pass 1: anything already keyed by a configured id is authoritative.
+        foreach ($stored as $key => $value) {
+            if (is_string($key) && isset($validIds[$key])) {
+                $migrated[$key] = $value;
+            }
+        }
+
+        // Pass 2: legacy entries fill only ids pass 1 left unset, so re-running
+        // can never clobber migrated state with a stale legacy copy. An entry
+        // whose endpoint is gone is dropped rather than carried forward.
+        foreach ($stored as $key => $value) {
+            if (!is_string($key) || isset($validIds[$key])) {
+                continue;
+            }
+
+            $id = $idByLegacyKey[$key] ?? null;
+            if ($id === null || array_key_exists($id, $migrated)) {
+                continue;
+            }
+
+            $migrated[$id] = $value;
+        }
+
+        // Identical content AND order means nothing to do, which is what keeps
+        // a repeat run from touching the option at all.
+        if ($migrated !== $stored) {
+            update_option($option, $migrated, false);
+
+            // Read back before treating the legacy keys as replaced. An
+            // update_option() that silently failed (a full disk, a filter
+            // short-circuiting the write) would otherwise leave the caller
+            // re-pointing cron events at ids no state is stored under.
+            $readBack = get_option($option, null);
+            if (!is_array($readBack) || array_keys($readBack) !== array_keys($migrated)) {
+                return null;
+            }
+        }
+
+        return $migrated;
+    }
+
+    /**
+     * Re-points pending retry cron events from URL arguments onto durable ids.
+     *
+     * The timestamp comes from the migrated retry state rather than
+     * wp_next_scheduled(), because the event being moved is identified by the
+     * exact (timestamp, hook, args) triple WP-Cron stores. Re-pointing only
+     * when the legacy event was genuinely unscheduled makes this idempotent:
+     * a second pass finds nothing to unschedule and schedules nothing.
+     *
+     * @param array<string, mixed>  $retryStates Retry state keyed by durable id.
+     * @param array<string, string> $urlById     Durable id => configured URL.
+     * @return void
+     */
+    private static function migratePendingRetryCron(array $retryStates, array $urlById): void
+    {
+        foreach ($retryStates as $id => $state) {
+            if (!is_string($id) || !is_array($state)) {
+                continue;
+            }
+
+            $timestamp = (int) ($state['scheduled_for'] ?? 0);
+            if ($timestamp <= 0) {
+                continue;
+            }
+
+            $url = $urlById[$id] ?? (string) ($state['url'] ?? '');
+            if ($url === '' || $url === $id) {
+                continue;
+            }
+
+            if (wp_unschedule_event($timestamp, self::RETRY_HOOK, [$url])) {
+                wp_schedule_single_event($timestamp, self::RETRY_HOOK, [$id]);
+            }
+        }
+    }
+
+    /**
      * One endpoint's stored retry state, or null when it has none.
      *
      * @param string $url Endpoint URL.
@@ -1222,7 +1502,7 @@ final class AnalyticsDispatcher
      */
     private static function retryStateFor(string $url): ?RetryState
     {
-        return self::getRetryStates()[md5($url)] ?? null;
+        return self::getRetryStates()[self::stateKeyFor($url)] ?? null;
     }
 
     /**
@@ -1236,7 +1516,10 @@ final class AnalyticsDispatcher
      */
     private static function pruneStaleState(array $activeUrls): void
     {
-        $activeKeys = array_map('md5', $activeUrls);
+        // Derived from durable identity: comparing md5(url) meant an endpoint
+        // whose URL had been edited looked deleted, and its undelivered frozen
+        // payload was discarded.
+        $activeKeys = array_map([self::class, 'stateKeyFor'], $activeUrls);
 
         $lastSent = get_option(self::LAST_SENT_OPTION, []);
         if (is_array($lastSent)) {
@@ -1247,7 +1530,7 @@ final class AnalyticsDispatcher
 
         foreach (self::getRetryStates() as $key => $state) {
             if (!in_array($key, $activeKeys, true)) {
-                self::clearRetry($state->url);
+                self::clearRetryByKey($key, $state->url);
                 continue;
             }
 

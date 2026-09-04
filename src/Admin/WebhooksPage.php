@@ -135,6 +135,19 @@ final class WebhooksPage
         $endpoints = [];
         $seen      = [];
 
+        // Only ids that are ALREADY configured may be carried through a save.
+        // A posted id that matches nothing is discarded and the row is treated
+        // as new, so a hand-crafted POST cannot graft one endpoint's identity
+        // (and therefore its signing secret and retry chain) onto another.
+        $knownIds = [];
+        foreach (Options::endpoints() as $configured) {
+            if ($configured->id !== '') {
+                $knownIds[$configured->id] = true;
+            }
+        }
+
+        $claimedIds = [];
+
         $rawEndpoints = isset($_POST['cvm_webhooks']) && is_array($_POST['cvm_webhooks'])
             ? wp_unslash($_POST['cvm_webhooks'])
             : [];
@@ -162,8 +175,18 @@ final class WebhooksPage
                 continue;
             }
 
+            $postedId = trim((string) ($entry['id'] ?? ''));
+            $id       = ($postedId !== '' && isset($knownIds[$postedId]) && !isset($claimedIds[$postedId]))
+                ? $postedId
+                : '';
+
+            if ($id !== '') {
+                $claimedIds[$id] = true;
+            }
+
             $seen[$url]  = true;
             $endpoints[] = [
+                'id'        => $id,
                 'url'       => $url,
                 'label'     => mb_substr(sanitize_text_field((string) ($entry['label'] ?? '')), 0, 100),
                 'secret'    => mb_substr(sanitize_text_field((string) ($entry['secret'] ?? '')), 0, 190),
@@ -187,6 +210,11 @@ final class WebhooksPage
         ];
 
         update_option(Options::WEBHOOK_OPTION_KEY, $settings);
+
+        // Newly added rows were stored with an empty id; mint one for each.
+        // Existing ids came through the form untouched and are never
+        // regenerated, so a routine save cannot strand state keyed by them.
+        Options::ensureEndpointIds();
 
         if ($rejected !== []) {
             set_transient('cvm_webhook_rejected_' . get_current_user_id(), $rejected, MINUTE_IN_SECONDS);
@@ -411,7 +439,8 @@ final class WebhooksPage
                 $endpoint->label,
                 $endpoint->secret,
                 $endpoint->analytics,
-                $endpoint->forms
+                $endpoint->forms,
+                $endpoint->id
             );
         }
         ?>
@@ -528,12 +557,21 @@ final class WebhooksPage
      * @param string $secret    Saved per-endpoint secret.
      * @param bool   $analytics Whether the endpoint receives analytics reports.
      * @param bool   $forms     Whether the endpoint receives form submissions.
+     * @param string $id        Durable endpoint id, or '' for a new row.
      * @return void
      */
-    private static function renderEndpointBlock(int $index, string $url, string $label, string $secret, bool $analytics, bool $forms): void
+    private static function renderEndpointBlock(int $index, string $url, string $label, string $secret, bool $analytics, bool $forms, string $id = ''): void
     {
         ?>
         <div class="cvm-webhook-block" data-webhook-index="<?php echo esc_attr((string) $index); ?>">
+        <?php
+        // The durable endpoint id rides along with the row. Without it a save
+        // rebuilds the endpoint list from POST alone and every id is lost,
+        // orphaning the delivery window, retry chain and per-endpoint secret
+        // that are keyed by it. Rows added in the browser post no id and are
+        // assigned one by Options::ensureEndpointIds() after the save.
+        ?>
+        <input type="hidden" name="cvm_webhooks[<?php echo esc_attr((string) $index); ?>][id]" value="<?php echo esc_attr($id); ?>">
         <div class="cvm-webhook-block-header">
         <strong class="cvm-webhook-block-title">Endpoint <?php echo esc_html((string) ($index + 1)); ?></strong>
         <?php
