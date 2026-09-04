@@ -49,6 +49,9 @@ final class QueueDurabilityTest extends TestCase
      */
     private array $rowPresent = [];
 
+    /** @var array<string, mixed>|null */
+    private ?array $submissionRow = ['id' => 11, 'submission_id' => 'sub-1', 'delivery_state' => 'not_sent'];
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -59,6 +62,7 @@ final class QueueDurabilityTest extends TestCase
         $this->storageErrors = [];
         $this->insertResults = [];
         $this->rowPresent    = [];
+        $this->submissionRow = ['id' => 11, 'submission_id' => 'sub-1', 'delivery_state' => 'not_sent'];
 
         Functions\when('home_url')->justReturn('https://site.test');
         Functions\when('wp_parse_url')->alias(
@@ -124,6 +128,12 @@ final class QueueDurabilityTest extends TestCase
                 return [];
             }
 
+            /** @return array<string, mixed>|null */
+            public function get_row(string $sql, string $output = 'ARRAY_A'): ?array
+            {
+                return $this->test->submissionRow();
+            }
+
             /**
              * @param array<string, mixed> $data
              * @param array<string, mixed> $where
@@ -162,6 +172,12 @@ final class QueueDurabilityTest extends TestCase
      * Routes a read-back to the configured presence for whichever endpoint's
      * md5 key the statement names.
      */
+    /** @return array<string, mixed>|null */
+    public function submissionRow(): ?array
+    {
+        return $this->submissionRow;
+    }
+
     public function recordReadBack(string $sql): int
     {
         foreach ($this->rowPresent as $url => $present) {
@@ -219,7 +235,7 @@ final class QueueDurabilityTest extends TestCase
 
     public function testAnyFailureMakesTheOutcomeIncomplete(): void
     {
-        $outcome = new QueueOutcome(expected: 3, inserted: 2, failed: 1, failedKeys: ['k']);
+        $outcome = new QueueOutcome(expected: 3, inserted: 2, failed: 1, failedRefs: ['k']);
 
         self::assertFalse($outcome->isComplete(), 'A dropped destination is not "complete"');
         self::assertTrue($outcome->queuedAnything(), 'Two destinations did receive it');
@@ -228,14 +244,14 @@ final class QueueDurabilityTest extends TestCase
 
     public function testTelemetryCarriesCountsButNoEndpointDetail(): void
     {
-        $outcome = new QueueOutcome(expected: 2, inserted: 1, failed: 1, failedKeys: ['abc']);
+        $outcome = new QueueOutcome(expected: 2, inserted: 1, failed: 1, failedRefs: ['abc']);
         $telemetry = $outcome->telemetry();
 
         self::assertSame(['expected' => 2, 'inserted' => 1, 'duplicate' => 0, 'failed' => 1], $telemetry);
 
         $encoded = (string) json_encode($telemetry);
         self::assertStringNotContainsString('http', $encoded, 'Telemetry must never carry an endpoint URL');
-        self::assertStringNotContainsString('abc', $encoded, 'Telemetry must not leak endpoint keys');
+        self::assertStringNotContainsString('abc', $encoded, 'Telemetry must not leak endpoint references');
     }
 
     // ── enqueue() ────────────────────────────────────────────────────────────
@@ -320,7 +336,10 @@ final class QueueDurabilityTest extends TestCase
         self::assertSame(1, $outcome->failed);
         self::assertTrue($outcome->queuedAnything());
         self::assertFalse($outcome->isComplete(), 'One dropped destination must not read as success');
-        self::assertSame([md5('https://cloud.test/hook')], $outcome->failedKeys);
+
+        // The DURABLE endpoint id, not md5(url): a URL edited between the failed
+        // enqueue and the repair pass would leave a url hash matching nothing.
+        self::assertSame(['endpoint-1'], $outcome->failedRefs);
     }
 
     public function testAFailedEnqueueReportsSanitizedTelemetry(): void
@@ -359,10 +378,11 @@ final class QueueDurabilityTest extends TestCase
         self::assertCount(1, $repair, 'A dropped row must schedule exactly one repair pass');
         self::assertSame('sub-1', $repair[0]['args'][0]);
         self::assertSame(
-            [md5('https://b.test/hook')],
+            ['endpoint-1'],
             $repair[0]['args'][1],
             'Repair must target only the endpoint that failed, never re-queue delivered ones'
         );
+        self::assertSame(1, $repair[0]['args'][2], 'The first repair pass is attempt 1');
     }
 
     public function testASuccessfulEnqueueSchedulesNoReconciliation(): void
@@ -377,6 +397,133 @@ final class QueueDurabilityTest extends TestCase
         );
 
         self::assertSame([], $repair);
+    }
+
+    // ── reconcile() ──────────────────────────────────────────────────────────
+
+    /**
+     * @return list<array{hook: string, args: array<int, mixed>}>
+     */
+    private function repairPasses(): array
+    {
+        return array_values(array_filter(
+            $this->scheduled,
+            static fn(array $e): bool => $e['hook'] === FormDeliveryQueue::RECONCILE_HOOK
+        ));
+    }
+
+    public function testRepairReinsertsAMissingRow(): void
+    {
+        $this->configureEndpoints(['https://a.test/hook']);
+
+        FormDeliveryQueue::reconcile('sub-1', ['endpoint-0'], 1);
+
+        self::assertSame([], $this->storageErrors, 'A successful repair reports nothing');
+        self::assertSame([], $this->repairPasses(), 'A successful repair schedules no follow-up');
+    }
+
+    /**
+     * One repair attempt was too thin: the condition that refused the original
+     * insert is often still present when it runs.
+     */
+    public function testAFailedRepairRetriesOnTheNextBackoffStep(): void
+    {
+        $this->configureEndpoints(['https://a.test/hook']);
+        $this->insertResults['https://a.test/hook'] = false;
+
+        FormDeliveryQueue::reconcile('sub-1', ['endpoint-0'], 1);
+
+        self::assertSame(['queue_repair_failed'], array_column($this->storageErrors, 'code'));
+
+        $passes = $this->repairPasses();
+        self::assertCount(1, $passes, 'A failed repair must schedule another attempt');
+        self::assertSame(['endpoint-0'], $passes[0]['args'][1]);
+        self::assertSame(2, $passes[0]['args'][2], 'The retry is attempt 2');
+    }
+
+    /**
+     * Bounded: it must not retry forever.
+     */
+    public function testRepairIsAbandonedAfterTheBoundedRetries(): void
+    {
+        $this->configureEndpoints(['https://a.test/hook']);
+        $this->insertResults['https://a.test/hook'] = false;
+
+        FormDeliveryQueue::reconcile('sub-1', ['endpoint-0'], 3);
+
+        self::assertSame(
+            ['queue_repair_failed', 'queue_repair_abandoned'],
+            array_column($this->storageErrors, 'code'),
+            'The final failure must be announced as abandonment, not another retry'
+        );
+        self::assertSame([], $this->repairPasses(), 'Nothing may be scheduled after abandonment');
+    }
+
+    /**
+     * A cron write that fails is exactly as lost as the queue row was.
+     */
+    public function testAFailureToScheduleRepairIsReported(): void
+    {
+        Functions\when('wp_schedule_single_event')->justReturn(false);
+
+        $this->configureEndpoints(['https://a.test/hook']);
+        $this->insertResults['https://a.test/hook'] = false;
+
+        FormDeliveryQueue::enqueue(11, 'sub-1');
+
+        self::assertSame(
+            ['queue_row_not_persisted', 'queue_repair_not_scheduled'],
+            array_column($this->storageErrors, 'code')
+        );
+    }
+
+    /**
+     * The reason repair is addressed by durable id: an operator editing the URL
+     * between the failed enqueue and the repair pass must not orphan it.
+     */
+    public function testRepairFollowsAnEndpointWhoseUrlChanged(): void
+    {
+        // Failure recorded against endpoint-0 while it pointed at the old URL.
+        $this->configureEndpoints(['https://old.test/hook']);
+        $this->insertResults['https://old.test/hook'] = false;
+        FormDeliveryQueue::enqueue(11, 'sub-1');
+
+        $refs = $this->repairPasses()[0]['args'][1];
+        self::assertSame(['endpoint-0'], $refs);
+
+        // The endpoint is re-pointed before the repair pass runs.
+        $this->scheduled     = [];
+        $this->storageErrors = [];
+        $this->insertResults = [];
+        $this->configureEndpoints(['https://new.test/hook']);
+
+        FormDeliveryQueue::reconcile('sub-1', $refs, 1);
+
+        self::assertSame([], $this->storageErrors, 'The endpoint must still be found by its durable id');
+
+        $inserts = array_filter(
+            $this->queries,
+            static fn(array $q): bool => str_contains($q['sql'], 'https://new.test/hook')
+        );
+        self::assertNotSame([], $inserts, 'Repair must queue to the endpoint\'s CURRENT url');
+    }
+
+    /**
+     * Erasure wins: a submission deleted between the failure and the repair is
+     * never resurrected.
+     */
+    public function testRepairStopsWhenTheSubmissionWasDeleted(): void
+    {
+        $this->configureEndpoints(['https://a.test/hook']);
+        $this->submissionRow = null;
+
+        FormDeliveryQueue::reconcile('sub-1', ['endpoint-0'], 1);
+
+        $inserts = array_filter(
+            $this->queries,
+            static fn(array $q): bool => str_contains($q['sql'], 'INSERT IGNORE')
+        );
+        self::assertSame([], $inserts, 'A deleted submission must not be re-queued');
     }
 
     public function testNoConfiguredEndpointsQueuesNothingAndReportsNoError(): void

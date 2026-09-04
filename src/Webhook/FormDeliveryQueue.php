@@ -64,6 +64,13 @@ final class FormDeliveryQueue
     /** Cron hook that repairs queue rows which failed to persist. */
     public const string RECONCILE_HOOK = 'cvm_reconcile_form_queue';
 
+    /**
+     * Backoff between repair attempts, in seconds. Bounded on purpose: a
+     * destination that cannot be queued after these is reported, not retried
+     * forever.
+     */
+    private const array RECONCILE_DELAYS = [30, 300, 1800];
+
     /** Maximum queue rows one worker pass may claim. */
     private const int BATCH_SIZE = 10;
 
@@ -164,7 +171,7 @@ final class FormDeliveryQueue
     public static function init(): void
     {
         add_action(self::WORKER_HOOK, [self::class, 'processDue']);
-        add_action(self::RECONCILE_HOOK, [self::class, 'reconcile'], 10, 2);
+        add_action(self::RECONCILE_HOOK, [self::class, 'reconcile'], 10, 3);
     }
 
     /**
@@ -221,7 +228,7 @@ final class FormDeliveryQueue
         $now        = gmdate('Y-m-d H:i:s');
         $queued     = 0;
         $duplicate  = 0;
-        $failedKeys = [];
+        $failedRefs = [];
 
         foreach ($endpoints as $endpoint) {
             $endpointKey = md5($endpoint->url);
@@ -246,7 +253,7 @@ final class FormDeliveryQueue
                 if ($inserted !== false && self::rowExists($submissionId, $endpointKey)) {
                     $duplicate++;
                 } else {
-                    $failedKeys[] = $endpointKey;
+                    $failedRefs[] = self::endpointRef($endpoint);
                 }
 
                 continue;
@@ -285,8 +292,8 @@ final class FormDeliveryQueue
             expected: count($endpoints),
             inserted: $queued,
             duplicate: $duplicate,
-            failed: count($failedKeys),
-            failedKeys: $failedKeys,
+            failed: count($failedRefs),
+            failedRefs: $failedRefs,
         );
 
         if (!$outcome->isComplete()) {
@@ -301,7 +308,7 @@ final class FormDeliveryQueue
             // Repair exactly the endpoints whose rows are known to be absent.
             // Re-queuing anything broader could re-send a delivery a worker had
             // already completed and deleted.
-            self::scheduleReconciliation($submissionId, $outcome->failedKeys);
+            self::scheduleReconciliation($submissionId, $outcome->failedRefs);
         }
 
         if ($queued > 0) {
@@ -320,6 +327,92 @@ final class FormDeliveryQueue
         }
 
         return $outcome;
+    }
+
+    /**
+     * How many delivery rows are currently queued for a submission.
+     *
+     * @param string $submissionId Globally unique submission id.
+     * @return int
+     */
+    public static function pendingCountFor(string $submissionId): int
+    {
+        global $wpdb;
+
+        if ($submissionId === '') {
+            return 0;
+        }
+
+        return (int) $wpdb->get_var($wpdb->prepare(
+            'SELECT COUNT(*) FROM ' . self::tableName() . ' WHERE submission_id = %s',
+            $submissionId
+        ));
+    }
+
+    /**
+     * Repairs a submission whose delivery rows provably never landed.
+     *
+     * Called from the duplicate-submission path, where a re-fired provider
+     * callback is the first thing to notice that the original request's enqueue
+     * failed and its repair passes did too.
+     *
+     * The gate is deliberately strict, because getting it wrong means re-sending
+     * a webhook a receiver already processed. Repair happens ONLY when there is
+     * no queue row AND the submission's recorded delivery state is exactly
+     * 'not_sent' — a state {@see FormSubmissions::refreshDeliveryState()} derives
+     * from both the queue and the delivery log, so it means nothing was ever
+     * queued and nothing was ever attempted. Any other state, including an
+     * unrecognised or not-yet-backfilled one, is left alone.
+     *
+     * @param string $submissionId Globally unique submission id.
+     * @return void
+     */
+    public static function repairIfNeverQueued(string $submissionId): void
+    {
+        if ($submissionId === '' || self::pendingCountFor($submissionId) > 0) {
+            return;
+        }
+
+        $submission = FormSubmissions::getBySubmissionId($submissionId);
+        if ($submission === null) {
+            return;
+        }
+
+        if ((string) ($submission['delivery_state'] ?? '') !== DeliveryState::NotSent->value) {
+            return;
+        }
+
+        $refs = [];
+        foreach (Options::formEndpoints() as $endpoint) {
+            $refs[] = self::endpointRef($endpoint);
+        }
+
+        if ($refs === []) {
+            return;
+        }
+
+        Errors::storage('form_delivery_queue', 'duplicate', 'queue_missing_on_duplicate', [
+            'submission_id' => $submissionId,
+            'endpoints'     => count($refs),
+        ]);
+
+        self::scheduleReconciliation($submissionId, $refs);
+    }
+
+    /**
+     * The durable reference used to address an endpoint across requests.
+     *
+     * The queue ROW is still keyed by md5(url), which is what the unique index
+     * and every existing row use. Repair scheduling is different: it has to
+     * survive a URL edit between the failed enqueue and the repair pass, and
+     * md5(url) would stop matching the moment an operator changed the URL.
+     *
+     * @param \Convermetry\Settings\WebhookEndpoint $endpoint Configured endpoint.
+     * @return string Durable id, or the legacy url hash when none is assigned.
+     */
+    private static function endpointRef(\Convermetry\Settings\WebhookEndpoint $endpoint): string
+    {
+        return $endpoint->id !== '' ? $endpoint->id : md5($endpoint->url);
     }
 
     /**
@@ -348,19 +441,59 @@ final class FormDeliveryQueue
     }
 
     /**
-     * Schedules a repair pass for queue rows that failed to persist.
+     * Schedules the next repair pass for queue rows that failed to persist.
+     *
+     * BOUNDED. A single repair attempt was too thin: the database problem that
+     * refused the original insert is frequently still present 30 seconds later,
+     * and one more failure left the destination undelivered. The backoff gives
+     * a transient outage three chances across roughly half an hour, then stops
+     * and says so rather than retrying forever.
+     *
+     * The scheduling call's own result is checked, because a cron write that
+     * fails is exactly as lost as the queue row was.
      *
      * @param string       $submissionId Globally unique submission id.
-     * @param list<string> $endpointKeys Endpoint keys known to have no row.
+     * @param list<string> $endpointRefs Durable references known to have no row.
+     * @param int          $attempt      Repair attempts already made.
      * @return void
      */
-    private static function scheduleReconciliation(string $submissionId, array $endpointKeys): void
-    {
-        if ($submissionId === '' || $endpointKeys === []) {
+    private static function scheduleReconciliation(
+        string $submissionId,
+        array $endpointRefs,
+        int $attempt = 0
+    ): void {
+        if ($submissionId === '' || $endpointRefs === []) {
             return;
         }
 
-        wp_schedule_single_event(time() + 30, self::RECONCILE_HOOK, [$submissionId, $endpointKeys]);
+        if ($attempt >= count(self::RECONCILE_DELAYS)) {
+            // Out of retries. Announced as its own code so an operator can alert
+            // on "a destination was never queued" distinctly from "a repair
+            // attempt failed and will be tried again".
+            Errors::storage('form_delivery_queue', 'reconcile', 'queue_repair_abandoned', [
+                'submission_id' => $submissionId,
+                'attempts'      => $attempt,
+                'endpoints'     => count($endpointRefs),
+            ]);
+
+            return;
+        }
+
+        $scheduled = wp_schedule_single_event(
+            time() + self::RECONCILE_DELAYS[$attempt],
+            self::RECONCILE_HOOK,
+            [$submissionId, $endpointRefs, $attempt + 1]
+        );
+
+        if ($scheduled === false) {
+            Errors::storage('form_delivery_queue', 'reconcile', 'queue_repair_not_scheduled', [
+                'submission_id' => $submissionId,
+                'attempt'       => $attempt,
+                'endpoints'     => count($endpointRefs),
+            ]);
+
+            return;
+        }
 
         if (function_exists('spawn_cron')) {
             spawn_cron();
@@ -383,14 +516,15 @@ final class FormDeliveryQueue
      * Idempotency-Key.
      *
      * @param string       $submissionId Globally unique submission id.
-     * @param list<string> $endpointKeys Endpoint keys to repair.
+     * @param list<string> $endpointRefs Durable endpoint references to repair.
+     * @param int          $attempt      Which repair attempt this is (1-based).
      * @return void
      */
-    public static function reconcile(string $submissionId, array $endpointKeys): void
+    public static function reconcile(string $submissionId, array $endpointRefs, int $attempt = 1): void
     {
         global $wpdb;
 
-        if ($submissionId === '' || $endpointKeys === []) {
+        if ($submissionId === '' || $endpointRefs === []) {
             return;
         }
 
@@ -402,15 +536,24 @@ final class FormDeliveryQueue
             return;
         }
 
-        $wanted   = array_flip($endpointKeys);
-        $now      = gmdate('Y-m-d H:i:s');
-        $repaired = 0;
-        $stillBad = 0;
+        $wanted     = array_flip($endpointRefs);
+        $now        = gmdate('Y-m-d H:i:s');
+        $repaired   = 0;
+        $failedRefs = [];
 
         foreach (Options::formEndpoints() as $endpoint) {
+            $ref = self::endpointRef($endpoint);
+
+            if (!isset($wanted[$ref])) {
+                continue;
+            }
+
+            // Resolved from the CURRENT configuration, so an endpoint whose URL
+            // was edited since the failed enqueue is queued at its new address
+            // rather than silently skipped.
             $endpointKey = md5($endpoint->url);
 
-            if (!isset($wanted[$endpointKey]) || self::rowExists($submissionId, $endpointKey)) {
+            if (self::rowExists($submissionId, $endpointKey)) {
                 continue;
             }
 
@@ -433,15 +576,21 @@ final class FormDeliveryQueue
                 continue;
             }
 
-            $stillBad++;
+            $failedRefs[] = $ref;
         }
 
-        if ($stillBad > 0) {
+        if ($failedRefs !== []) {
             Errors::storage('form_delivery_queue', 'reconcile', 'queue_repair_failed', [
                 'submission_id' => $submissionId,
+                'attempt'       => $attempt,
                 'repaired'      => $repaired,
-                'failed'        => $stillBad,
+                'failed'        => count($failedRefs),
             ]);
+
+            // The condition that refused the original insert is often still
+            // present. Try again on the next backoff step rather than leaving
+            // the destination undelivered after one attempt.
+            self::scheduleReconciliation($submissionId, $failedRefs, $attempt);
         }
 
         if ($repaired > 0) {

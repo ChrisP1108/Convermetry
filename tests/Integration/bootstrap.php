@@ -93,6 +93,20 @@ require_once __DIR__ . '/TestWpdb.php';
  * testing the stubs rather than the SQL.
  */
 
+if (!function_exists('wp_using_ext_object_cache')) {
+    /**
+     * No persistent object cache in this harness, which is what forces the
+     * rate limiter down its database path — the path these tests exercise.
+     *
+     * @param bool|null $using Ignored; the harness never enables a cache.
+     * @return bool
+     */
+    function wp_using_ext_object_cache(?bool $using = null): bool
+    {
+        return false;
+    }
+}
+
 if (!function_exists('sanitize_key')) {
     function sanitize_key(string $key): string
     {

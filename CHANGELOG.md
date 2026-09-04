@@ -117,6 +117,45 @@ identity, and correct delivery-log date filtering.
   never a broader re-queue, which could re-send a delivery a worker had already
   completed and deleted.
 
+- **The rate-limit window could move backwards.** The window was computed in
+  PHP and interpolated into the counter statement, and the "different window"
+  branch replaced the row with that PHP-side window unconditionally. A request
+  that computed window N but reached the server after one that had already
+  written N+1 reset the row backwards to N, discarding the newer window's
+  accumulated count; two clients straddling a minute boundary could flip the row
+  back and forth, under-counting a flood at exactly the moment the limit matters.
+  MySQL now computes the window from its own clock inside the statement, and the
+  comparison is `>=` so a window at or ahead of the current one is charged into
+  rather than replaced — which also survives the database clock being stepped
+  backwards by NTP. A `REGEXP` guard keeps the numeric comparison away from a
+  malformed value, which under `STRICT_TRANS_TABLES` would otherwise raise
+  ERROR 1292, fail the statement, and — combined with failing closed — reject
+  every tracking request until the row was repaired by hand. Covered by a real
+  MySQL integration suite, because the defect lived entirely inside the SQL.
+
+- **Queue repair was a single attempt, and its scheduling was unchecked.** A
+  failed enqueue scheduled one repair pass 30 seconds later; if the database
+  problem persisted that long, the destination stayed undelivered. Repair now
+  follows a bounded backoff (30s, 5m, 30m) and then reports
+  `queue_repair_abandoned` rather than retrying forever, and the result of
+  `wp_schedule_single_event()` is checked — a cron write that fails is exactly
+  as lost as the queue row was.
+
+- **Repair is addressed by durable endpoint id.** It previously recorded
+  `md5(url)`, so an operator editing an endpoint's URL between the failed
+  enqueue and the repair pass left the recorded reference matching nothing and
+  that destination was never queued. Queue rows keep their existing
+  `endpoint_key`; only repair addressing changed.
+
+- **The duplicate-submission path asserted a delivery it never checked.** It
+  returned `queued: true` on the reasoning that the original request had already
+  queued everything. If that request's enqueue failed and its repair passes
+  failed too, the duplicate confidently reported a delivery that did not exist.
+  It now reports whether delivery rows actually exist, and — gated strictly on
+  there being no queue row and a recorded delivery state of exactly `not_sent`,
+  so a delivered submission can never be re-sent — schedules repair when the
+  original enqueue provably never landed.
+
 - **The database-backed tracking rate limiter failed open.** The counter's
   write result was never checked, and when the read-back did not produce the
   expected `window|count` value the code fell back to treating the current

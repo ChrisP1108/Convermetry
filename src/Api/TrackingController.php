@@ -633,12 +633,12 @@ final class TrackingController
     /**
      * Adds $events to one rolling counter and reports whether it is under $max.
      *
-     * FAILS CLOSED. Every step is checked: a refused counter write, a counter
-     * that cannot be read back, a malformed value, and a stale window all
-     * REJECT the request and emit sanitized telemetry. The result of the
-     * charge used to be discarded, and an unreadable counter fell back to this
-     * request's own event count — which is below any sane cap — so a broken
-     * counter waved every request through while reporting nothing.
+     * FAILS CLOSED. A refused counter write, a counter that cannot be read
+     * back, and a malformed value all REJECT the request and emit sanitized
+     * telemetry. The result of the charge used to be discarded, and an
+     * unreadable counter fell back to this request's own event count — which is
+     * below any sane cap — so a broken counter waved every request through
+     * while reporting nothing.
      *
      * Uses an atomic object-cache increment when a persistent object cache is
      * available; otherwise — and whenever the cache increment fails — an
@@ -670,24 +670,57 @@ final class TrackingController
 
         global $wpdb;
 
-        $window = (string) intdiv(time(), self::RATE_LIMIT_WINDOW);
-
-        // Atomic: the IF() either increments the current window's count or
-        // resets the row for a new window, all inside one statement. These
-        // rows are written directly (never through get_option/update_option)
-        // so they bypass — and can never pollute — WordPress's option caches.
+        // The window is computed by MySQL from ITS OWN clock, inside the
+        // statement, rather than in PHP before the query is issued. PHP-side
+        // windows could move the counter BACKWARDS: a request that computed
+        // window N but reached the server after a request that had already
+        // written window N+1 took the "different window" branch and reset the
+        // row to N, discarding the newer window's accumulated count. Two
+        // requests straddling a minute boundary could flip the row back and
+        // forth, resetting the total each time and under-counting a flood at
+        // exactly the moment the limit matters.
+        //
+        // Evaluating UNIX_TIMESTAMP() inside the statement removes the race by
+        // construction: statements against one row are serialised, so they all
+        // read one clock in a fixed order.
+        //
+        // The comparison is >= rather than =, which makes the window monotonic
+        // outright: a stored window at or ahead of the current one is charged
+        // INTO, never replaced. Only a genuinely older window resets the row.
+        // That also survives the database clock being stepped backwards by NTP,
+        // which would otherwise discard a newer window's accumulated count.
+        //
+        // The REGEXP guard is load-bearing, not defensive decoration. Under
+        // STRICT_TRANS_TABLES — the MySQL 8 default — CAST()ing a non-numeric
+        // value raises ERROR 1292 rather than coercing to 0, which would fail
+        // the whole statement. Combined with failing closed, a single corrupted
+        // counter row would then reject EVERY tracking request until someone
+        // edited the database by hand. Guarding the shape first means a
+        // malformed value simply takes the reset branch and self-heals.
+        //
+        // These rows are written directly (never through get_option/
+        // update_option) so they bypass — and can never pollute — WordPress's
+        // option caches.
         $charged = $wpdb->query($wpdb->prepare(
             "INSERT INTO {$wpdb->options} (option_name, option_value, autoload)
-             VALUES (%s, %s, 'off')
+             VALUES (%s, CONCAT(FLOOR(UNIX_TIMESTAMP() / %d), '|', %d), 'off')
              ON DUPLICATE KEY UPDATE option_value = IF(
-                 SUBSTRING_INDEX(option_value, '|', 1) = %s,
-                 CONCAT(%s, '|', CAST(SUBSTRING_INDEX(option_value, '|', -1) AS UNSIGNED) + %d),
-                 VALUES(option_value)
+                 option_value REGEXP '^[0-9]+[|][0-9]+$'
+                 AND CAST(SUBSTRING_INDEX(option_value, '|', 1) AS UNSIGNED)
+                     >= FLOOR(UNIX_TIMESTAMP() / %d),
+                 CONCAT(
+                     SUBSTRING_INDEX(option_value, '|', 1),
+                     '|',
+                     CAST(SUBSTRING_INDEX(option_value, '|', -1) AS UNSIGNED) + %d
+                 ),
+                 CONCAT(FLOOR(UNIX_TIMESTAMP() / %d), '|', %d)
              )",
             $key,
-            $window . '|' . $events,
-            $window,
-            $window,
+            self::RATE_LIMIT_WINDOW,
+            $events,
+            self::RATE_LIMIT_WINDOW,
+            $events,
+            self::RATE_LIMIT_WINDOW,
             $events
         ));
 
@@ -726,31 +759,19 @@ final class TrackingController
             return false;
         }
 
-        $storedWindow = (int) $parts[0];
-        $storedCount  = (int) $parts[1];
-
-        // The read runs after the increment, so under heavy concurrency it
-        // may see later charges too — the count is >= this request's true
-        // position, which can only over-reject at the margin, never let the
-        // stored volume exceed the cap.
-        if ($storedWindow === (int) $window) {
-            return $storedCount <= $max;
-        }
-
-        // The minute rolled over between the charge and the read, and another
-        // request reset the row. Not a failure: the previous window is closed
-        // and the fresh one legitimately starts from that request's own charge.
-        if ($storedWindow > (int) $window) {
-            return $storedCount <= $max;
-        }
-
-        // A window OLDER than the one just written means the charge did not
-        // land — the row cannot have gone backwards on its own.
-        Errors::storage('tracking', 'rate_limit_verify', 'counter_stale', [
-            'events' => $events,
-        ]);
-
-        return false;
+        // Which window the row names does not change the decision, so it is not
+        // compared against a PHP-side clock — doing so rejected legitimate
+        // requests on every window boundary and reported a phantom failure.
+        //
+        // Whatever window the row holds, its count is authoritative: every
+        // charge either increments the current window or resets the row to it,
+        // so a row still naming an older window is one nothing has charged
+        // since, and its count is the one this request was added to. The read
+        // runs after the increment, so under heavy concurrency it may also see
+        // later charges — the count is >= this request's true position, which
+        // can only over-reject at the margin, never let the stored volume
+        // exceed the cap.
+        return (int) $parts[1] <= $max;
     }
 
     /**

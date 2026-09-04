@@ -254,12 +254,22 @@ final class SubmissionService
                     $formKey
                 );
 
+                // Reported from ACTUAL state, not assumed. This branch used to
+                // return queued: true on the reasoning that the original
+                // request had already queued everything — an assumption nothing
+                // checked. If that request's enqueue failed and its repair
+                // passes failed too, the duplicate confidently reported a
+                // delivery that did not exist.
+                $existingId = (string) $existing['submission_id'];
+
+                FormDeliveryQueue::repairIfNeverQueued($existingId);
+
                 return new SubmissionResult(
                     ok: true,
-                    submissionId: (string) $existing['submission_id'],
+                    submissionId: $existingId,
                     conversionId: $correlation->conversionId,
                     msg: '',
-                    queued: true
+                    queued: FormDeliveryQueue::pendingCountFor($existingId) > 0
                 );
             }
 

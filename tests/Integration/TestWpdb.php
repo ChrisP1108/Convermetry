@@ -25,6 +25,12 @@ final class TestWpdb
     /** Table prefix, matching a default WordPress install. */
     public string $prefix = 'wp_';
 
+    /**
+     * Real $wpdb exposes the options table by name; the rate-limit counter
+     * writes to it directly rather than through the options API.
+     */
+    public string $options = 'wp_options';
+
     /** The most recent error message, or '' — read by Analytics\ReportQuery. */
     public string $last_error = '';
 

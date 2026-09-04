@@ -21,10 +21,17 @@ if (!defined('ABSPATH')) exit;
  * its delivery row could fail to persist, and the caller was told the webhook
  * was on its way. For a lead-generation plugin that is a silently lost lead.
  *
- * $failedKeys carries the endpoint keys whose rows are known NOT to exist, so a
- * repair pass can re-insert exactly those and nothing else. Re-queuing anything
- * broader would risk re-sending a delivery a worker had already completed and
- * deleted.
+ * $failedRefs carries DURABLE references to the destinations whose rows are
+ * known NOT to exist, so a repair pass can re-insert exactly those and nothing
+ * else. Re-queuing anything broader would risk re-sending a delivery a worker
+ * had already completed and deleted.
+ *
+ * A reference is the endpoint's durable id where it has one, falling back to
+ * md5(url) only for an endpoint predating id assignment. Using the durable id
+ * matters for repair specifically: an operator who edits an endpoint's URL
+ * between the failed enqueue and the repair pass would otherwise leave the
+ * recorded reference matching nothing, and that destination would never be
+ * queued at all.
  */
 final readonly class QueueOutcome
 {
@@ -33,14 +40,14 @@ final readonly class QueueOutcome
      * @param int          $inserted   Rows this call genuinely created.
      * @param int          $duplicate  Rows that already existed (verified present).
      * @param int          $failed     Rows verified ABSENT after a refused write.
-     * @param list<string> $failedKeys Endpoint keys behind $failed, for targeted repair.
+     * @param list<string> $failedRefs Durable references behind $failed, for targeted repair.
      */
     public function __construct(
         public int $expected = 0,
         public int $inserted = 0,
         public int $duplicate = 0,
         public int $failed = 0,
-        public array $failedKeys = [],
+        public array $failedRefs = [],
     ) {
     }
 

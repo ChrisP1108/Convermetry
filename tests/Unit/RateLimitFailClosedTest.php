@@ -175,28 +175,47 @@ final class RateLimitFailClosedTest extends TestCase
     }
 
     /**
-     * A window rollover between the charge and the read is legitimate, not a
-     * failure — rejecting there would drop a valid request every minute under
-     * concurrency.
+     * The window the row names does not decide anything.
+     *
+     * The window is computed by MySQL inside the charge statement, so PHP has
+     * no clock to compare against and comparing anyway was itself a bug: a
+     * request whose PHP-side window differed from the stored one was rejected
+     * with a phantom 'counter_stale', which under concurrency happened on every
+     * minute boundary. Whatever window the row holds, its count is the one this
+     * request was added to.
+     *
+     * @dataProvider windowOffsets
      */
-    public function testAcceptsWhenTheWindowRolledOverDuringTheCharge(): void
+    public function testTheStoredWindowDoesNotAffectTheDecision(int $offset): void
     {
-        $this->storedValue = ($this->currentWindow() + 1) . '|3';
+        $this->storedValue = ($this->currentWindow() + $offset) . '|3';
 
-        self::assertTrue($this->charge(5, 300));
-        self::assertSame([], $this->storageErrors);
+        self::assertTrue($this->charge(5, 300), 'A count under the cap is accepted in any window');
+        self::assertSame([], $this->storageErrors, 'A differing window is not a storage failure');
     }
 
     /**
-     * The row cannot go backwards on its own, so an older window means the
-     * charge never landed.
+     * @return array<string, array{int}>
      */
-    public function testFailsClosedWhenTheStoredWindowIsOlderThanTheCharge(): void
+    public static function windowOffsets(): array
     {
-        $this->storedValue = ($this->currentWindow() - 1) . '|3';
+        return [
+            'same window'   => [0],
+            'rolled over'   => [1],
+            'older window'  => [-1],
+        ];
+    }
+
+    /**
+     * The cap is still enforced whichever window the row names.
+     *
+     * @dataProvider windowOffsets
+     */
+    public function testTheCapIsEnforcedInAnyWindow(int $offset): void
+    {
+        $this->storedValue = ($this->currentWindow() + $offset) . '|900';
 
         self::assertFalse($this->charge(5, 300));
-        self::assertSame(['counter_stale'], array_column($this->storageErrors, 'code'));
     }
 
     /**

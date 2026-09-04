@@ -329,7 +329,7 @@ final class NotificationQueue
         $settings   = (string) wp_json_encode($snapshot);
         $queued     = 0;
         $duplicate  = 0;
-        $failedKeys = [];
+        $failedRefs = [];
 
         foreach ($recipients as $recipient) {
             $recipientKey = self::recipientKey($recipient);
@@ -351,7 +351,7 @@ final class NotificationQueue
                 if ($inserted !== false && self::rowExists($submissionId, $recipientKey)) {
                     $duplicate++;
                 } else {
-                    $failedKeys[] = $recipientKey;
+                    $failedRefs[] = $recipientKey;
                 }
 
                 continue;
@@ -383,8 +383,8 @@ final class NotificationQueue
             expected: count($recipients),
             inserted: $queued,
             duplicate: $duplicate,
-            failed: count($failedKeys),
-            failedKeys: $failedKeys,
+            failed: count($failedRefs),
+            failedRefs: $failedRefs,
         );
 
         if (!$outcome->isComplete()) {
