@@ -60,6 +60,25 @@ final class QueueDurabilityTest extends TestCase
      */
     private array $options = [];
 
+    /**
+     * option_id per option name, so the safety net's cursor scan is real.
+     *
+     * @var array<string, int>
+     */
+    private array $optionIds = [];
+
+    private int $nextOptionId = 0;
+
+    /** When true, every options write is refused — the unverifiable-write case. */
+    private bool $optionWritesFail = false;
+
+    /**
+     * Endpoints the Activity Log already holds an attempt for.
+     *
+     * @var array<string, bool>
+     */
+    private array $loggedAttempts = [];
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -70,8 +89,12 @@ final class QueueDurabilityTest extends TestCase
         $this->storageErrors = [];
         $this->insertResults = [];
         $this->rowPresent    = [];
-        $this->options       = [];
-        $this->submissionRow = ['id' => 11, 'submission_id' => 'sub-1', 'delivery_state' => 'not_sent'];
+        $this->options          = [];
+        $this->optionIds        = [];
+        $this->nextOptionId     = 0;
+        $this->optionWritesFail = false;
+        $this->loggedAttempts   = [];
+        $this->submissionRow    = ['id' => 11, 'submission_id' => 'sub-1', 'delivery_state' => 'not_sent'];
 
         Functions\when('get_option')->alias(
             fn(string $key, mixed $default = false): mixed => $this->options[$key] ?? $default
@@ -117,16 +140,40 @@ final class QueueDurabilityTest extends TestCase
 
         $test = $this;
 
+        // A small options table, because the repair record is now one wp_options
+        // ROW PER SUBMISSION written straight through $wpdb — the whole point of
+        // the change, and untestable against a double that swallows writes.
         $GLOBALS['wpdb'] = new class ($test) {
             public string $prefix = 'wp_';
+
+            public string $options = 'wp_options';
+
+            /** @var array<int, mixed> */
+            public array $lastArgs = [];
 
             public function __construct(private object $test)
             {
             }
 
-            /** @param array<int, mixed> $args */
+            public function esc_like(string $text): string
+            {
+                return addcslashes($text, '_%\\');
+            }
+
+            /**
+             * Records the bound arguments as well as interpolating them.
+             *
+             * The options statements carry JSON values full of commas, quotes
+             * and braces; parsing those back out of an interpolated string
+             * would be testing the parser. The arguments are kept instead, and
+             * every wp_options branch below reads them rather than the SQL.
+             *
+             * @param array<int, mixed> $args
+             */
             public function prepare(string $sql, ...$args): string
             {
+                $this->lastArgs = $args;
+
                 // Good enough for routing: the assertions care which endpoint a
                 // statement names, not its exact escaping.
                 foreach ($args as $arg) {
@@ -141,17 +188,50 @@ final class QueueDurabilityTest extends TestCase
 
             public function query(string $sql): int|false
             {
+                if (str_contains($sql, "INSERT INTO {$this->options}")) {
+                    return $this->test->writeOption(
+                        (string) ($this->lastArgs[0] ?? ''),
+                        (string) ($this->lastArgs[1] ?? '')
+                    );
+                }
+
+                if (str_contains($sql, "DELETE FROM {$this->options}")) {
+                    return $this->test->deleteOption((string) ($this->lastArgs[0] ?? ''));
+                }
+
                 return $this->test->recordInsert($sql);
             }
 
-            public function get_var(string $sql): string
+            public function get_var(string $sql): ?string
             {
+                if (str_contains($sql, "SELECT option_value FROM {$this->options}")) {
+                    return $this->test->readOption((string) ($this->lastArgs[0] ?? ''));
+                }
+
+                if (str_contains($sql, "SELECT option_name FROM {$this->options}")) {
+                    $name = (string) ($this->lastArgs[0] ?? '');
+
+                    return $this->test->readOption($name) === null ? null : $name;
+                }
+
+                if (str_contains($sql, 'wp_cvm_webhook_deliveries')) {
+                    return (string) $this->test->loggedAttemptCount($sql);
+                }
+
                 return (string) $this->test->recordReadBack($sql);
             }
 
             /** @return array<int, mixed> */
             public function get_results(string $sql, string $output = 'ARRAY_A'): array
             {
+                if (str_contains($sql, "FROM {$this->options}")) {
+                    return $this->test->listOptions(
+                        (string) ($this->lastArgs[0] ?? ''),
+                        (int) ($this->lastArgs[1] ?? 0),
+                        (int) ($this->lastArgs[2] ?? 0)
+                    );
+                }
+
                 return [];
             }
 
@@ -234,6 +314,120 @@ final class QueueDurabilityTest extends TestCase
         }
 
         $this->options['cvm_webhook_settings'] = ['endpoints' => $endpoints, 'shared_secret' => ''];
+    }
+
+
+    // ── the in-memory options table ──────────────────────────────────────────
+
+    /**
+     * Writes one option row, honouring the failure switch.
+     *
+     * @return int|false
+     */
+    public function writeOption(string $name, string $value): int|false
+    {
+        if ($this->optionWritesFail) {
+            return false;
+        }
+
+        if (!isset($this->optionIds[$name])) {
+            $this->optionIds[$name] = ++$this->nextOptionId;
+        }
+
+        $this->options[$name] = $value;
+
+        return 1;
+    }
+
+    /** @return int|false */
+    public function deleteOption(string $name): int|false
+    {
+        if ($this->optionWritesFail) {
+            return false;
+        }
+
+        unset($this->options[$name], $this->optionIds[$name]);
+
+        return 1;
+    }
+
+    public function readOption(string $name): ?string
+    {
+        $value = $this->options[$name] ?? null;
+
+        return is_string($value) ? $value : null;
+    }
+
+    /**
+     * The LIKE + cursor + LIMIT scan repairPending() pages through.
+     *
+     * @return list<array{option_id: int, option_name: string, option_value: string}>
+     */
+    public function listOptions(string $like, int $after, int $limit): array
+    {
+        $prefix = str_replace('\\', '', rtrim($like, '%'));
+        $rows   = [];
+
+        foreach ($this->options as $name => $value) {
+            $id = $this->optionIds[$name] ?? 0;
+
+            if (!str_starts_with((string) $name, $prefix) || $id <= $after || !is_string($value)) {
+                continue;
+            }
+
+            $rows[] = ['option_id' => $id, 'option_name' => (string) $name, 'option_value' => $value];
+        }
+
+        usort($rows, static fn(array $a, array $b): int => $a['option_id'] <=> $b['option_id']);
+
+        return array_slice($rows, 0, max($limit, 1));
+    }
+
+    /**
+     * How many Activity Log attempts exist for the endpoint a statement names.
+     */
+    public function loggedAttemptCount(string $sql): int
+    {
+        foreach ($this->loggedAttempts as $url => $attempted) {
+            if ($attempted && str_contains($sql, $url)) {
+                return 1;
+            }
+        }
+
+        return 0;
+    }
+
+    /**
+     * Writes one repair record straight into the fake options table.
+     *
+     * @param list<string> $refs
+     */
+    private function seedRecord(string $submissionId, array $refs, int $at): void
+    {
+        $name = 'cvm_queue_repair_' . $submissionId;
+
+        $this->optionIds[$name] = ++$this->nextOptionId;
+        $this->options[$name]   = (string) json_encode(['at' => $at, 'refs' => $refs]);
+    }
+
+    /**
+     * Every repair record currently stored, by submission id.
+     *
+     * @return list<string>
+     */
+    private function recordedSubmissions(): array
+    {
+        $out = [];
+
+        foreach (array_keys($this->options) as $name) {
+            if (str_starts_with((string) $name, 'cvm_queue_repair_')) {
+                $out[] = substr((string) $name, strlen('cvm_queue_repair_'));
+            }
+        }
+
+        sort($out);
+
+        return $out;
     }
 
     /**
@@ -591,10 +785,10 @@ final class QueueDurabilityTest extends TestCase
         FormDeliveryQueue::enqueue(11, 'sub-1');
 
         self::assertSame([], FormDeliveryQueue::pendingRepairFor('sub-1'));
-        self::assertArrayNotHasKey(
-            'cvm_queue_repairs',
-            $this->options,
-            'A site with nothing outstanding must not carry the option at all'
+        self::assertSame(
+            [],
+            $this->recordedSubmissions(),
+            'A site with nothing outstanding must not carry a record at all'
         );
     }
 
@@ -685,21 +879,18 @@ final class QueueDurabilityTest extends TestCase
         FormDeliveryQueue::repairPending();
 
         self::assertSame([], FormDeliveryQueue::pendingRepairFor('sub-1'));
-        self::assertArrayNotHasKey('cvm_queue_repairs', $this->options);
+        self::assertSame([], $this->recordedSubmissions());
     }
 
     /**
-     * The option is ordinary site data; a filter or a hand edit can put
-     * anything in it.
+     * The row is ordinary site data; a filter or a hand edit can put anything
+     * in it.
      */
     public function testAMalformedRecordIsIgnoredRatherThanTrusted(): void
     {
-        $this->options['cvm_queue_repairs'] = [
-            'sub-1' => 'not-a-record',
-            'sub-2' => ['refs' => [123, ''], 'at' => time()],
-            'sub-3' => ['refs' => ['endpoint-0']],
-            7       => ['refs' => ['endpoint-0'], 'at' => time()],
-        ];
+        $this->options['cvm_queue_repair_sub-1'] = 'not-json-at-all';
+        $this->options['cvm_queue_repair_sub-2'] = (string) json_encode(['at' => time(), 'refs' => [123, '']]);
+        $this->options['cvm_queue_repair_sub-3'] = (string) json_encode(['refs' => ['endpoint-0']]);
 
         self::assertSame([], FormDeliveryQueue::pendingRepairFor('sub-1'));
         self::assertSame([], FormDeliveryQueue::pendingRepairFor('sub-2'), 'Non-string references are dropped');
@@ -707,18 +898,106 @@ final class QueueDurabilityTest extends TestCase
     }
 
     /**
-     * A database refusing every insert must not grow one option without limit.
+     * Each submission owns its own row.
+     *
+     * This pins the STRUCTURE, which is the part a test in a single-threaded
+     * process can prove; it does not reproduce an interleaving. The interleaving
+     * is why the structure matters: the first implementation kept every
+     * obligation in one serialized option and rewrote the whole map on each
+     * change, so two requests that each read the map before either wrote it
+     * back — the normal shape of this path, since what puts submissions on it is
+     * the queue table refusing writes for everyone at once — left only the
+     * second one's obligation stored. Separate rows leave the two writers with
+     * no shared value to race over, and the atomic INSERT ... ON DUPLICATE KEY
+     * UPDATE against the unique option_name index is verified against real
+     * MySQL in QueueRepairRecordTest.
      */
-    public function testTheRecordIsCappedAtTheNewestEntries(): void
+    public function testEachSubmissionOwnsItsOwnRecordRow(): void
     {
-        $entries = [];
-        for ($i = 0; $i < 120; $i++) {
-            $entries['sub-' . $i] = ['refs' => ['endpoint-0'], 'at' => time() - (120 - $i)];
-        }
-        $this->options['cvm_queue_repairs'] = $entries;
+        $this->configureEndpoints(['https://a.test/hook']);
+        $this->insertResults['https://a.test/hook'] = false;
 
-        self::assertSame([], FormDeliveryQueue::pendingRepairFor('sub-0'), 'The oldest records are dropped first');
-        self::assertSame(['endpoint-0'], FormDeliveryQueue::pendingRepairFor('sub-119'), 'The newest are kept');
+        FormDeliveryQueue::enqueue(11, 'sub-A');
+        FormDeliveryQueue::enqueue(12, 'sub-B');
+
+        self::assertSame(['endpoint-0'], FormDeliveryQueue::pendingRepairFor('sub-A'));
+        self::assertSame(['endpoint-0'], FormDeliveryQueue::pendingRepairFor('sub-B'));
+        self::assertSame(
+            ['sub-A', 'sub-B'],
+            $this->recordedSubmissions(),
+            'Two rows, not one map both requests rewrite'
+        );
+    }
+
+    /**
+     * No cap: an outage that costs a site hundreds of queue writes must not
+     * quietly forget the older ones. The WORK is bounded, not the record set.
+     */
+    public function testEveryOutstandingObligationSurvivesRegardlessOfCount(): void
+    {
+        $this->configureEndpoints(['https://a.test/hook']);
+        $this->insertResults['https://a.test/hook'] = false;
+
+        for ($i = 0; $i < 250; $i++) {
+            FormDeliveryQueue::enqueue(11, 'sub-' . $i);
+        }
+
+        self::assertCount(250, $this->recordedSubmissions());
+        self::assertSame(['endpoint-0'], FormDeliveryQueue::pendingRepairFor('sub-0'), 'The oldest is still owed');
+        self::assertSame(['endpoint-0'], FormDeliveryQueue::pendingRepairFor('sub-249'));
+    }
+
+    /**
+     * update_option() returns false both for a failed write and for a value
+     * that did not change, so its result cannot answer "did this land?". The
+     * record is read back instead.
+     */
+    public function testARecordThatCannotBePersistedIsReportedNotAssumed(): void
+    {
+        $this->configureEndpoints(['https://a.test/hook']);
+        $this->insertResults['https://a.test/hook'] = false;
+        $this->optionWritesFail = true;
+
+        FormDeliveryQueue::enqueue(11, 'sub-1');
+
+        self::assertContains(
+            'queue_repair_not_recorded',
+            array_column($this->storageErrors, 'code'),
+            'A repair obligation that could not be stored must be announced'
+        );
+    }
+
+    /**
+     * The failure mode that could re-send a delivered lead: the repair lands,
+     * the worker delivers it and deletes the queue row, and the record cannot
+     * be removed.
+     */
+    public function testARecordThatCannotBeClearedIsReported(): void
+    {
+        $this->configureEndpoints(['https://a.test/hook']);
+        $this->seedRecord('sub-1', ['endpoint-0'], time());
+        $this->optionWritesFail = true;
+
+        FormDeliveryQueue::reconcile('sub-1', ['endpoint-0'], 1);
+
+        self::assertContains('queue_repair_not_cleared', array_column($this->storageErrors, 'code'));
+    }
+
+    /**
+     * The second, independent guard. Even with a record that outlived its own
+     * deletion, an endpoint the Activity Log says was already attempted is
+     * never re-queued — both guards would have to fail to send a lead twice.
+     */
+    public function testAnAlreadyAttemptedEndpointIsNeverRequeued(): void
+    {
+        $this->configureEndpoints(['https://a.test/hook']);
+        $this->seedRecord('sub-1', ['endpoint-0'], time());
+        $this->loggedAttempts['https://a.test/hook'] = true;
+
+        FormDeliveryQueue::reconcile('sub-1', ['endpoint-0'], 1);
+
+        self::assertSame([], $this->inserts(), 'A logged attempt means the delivery was made');
+        self::assertSame([], FormDeliveryQueue::pendingRepairFor('sub-1'), 'and the obligation is settled');
     }
 
     // ── repairIfNeverQueued() ────────────────────────────────────────────────
@@ -836,15 +1115,34 @@ final class QueueDurabilityTest extends TestCase
     public function testTheSafetyNetDropsRecordsPastTheirWindow(): void
     {
         $this->configureEndpoints(['https://a.test/hook']);
-        $this->options['cvm_queue_repairs'] = [
-            'sub-old' => ['refs' => ['endpoint-0'], 'at' => time() - (8 * DAY_IN_SECONDS)],
-        ];
+        $this->seedRecord('sub-old', ['endpoint-0'], time() - (8 * DAY_IN_SECONDS));
 
         FormDeliveryQueue::repairPending();
 
         self::assertSame([], FormDeliveryQueue::pendingRepairFor('sub-old'));
         self::assertSame([], $this->inserts(), 'A week-old lead is stale, not owed');
-        self::assertArrayNotHasKey('cvm_queue_repairs', $this->options);
+        self::assertSame([], $this->recordedSubmissions());
+
+        // Giving up permanently is a terminal event, not a pruning side effect.
+        self::assertSame(['queue_repair_expired'], array_column($this->storageErrors, 'code'));
+    }
+
+    /**
+     * The pass is bounded by chunks and a wall clock, and pages with a CURSOR:
+     * a record it settles is deleted, which under an OFFSET would shift every
+     * later row and skip one per removal.
+     */
+    public function testTheSafetyNetPagesPastMoreRecordsThanOneChunkHolds(): void
+    {
+        $this->configureEndpoints(['https://a.test/hook']);
+
+        for ($i = 0; $i < 250; $i++) {
+            $this->seedRecord('sub-' . $i, ['endpoint-0'], time());
+        }
+
+        FormDeliveryQueue::repairPending();
+
+        self::assertSame([], $this->recordedSubmissions(), 'Every record is reached, not just the first chunk');
     }
 
     public function testTheSafetyNetIsAnInexpensiveNoOpWithNothingOutstanding(): void
@@ -854,6 +1152,6 @@ final class QueueDurabilityTest extends TestCase
         FormDeliveryQueue::repairPending();
 
         self::assertSame([], $this->inserts());
-        self::assertArrayNotHasKey('cvm_queue_repairs', $this->options);
+        self::assertSame([], $this->recordedSubmissions());
     }
 }

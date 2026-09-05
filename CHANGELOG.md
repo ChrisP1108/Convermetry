@@ -176,8 +176,48 @@ identity, and correct delivery-log date filtering.
   and the exact endpoint ids still owed a row — to a non-autoloaded option,
   before the repair cron is scheduled, because scheduling is itself a write that
   can fail. Every repair path is authorised by that record and by nothing else.
-  The record is coerced on read, expires after seven days, and is capped at 100
-  submissions, so a database refusing every insert cannot grow it without limit.
+  The record is coerced on read and expires after seven days.
+
+- **The repair record is one row per submission, not one shared map.** Its first
+  implementation kept every outstanding repair in a single serialized option and
+  rewrote the whole map on each change — a read-modify-write with no
+  compare-and-swap. Two submissions failing to queue at the same moment each
+  built a map from a read taken before the other existed, and the second write
+  dropped the first's obligation entirely. That is the ordinary shape of this
+  path rather than a load-test curiosity: what puts submissions on it is the
+  queue table refusing writes for everyone at once.
+
+  Records are now `cvm_queue_repair_<submission id>`, written with a single
+  `INSERT ... ON DUPLICATE KEY UPDATE` against the unique `option_name` index
+  and read straight back through `$wpdb` — the same pattern, and the same
+  reasoning about option caches, as the rate limiter's per-key counters. Two
+  writers no longer share a value to race over.
+
+  Separate rows also removed the 100-submission cap the shared map needed. A
+  site that loses hundreds of queue writes during an outage owes every one of
+  them afterwards; it is the daily PASS that is bounded (chunk, chunk cap and
+  wall-clock budget, paging by cursor rather than offset so removals cannot make
+  it skip rows), not the set of obligations.
+
+- **Repair-record writes and deletions are verified.** `update_option()` returns
+  false both for a failed write and for a value that did not change, so its
+  result cannot answer "did this land?" — and this record is the only thing
+  standing between a refused queue `INSERT` and a silently lost lead. Records
+  are read back after writing, retried once, and reported as
+  `queue_repair_not_recorded` if still absent; a record that survives its own
+  deletion is reported as `queue_repair_not_cleared`.
+
+- **A second, independent guard against re-sending a delivered lead.** Before
+  re-creating a queue row, repair now checks the Activity Log for an attempt
+  against that endpoint. A logged attempt means the delivery WAS made and the
+  missing queue row is the worker having finished with it — so the obligation
+  settles instead of re-queuing. A stale record can no longer cause a duplicate
+  delivery on its own; both guards would have to fail.
+
+- **Giving up is now announced.** A repair record that reaches its seven-day
+  window emits `queue_repair_expired` before it is removed, rather than
+  disappearing as a pruning side effect. "Delivery of this lead was abandoned"
+  is worth saying out loud.
 
 - **A repair the cron could not carry out is no longer lost.** Bounded backoff
   ends the cron chain after roughly half an hour, and

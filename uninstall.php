@@ -56,7 +56,6 @@ function cvm_uninstall_current_site(): void
     delete_option('cvm_webhook_last_sent');
     delete_option('cvm_webhook_retry_state');
     delete_option('cvm_webhook_dispatch_lock');
-    delete_option('cvm_queue_repairs');
     delete_option('cvm_migration_lock');
 
     // Cleanup mutex. Unlike at deactivation, uninstall runs strictly after
@@ -67,6 +66,10 @@ function cvm_uninstall_current_site(): void
     // Rate-limit counter rows, written directly to the options table by the
     // tracking REST controller when no persistent object cache is available.
     $wpdb->query("DELETE FROM {$wpdb->options} WHERE option_name LIKE 'cvm\\_rl\\_%'");
+
+    // Queue-repair records, one row per submission, written directly for the
+    // same reason.
+    $wpdb->query("DELETE FROM {$wpdb->options} WHERE option_name LIKE 'cvm\\_queue\\_repair\\_%'");
 
     // Transients (form-discovery caches, rate-limit flag, failure-log
     // throttle, API auth-failure counters).
