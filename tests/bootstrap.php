@@ -6,22 +6,25 @@
  * and the handful of global functions the units under test touch are defined
  * here; per-test WP function behaviour is stubbed with Brain Monkey.
  *
- * What this suite deliberately cannot cover — and what therefore stays on the
- * manual/live checklist — is anything that needs a real WordPress runtime:
- * dbDelta() migrations, provider hook lifecycles inside the real form plugins,
- * WP-Cron scheduling, REST authentication, and end-to-end delivery.
+ * What this suite deliberately cannot cover is anything that needs a real
+ * WordPress runtime: dbDelta() migrations, WP-Cron, REST registration,
+ * activation and uninstall, and end-to-end delivery. Those now live in
+ * tests/WordPress, which installs a real WordPress, activates the plugin and
+ * delivers to a real HTTP receiver — see that suite's bootstrap.
  *
- * For the notification subsystem specifically, that checklist is:
+ * What is still on the manual/live checklist:
  *
- *  - the cvm_notification_queue migration, including whether dbDelta actually
- *    created the UNIQUE submission_recipient index (deduplication depends on
- *    it, and its absence would be silent);
- *  - the cron worker firing, claiming rows, and re-arming;
- *  - INSERT IGNORE idempotency under a real unique index;
- *  - the delete-submission and clear-all cascades, and retention interaction;
- *  - activation, deactivation, and uninstall (including multisite);
- *  - whether an email actually arrives, which no code can assert —
- *    wp_mail() returning true means the local transport accepted the message.
+ *  - Provider hook lifecycles inside the real form plugins. The end-to-end
+ *    suite records submissions through the plugin's own public API, which is
+ *    the entry point every provider adapter calls, but the adapters themselves
+ *    need the third-party plugins installed.
+ *  - The notification subsystem's runtime: whether dbDelta created the UNIQUE
+ *    submission_recipient index that deduplication depends on (its absence
+ *    would be silent), the mail cron worker claiming rows and re-arming, and
+ *    the delete-submission and clear-all cascades.
+ *  - Multisite activation, deactivation and uninstall.
+ *  - Whether an email actually arrives, which no code can assert — wp_mail()
+ *    returning true means the local transport accepted the message.
  *
  * NotificationLifecycleTest covers the wiring for these behaviorally where a
  * callback is observable and by source-contract assertions where it is not; it

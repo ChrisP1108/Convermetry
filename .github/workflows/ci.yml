@@ -22,7 +22,7 @@ jobs:
         php: ['8.3', '8.4', '8.5']
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Set up PHP
         uses: shivammathur/setup-php@v2
@@ -51,7 +51,7 @@ jobs:
     # would report the same errors three times. It runs on the 8.3 floor
     # because that is the version composer.json's platform config pins.
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Set up PHP 8.3
         uses: shivammathur/setup-php@v2
@@ -101,7 +101,7 @@ jobs:
           --health-retries=10
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Set up PHP 8.3
         uses: shivammathur/setup-php@v2
@@ -146,7 +146,7 @@ jobs:
     name: No syntax or functions above the PHP 8.3 floor
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Set up PHP 8.3
         uses: shivammathur/setup-php@v2
@@ -177,11 +177,93 @@ jobs:
           check "\|>" "the pipe operator (8.5+)"
           exit $fail
 
+  wordpress:
+    name: End-to-end (real WordPress)
+    runs-on: ubuntu-latest
+
+    # The gap the other suites cannot reach. The unit suite has no WordPress and
+    # the integration suite executes the plugin's SQL directly against MySQL, so
+    # everything between "the SQL is right" and "the plugin works when WordPress
+    # runs it" was untested: dbDelta applying the schema, REST registration,
+    # WP-Cron firing the queue worker, and a payload actually leaving over HTTP.
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: cvm_wp_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -proot"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+
+    steps:
+      # Checked out into its own directory so the plugin can be linked into a
+      # WordPress tree without the two overlapping.
+      - uses: actions/checkout@v5
+        with:
+          path: convermetry
+
+      - name: Set up PHP 8.3
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: mysqli
+          coverage: none
+          tools: composer:v2
+
+      - name: Install dependencies
+        working-directory: convermetry
+        run: composer install --no-interaction --no-progress
+
+      - name: Download WordPress
+        run: |
+          set -e
+          curl -sSL https://wordpress.org/latest.tar.gz | tar xz
+          mkdir -p wordpress/wp-content/plugins
+          ln -s "$GITHUB_WORKSPACE/convermetry" wordpress/wp-content/plugins/convermetry
+          test -f wordpress/wp-content/plugins/convermetry/convermetry.php
+
+      - name: End-to-end suite
+        working-directory: convermetry
+        env:
+          CVM_WP_DIR: ${{ github.workspace }}/wordpress
+          CVM_WP_DB_HOST: 127.0.0.1
+          CVM_WP_DB_NAME: cvm_wp_test
+          CVM_WP_DB_USER: root
+          CVM_WP_DB_PASS: root
+          CVM_WP_PORT: 8731
+        run: vendor/bin/phpunit -c phpunit.wordpress.xml
+
+      # The suite skips itself when CVM_WP_DIR is unset, which is right for a
+      # laptop and wrong here: a misconfigured job would otherwise turn every
+      # test into a silent pass.
+      - name: Assert the suite actually ran
+        working-directory: convermetry
+        env:
+          CVM_WP_DIR: ${{ github.workspace }}/wordpress
+          CVM_WP_DB_HOST: 127.0.0.1
+          CVM_WP_DB_NAME: cvm_wp_test
+          CVM_WP_DB_USER: root
+          CVM_WP_DB_PASS: root
+          CVM_WP_PORT: 8731
+        run: |
+          set -e
+          OUT="$(vendor/bin/phpunit -c phpunit.wordpress.xml --do-not-cache-result | tail -3)"
+          echo "$OUT"
+          if echo "$OUT" | grep -qE 'Skipped: [0-9]+'; then
+            echo "::error::The end-to-end suite skipped tests — WordPress was not reachable."
+            exit 1
+          fi
+
   package:
     name: Release ZIP is clean
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
@@ -201,7 +283,7 @@ jobs:
           fi
           echo "Inspecting $ZIP"
           unzip -l "$ZIP"
-          if unzip -l "$ZIP" | grep -E '(^|/)(\.git|tests|vendor|bin|\.github)/|composer\.(json|lock)|phpunit(\.integration)?\.xml|\.distignore|\.gitignore'; then
+          if unzip -l "$ZIP" | grep -E '(^|/)(\.git|tests|vendor|bin|\.github)/|composer\.(json|lock)|phpunit[^/]*\.xml|\.distignore|\.gitignore'; then
             echo "::error::Development artifacts leaked into the release ZIP"
             exit 1
           fi
@@ -212,7 +294,7 @@ jobs:
           echo "Release ZIP is clean."
 
       - name: Upload the built plugin
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: convermetry-plugin
           path: build/*.zip

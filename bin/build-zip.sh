@@ -184,6 +184,7 @@ done < <(git ls-files -z)
 # Fail loudly rather than shipping a contaminated archive.
 for forbidden in .git .github tests vendor node_modules build phpstan bin \
                  composer.json composer.lock phpunit.xml phpunit.integration.xml \
+                 phpunit.wordpress.xml \
                  phpstan.neon .distignore; do
   if [[ -e "$STAGE/$forbidden" ]]; then
     die "development artifact '$forbidden' reached the staged plugin"

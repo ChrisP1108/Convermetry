@@ -31,8 +31,9 @@
  * WHAT IT DOES NOT PROVE. There is no WordPress here — no dbDelta, no cron, no
  * REST layer, no provider hooks. The DDL is executed directly rather than
  * through dbDelta, so this covers "does this schema do what we claim" and not
- * "does dbDelta apply it to an existing table correctly". That second question
- * needs the wordpress-develop harness and stays on the manual checklist.
+ * "does dbDelta apply it". That second question is answered one layer up, by
+ * tests/WordPress, which activates the plugin inside a real WordPress and
+ * asserts on what dbDelta actually created.
  *
  * CONNECTION. Configure with environment variables; the whole suite skips
  * cleanly when none is reachable, so `composer test` on a laptop is unaffected:

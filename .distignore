@@ -13,6 +13,8 @@ composer.json
 composer.lock
 phpunit.xml
 phpunit.integration.xml
+phpunit.wordpress.xml
+.phpunit.wordpress.cache
 phpstan.neon
 phpstan
 bin

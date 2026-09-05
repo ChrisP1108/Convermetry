@@ -8,5 +8,6 @@
 # loads its own src/Autoloader.php, never vendor/autoload.php.
 /vendor/
 /.phpunit.cache/
+/.phpunit.wordpress.cache/
 /build/
 .DS_Store

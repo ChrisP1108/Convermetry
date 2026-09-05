@@ -219,6 +219,41 @@ identity, and correct delivery-log date filtering.
   disappearing as a pruning side effect. "Delivery of this lead was abandoned"
   is worth saying out loud.
 
+- **An end-to-end suite that runs inside a real WordPress.** The unit suite has
+  no WordPress and the integration suite executes the plugin's SQL directly
+  against MySQL, so everything between "the SQL is right" and "the plugin works
+  when WordPress runs it" was untested. `tests/WordPress` installs a real
+  WordPress into a throwaway database, activates the plugin, and asserts on what
+  actually happens: dbDelta creating every table, the cron events being
+  scheduled, the REST route answering a real request, a submission reaching the
+  queue, the WP-Cron worker delivering over real HTTP to a real receiver, and
+  the recorded state settling on `delivered`. It checks the signature against
+  the body that arrived rather than the one the plugin believed it sent, covers
+  a refused delivery staying queued, and runs `uninstall.php` the way WordPress
+  does — reinstalling afterwards so it is safe in any order. New CI job; the
+  suite skips itself when no WordPress is configured, and CI fails if it skips.
+
+  Writing it found three things. The tracking endpoint accepts-and-discards a
+  request with no User-Agent, which is deliberate bot handling and now has a
+  test of its own rather than only being worked around. `wp_safe_remote_post()`
+  refuses a local receiver twice over — loopback address and non-safe port — and
+  both refusals are real SSRF safeguards, so the suite opts out of them
+  explicitly, per test, rather than quietly. And the receiver helper's original
+  readiness check waited for the port to accept connections, which a server
+  orphaned by an interrupted earlier run satisfies just as well: deliveries
+  succeeded, the Activity Log recorded a 200, and the assertion on what arrived
+  read an empty file belonging to a different process. It now asks the server
+  who it is and accepts only its own token.
+
+- `phpunit.wordpress.xml` is excluded from the release ZIP. `bin/build-zip.sh`
+  copies tracked files and refuses a list of development artifacts by name, so a
+  new PHPUnit config would have shipped the moment it was committed; the
+  archive check in CI now matches any `phpunit*.xml` rather than the two
+  filenames it knew about.
+
+- The `actions/checkout` and `actions/upload-artifact` pins move to v5, clearing
+  the Node 20 runtime deprecation warnings on every run.
+
 - **A repair the cron could not carry out is no longer lost.** Bounded backoff
   ends the cron chain after roughly half an hour, and
   `wp_schedule_single_event()` can fail outright, leaving nothing to retry.

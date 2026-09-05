@@ -32,6 +32,7 @@
         "analyse": "phpstan analyse --memory-limit=1G",
         "test": "phpunit --display-skipped",
         "test:integration": "phpunit -c phpunit.integration.xml --display-skipped",
+        "test:wordpress": "phpunit -c phpunit.wordpress.xml --display-skipped",
         "lint": "find src tests convermetry.php uninstall.php -name '*.php' -print0 | xargs -0 -n1 php -l"
     },
     "scripts-descriptions": {

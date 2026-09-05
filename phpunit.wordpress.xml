@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    End-to-end suite: a real WordPress, a real MySQL, real WP-Cron, and a real
+    HTTP receiver. Skips itself when CVM_WP_DIR is unset, so it costs a laptop
+    nothing; CI asserts that it did not skip.
+-->
+<phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:noNamespaceSchemaLocation="vendor/phpunit/phpunit/phpunit.xsd"
+         bootstrap="tests/WordPress/bootstrap.php"
+         colors="true"
+         failOnWarning="true"
+         failOnRisky="true"
+         beStrictAboutOutputDuringTests="true"
+         cacheDirectory=".phpunit.wordpress.cache">
+    <testsuites>
+        <testsuite name="wordpress">
+            <directory>tests/WordPress</directory>
+        </testsuite>
+    </testsuites>
+</phpunit>
