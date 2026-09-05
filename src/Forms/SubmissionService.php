@@ -262,6 +262,10 @@ final class SubmissionService
                 // delivery that did not exist.
                 $existingId = (string) $existing['submission_id'];
 
+                // A last chance to deliver what the original request could not
+                // queue. It acts ONLY on the durable record a verified failed
+                // INSERT wrote — never on "this submission looks unsent", which
+                // is also how a delivered-and-cleaned-up submission looks.
                 FormDeliveryQueue::repairIfNeverQueued($existingId);
 
                 return new SubmissionResult(

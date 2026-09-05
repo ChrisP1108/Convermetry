@@ -52,6 +52,14 @@ final class QueueDurabilityTest extends TestCase
     /** @var array<string, mixed>|null */
     private ?array $submissionRow = ['id' => 11, 'submission_id' => 'sub-1', 'delivery_state' => 'not_sent'];
 
+    /**
+     * In-memory wp_options, so the durable repair record can be asserted on
+     * rather than mocked away.
+     *
+     * @var array<string, mixed>
+     */
+    private array $options = [];
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -62,7 +70,26 @@ final class QueueDurabilityTest extends TestCase
         $this->storageErrors = [];
         $this->insertResults = [];
         $this->rowPresent    = [];
+        $this->options       = [];
         $this->submissionRow = ['id' => 11, 'submission_id' => 'sub-1', 'delivery_state' => 'not_sent'];
+
+        Functions\when('get_option')->alias(
+            fn(string $key, mixed $default = false): mixed => $this->options[$key] ?? $default
+        );
+        Functions\when('update_option')->alias(
+            function (string $key, mixed $value, mixed $autoload = null): bool {
+                $this->options[$key] = $value;
+
+                return true;
+            }
+        );
+        Functions\when('delete_option')->alias(
+            function (string $key): bool {
+                unset($this->options[$key]);
+
+                return true;
+            }
+        );
 
         Functions\when('home_url')->justReturn('https://site.test');
         Functions\when('wp_parse_url')->alias(
@@ -206,11 +233,18 @@ final class QueueDurabilityTest extends TestCase
             ];
         }
 
-        Functions\when('get_option')->alias(
-            static fn(string $key, $default = false) => $key === 'cvm_webhook_settings'
-                ? ['endpoints' => $endpoints, 'shared_secret' => '']
-                : $default
-        );
+        $this->options['cvm_webhook_settings'] = ['endpoints' => $endpoints, 'shared_secret' => ''];
+    }
+
+    /**
+     * @return list<array{sql: string}>
+     */
+    private function inserts(): array
+    {
+        return array_values(array_filter(
+            $this->queries,
+            static fn(array $q): bool => str_contains($q['sql'], 'INSERT IGNORE')
+        ));
     }
 
     // ── QueueOutcome semantics ───────────────────────────────────────────────
@@ -519,11 +553,7 @@ final class QueueDurabilityTest extends TestCase
 
         FormDeliveryQueue::reconcile('sub-1', ['endpoint-0'], 1);
 
-        $inserts = array_filter(
-            $this->queries,
-            static fn(array $q): bool => str_contains($q['sql'], 'INSERT IGNORE')
-        );
-        self::assertSame([], $inserts, 'A deleted submission must not be re-queued');
+        self::assertSame([], $this->inserts(), 'A deleted submission must not be re-queued');
     }
 
     public function testNoConfiguredEndpointsQueuesNothingAndReportsNoError(): void
@@ -536,5 +566,294 @@ final class QueueDurabilityTest extends TestCase
         self::assertTrue($outcome->isComplete());
         self::assertFalse($outcome->queuedAnything());
         self::assertSame([], $this->storageErrors);
+    }
+
+    // ── the durable repair record ────────────────────────────────────────────
+
+    public function testAFailedEnqueueRecordsTheOwedDestinationsDurably(): void
+    {
+        $this->configureEndpoints(['https://a.test/hook', 'https://b.test/hook']);
+        $this->insertResults['https://b.test/hook'] = false;
+
+        FormDeliveryQueue::enqueue(11, 'sub-1');
+
+        self::assertSame(
+            ['endpoint-1'],
+            FormDeliveryQueue::pendingRepairFor('sub-1'),
+            'The record names exactly the destination whose row was verified absent'
+        );
+    }
+
+    public function testACleanEnqueueRecordsNothing(): void
+    {
+        $this->configureEndpoints(['https://a.test/hook']);
+
+        FormDeliveryQueue::enqueue(11, 'sub-1');
+
+        self::assertSame([], FormDeliveryQueue::pendingRepairFor('sub-1'));
+        self::assertArrayNotHasKey(
+            'cvm_queue_repairs',
+            $this->options,
+            'A site with nothing outstanding must not carry the option at all'
+        );
+    }
+
+    /**
+     * The record is written BEFORE the cron is scheduled, because this is the
+     * case where nothing else remembers the delivery is owed.
+     */
+    public function testTheRecordSurvivesAFailureToScheduleTheRepairCron(): void
+    {
+        Functions\when('wp_schedule_single_event')->justReturn(false);
+
+        $this->configureEndpoints(['https://a.test/hook']);
+        $this->insertResults['https://a.test/hook'] = false;
+
+        FormDeliveryQueue::enqueue(11, 'sub-1');
+
+        self::assertSame(['endpoint-0'], FormDeliveryQueue::pendingRepairFor('sub-1'));
+    }
+
+    public function testASuccessfulRepairClearsTheRecord(): void
+    {
+        $this->configureEndpoints(['https://a.test/hook']);
+        $this->insertResults['https://a.test/hook'] = false;
+        FormDeliveryQueue::enqueue(11, 'sub-1');
+
+        $this->insertResults = [];
+        FormDeliveryQueue::reconcile('sub-1', ['endpoint-0'], 1);
+
+        self::assertSame([], FormDeliveryQueue::pendingRepairFor('sub-1'));
+    }
+
+    public function testAFailedRepairKeepsTheRecord(): void
+    {
+        $this->configureEndpoints(['https://a.test/hook']);
+        $this->insertResults['https://a.test/hook'] = false;
+        FormDeliveryQueue::enqueue(11, 'sub-1');
+
+        FormDeliveryQueue::reconcile('sub-1', ['endpoint-0'], 1);
+
+        self::assertSame(['endpoint-0'], FormDeliveryQueue::pendingRepairFor('sub-1'));
+    }
+
+    /**
+     * Abandonment ends the CRON CHAIN, not the obligation.
+     */
+    public function testAbandonmentKeepsTheRecordForTheSafetyNet(): void
+    {
+        $this->configureEndpoints(['https://a.test/hook']);
+        $this->insertResults['https://a.test/hook'] = false;
+        FormDeliveryQueue::enqueue(11, 'sub-1');
+
+        FormDeliveryQueue::reconcile('sub-1', ['endpoint-0'], 3);
+
+        self::assertContains('queue_repair_abandoned', array_column($this->storageErrors, 'code'));
+        self::assertSame(
+            ['endpoint-0'],
+            FormDeliveryQueue::pendingRepairFor('sub-1'),
+            'The retry chain is spent; the lead is still owed'
+        );
+    }
+
+    /**
+     * A destination that no longer exists is settled, not left to expire — and
+     * certainly not re-queued daily against an endpoint nobody configured.
+     */
+    public function testARemovedEndpointSettlesTheRecord(): void
+    {
+        $this->configureEndpoints(['https://a.test/hook']);
+        $this->insertResults['https://a.test/hook'] = false;
+        FormDeliveryQueue::enqueue(11, 'sub-1');
+
+        $this->configureEndpoints([]);
+        FormDeliveryQueue::repairPending();
+
+        self::assertSame([], FormDeliveryQueue::pendingRepairFor('sub-1'));
+    }
+
+    /**
+     * Erasure wins over recovery, and takes the record with it.
+     */
+    public function testADeletedSubmissionForgetsItsRecord(): void
+    {
+        $this->configureEndpoints(['https://a.test/hook']);
+        $this->insertResults['https://a.test/hook'] = false;
+        FormDeliveryQueue::enqueue(11, 'sub-1');
+
+        $this->submissionRow = null;
+        FormDeliveryQueue::repairPending();
+
+        self::assertSame([], FormDeliveryQueue::pendingRepairFor('sub-1'));
+        self::assertArrayNotHasKey('cvm_queue_repairs', $this->options);
+    }
+
+    /**
+     * The option is ordinary site data; a filter or a hand edit can put
+     * anything in it.
+     */
+    public function testAMalformedRecordIsIgnoredRatherThanTrusted(): void
+    {
+        $this->options['cvm_queue_repairs'] = [
+            'sub-1' => 'not-a-record',
+            'sub-2' => ['refs' => [123, ''], 'at' => time()],
+            'sub-3' => ['refs' => ['endpoint-0']],
+            7       => ['refs' => ['endpoint-0'], 'at' => time()],
+        ];
+
+        self::assertSame([], FormDeliveryQueue::pendingRepairFor('sub-1'));
+        self::assertSame([], FormDeliveryQueue::pendingRepairFor('sub-2'), 'Non-string references are dropped');
+        self::assertSame([], FormDeliveryQueue::pendingRepairFor('sub-3'), 'A record with no timestamp has expired');
+    }
+
+    /**
+     * A database refusing every insert must not grow one option without limit.
+     */
+    public function testTheRecordIsCappedAtTheNewestEntries(): void
+    {
+        $entries = [];
+        for ($i = 0; $i < 120; $i++) {
+            $entries['sub-' . $i] = ['refs' => ['endpoint-0'], 'at' => time() - (120 - $i)];
+        }
+        $this->options['cvm_queue_repairs'] = $entries;
+
+        self::assertSame([], FormDeliveryQueue::pendingRepairFor('sub-0'), 'The oldest records are dropped first');
+        self::assertSame(['endpoint-0'], FormDeliveryQueue::pendingRepairFor('sub-119'), 'The newest are kept');
+    }
+
+    // ── repairIfNeverQueued() ────────────────────────────────────────────────
+
+    /**
+     * The regression this record exists to prevent, first form.
+     *
+     * The submission was recorded on a site with webhooks switched off, so
+     * nothing was ever queued and nothing was supposed to be. Endpoints are
+     * added months later and the provider replays the original callback. The
+     * previous gate — no queue row plus delivery_state 'not_sent' — matched
+     * exactly this, and delivered a lead that was never meant to be sent.
+     */
+    public function testASubmissionRecordedBeforeWebhooksExistedIsNeverDelivered(): void
+    {
+        $this->configureEndpoints(['https://crm.test/hook']);
+        $this->submissionRow = ['id' => 11, 'submission_id' => 'sub-1', 'delivery_state' => 'not_sent'];
+
+        FormDeliveryQueue::repairIfNeverQueued('sub-1');
+
+        self::assertSame([], $this->inserts(), 'Nothing was ever owed, so nothing may be queued');
+        self::assertSame([], $this->scheduled);
+        self::assertSame([], $this->storageErrors);
+    }
+
+    /**
+     * The regression this record exists to prevent, second form.
+     *
+     * The webhook was DELIVERED: the worker deleted the queue row on the 2xx,
+     * and the log row that would have remembered it was suppressed by a
+     * 'convermetry_delivery_log_row' filter (a failed log INSERT does the
+     * same). refreshDeliveryState() then settles the submission back on
+     * 'not_sent' with no evidence either way — and the old gate would have
+     * re-sent a lead the receiver had already processed.
+     */
+    public function testADeliveredSubmissionWithNoSurvivingEvidenceIsNeverResent(): void
+    {
+        $this->configureEndpoints(['https://crm.test/hook']);
+        $this->submissionRow = ['id' => 11, 'submission_id' => 'sub-1', 'delivery_state' => 'not_sent'];
+        $this->rowPresent['https://crm.test/hook'] = false;
+
+        FormDeliveryQueue::repairIfNeverQueued('sub-1');
+
+        self::assertSame([], $this->inserts(), 'Absence of evidence is not evidence the enqueue failed');
+        self::assertSame([], $this->scheduled, 'Nor may it be repaired later');
+        self::assertSame([], $this->storageErrors);
+    }
+
+    public function testARecordedFailureIsRepairedOnADuplicateCallback(): void
+    {
+        $this->configureEndpoints(['https://a.test/hook']);
+        $this->insertResults['https://a.test/hook'] = false;
+        FormDeliveryQueue::enqueue(11, 'sub-1');
+
+        // The database recovers before the replayed callback arrives.
+        $this->insertResults = [];
+        $this->queries       = [];
+        $this->scheduled     = [];
+        $this->storageErrors = [];
+
+        FormDeliveryQueue::repairIfNeverQueued('sub-1');
+
+        self::assertSame(['queue_repair_on_duplicate'], array_column($this->storageErrors, 'code'));
+        self::assertNotSame([], $this->inserts(), 'A destination verifiably owed a row gets one');
+        self::assertSame([], FormDeliveryQueue::pendingRepairFor('sub-1'));
+    }
+
+    /**
+     * An out-of-band repair reports and records; it does not open a second
+     * backoff chain alongside the one already running.
+     */
+    public function testTheDuplicatePathDoesNotStartASecondCronChain(): void
+    {
+        $this->configureEndpoints(['https://a.test/hook']);
+        $this->insertResults['https://a.test/hook'] = false;
+        FormDeliveryQueue::enqueue(11, 'sub-1');
+
+        $this->scheduled     = [];
+        $this->storageErrors = [];
+
+        FormDeliveryQueue::repairIfNeverQueued('sub-1');
+
+        self::assertSame(
+            ['queue_repair_on_duplicate', 'queue_repair_failed'],
+            array_column($this->storageErrors, 'code')
+        );
+        self::assertSame([], $this->repairPasses(), 'One chain at a time');
+        self::assertSame(['endpoint-0'], FormDeliveryQueue::pendingRepairFor('sub-1'));
+    }
+
+    // ── repairPending() ──────────────────────────────────────────────────────
+
+    /**
+     * The hole the record closes: the chain ends, or is never scheduled at all,
+     * and the destination is still owed a row.
+     */
+    public function testTheSafetyNetQueuesWhatTheCronChainCouldNot(): void
+    {
+        $this->configureEndpoints(['https://a.test/hook']);
+        $this->insertResults['https://a.test/hook'] = false;
+        FormDeliveryQueue::enqueue(11, 'sub-1');
+        FormDeliveryQueue::reconcile('sub-1', ['endpoint-0'], 3);
+
+        self::assertSame(['endpoint-0'], FormDeliveryQueue::pendingRepairFor('sub-1'));
+
+        $this->insertResults = [];
+        $this->queries       = [];
+
+        FormDeliveryQueue::repairPending();
+
+        self::assertNotSame([], $this->inserts());
+        self::assertSame([], FormDeliveryQueue::pendingRepairFor('sub-1'));
+    }
+
+    public function testTheSafetyNetDropsRecordsPastTheirWindow(): void
+    {
+        $this->configureEndpoints(['https://a.test/hook']);
+        $this->options['cvm_queue_repairs'] = [
+            'sub-old' => ['refs' => ['endpoint-0'], 'at' => time() - (8 * DAY_IN_SECONDS)],
+        ];
+
+        FormDeliveryQueue::repairPending();
+
+        self::assertSame([], FormDeliveryQueue::pendingRepairFor('sub-old'));
+        self::assertSame([], $this->inserts(), 'A week-old lead is stale, not owed');
+        self::assertArrayNotHasKey('cvm_queue_repairs', $this->options);
+    }
+
+    public function testTheSafetyNetIsAnInexpensiveNoOpWithNothingOutstanding(): void
+    {
+        $this->configureEndpoints(['https://a.test/hook']);
+
+        FormDeliveryQueue::repairPending();
+
+        self::assertSame([], $this->inserts());
+        self::assertArrayNotHasKey('cvm_queue_repairs', $this->options);
     }
 }

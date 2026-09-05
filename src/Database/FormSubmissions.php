@@ -274,8 +274,8 @@ final class FormSubmissions
             . ' (submission_id, conversion_id, session_id, provider, form_key, form_name,'
             . ' native_form_id, form_id, page_url, ip_address, channel, utm_campaign,'
             . ' utm_source, utm_medium, utm_id, landing_page,'
-            . ' page_query, submission_data, context, runtime, created_at)'
-            . ' VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)',
+            . ' page_query, submission_data, context, runtime, delivery_state, created_at)'
+            . ' VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)',
             $submission->submissionId,
             $submission->conversionId,
             $submission->sessionId,
@@ -296,6 +296,12 @@ final class FormSubmissions
             self::encodeJson($submission->fields),
             self::encodeJson($submission->context),
             self::encodeJson($submission->runtime),
+            // Nothing has been attempted yet, which is precisely what NotSent
+            // means. Leaving it NULL made every row on a site that does not use
+            // webhooks match BACKFILL_PREDICATE, so the daily worker re-derived
+            // a state it could have been told — the exact "a new row must never
+            // enter the backfill queue" rule the comment above states.
+            DeliveryState::NotSent->value,
             gmdate('Y-m-d H:i:s')
         ));
 

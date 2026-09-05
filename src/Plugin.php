@@ -192,6 +192,10 @@ final class Plugin
         add_action('cvm_cleanup_old_events', [FormSubmissions::class, 'backfillOnCleanup']);
         add_action(FormSubmissions::BACKFILL_CATCHUP_HOOK, [FormSubmissions::class, 'backfillCatchUp']);
         add_action('cvm_cleanup_old_events', [FormDeliveryQueue::class, 'ensureWorkerScheduled']);
+        // Safety net for queue rows whose INSERT was refused and whose bounded
+        // repair chain ended without them — including the case where the repair
+        // cron could not be scheduled at all, so nothing else would ever retry.
+        add_action('cvm_cleanup_old_events', [FormDeliveryQueue::class, 'repairPending']);
         add_action('cvm_cleanup_old_events', [NotificationQueue::class, 'ensureWorkerScheduled']);
         add_action('cvm_cleanup_old_events', [NotificationQueue::class, 'purgeOrphans']);
         add_action(DatabaseManager::CLEANUP_CATCHUP_HOOK, [DatabaseManager::class, 'cleanupOldEventsCatchUp']);

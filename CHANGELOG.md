@@ -151,10 +151,54 @@ identity, and correct delivery-log date filtering.
   returned `queued: true` on the reasoning that the original request had already
   queued everything. If that request's enqueue failed and its repair passes
   failed too, the duplicate confidently reported a delivery that did not exist.
-  It now reports whether delivery rows actually exist, and — gated strictly on
-  there being no queue row and a recorded delivery state of exactly `not_sent`,
-  so a delivered submission can never be re-sent — schedules repair when the
-  original enqueue provably never landed.
+  It now reports whether delivery rows actually exist.
+
+- **Queue repair no longer infers intent from `not_sent`.** The first version of
+  the duplicate-path repair was gated on there being no queue row and a recorded
+  delivery state of exactly `not_sent`, described as proving the original enqueue
+  never landed. It does not prove that. `not_sent` is a NEUTRAL state, and two
+  ordinary situations produce it:
+
+  - A submission recorded on a site that does not use webhooks at all. Enable
+    webhooks and add an endpoint months later, and a replayed provider callback
+    for that old submission would have delivered a lead that was never meant to
+    be sent anywhere.
+  - A delivery that SUCCEEDED and left no evidence. The worker deletes the queue
+    row on a 2xx, and the delivery-log row that would remember it can be
+    suppressed by a `convermetry_delivery_log_row` filter or lost to a failed
+    `INSERT`. With neither row left, `refreshDeliveryState()` settles the
+    submission back on `not_sent` — and the receiver would have been sent a lead
+    it had already processed. The stable `delivery_id` / `Idempotency-Key` helps
+    receivers that honour it, but Convermetry must not depend on a third-party
+    receiver deduplicating correctly.
+
+  A verified failed `INSERT` now writes a durable repair record — the submission
+  and the exact endpoint ids still owed a row — to a non-autoloaded option,
+  before the repair cron is scheduled, because scheduling is itself a write that
+  can fail. Every repair path is authorised by that record and by nothing else.
+  The record is coerced on read, expires after seven days, and is capped at 100
+  submissions, so a database refusing every insert cannot grow it without limit.
+
+- **A repair the cron could not carry out is no longer lost.** Bounded backoff
+  ends the cron chain after roughly half an hour, and
+  `wp_schedule_single_event()` can fail outright, leaving nothing to retry.
+  `FormDeliveryQueue::repairPending()` now runs on the daily cleanup and works
+  from the durable record — never from a scan for "submissions with no queue
+  row", which equally describes every submission that was delivered and cleaned
+  up. A repair reached out of band reports and re-records rather than opening a
+  second backoff chain, and a record settles when its row lands, when its
+  endpoint is deleted from the configuration, or when the submission is erased.
+  `queue_repair_abandoned` now means the cron chain is spent, not that the
+  obligation is; the new `queue_repair_on_duplicate` code reports a repair
+  triggered by a replayed provider callback.
+
+- **New submissions no longer enter the backfill queue.** `FormSubmissions`
+  documents that every derived column is written at insert so that a row created
+  by this version never needs backfilling, but `delivery_state` was left `NULL`.
+  On a site that does not use webhooks, that made every submission match
+  `BACKFILL_PREDICATE` and be re-derived by the daily worker — to `not_sent`, the
+  value the insert already knew. It is written at insert now, and the
+  integration test whose name promised this invariant asserts it.
 
 - **The database-backed tracking rate limiter failed open.** The counter's
   write result was never checked, and when the read-back did not produce the
@@ -168,7 +212,8 @@ identity, and correct delivery-log date filtering.
 
 - All 32 known-defect PHPUnit skips are implemented and passing: `DateRangeTest`
   (17), `ElementorIdentityTest` (6), `EndpointStateMigrationTest` (6) and
-  `FrozenRetryTest` (3). The suite runs 847 tests with zero skips.
+  `FrozenRetryTest` (3). The suite runs with zero skips, enforced by
+  `failOnSkipped` so a known defect cannot be parked in it again.
 
 - Editing an endpoint's URL no longer resets its delivery window, orphans its
   frozen retry payload, or leaves a retry cron event that `wp_unschedule_event()`

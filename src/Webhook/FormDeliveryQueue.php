@@ -43,6 +43,11 @@ use Convermetry\Support\QueueOutcome;
  *    lost cron event (or a deactivate/reactivate cycle) are always picked
  *    back up. Rows stuck in 'sending' (a worker died mid-flight) are
  *    reclaimed after a timeout.
+ *  - Repair record: an INSERT verified NOT to have landed is recorded
+ *    durably, outside this table, naming the exact destinations still owed a
+ *    row. Every repair path is authorised by that record and by nothing else
+ *    — never by "this submission has no queue row", which is equally true of
+ *    one that was delivered and cleaned up.
  *
  * Storing the queue in its own table — not in autoloaded options — keeps
  * potentially large, PII-bearing frozen payloads out of every page load.
@@ -70,6 +75,28 @@ final class FormDeliveryQueue
      * forever.
      */
     private const array RECONCILE_DELAYS = [30, 300, 1800];
+
+    /**
+     * Option holding the durable record of queue writes that provably failed.
+     *
+     * Not autoloaded, and read only on repair paths — never on a page load.
+     * It lives in wp_options rather than in a column of the queue table on
+     * purpose: what it records is that a write to THAT table was refused, so a
+     * marker kept there would be lost to the very failure it exists to survive.
+     */
+    private const string REPAIR_OPTION = 'cvm_queue_repairs';
+
+    /**
+     * How long a destination stays eligible for repair after its queue write
+     * failed. Bounded in both directions: a lead that could not be queued for a
+     * week is stale enough that delivering it would surprise more than it would
+     * help, and a record with no expiry would grow through an outage that never
+     * resolves.
+     */
+    private const int REPAIR_TTL = 7 * DAY_IN_SECONDS;
+
+    /** Maximum submissions tracked at once; the oldest records are dropped first. */
+    private const int REPAIR_MAX = 100;
 
     /** Maximum queue rows one worker pass may claim. */
     private const int BATCH_SIZE = 10;
@@ -305,6 +332,13 @@ final class FormDeliveryQueue
                 $outcome->telemetry() + ['submission_id' => $submissionId]
             );
 
+            // Recorded BEFORE the cron is scheduled, because scheduling is
+            // itself a write that can fail — and a repair nobody remembers is
+            // owed is a lead nobody delivers. This record, not any inference
+            // from the submission's delivery state, is what later authorises a
+            // repair; see {@see repairIfNeverQueued()}.
+            self::recordRepairIntent($submissionId, $outcome->failedRefs);
+
             // Repair exactly the endpoints whose rows are known to be absent.
             // Re-queuing anything broader could re-send a delivery a worker had
             // already completed and deleted.
@@ -350,53 +384,275 @@ final class FormDeliveryQueue
     }
 
     /**
-     * Repairs a submission whose delivery rows provably never landed.
+     * Repairs a submission whose queue rows are RECORDED as never having landed.
      *
      * Called from the duplicate-submission path, where a re-fired provider
      * callback is the first thing to notice that the original request's enqueue
      * failed and its repair passes did too.
      *
-     * The gate is deliberately strict, because getting it wrong means re-sending
-     * a webhook a receiver already processed. Repair happens ONLY when there is
-     * no queue row AND the submission's recorded delivery state is exactly
-     * 'not_sent' — a state {@see FormSubmissions::refreshDeliveryState()} derives
-     * from both the queue and the delivery log, so it means nothing was ever
-     * queued and nothing was ever attempted. Any other state, including an
-     * unrecognised or not-yet-backfilled one, is left alone.
+     * The gate is the durable repair record and NOTHING else. The first version
+     * of this method inferred the intent instead — it repaired whenever there
+     * was no queue row and the submission's recorded delivery state was
+     * 'not_sent' — and 'not_sent' does not mean "the enqueue failed". Two
+     * ordinary situations produce it:
+     *
+     *  - A site that records submissions without using webhooks at all. That is
+     *    exactly what {@see DeliveryState::NotSent} is for. Enable webhooks and
+     *    add an endpoint months later, and a replayed provider callback for an
+     *    old submission would have delivered a lead that was never meant to be
+     *    sent anywhere.
+     *  - A delivery that SUCCEEDED and left no evidence. The worker deletes the
+     *    queue row on a 2xx, and 'convermetry_delivery_log_row' is allowed to
+     *    suppress the log row that would otherwise remember it (as is a failed
+     *    log INSERT, {@see LogOutcome::Failed}). With neither row left,
+     *    {@see FormSubmissions::refreshDeliveryState()} settles the submission
+     *    back on 'not_sent' — and the receiver would have been sent a lead it
+     *    had already processed.
+     *
+     * What actually proves a queue write failed is the record {@see enqueue()}
+     * wrote when it read the table back and verified the row was absent. No
+     * record, no repair.
      *
      * @param string $submissionId Globally unique submission id.
      * @return void
      */
     public static function repairIfNeverQueued(string $submissionId): void
     {
-        if ($submissionId === '' || self::pendingCountFor($submissionId) > 0) {
-            return;
-        }
-
-        $submission = FormSubmissions::getBySubmissionId($submissionId);
-        if ($submission === null) {
-            return;
-        }
-
-        if ((string) ($submission['delivery_state'] ?? '') !== DeliveryState::NotSent->value) {
-            return;
-        }
-
-        $refs = [];
-        foreach (Options::formEndpoints() as $endpoint) {
-            $refs[] = self::endpointRef($endpoint);
-        }
+        $refs = self::pendingRepairFor($submissionId);
 
         if ($refs === []) {
             return;
         }
 
-        Errors::storage('form_delivery_queue', 'duplicate', 'queue_missing_on_duplicate', [
+        Errors::storage('form_delivery_queue', 'duplicate', 'queue_repair_on_duplicate', [
             'submission_id' => $submissionId,
             'endpoints'     => count($refs),
         ]);
 
-        self::scheduleReconciliation($submissionId, $refs);
+        // Repaired on THIS request rather than scheduled for later. The cron
+        // chain that was supposed to do this has already spent its attempts,
+        // and on a site where a lost cron event is the actual fault, this
+        // request is the only thing that will run.
+        self::repairDestinations($submissionId, $refs, 0, resumeChain: false);
+    }
+
+    /**
+     * Daily safety net: retries every destination still recorded as unqueued.
+     *
+     * The bounded cron chain can end with the row still unwritten — the
+     * database problem outlasted all three attempts, or
+     * wp_schedule_single_event() failed and no repair pass was ever queued at
+     * all. The record outlives both, so this pass picks up exactly the
+     * destinations that are still outstanding.
+     *
+     * "Exactly" is the point. A scan for submissions with no queue row would
+     * also match every submission that was delivered and had its row deleted,
+     * and re-queuing those would re-send leads the receiver already has. Only
+     * a destination a verified read-back found missing is ever repaired.
+     *
+     * Runs on the daily cleanup cron. Bounded by {@see REPAIR_MAX}.
+     *
+     * @return void
+     */
+    public static function repairPending(): void
+    {
+        $stored  = get_option(self::REPAIR_OPTION, []);
+        $intents = self::pruneRepairIntents(is_array($stored) ? $stored : []);
+
+        if ($intents !== $stored) {
+            // Persist the prune even when nothing needs repairing, so expired
+            // entries cannot outlive their window on an otherwise quiet site.
+            self::saveRepairIntents($intents);
+        }
+
+        foreach (array_keys($intents) as $submissionId) {
+            $refs = self::pendingRepairFor($submissionId);
+
+            if ($refs !== []) {
+                self::repairDestinations($submissionId, $refs, 0, resumeChain: false);
+            }
+        }
+    }
+
+    /**
+     * The destinations still recorded as never queued for one submission.
+     *
+     * @param string $submissionId Globally unique submission id.
+     * @return list<string> Durable endpoint references, empty when nothing is owed.
+     */
+    public static function pendingRepairFor(string $submissionId): array
+    {
+        if ($submissionId === '') {
+            return [];
+        }
+
+        $intents = self::repairIntents();
+
+        return isset($intents[$submissionId]) ? $intents[$submissionId]['refs'] : [];
+    }
+
+    /**
+     * Records that specific destinations were owed a queue row and did not get one.
+     *
+     * 'at' is stamped once per submission and never refreshed, so a destination
+     * that keeps failing expires on the schedule its FIRST failure started
+     * rather than renewing its own deadline on every attempt.
+     *
+     * @param string       $submissionId Globally unique submission id.
+     * @param list<string> $endpointRefs Durable references verified to have no row.
+     * @return void
+     */
+    private static function recordRepairIntent(string $submissionId, array $endpointRefs): void
+    {
+        if ($submissionId === '' || $endpointRefs === []) {
+            return;
+        }
+
+        $intents  = self::repairIntents();
+        $existing = $intents[$submissionId] ?? ['refs' => [], 'at' => time()];
+
+        $intents[$submissionId] = [
+            'refs' => array_values(array_unique(array_merge($existing['refs'], $endpointRefs))),
+            'at'   => $existing['at'],
+        ];
+
+        self::saveRepairIntents($intents);
+    }
+
+    /**
+     * Updates one submission's record after a repair pass.
+     *
+     * Only the references this pass attempted are settled; anything still
+     * failing is written back so the next pass finds it. A reference the pass
+     * could not match to a configured endpoint settles too — the operator
+     * deleted the endpoint or turned form delivery off for it, so nothing is
+     * owed to it any more and keeping the record would only make it expire
+     * slowly instead of now.
+     *
+     * @param string       $submissionId Globally unique submission id.
+     * @param list<string> $attempted    Every reference this pass considered.
+     * @param list<string> $outstanding  References that still have no row.
+     * @return void
+     */
+    private static function settleRepairIntent(string $submissionId, array $attempted, array $outstanding): void
+    {
+        $intents = self::repairIntents();
+
+        if (!isset($intents[$submissionId])) {
+            return;
+        }
+
+        $refs = array_values(array_unique(array_merge(
+            array_diff($intents[$submissionId]['refs'], $attempted),
+            $outstanding
+        )));
+
+        if ($refs === []) {
+            unset($intents[$submissionId]);
+        } else {
+            $intents[$submissionId]['refs'] = $refs;
+        }
+
+        self::saveRepairIntents($intents);
+    }
+
+    /**
+     * Forgets everything recorded for one submission.
+     *
+     * @param string $submissionId Globally unique submission id.
+     * @return void
+     */
+    private static function forgetRepairIntent(string $submissionId): void
+    {
+        $intents = self::repairIntents();
+
+        if (!isset($intents[$submissionId])) {
+            return;
+        }
+
+        unset($intents[$submissionId]);
+
+        self::saveRepairIntents($intents);
+    }
+
+    /**
+     * The stored repair record, coerced and with expired entries dropped.
+     *
+     * @return array<string, array{refs: list<string>, at: int}>
+     */
+    private static function repairIntents(): array
+    {
+        $stored = get_option(self::REPAIR_OPTION, []);
+
+        return self::pruneRepairIntents(is_array($stored) ? $stored : []);
+    }
+
+    /**
+     * Coerces the stored shape and enforces both bounds.
+     *
+     * The option is ordinary site data — a filter, a partial write, or a hand
+     * edit can put anything in it — so every field is coerced rather than
+     * trusted. Entries older than {@see REPAIR_TTL} are dropped, and the map is
+     * capped at {@see REPAIR_MAX} newest-first, so a database refusing every
+     * insert cannot grow one option without limit.
+     *
+     * Pure: no database, no WordPress state.
+     *
+     * @param array<mixed> $stored Raw option value.
+     * @return array<string, array{refs: list<string>, at: int}>
+     */
+    private static function pruneRepairIntents(array $stored): array
+    {
+        $cutoff  = time() - self::REPAIR_TTL;
+        $intents = [];
+
+        foreach ($stored as $submissionId => $entry) {
+            if (!is_string($submissionId) || $submissionId === '' || !is_array($entry)) {
+                continue;
+            }
+
+            $at = (int) ($entry['at'] ?? 0);
+            if ($at <= $cutoff) {
+                continue;
+            }
+
+            $refs = [];
+            foreach ((array) ($entry['refs'] ?? []) as $ref) {
+                if (is_string($ref) && $ref !== '') {
+                    $refs[] = $ref;
+                }
+            }
+
+            if ($refs === []) {
+                continue;
+            }
+
+            $intents[$submissionId] = ['refs' => array_values(array_unique($refs)), 'at' => $at];
+        }
+
+        if (count($intents) > self::REPAIR_MAX) {
+            uasort($intents, static fn(array $a, array $b): int => $b['at'] <=> $a['at']);
+            $intents = array_slice($intents, 0, self::REPAIR_MAX, true);
+        }
+
+        return $intents;
+    }
+
+    /**
+     * Writes the repair record, deleting the option when nothing is outstanding.
+     *
+     * @param array<string, array{refs: list<string>, at: int}> $intents Pruned record.
+     * @return void
+     */
+    private static function saveRepairIntents(array $intents): void
+    {
+        if ($intents === []) {
+            delete_option(self::REPAIR_OPTION);
+
+            return;
+        }
+
+        update_option(self::REPAIR_OPTION, $intents, false);
     }
 
     /**
@@ -467,9 +723,12 @@ final class FormDeliveryQueue
         }
 
         if ($attempt >= count(self::RECONCILE_DELAYS)) {
-            // Out of retries. Announced as its own code so an operator can alert
-            // on "a destination was never queued" distinctly from "a repair
-            // attempt failed and will be tried again".
+            // The CRON CHAIN is out of retries — the durable record is not.
+            // Announced as its own code so an operator can alert on "half an
+            // hour of repair attempts did not queue this destination"
+            // distinctly from "one attempt failed and another is scheduled".
+            // {@see repairPending()} keeps trying daily until the record
+            // expires, and a duplicate callback repairs it on sight.
             Errors::storage('form_delivery_queue', 'reconcile', 'queue_repair_abandoned', [
                 'submission_id' => $submissionId,
                 'attempts'      => $attempt,
@@ -522,6 +781,30 @@ final class FormDeliveryQueue
      */
     public static function reconcile(string $submissionId, array $endpointRefs, int $attempt = 1): void
     {
+        self::repairDestinations($submissionId, $endpointRefs, $attempt, resumeChain: true);
+    }
+
+    /**
+     * Re-creates the missing queue rows for one submission.
+     *
+     * Shared by all three ways a repair can be reached: the cron chain
+     * {@see reconcile()}, the duplicate-callback path, and the daily safety net.
+     * Only the cron chain resumes itself on failure — an out-of-band pass
+     * reports what happened and leaves the durable record for the next one,
+     * rather than starting a second backoff chain alongside the first.
+     *
+     * @param string       $submissionId Globally unique submission id.
+     * @param list<string> $endpointRefs Durable endpoint references to repair.
+     * @param int          $attempt      Cron attempt number, or 0 for an out-of-band pass.
+     * @param bool         $resumeChain  Whether a failure schedules the next cron attempt.
+     * @return void
+     */
+    private static function repairDestinations(
+        string $submissionId,
+        array $endpointRefs,
+        int $attempt,
+        bool $resumeChain
+    ): void {
         global $wpdb;
 
         if ($submissionId === '' || $endpointRefs === []) {
@@ -531,8 +814,12 @@ final class FormDeliveryQueue
         $submission = FormSubmissions::getBySubmissionId($submissionId);
 
         // The submission was deleted (retention, or an erasure request) between
-        // the failed enqueue and this pass. Erasure wins: nothing is re-created.
+        // the failed enqueue and this pass. Erasure wins: nothing is re-created,
+        // and the record goes with it rather than naming a deleted submission
+        // until it expires.
         if ($submission === null) {
+            self::forgetRepairIntent($submissionId);
+
             return;
         }
 
@@ -579,6 +866,12 @@ final class FormDeliveryQueue
             $failedRefs[] = $ref;
         }
 
+        // Settled before anything else can fail: a destination that now has a
+        // row, and one whose endpoint is no longer configured, are both done —
+        // and leaving either in the record would have the safety net re-queue
+        // it every day until it expired.
+        self::settleRepairIntent($submissionId, $endpointRefs, $failedRefs);
+
         if ($failedRefs !== []) {
             Errors::storage('form_delivery_queue', 'reconcile', 'queue_repair_failed', [
                 'submission_id' => $submissionId,
@@ -587,10 +880,12 @@ final class FormDeliveryQueue
                 'failed'        => count($failedRefs),
             ]);
 
-            // The condition that refused the original insert is often still
-            // present. Try again on the next backoff step rather than leaving
-            // the destination undelivered after one attempt.
-            self::scheduleReconciliation($submissionId, $failedRefs, $attempt);
+            if ($resumeChain) {
+                // The condition that refused the original insert is often still
+                // present. Try again on the next backoff step rather than
+                // leaving the destination undelivered after one attempt.
+                self::scheduleReconciliation($submissionId, $failedRefs, $attempt);
+            }
         }
 
         if ($repaired > 0) {

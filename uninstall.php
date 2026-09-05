@@ -56,6 +56,7 @@ function cvm_uninstall_current_site(): void
     delete_option('cvm_webhook_last_sent');
     delete_option('cvm_webhook_retry_state');
     delete_option('cvm_webhook_dispatch_lock');
+    delete_option('cvm_queue_repairs');
     delete_option('cvm_migration_lock');
 
     // Cleanup mutex. Unlike at deactivation, uninstall runs strictly after
@@ -83,6 +84,7 @@ function cvm_uninstall_current_site(): void
     wp_clear_scheduled_hook('cvm_submissions_backfill_catchup');
     wp_clear_scheduled_hook('cvm_dispatch_webhooks');
     wp_clear_scheduled_hook('cvm_process_form_queue');
+    wp_unschedule_hook('cvm_reconcile_form_queue');
     wp_clear_scheduled_hook('cvm_process_notifications');
     wp_unschedule_hook('cvm_retry_webhook');
 }

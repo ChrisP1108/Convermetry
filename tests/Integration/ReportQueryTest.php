@@ -433,8 +433,6 @@ final class ReportQueryTest extends IntegrationTestCase
             runtime: ['query' => [], 'headers' => []],
         ));
 
-        // delivery_state is filled by the delivery pipeline, so only the
-        // attribution half is asserted here.
         self::assertNull(
             self::$db->get_var("SELECT landing_page FROM wp_cvm_form_submissions WHERE landing_page IS NULL LIMIT 1"),
             'A freshly inserted submission must carry its landing page already.'
@@ -448,6 +446,24 @@ final class ReportQueryTest extends IntegrationTestCase
                 ARRAY_A
             )),
             'Every derived column is written from the context at insert time.'
+        );
+
+        // delivery_state used to be left NULL for the delivery pipeline to
+        // fill, which meant every submission on a site that does not use
+        // webhooks matched BACKFILL_PREDICATE and was re-derived by the daily
+        // worker — a state nothing was going to change and the insert already
+        // knew. Nothing has been attempted at this point, which is exactly what
+        // NotSent means.
+        self::assertSame(
+            'not_sent',
+            self::$db->get_var("SELECT delivery_state FROM wp_cvm_form_submissions WHERE submission_id = 'fresh1'"),
+            'A submission with no delivery attempted carries that verdict from the start.'
+        );
+
+        // The assertion this test's NAME has always promised.
+        self::assertFalse(
+            FormSubmissions::needsBackfill(),
+            'A row created by this version must never enter the backfill queue.'
         );
     }
 
