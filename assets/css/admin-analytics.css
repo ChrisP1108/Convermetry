@@ -1,10 +1,11 @@
 /**
- * Convermetry — analytics dashboard styles.
+ * Convermetry — Analytics page.
  *
- * Loaded only on the main Convermetry dashboard screen (the shared admin.css
- * carries the styles common to all plugin pages). Everything here is scoped
- * to .cvm-dash, and the print block turns the page into a clean report for
- * the browser's Print / Save as PDF flow.
+ * assets/css/admin-<page>.css for Convermetry → Analytics. Loaded only on
+ * that screen; assets/css/admin-common.css (shared across screens) and
+ * assets/css/admin-ui.css (design-system tokens) load before it. Everything
+ * here is scoped to .cvm-dash, and the print block turns the page into a
+ * clean report for the browser's Print / Save as PDF flow.
  */
 
 /* ==========================================================================
@@ -18,45 +19,17 @@
     margin: 16px 0 4px;
 }
 
+/* The buttons themselves are plain .button / .button-primary / .button-secondary
+   — the same classes, and therefore the same look, the Goals and Funnels
+   period filters use (see admin-common.css's design-system alignment
+   section). This wrapper only spaces them out; it used to also draw a
+   shared border around them as one joined segmented control, a skin that
+   was unique to this page and is retired along with the .cvm-period-btn
+   class it was written for. */
 .cvm-dash .cvm-period-group {
-    display: inline-flex;
-    border: 1px solid #2271b1;
-    border-radius: 4px;
-    overflow: hidden;
-}
-
-.cvm-dash .cvm-period-btn {
-    display: inline-flex;
-    align-items: center;
-    min-height: 32px;
-    padding: 0 14px;
-    background: #fff;
-    color: #2271b1;
-    text-decoration: none;
-    font-size: 13px;
-    line-height: 1;
-    border-right: 1px solid #2271b1;
-}
-
-.cvm-dash .cvm-period-btn:last-child {
-    border-right: none;
-}
-
-.cvm-dash .cvm-period-btn:hover {
-    background: #f0f6fc;
-    color: #135e96;
-}
-
-.cvm-dash .cvm-period-btn:focus-visible {
-    outline: 2px solid #043959;
-    outline-offset: -2px;
-    box-shadow: none;
-}
-
-.cvm-dash .cvm-period-btn.is-active {
-    background: #2271b1;
-    color: #fff;
-    font-weight: 600;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
 }
 
 .cvm-dash .cvm-period-range {
@@ -510,23 +483,10 @@
 }
 
 @media screen and (max-width: 782px) {
-    .cvm-dash .cvm-period-btn {
-        min-height: 40px;
-        padding: 0 16px;
-    }
-
-    /* Equal-width segments that fill the row instead of overflowing it. */
-    .cvm-dash .cvm-period-group {
-        display: flex;
-        width: 100%;
-        max-width: 420px;
-    }
-
-    .cvm-dash .cvm-period-btn {
-        flex: 1 1 0;
-        justify-content: center;
-        padding: 0 8px;
-    }
+    /* No .cvm-period-group/-btn override needed here any more: the buttons
+       are plain .button elements now, and admin-common.css's own 782px rule
+       already grows every Convermetry button's tap target on this page along
+       with every other screen's. */
 
     .cvm-dash .cvm-card-value {
         font-size: 26px;

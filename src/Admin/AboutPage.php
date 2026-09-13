@@ -1927,7 +1927,7 @@ final class AboutPage
     public static function addMenu(): void
     {
         add_submenu_page(
-            AnalyticsPage::MENU_SLUG,
+            HomePage::MENU_SLUG,
             'About Convermetry',
             'About',
             Capability::required(Capability::ANALYTICS_VIEW),
@@ -1949,6 +1949,13 @@ final class AboutPage
         if (!str_contains($hook, self::MENU_SLUG)) {
             return;
         }
+
+        wp_enqueue_style(
+            'cvm-about',
+            CVM_PLUGIN_URL . 'assets/css/admin-about.css',
+            [AdminAssets::COMMON_HANDLE],
+            CVM_VERSION
+        );
 
         wp_enqueue_script(
             'cvm-about',
@@ -2248,7 +2255,9 @@ Was it successfully delivered to external systems?');
 
         self::cardStart('Where everything lives');
         self::code('Convermetry
-    Analytics      — the reporting dashboard (top-level default)
+    Home           — what Convermetry does, this installation\'s status, the
+                     setup checklist, and links to everything (top-level default)
+    Analytics      — the reporting dashboard
     Submissions    — every server-confirmed lead, with its attribution,
                      answers, status and value
     Goals          — conversions that are not form submissions

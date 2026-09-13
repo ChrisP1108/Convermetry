@@ -78,7 +78,7 @@ final class SubmissionsPage
     public static function addMenu(): void
     {
         add_submenu_page(
-            AnalyticsPage::MENU_SLUG,
+            HomePage::MENU_SLUG,
             'Convermetry Submissions',
             'Submissions',
             Capability::required(Capability::SUBMISSIONS_VIEW),
@@ -101,6 +101,13 @@ final class SubmissionsPage
         if (!str_contains($hook, self::MENU_SLUG)) {
             return;
         }
+
+        wp_enqueue_style(
+            'cvm-submissions',
+            CVM_PLUGIN_URL . 'assets/css/admin-submissions.css',
+            [AdminAssets::COMMON_HANDLE],
+            CVM_VERSION
+        );
 
         wp_enqueue_script(
             'cvm-submissions',

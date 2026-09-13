@@ -80,3 +80,13 @@ if (!defined('CVM_VERSION')) {
     define('CVM_VERSION', $cvmVersionMatch[1]);
     unset($cvmVersionMatch);
 }
+
+if (!defined('CVM_PLUGIN_DIR')) {
+    define('CVM_PLUGIN_DIR', dirname(__DIR__) . '/');
+}
+
+if (!defined('CVM_PLUGIN_URL')) {
+    // Only ever concatenated with an asset path and handed to wp_enqueue_*,
+    // which is stubbed in this suite — the value just has to be a URL.
+    define('CVM_PLUGIN_URL', 'https://example.test/wp-content/plugins/convermetry/');
+}

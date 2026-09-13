@@ -65,7 +65,7 @@ final class FormsPage
     public static function addMenu(): void
     {
         add_submenu_page(
-            AnalyticsPage::MENU_SLUG,
+            HomePage::MENU_SLUG,
             'Convermetry Forms',
             'Forms',
             Capability::required(Capability::FORMS_MANAGE),
@@ -85,6 +85,13 @@ final class FormsPage
         if (!str_contains($hook, self::MENU_SLUG)) {
             return;
         }
+
+        wp_enqueue_style(
+            'cvm-forms',
+            CVM_PLUGIN_URL . 'assets/css/admin-forms.css',
+            [AdminAssets::COMMON_HANDLE],
+            CVM_VERSION
+        );
 
         wp_enqueue_script(
             'cvm-admin',

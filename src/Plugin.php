@@ -7,10 +7,12 @@ if (!defined('ABSPATH')) exit;
 
 use Convermetry\Admin\AboutPage;
 use Convermetry\Admin\ActivityLogPage;
+use Convermetry\Admin\AdminAssets;
 use Convermetry\Admin\AnalyticsPage;
 use Convermetry\Admin\FormsPage;
 use Convermetry\Admin\FunnelsPage;
 use Convermetry\Admin\GoalsPage;
+use Convermetry\Admin\HomePage;
 use Convermetry\Admin\NotificationsPage;
 use Convermetry\Admin\SettingsPage;
 use Convermetry\Admin\SubmissionsPage;
@@ -51,7 +53,7 @@ use Convermetry\Webhook\FormDeliveryQueue;
  *  - FormProviderRegistry — form-plugin integrations (feature-detected)
  *  - SubmissionService    — the pipeline every confirmed submission flows through
  *  - DeliveryLogController — read-only deliveries REST API
- *  - Admin pages          — Analytics, Submissions, Forms, Webhooks,
+ *  - Admin pages          — Home, Analytics, Submissions, Forms, Webhooks,
  *                           Activity Log, Settings, About
  *
  * Static subsystems expose an init() that registers their own hooks; the
@@ -203,8 +205,14 @@ final class Plugin
         $this->ensureCronScheduled();
 
         if (is_admin()) {
-            // Submenu order follows registration order — Submissions sits
-            // directly under Analytics.
+            // Shared stylesheets first, so no single screen owns the styling
+            // every screen depends on.
+            AdminAssets::init();
+
+            // Submenu order follows registration order. Home holds the
+            // top-level slug and is therefore the first row; Analytics sits
+            // directly under it, then Submissions.
+            HomePage::init($this->formRegistry);
             AnalyticsPage::init();
             SubmissionsPage::init();
             GoalsPage::init();

@@ -22,7 +22,7 @@
  * Print: the "Print / Save as PDF" button calls window.print(); beforeprint
  * expands every panel (and the chart's data table) so the printed report is
  * complete, and afterprint restores the previous states. The print layout
- * itself is pure CSS (assets/css/dashboard.css).
+ * itself is pure CSS (assets/css/admin-analytics.css).
  */
 (function () {
     'use strict';

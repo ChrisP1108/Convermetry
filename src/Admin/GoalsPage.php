@@ -70,6 +70,13 @@ final class GoalsPage
             return;
         }
 
+        wp_enqueue_style(
+            'cvm-goals',
+            CVM_PLUGIN_URL . 'assets/css/admin-goals.css',
+            [AdminAssets::COMMON_HANDLE],
+            CVM_VERSION
+        );
+
         wp_enqueue_script(
             'cvm-goals',
             CVM_PLUGIN_URL . 'assets/js/goals.js',
@@ -87,7 +94,7 @@ final class GoalsPage
     public static function addMenu(): void
     {
         add_submenu_page(
-            AnalyticsPage::MENU_SLUG,
+            HomePage::MENU_SLUG,
             'Convermetry Goals',
             'Goals',
             Capability::required(Capability::GOALS_MANAGE),

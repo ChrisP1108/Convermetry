@@ -66,7 +66,7 @@ final class NotificationsPage
     public static function addMenu(): void
     {
         add_submenu_page(
-            AnalyticsPage::MENU_SLUG,
+            HomePage::MENU_SLUG,
             'Convermetry Notifications',
             'Notifications',
             Capability::required(Capability::NOTIFICATIONS_MANAGE),
@@ -86,6 +86,13 @@ final class NotificationsPage
         if (!str_contains($hook, self::MENU_SLUG)) {
             return;
         }
+
+        wp_enqueue_style(
+            'cvm-notifications',
+            CVM_PLUGIN_URL . 'assets/css/admin-notifications.css',
+            [AdminAssets::COMMON_HANDLE],
+            CVM_VERSION
+        );
 
         wp_enqueue_script('cvm-admin', CVM_PLUGIN_URL . 'assets/js/admin.js', [], CVM_VERSION, true);
 

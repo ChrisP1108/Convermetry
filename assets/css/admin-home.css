@@ -1,0 +1,12 @@
+/**
+ * Convermetry — Home page.
+ *
+ * Reserved for styling exclusive to Convermetry → Home
+ * (src/Admin/HomePage.php). The page currently needs none: it is built
+ * entirely from assets/css/admin-ui.css's `cvm-ui-*` design-system
+ * components and tokens, with no rule of its own.
+ *
+ * This file is enqueued on the Home screen regardless, so a future
+ * Home-only rule has an obvious, already-wired home rather than being added
+ * to the design-system stylesheet "just this once."
+ */

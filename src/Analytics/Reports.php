@@ -763,6 +763,52 @@ final class Reports
     }
 
     /**
+     * Distinct visitor sessions within a range.
+     *
+     * Deliberately narrow, for the Home page's at-a-glance panel: one count,
+     * bounded by the created_at index, over a short window. Rows whose
+     * session_id is empty (a tracked event that arrived without one) are
+     * excluded rather than being collapsed into a phantom session.
+     *
+     * @param string $start UTC datetime (inclusive).
+     * @param string $end   UTC datetime (exclusive).
+     * @return int
+     * @throws ReportQueryException When the query itself failed.
+     */
+    public static function sessionCount(string $start, string $end): int
+    {
+        global $wpdb;
+        $table = DatabaseManager::tableName();
+
+        return (int) self::queryValue($wpdb->prepare(
+            "SELECT COUNT(DISTINCT session_id)
+             FROM {$table}
+             WHERE created_at >= %s AND created_at < %s AND session_id <> ''",
+            $start,
+            $end
+        ));
+    }
+
+    /**
+     * Whether the events table holds any row at all.
+     *
+     * The evidence behind the Home page's "has this site ever recorded
+     * anything" question, which a count over a window cannot answer: a site
+     * that tracked correctly for a year and had no visitors this week has
+     * working tracking and a zero. LIMIT 1 stops at the first row, so the cost
+     * does not grow with the table.
+     *
+     * @return bool
+     * @throws ReportQueryException When the query itself failed.
+     */
+    public static function hasEvents(): bool
+    {
+        $table = DatabaseManager::tableName();
+
+        return self::queryValue("SELECT id FROM {$table} LIMIT 1") !== null;
+    }
+
+    /**
      * Total server-confirmed form submissions within a range — rows in the
      * form submissions table, written only when a form provider's server-side
      * success hook fired. This is the authoritative "the form plugin accepted

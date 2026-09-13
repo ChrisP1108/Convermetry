@@ -1,0 +1,1267 @@
+/**
+ * Convermetry — admin design system.
+ *
+ * The reusable half of the Convermetry admin UI: design tokens plus the
+ * component classes built on them (cards, buttons, status pills, grids,
+ * typography, icon tiles, flow diagrams). The Home page is the first screen
+ * built entirely from it; the other screens can adopt it one at a time.
+ *
+ * Two rules make that adoption safe.
+ *
+ * 1. EVERYTHING IS SCOPED. Every component selector is a descendant of
+ *    `.cvm-ui`, and `.cvm-ui` only ever appears on a Convermetry screen's own
+ *    wrapper. The file can therefore be enqueued on Convermetry admin pages
+ *    without being able to alter wp-admin chrome, another plugin's screen, or
+ *    a Convermetry screen that has not opted in. The design TOKENS below are
+ *    the one deliberate exception: they are declared on `.cvm-wrap` as well as
+ *    `.cvm-ui` (the wrapper class every OTHER Convermetry admin screen already
+ *    carries — see assets/css/admin.css), so that older screen's headings and
+ *    buttons can read the same brand colours, radii and type scale as this
+ *    one rather than keeping a second, hand-copied set of the same values. A
+ *    custom property produces no output on its own — declaring one on
+ *    `.cvm-wrap` cannot restyle anything by itself, only what a rule
+ *    elsewhere in the cascade chooses to `var()` in.
+ *
+ * 2. THE PREFIX IS `cvm-ui-`, NOT `cvm-`. assets/css/admin.css already owns
+ *    `.cvm-card`, `.cvm-card-title`, `.cvm-cards`, `.cvm-badge` and `.cvm-wrap`
+ *    with different, older meanings, and the Analytics / Settings / Activity
+ *    Log screens depend on them. Reusing those names here would have silently
+ *    restyled five shipped screens, so the design system's COMPONENT classes
+ *    take their own namespace and the two can coexist until the old one is
+ *    retired; only the token layer (custom properties, never a class) is
+ *    shared, per (1).
+ *
+ * Values are derived from the Convermetry dashboard design: nothing here is
+ * invented per-component, and nothing is a value ANOTHER rule already holds —
+ * a card's padding, a heading's size, a status pill's colours, and now
+ * assets/css/admin.css's own headings and buttons all resolve through the
+ * same tokens below, so re-theming Convermetry is an edit to this one block
+ * rather than a sweep through two files.
+ *
+ * Fonts. Headings are set in Play, the display face the design specifies,
+ * SELF-HOSTED from assets/fonts/ rather than linked from Google — a plugin
+ * should not make every one of a site owner's admin page views a request to a
+ * third party, or hand that third party their IP address. Body copy and figures
+ * stay on system stacks: the design's Instrument Sans and IBM Plex Mono are
+ * close enough to the native UI and monospace faces that bundling two more
+ * families would cost more bytes than it buys, and the hierarchy the design
+ * establishes lives in size, weight and letter-spacing rather than in those two
+ * faces. See assets/fonts/README.md for the subsets and the licence.
+ */
+
+/* Play ­— the heading face. Latin and Latin Extended only; anything outside
+   those ranges falls back to the body stack rather than pulling a subset almost
+   no installation needs. `swap` keeps headings visible from the first paint. */
+
+@font-face {
+    font-family: "Play";
+    font-style: normal;
+    font-weight: 400;
+    font-display: swap;
+    src: url("../fonts/play-400-latin.woff2") format("woff2");
+    unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA,
+        U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191,
+        U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+    font-family: "Play";
+    font-style: normal;
+    font-weight: 400;
+    font-display: swap;
+    src: url("../fonts/play-400-latin-ext.woff2") format("woff2");
+    unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7,
+        U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F,
+        U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F,
+        U+A720-A7FF;
+}
+
+@font-face {
+    font-family: "Play";
+    font-style: normal;
+    font-weight: 700;
+    font-display: swap;
+    src: url("../fonts/play-700-latin.woff2") format("woff2");
+    unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA,
+        U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191,
+        U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+    font-family: "Play";
+    font-style: normal;
+    font-weight: 700;
+    font-display: swap;
+    src: url("../fonts/play-700-latin-ext.woff2") format("woff2");
+    unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7,
+        U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F,
+        U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F,
+        U+A720-A7FF;
+}
+
+/* Tokens ------------------------------------------------------------------ */
+
+.cvm-ui,
+.cvm-wrap {
+    /* Brand: the hero mark, primary buttons. */
+    --cvm-ui-color-brand: #1c7bb1;
+    --cvm-ui-color-brand-hover: #16638e;
+    --cvm-ui-color-brand-border: #16638e;
+
+    /* Accent: links, iconography, progress, "current" emphasis. */
+    --cvm-ui-color-accent: #2b3fbe;
+    --cvm-ui-color-accent-hover: #1d2c93;
+    --cvm-ui-color-accent-strong: #24359f;
+    --cvm-ui-color-accent-soft: #eef1fb;
+    --cvm-ui-color-accent-soft-border: #dde2f4;
+    --cvm-ui-color-accent-muted: #9aa3c4;
+
+    /* Secondary accent: delivery/integration surfaces. */
+    --cvm-ui-color-teal: #0e8a84;
+    --cvm-ui-color-teal-strong: #0b6a65;
+    --cvm-ui-color-teal-muted: #79a9a6;
+    --cvm-ui-color-teal-soft: #e9f4f3;
+    --cvm-ui-color-teal-soft-border: #cfe6e3;
+
+    /* Text. */
+    --cvm-ui-color-text: #14161a;
+    --cvm-ui-color-heading: #1f2430;
+    --cvm-ui-color-body: #41485a;
+    --cvm-ui-color-muted: #4a5160;
+    --cvm-ui-color-subtle: #5a6070;
+    --cvm-ui-color-faint: #6b7280;
+
+    /* Surfaces and lines. */
+    --cvm-ui-color-surface: #fff;
+    --cvm-ui-color-surface-muted: #fcfcfe;
+    --cvm-ui-color-surface-subtle: #f6f7fb;
+    --cvm-ui-color-surface-tint: #f7f9fd;
+    --cvm-ui-color-surface-current: #f6f8ff;
+    --cvm-ui-color-border: #e0e2ea;
+    --cvm-ui-color-border-soft: #e4e6ee;
+    --cvm-ui-color-border-strong: #dfe2ea;
+    --cvm-ui-color-border-hover: #b9c0da;
+    --cvm-ui-color-border-current: #c9cfe8;
+    --cvm-ui-color-border-tint: #dbe2f0;
+    --cvm-ui-color-rule: #e6e8f0;
+
+    /* Status. Each state is a text / icon / background / border quartet so a
+       pill can never be communicated by colour alone — every one carries a
+       glyph and a word as well. */
+    --cvm-ui-color-success: #0f6b46;
+    --cvm-ui-color-success-icon: #0f7b4f;
+    --cvm-ui-color-success-bg: #e6f4ec;
+    --cvm-ui-color-success-border: #bfe3d0;
+    --cvm-ui-color-warning: #7d5100;
+    --cvm-ui-color-warning-icon: #9a6400;
+    --cvm-ui-color-warning-bg: #fdf3df;
+    --cvm-ui-color-warning-border: #e8d9b5;
+    --cvm-ui-color-error: #8a2424;
+    --cvm-ui-color-error-icon: #b32d2e;
+    --cvm-ui-color-error-bg: #fcf0f0;
+    --cvm-ui-color-error-border: #f0c2c2;
+    --cvm-ui-color-neutral: #4a5160;
+    --cvm-ui-color-neutral-icon: #6b7280;
+    --cvm-ui-color-neutral-bg: #f1f2f6;
+    --cvm-ui-color-neutral-border: #d9dce4;
+    --cvm-ui-color-info: #1f5fb0;
+
+    /* A button's own border, distinct from a card's or the page's — close to
+       --cvm-ui-color-border-hover but a shade lighter, and used only here. */
+    --cvm-ui-color-button-border: #c9cdd9;
+
+    /* Type. */
+    --cvm-ui-font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    /* Headings only. The body stack is the fallback, so a heading in a script
+       Play does not cover still matches the rest of the page. */
+    --cvm-ui-font-display: "Play", var(--cvm-ui-font);
+    --cvm-ui-font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+    --cvm-ui-size-title: 32px;
+    --cvm-ui-size-h2-lg: 22px;
+    --cvm-ui-size-h2: 20px;
+    --cvm-ui-size-h3: 15.5px;
+    --cvm-ui-size-h4: 14px;
+    --cvm-ui-size-body-lg: 14.5px;
+    --cvm-ui-size-body: 14px;
+    --cvm-ui-size-body-sm: 13.5px;
+    --cvm-ui-size-body-xs: 13px;
+    --cvm-ui-size-meta: 12.5px;
+    --cvm-ui-size-micro: 11.5px;
+    --cvm-ui-leading: 1.6;
+    --cvm-ui-leading-relaxed: 1.65;
+
+    /* Shape. */
+    --cvm-ui-radius-hero: 14px;
+    --cvm-ui-radius-lg: 12px;
+    --cvm-ui-radius-md: 11px;
+    --cvm-ui-radius-sm: 10px;
+    --cvm-ui-radius-control: 8px;
+    --cvm-ui-radius-tile: 7px;
+    --cvm-ui-radius-pill: 999px;
+
+    /* Space. */
+    --cvm-ui-page-max: 1240px;
+    --cvm-ui-page-pad: 24px;
+    --cvm-ui-page-pad-bottom: 56px;
+    --cvm-ui-section-gap: 28px;
+    --cvm-ui-panel-pad: 24px;
+    --cvm-ui-card-pad: 20px;
+    --cvm-ui-card-pad-compact: 16px 18px;
+    --cvm-ui-card-gap: 10px;
+    --cvm-ui-grid-gap: 16px;
+    --cvm-ui-button-padding: 11px 20px;
+
+    /* Depth. */
+    --cvm-ui-shadow-card: 0 1px 2px rgba(20, 22, 26, 0.04);
+    --cvm-ui-shadow-raised: 0 4px 14px rgba(20, 22, 26, 0.07);
+    --cvm-ui-shadow-button: 0 1px 2px rgba(20, 22, 26, 0.12);
+}
+
+/* Page shell -------------------------------------------------------------- */
+
+.cvm-ui {
+    max-width: var(--cvm-ui-page-max);
+    margin: 0 auto;
+    padding: var(--cvm-ui-page-pad) var(--cvm-ui-page-pad) var(--cvm-ui-page-pad-bottom);
+    display: flex;
+    flex-direction: column;
+    gap: var(--cvm-ui-section-gap);
+    font-family: var(--cvm-ui-font);
+    font-size: var(--cvm-ui-size-body);
+    color: var(--cvm-ui-color-text);
+    text-wrap: pretty;
+    -webkit-font-smoothing: antialiased;
+}
+
+/* wp-admin puts .wrap on every screen wrapper and gives it its own margins;
+   the design's container is centred with its own padding instead. */
+.cvm-ui.wrap {
+    margin: 0 auto;
+}
+
+.cvm-ui,
+.cvm-ui *,
+.cvm-ui *::before,
+.cvm-ui *::after {
+    box-sizing: border-box;
+}
+
+/* wp-admin's element defaults (.wrap h1 at 23px/400, p at 13px with 1em
+   margins, list indentation) would otherwise fight every component below. */
+.cvm-ui h1,
+.cvm-ui h2,
+.cvm-ui h3,
+.cvm-ui h4,
+.cvm-ui p,
+.cvm-ui ol,
+.cvm-ui ul,
+.cvm-ui li,
+.cvm-ui dl,
+.cvm-ui dt,
+.cvm-ui dd,
+.cvm-ui figure {
+    margin: 0;
+    padding: 0;
+}
+
+.cvm-ui ol,
+.cvm-ui ul {
+    list-style: none;
+}
+
+.cvm-ui h1,
+.cvm-ui h2,
+.cvm-ui h3,
+.cvm-ui h4 {
+    font-family: var(--cvm-ui-font-display);
+    font-weight: 700;
+    color: var(--cvm-ui-color-text);
+    line-height: 1.25;
+}
+
+.cvm-ui p {
+    font-size: inherit;
+    line-height: var(--cvm-ui-leading);
+}
+
+.cvm-ui a {
+    color: var(--cvm-ui-color-accent);
+    text-decoration: none;
+}
+
+.cvm-ui a:hover,
+.cvm-ui a:active {
+    color: var(--cvm-ui-color-accent-hover);
+}
+
+.cvm-ui a:focus-visible,
+.cvm-ui button:focus-visible,
+.cvm-ui [tabindex]:focus-visible {
+    outline: 2px solid var(--cvm-ui-color-accent);
+    outline-offset: 2px;
+    border-radius: 4px;
+    box-shadow: none;
+}
+
+.cvm-ui svg {
+    flex: none;
+}
+
+/* Typography -------------------------------------------------------------- */
+
+.cvm-ui-title {
+    font-size: var(--cvm-ui-size-title);
+    line-height: 1.15;
+    letter-spacing: -0.025em;
+}
+
+.cvm-ui-heading {
+    font-size: var(--cvm-ui-size-h2);
+    letter-spacing: -0.02em;
+}
+
+.cvm-ui-heading--lg {
+    font-size: var(--cvm-ui-size-h2-lg);
+}
+
+.cvm-ui-heading--sm {
+    font-size: 19px;
+}
+
+.cvm-ui-heading--xs {
+    font-size: 16px;
+    letter-spacing: 0;
+}
+
+.cvm-ui-card-title {
+    font-size: var(--cvm-ui-size-h3);
+    letter-spacing: -0.01em;
+}
+
+.cvm-ui-card-title--sm {
+    font-size: 14.5px;
+    letter-spacing: 0;
+}
+
+.cvm-ui-card-title--xs {
+    font-size: var(--cvm-ui-size-h4);
+    letter-spacing: 0;
+}
+
+.cvm-ui-lede {
+    font-size: 17px;
+    font-weight: 600;
+    color: var(--cvm-ui-color-brand);
+    line-height: 1.4;
+}
+
+.cvm-ui-text {
+    font-size: var(--cvm-ui-size-body-sm);
+    line-height: var(--cvm-ui-leading);
+    color: var(--cvm-ui-color-body);
+}
+
+.cvm-ui-text--lg {
+    font-size: var(--cvm-ui-size-body-lg);
+    line-height: var(--cvm-ui-leading-relaxed);
+}
+
+.cvm-ui-text--md {
+    font-size: var(--cvm-ui-size-body);
+}
+
+.cvm-ui-text--sm {
+    font-size: var(--cvm-ui-size-body-xs);
+}
+
+.cvm-ui-text--xs {
+    font-size: var(--cvm-ui-size-meta);
+    line-height: 1.5;
+}
+
+.cvm-ui-text--relaxed {
+    line-height: var(--cvm-ui-leading-relaxed);
+}
+
+.cvm-ui-text--subtle {
+    color: var(--cvm-ui-color-subtle);
+}
+
+.cvm-ui-text--strong {
+    font-weight: 700;
+    color: var(--cvm-ui-color-text);
+}
+
+/* Measure caps, so long paragraphs stay readable on a 1240px page. */
+.cvm-ui-measure {
+    max-width: 65ch;
+}
+
+.cvm-ui-measure--wide {
+    max-width: 82ch;
+}
+
+.cvm-ui-eyebrow {
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: var(--cvm-ui-color-muted);
+}
+
+.cvm-ui-mono {
+    font-family: var(--cvm-ui-font-mono);
+}
+
+/* Layout ------------------------------------------------------------------ */
+
+.cvm-ui-section {
+    display: flex;
+    flex-direction: column;
+    gap: var(--cvm-ui-grid-gap);
+    scroll-margin-top: 40px;
+}
+
+.cvm-ui-section--loose {
+    gap: 20px;
+}
+
+.cvm-ui-section--tight {
+    gap: 14px;
+}
+
+.cvm-ui-section-header {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+/* A section header whose supporting copy sits beside the heading rather than
+   under it (the value-proposition band). */
+.cvm-ui-section-header--split {
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 10px 40px;
+    align-items: center;
+}
+
+.cvm-ui-section-header--split > :first-child {
+    flex: 1 1 340px;
+}
+
+.cvm-ui-section-header--split > :last-child {
+    flex: 1 1 420px;
+    max-width: 62ch;
+}
+
+.cvm-ui-grid {
+    display: grid;
+    /* min() keeps a card from forcing horizontal overflow in a narrow admin
+       content column — auto-fit alone would hold the full minimum width. */
+    grid-template-columns: repeat(auto-fit, minmax(min(var(--cvm-ui-grid-min, 238px), 100%), 1fr));
+    gap: var(--cvm-ui-grid-gap);
+}
+
+.cvm-ui-grid--steps {
+    --cvm-ui-grid-min: 232px;
+    --cvm-ui-grid-gap: 14px;
+}
+
+.cvm-ui-grid--status {
+    --cvm-ui-grid-min: 268px;
+    --cvm-ui-grid-gap: 14px;
+}
+
+.cvm-ui-grid--links {
+    --cvm-ui-grid-min: 230px;
+    --cvm-ui-grid-gap: 12px;
+}
+
+/* A row that splits into two ends and wraps to a stack when it cannot. */
+.cvm-ui-split {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px 32px;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.cvm-ui-split--baseline {
+    align-items: flex-end;
+    gap: 12px 24px;
+}
+
+.cvm-ui-split__main {
+    flex: 1 1 460px;
+    min-width: 0;
+}
+
+.cvm-ui-split__aside {
+    flex: none;
+}
+
+/* Cards ------------------------------------------------------------------- */
+
+.cvm-ui-card {
+    background: var(--cvm-ui-color-surface);
+    border: 1px solid var(--cvm-ui-color-border);
+    border-radius: var(--cvm-ui-radius-lg);
+    padding: var(--cvm-ui-card-pad);
+    box-shadow: var(--cvm-ui-shadow-card);
+    display: flex;
+    flex-direction: column;
+    gap: var(--cvm-ui-card-gap);
+}
+
+/* A card that is also a link or otherwise reacts to the pointer. */
+.cvm-ui-card--interactive {
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.cvm-ui-card--interactive:hover,
+.cvm-ui-card--interactive:focus-within {
+    border-color: var(--cvm-ui-color-border-hover);
+    box-shadow: var(--cvm-ui-shadow-raised);
+}
+
+/* Status cards: shorter, tighter, no lift. */
+.cvm-ui-card--compact {
+    padding: var(--cvm-ui-card-pad-compact);
+    border-radius: var(--cvm-ui-radius-md);
+    gap: 7px;
+}
+
+/* A card that wraps a whole section (Getting Started, the journey diagram). */
+.cvm-ui-card--panel {
+    padding: var(--cvm-ui-panel-pad);
+    gap: 18px;
+}
+
+/* Nested cards: quieter, because they already sit on a card. */
+.cvm-ui-card--nested {
+    background: var(--cvm-ui-color-surface-muted);
+    border-color: var(--cvm-ui-color-border-soft);
+    border-radius: var(--cvm-ui-radius-sm);
+    padding: 16px !important;
+    gap: 9px;
+    box-shadow: none;
+}
+
+/* The one step the site owner should do next. */
+.cvm-ui-card--current {
+    background: var(--cvm-ui-color-surface-current);
+    border-color: var(--cvm-ui-color-border-current);
+}
+
+/* An informational band rather than a content card. */
+.cvm-ui-card--tinted {
+    background: var(--cvm-ui-color-surface-tint);
+    border-color: var(--cvm-ui-color-border-tint);
+    padding: 20px 22px;
+    box-shadow: none;
+}
+
+/* Deliberately subordinate: an aside that must not compete with the plugin. */
+.cvm-ui-card--quiet {
+    background: #fafbfd;
+    border: 1px dashed #cfd4e0;
+    padding: 18px 20px;
+    box-shadow: none;
+}
+
+/* A card whose description should push its link to the bottom edge, so a row
+   of cards ends on one line however long the copy is. */
+.cvm-ui-card__fill {
+    flex: 1;
+}
+
+/* Compositions ------------------------------------------------------------ */
+
+/* `.cvm-ui-card` sets flex-direction/gap and is declared after `.cvm-ui-split`
+   and `.cvm-ui-notice`, which set the same properties at the same specificity —
+   so on an element carrying both, the card's column layout would win and the
+   row silently stack. These two-class selectors are what make the composition
+   authoritative rather than the order of the file. */
+.cvm-ui-card.cvm-ui-split {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px 32px;
+}
+
+.cvm-ui-card.cvm-ui-notice {
+    flex-direction: row;
+    align-items: flex-start;
+    gap: 14px;
+}
+
+/* Buttons ----------------------------------------------------------------- */
+
+/* Every rule in this block is scoped with `.cvm-ui` rather than standing
+   alone. `.cvm-ui a` above sets a link colour at specificity (0,1,1); a bare
+   `.cvm-ui-button--primary` is (0,1,0) and would lose to it, painting a solid
+   brand button with link-blue text. */
+.cvm-ui .cvm-ui-button {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: var(--cvm-ui-button-padding);
+    border-radius: var(--cvm-ui-radius-control);
+    border: 1px solid transparent;
+    font-family: inherit;
+    font-size: var(--cvm-ui-size-body);
+    font-weight: 600;
+    line-height: 1.2;
+    text-decoration: none;
+    cursor: pointer;
+    transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.cvm-ui .cvm-ui-button--primary,
+.cvm-ui .cvm-ui-button--primary:hover,
+.cvm-ui .cvm-ui-button--primary:focus,
+.cvm-ui .cvm-ui-button--primary:active {
+    color: #fff;
+}
+
+.cvm-ui .cvm-ui-button--primary {
+    background: var(--cvm-ui-color-brand);
+    border-color: var(--cvm-ui-color-brand-border);
+    box-shadow: var(--cvm-ui-shadow-button);
+}
+
+.cvm-ui .cvm-ui-button--primary:hover,
+.cvm-ui .cvm-ui-button--primary:focus-visible {
+    background: var(--cvm-ui-color-brand-hover);
+}
+
+.cvm-ui .cvm-ui-button--secondary {
+    background: var(--cvm-ui-color-surface);
+    border-color: var(--cvm-ui-color-button-border);
+    color: var(--cvm-ui-color-heading);
+}
+
+.cvm-ui .cvm-ui-button--secondary:hover,
+.cvm-ui .cvm-ui-button--secondary:focus-visible {
+    border-color: var(--cvm-ui-color-accent);
+    color: var(--cvm-ui-color-accent);
+}
+
+/* Inline "go somewhere" link with a trailing arrow. */
+.cvm-ui-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: var(--cvm-ui-size-body-xs);
+    font-weight: 600;
+    text-decoration: none;
+}
+
+.cvm-ui-link:hover,
+.cvm-ui-link:focus-visible {
+    text-decoration: underline;
+}
+
+.cvm-ui-link--meta {
+    font-size: var(--cvm-ui-size-meta);
+}
+
+/* Icon tiles -------------------------------------------------------------- */
+
+.cvm-ui-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: none;
+    width: 38px;
+    height: 38px;
+    border-radius: var(--cvm-ui-radius-sm);
+    background: var(--cvm-ui-color-accent-soft);
+    border: 1px solid var(--cvm-ui-color-accent-soft-border);
+}
+
+.cvm-ui-icon--teal {
+    background: var(--cvm-ui-color-teal-soft);
+    border-color: var(--cvm-ui-color-teal-soft-border);
+}
+
+.cvm-ui-icon--sm {
+    width: 30px;
+    height: 30px;
+    border-radius: var(--cvm-ui-radius-control);
+    border-color: transparent;
+}
+
+.cvm-ui-icon--md {
+    width: 34px;
+    height: 34px;
+    border-radius: 9px;
+    background: #e7ecf9;
+    border-color: #ccd6ee;
+}
+
+.cvm-ui-icon--brand {
+    width: 46px;
+    height: 46px;
+    border-radius: var(--cvm-ui-radius-lg);
+    background: var(--cvm-ui-color-brand);
+    border-color: var(--cvm-ui-color-brand);
+}
+
+/* Icon colour comes from the tile, not from the markup: primary strokes are
+   currentColor and the secondary ones resolve through these classes, so
+   src/Admin/Icons.php never hard-codes a hex value. */
+.cvm-ui-icon > svg {
+    color: var(--cvm-ui-color-accent);
+}
+
+.cvm-ui-icon--teal > svg {
+    color: var(--cvm-ui-color-teal);
+}
+
+.cvm-ui-icon--md > svg {
+    color: var(--cvm-ui-color-info);
+}
+
+.cvm-ui-icon--brand > svg {
+    color: #fff;
+}
+
+.cvm-ui-icon__muted {
+    stroke: var(--cvm-ui-color-accent-muted);
+}
+
+.cvm-ui-icon__muted-fill {
+    fill: var(--cvm-ui-color-accent-muted);
+}
+
+.cvm-ui-icon--teal .cvm-ui-icon__muted {
+    stroke: var(--cvm-ui-color-teal-muted);
+}
+
+.cvm-ui-icon--teal .cvm-ui-icon__muted-fill {
+    fill: var(--cvm-ui-color-teal-muted);
+}
+
+.cvm-ui-icon__mark {
+    fill: #7ee0d6;
+}
+
+/* Status pills ------------------------------------------------------------ */
+
+.cvm-ui-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    border-radius: var(--cvm-ui-radius-pill);
+    border: 1px solid var(--cvm-ui-color-neutral-border);
+    background: var(--cvm-ui-color-neutral-bg);
+    color: var(--cvm-ui-color-neutral);
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 1.35;
+    white-space: nowrap;
+}
+
+.cvm-ui-status--success {
+    color: var(--cvm-ui-color-success);
+    background: var(--cvm-ui-color-success-bg);
+    border-color: var(--cvm-ui-color-success-border);
+}
+
+.cvm-ui-status--warning {
+    color: var(--cvm-ui-color-warning);
+    background: var(--cvm-ui-color-warning-bg);
+    border-color: var(--cvm-ui-color-warning-border);
+}
+
+.cvm-ui-status--error {
+    color: var(--cvm-ui-color-error);
+    background: var(--cvm-ui-color-error-bg);
+    border-color: var(--cvm-ui-color-error-border);
+}
+
+.cvm-ui-status--neutral {
+    color: var(--cvm-ui-color-neutral);
+    background: var(--cvm-ui-color-neutral-bg);
+    border-color: var(--cvm-ui-color-neutral-border);
+}
+
+/* A measured value (a count, an elapsed time) in place of a state pill. */
+.cvm-ui-status-value {
+    font-family: var(--cvm-ui-font-mono);
+    font-size: var(--cvm-ui-size-body-xs);
+    font-weight: 600;
+    color: var(--cvm-ui-color-heading);
+    white-space: nowrap;
+}
+
+.cvm-ui-status-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+/* The heading yields first. Wrapping the row would drop the pill onto its own
+   line under the title, which is the one place the reader is not looking for
+   it; letting the title wrap keeps the state where the design puts it. */
+.cvm-ui-status-row > :first-child {
+    min-width: 0;
+}
+
+/* A status card whose state warrants a coloured edge as well as a pill. */
+.cvm-ui-card--warning {
+    border-color: var(--cvm-ui-color-warning-border);
+}
+
+.cvm-ui-card--error {
+    border-color: var(--cvm-ui-color-error-border);
+}
+
+/* Badges ------------------------------------------------------------------ */
+
+.cvm-ui-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 10.5px;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    padding: 3px 7px;
+    border-radius: var(--cvm-ui-radius-pill);
+    border: 1px solid var(--cvm-ui-color-border-current);
+    background: var(--cvm-ui-color-surface);
+    color: var(--cvm-ui-color-accent-strong);
+    white-space: nowrap;
+}
+
+.cvm-ui-badge--success {
+    color: var(--cvm-ui-color-success);
+    background: var(--cvm-ui-color-success-bg);
+    border-color: var(--cvm-ui-color-success-border);
+}
+
+.cvm-ui-badge--neutral {
+    font-size: var(--cvm-ui-size-meta);
+    letter-spacing: 0;
+    text-transform: none;
+    padding: 7px 14px;
+    color: var(--cvm-ui-color-neutral);
+    background: var(--cvm-ui-color-neutral-bg);
+    border-color: var(--cvm-ui-color-neutral-border);
+}
+
+/* The version tag beside the wordmark. */
+.cvm-ui-tag {
+    font-family: var(--cvm-ui-font-mono);
+    font-size: 11px;
+    color: var(--cvm-ui-color-muted);
+    border: 1px solid #d3d7e2;
+    background: rgba(255, 255, 255, 0.7);
+    border-radius: var(--cvm-ui-radius-pill);
+    padding: 3px 9px;
+    white-space: nowrap;
+}
+
+/* Hero -------------------------------------------------------------------- */
+
+.cvm-ui-hero {
+    position: relative;
+    overflow: hidden;
+    border: 1px solid var(--cvm-ui-color-border-strong);
+    border-radius: var(--cvm-ui-radius-hero);
+    background: linear-gradient(135deg, #fbfcff 0%, #eef1fb 55%, #eaf4f4 100%);
+    padding: 32px 34px;
+}
+
+/* The dot field, as a pseudo-element rather than a spare div: decoration with
+   no place in the accessibility tree. */
+.cvm-ui-hero::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background-image: radial-gradient(var(--cvm-ui-color-accent) 1px, transparent 1px);
+    background-size: 22px 22px;
+    opacity: 0.06;
+    pointer-events: none;
+}
+
+.cvm-ui-hero__inner {
+    position: relative;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 28px;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.cvm-ui-hero__main {
+    flex: 1 1 460px;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.cvm-ui-hero__brand {
+    display: flex;
+    align-items: center;
+    gap: 11px;
+    flex-wrap: wrap;
+}
+
+.cvm-ui-wordmark {
+    font-family: var(--cvm-ui-font-display);
+    font-size: 24px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+}
+
+.cvm-ui-hero__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 4px;
+}
+
+.cvm-ui-hero__panel {
+    flex: 1 1 300px;
+    min-width: 240px;
+    background: rgba(255, 255, 255, 0.85);
+    border: 1px solid #dde0ea;
+    border-radius: var(--cvm-ui-radius-md);
+    padding: 16px 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.cvm-ui-hero__panel-note {
+    font-size: var(--cvm-ui-size-micro);
+    line-height: 1.5;
+    color: var(--cvm-ui-color-subtle);
+    border-top: 1px solid var(--cvm-ui-color-rule);
+    padding-top: 10px;
+}
+
+/* Stat grid --------------------------------------------------------------- */
+
+.cvm-ui-stats {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px 14px;
+}
+
+.cvm-ui-stat__label {
+    font-size: var(--cvm-ui-size-micro);
+    font-weight: 600;
+    color: var(--cvm-ui-color-muted);
+}
+
+.cvm-ui-stat__value {
+    margin-top: 3px;
+    font-family: var(--cvm-ui-font-mono);
+    font-size: 21px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    line-height: 1.2;
+    word-break: break-word;
+}
+
+/* A value that is a phrase ("4 minutes ago") rather than a figure. */
+.cvm-ui-stat__value--text {
+    font-size: 14px;
+    letter-spacing: 0;
+    line-height: 1.35;
+}
+
+/* Steps ------------------------------------------------------------------- */
+
+.cvm-ui-step__header {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+}
+
+.cvm-ui-step__number {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: none;
+    width: 24px;
+    height: 24px;
+    border-radius: var(--cvm-ui-radius-tile);
+    font-family: var(--cvm-ui-font-mono);
+    font-size: 12px;
+    font-weight: 700;
+    background: var(--cvm-ui-color-success-bg);
+    border: 1px solid var(--cvm-ui-color-success-border);
+    color: var(--cvm-ui-color-success);
+}
+
+.cvm-ui-step__number--todo {
+    background: var(--cvm-ui-color-neutral-bg);
+    border-color: var(--cvm-ui-color-neutral-border);
+    color: var(--cvm-ui-color-neutral);
+}
+
+.cvm-ui-step__number--current {
+    background: var(--cvm-ui-color-accent);
+    border-color: var(--cvm-ui-color-accent);
+    color: #fff;
+}
+
+.cvm-ui-step__badge {
+    margin-left: auto;
+}
+
+/* Progress ---------------------------------------------------------------- */
+
+.cvm-ui-progress {
+    flex: 0 1 240px;
+    min-width: 200px;
+}
+
+.cvm-ui-progress__label {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--cvm-ui-color-body);
+    margin-bottom: 6px;
+}
+
+.cvm-ui-progress__track {
+    height: 7px;
+    border-radius: var(--cvm-ui-radius-pill);
+    background: #eceef4;
+    overflow: hidden;
+}
+
+.cvm-ui-progress__fill {
+    height: 100%;
+    /* The percentage arrives as a custom property on the element, so the rule
+       itself stays here rather than becoming an inline style. */
+    width: var(--cvm-ui-progress-value, 0%);
+    background: var(--cvm-ui-color-accent);
+    border-radius: inherit;
+}
+
+/* Quick links ------------------------------------------------------------- */
+
+.cvm-ui .cvm-ui-quick-link {
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+    padding: 15px 16px;
+    border-radius: var(--cvm-ui-radius-md);
+    border: 1px solid var(--cvm-ui-color-border);
+    background: var(--cvm-ui-color-surface);
+    color: inherit;
+    text-decoration: none;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.cvm-ui .cvm-ui-quick-link:hover,
+.cvm-ui .cvm-ui-quick-link:focus-visible {
+    border-color: var(--cvm-ui-color-accent);
+    box-shadow: var(--cvm-ui-shadow-raised);
+    color: inherit;
+}
+
+.cvm-ui-quick-link__body {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+.cvm-ui-quick-link__title {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: var(--cvm-ui-size-body);
+    font-weight: 700;
+    color: var(--cvm-ui-color-text);
+}
+
+.cvm-ui-quick-link__arrow {
+    color: var(--cvm-ui-color-accent);
+}
+
+.cvm-ui-quick-link__arrow--teal {
+    color: var(--cvm-ui-color-teal);
+}
+
+/* Flow diagram ------------------------------------------------------------ */
+
+.cvm-ui-flow {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 6px;
+}
+
+.cvm-ui-flow__item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.cvm-ui-flow__node {
+    font-size: var(--cvm-ui-size-meta);
+    font-weight: 600;
+    color: var(--cvm-ui-color-heading);
+    background: var(--cvm-ui-color-surface-subtle);
+    border: 1px solid var(--cvm-ui-color-border-strong);
+    border-radius: var(--cvm-ui-radius-control);
+    padding: 9px 13px;
+    white-space: nowrap;
+}
+
+.cvm-ui-flow__node--accent {
+    background: var(--cvm-ui-color-accent-soft);
+    border-color: #cdd4ef;
+}
+
+.cvm-ui-flow__node--lead {
+    font-weight: 700;
+    color: var(--cvm-ui-color-accent-strong);
+    background: #e7ebfa;
+    border-color: #c2cbee;
+}
+
+.cvm-ui-flow__node--teal {
+    color: var(--cvm-ui-color-teal-strong);
+    background: var(--cvm-ui-color-teal-soft);
+    border-color: var(--cvm-ui-color-teal-soft-border);
+}
+
+.cvm-ui-flow__arrow {
+    color: var(--cvm-ui-color-accent-muted);
+    font-size: 15px;
+    line-height: 1;
+}
+
+/* Notice band ------------------------------------------------------------- */
+
+.cvm-ui-notice {
+    display: flex;
+    gap: 14px;
+    align-items: flex-start;
+}
+
+.cvm-ui-notice__body {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+/* Footer ------------------------------------------------------------------ */
+
+.cvm-ui-footer {
+    border-top: 1px solid var(--cvm-ui-color-border);
+    padding-top: 18px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px 32px;
+    align-items: flex-end;
+    justify-content: space-between;
+}
+
+.cvm-ui-footer__links {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 16px;
+}
+
+/* Responsive -------------------------------------------------------------- */
+
+@media screen and (max-width: 960px) {
+    .cvm-ui {
+        --cvm-ui-section-gap: 22px;
+        --cvm-ui-panel-pad: 20px;
+    }
+
+    .cvm-ui-hero {
+        padding: 26px 24px;
+    }
+
+    /* The at-a-glance panel stops being a sidebar and becomes a full-width
+       band under the copy rather than a 240px column squeezed beside it. */
+    .cvm-ui-hero__panel {
+        flex: 1 1 100%;
+    }
+}
+
+@media screen and (max-width: 782px) {
+    .cvm-ui {
+        --cvm-ui-page-pad: 14px;
+        --cvm-ui-size-title: 26px;
+        --cvm-ui-size-h2-lg: 20px;
+        --cvm-ui-size-h2: 18px;
+    }
+
+    .cvm-ui-hero {
+        padding: 22px 18px;
+    }
+
+    /* wp-admin drops to its own narrow layout at this width. Raising every
+       grid's minimum track takes the card grids down to two columns here
+       rather than leaving three squeezed ones with a lone card wrapped
+       underneath. */
+    .cvm-ui-grid,
+    .cvm-ui-grid--steps,
+    .cvm-ui-grid--status,
+    .cvm-ui-grid--links {
+        --cvm-ui-grid-min: 260px;
+    }
+
+    .cvm-ui-button {
+        /* wp-admin's own mobile breakpoint: tap targets grow here. */
+        padding: 12px 18px;
+    }
+
+    .cvm-ui-split__main,
+    .cvm-ui-section-header--split > :first-child,
+    .cvm-ui-section-header--split > :last-child {
+        flex-basis: 100%;
+    }
+}
+
+@media screen and (max-width: 480px) {
+    .cvm-ui-stats {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .cvm-ui-hero__panel {
+        min-width: 0;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .cvm-ui *,
+    .cvm-ui *::before,
+    .cvm-ui *::after {
+        transition-duration: 0.01ms !important;
+        animation-duration: 0.01ms !important;
+    }
+}
+
+/* Print ------------------------------------------------------------------- */
+
+@media print {
+    .cvm-ui-card,
+    .cvm-ui-hero,
+    .cvm-ui-quick-link {
+        box-shadow: none;
+        break-inside: avoid;
+    }
+}

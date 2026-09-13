@@ -63,7 +63,7 @@ final class ActivityLogPage
     public static function addMenu(): void
     {
         add_submenu_page(
-            AnalyticsPage::MENU_SLUG,
+            HomePage::MENU_SLUG,
             'Convermetry Activity Log',
             'Activity Log',
             Capability::required(Capability::ACTIVITY_VIEW),
@@ -83,6 +83,13 @@ final class ActivityLogPage
         if (!str_contains($hook, self::MENU_SLUG)) {
             return;
         }
+
+        wp_enqueue_style(
+            'cvm-activity-log',
+            CVM_PLUGIN_URL . 'assets/css/admin-activity-log.css',
+            [AdminAssets::COMMON_HANDLE],
+            CVM_VERSION
+        );
 
         wp_enqueue_script(
             'cvm-activity-log',

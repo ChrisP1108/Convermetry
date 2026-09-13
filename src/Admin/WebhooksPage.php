@@ -68,7 +68,7 @@ final class WebhooksPage
     public static function addMenu(): void
     {
         add_submenu_page(
-            AnalyticsPage::MENU_SLUG,
+            HomePage::MENU_SLUG,
             'Convermetry Webhooks',
             'Webhooks',
             Capability::required(Capability::WEBHOOKS_MANAGE),
@@ -89,6 +89,13 @@ final class WebhooksPage
         if (!str_contains($hook, self::MENU_SLUG)) {
             return;
         }
+
+        wp_enqueue_style(
+            'cvm-webhooks',
+            CVM_PLUGIN_URL . 'assets/css/admin-webhooks.css',
+            [AdminAssets::COMMON_HANDLE],
+            CVM_VERSION
+        );
 
         wp_enqueue_script(
             'cvm-admin',

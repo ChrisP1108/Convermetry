@@ -1,0 +1,112 @@
+/**
+ * Convermetry — Webhooks page.
+ *
+ * Styling exclusive to Convermetry → Webhooks (src/Admin/WebhooksPage.php):
+ * the endpoint repeater blocks and the delivery-type/test controls. The
+ * toggle switch, the key/value builder (shared with Forms), and the
+ * "send a test" result feedback (shared with Notifications) live in
+ * assets/css/admin-common.css, which loads before this file.
+ */
+
+/* The webhook status toggle card, and the endpoint repeater ------------- */
+
+.cvm-toggle-card {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    flex-wrap: wrap;
+}
+
+.cvm-toggle-card .cvm-card-title {
+    margin-bottom: 0;
+    border-bottom: none;
+    padding-bottom: 0;
+    margin-right: 20px;
+    flex-shrink: 0;
+}
+
+.cvm-toggle-card p.description {
+    flex-basis: 100%;
+    margin: 8px 0 0;
+}
+
+.cvm-webhook-block {
+    background: #f6f7f7;
+    border: 1px solid #dcdcde;
+    border-radius: 4px;
+    padding: 14px 16px;
+    margin-bottom: 12px;
+}
+
+.cvm-webhook-block-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 10px;
+}
+
+.cvm-webhook-block-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: #1d2327;
+}
+
+.cvm-remove-webhook-btn {
+    color: #d63638 !important;
+    border-color: #d63638 !important;
+    padding: 1px 10px !important;
+    height: 24px;
+    font-size: 12px;
+    line-height: 22px;
+}
+
+.cvm-remove-webhook-btn:hover {
+    background: #d63638 !important;
+    color: #fff !important;
+}
+
+.cvm-webhook-url-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.cvm-webhook-block input:not([type='checkbox']) {
+    width: min(420px, 100%);
+}
+
+/* Endpoint delivery types & tests --------------------------------------- */
+
+.cvm-webhook-field {
+    margin-top: 8px;
+    max-width: 100%;
+}
+
+.cvm-webhook-field * {
+    max-width: 100%;
+}
+
+.cvm-webhook-types {
+    margin-top: 10px;
+    border: none;
+    padding: 0;
+}
+
+.cvm-webhook-types label {
+    margin-right: 16px;
+}
+
+.cvm-endpoint-tests {
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px dashed #dcdcde;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+}
+
+.cvm-test-endpoint {
+    min-width: min(160px, 100%);
+}

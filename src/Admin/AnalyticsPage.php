@@ -16,8 +16,14 @@ use Convermetry\Leads\Money;
 use Convermetry\Settings\Options;
 
 /**
- * The top-level "Convermetry" admin page (Analytics) that visualizes
- * collected analytics.
+ * The "Convermetry → Analytics" admin page that visualizes collected
+ * analytics.
+ *
+ * This was the top-level screen until {@see HomePage} took that slot, and the
+ * move cost it nothing but its slug: every report, filter, chart and export
+ * below is unchanged, and it is still the first entry under the menu. The slug
+ * had to change because two pages cannot share one, and the top-level slug is
+ * the one a site's existing bookmarks and the plugin's own menu item point at.
  *
  * Renders, for a selectable period (7/30/90 days), an Overview section
  * (summary cards and an accessible daily page-view chart) followed by
@@ -37,8 +43,8 @@ use Convermetry\Settings\Options;
  */
 final class AnalyticsPage
 {
-    /** Menu slug for the top-level page. */
-    public const string MENU_SLUG = 'convermetry';
+    /** Menu slug for the submenu page. */
+    public const string MENU_SLUG = 'convermetry-analytics';
 
     /** @var int[] Periods (in days) selectable in the dashboard filter. */
     private const array PERIODS = [7, 30, 90];
@@ -55,26 +61,14 @@ final class AnalyticsPage
     }
 
     /**
-     * Adds the top-level Convermetry menu entry; the top-level item opens
-     * the Analytics page. Sibling subpages register themselves under this
-     * slug.
+     * Adds the Analytics submenu, first under the Convermetry menu after Home.
      *
      * @return void
      */
     public static function addMenu(): void
     {
-        add_menu_page(
-            'Convermetry',
-            'Convermetry',
-            Capability::required(Capability::ANALYTICS_VIEW),
-            self::MENU_SLUG,
-            [self::class, 'render'],
-            'dashicons-chart-area',
-            58
-        );
-
         add_submenu_page(
-            self::MENU_SLUG,
+            HomePage::MENU_SLUG,
             'Convermetry Analytics',
             'Analytics',
             Capability::required(Capability::ANALYTICS_VIEW),
@@ -84,9 +78,13 @@ final class AnalyticsPage
     }
 
     /**
-     * Enqueues the shared admin stylesheet on plugin pages only, and the
-     * dashboard assets (chart tooltips, print prep) on the Analytics screen
-     * only.
+     * Enqueues the dashboard assets (chart tooltips, print prep) on this
+     * screen only.
+     *
+     * The shared stylesheets belong to every Convermetry screen and are
+     * enqueued by {@see AdminAssets}; this page used to carry them because it
+     * owned the top-level slug, which made the plugin's styling depend on an
+     * accident of routing.
      *
      * @param string $hook The current admin page hook suffix.
      * @return void
@@ -98,28 +96,22 @@ final class AnalyticsPage
         }
 
         wp_enqueue_style(
-            'cvm-admin',
-            CVM_PLUGIN_URL . 'assets/css/admin.css',
-            [],
+            'cvm-analytics',
+            CVM_PLUGIN_URL . 'assets/css/admin-analytics.css',
+            [AdminAssets::COMMON_HANDLE],
             CVM_VERSION
         );
 
-        if ($hook === 'toplevel_page_' . self::MENU_SLUG) {
-            wp_enqueue_style(
-                'cvm-dashboard',
-                CVM_PLUGIN_URL . 'assets/css/dashboard.css',
-                ['cvm-admin'],
-                CVM_VERSION
-            );
-
-            wp_enqueue_script(
-                'cvm-dashboard',
-                CVM_PLUGIN_URL . 'assets/js/dashboard.js',
-                [],
-                CVM_VERSION,
-                true
-            );
-        }
+        // The script keeps the 'cvm-dashboard' handle and file name
+        // (assets/js/dashboard.js): only the stylesheet was renamed, to
+        // match every other screen's assets/css/admin-<page>.css.
+        wp_enqueue_script(
+            'cvm-dashboard',
+            CVM_PLUGIN_URL . 'assets/js/dashboard.js',
+            [],
+            CVM_VERSION,
+            true
+        );
     }
 
     /**
@@ -471,8 +463,12 @@ final class AnalyticsPage
 
             $isActive = $days === $active;
 
+            // Same .button/.button-primary/.button-secondary classes the
+            // Goals and Funnels period filters use (see admin-common.css's
+            // design-system alignment section), rather than this page's own
+            // now-retired .cvm-period-btn skin — one button look, shared.
             ?>
-            <a class="cvm-period-btn<?php echo ($isActive ? ' is-active' : ''); ?>"<?php echo ($isActive ? ' aria-current="page"' : ''); ?> href="<?php echo esc_url($url); ?>">Last
+            <a class="button <?php echo ($isActive ? 'button-primary' : 'button-secondary'); ?>"<?php echo ($isActive ? ' aria-current="page"' : ''); ?> href="<?php echo esc_url($url); ?>">Last
             <?php echo (int) $days; ?> days</a>
             <?php
         }
@@ -483,7 +479,7 @@ final class AnalyticsPage
         are UTC; the current day is still collecting data.</p>
         <?php
 
-        // Print-only report header (dashboard.css shows it in @media print).
+        // Print-only report header (admin-analytics.css shows it in @media print).
         $generatedFormat = trim(get_option('date_format', 'F j, Y') . ' ' . get_option('time_format', 'g:i a'));
         $rangeNote = $active === $effectiveDays
             ? ((string) $active . ' days')

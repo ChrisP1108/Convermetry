@@ -1046,6 +1046,27 @@ final class FormSubmissions
     }
 
     /**
+     * The created_at of the newest submission, or null when there are none.
+     *
+     * One column from one row, ordered by the primary key: the Home page needs
+     * "when did the last lead arrive" and "has anything arrived at all", and
+     * both fall out of this without loading a submission row — which would
+     * pull that lead's answers, and therefore their PII, into a page that has
+     * no use for it.
+     *
+     * @return string|null UTC datetime ('Y-m-d H:i:s'), or null when the table
+     *                     is empty or the read failed.
+     */
+    public static function latestCreatedAt(): ?string
+    {
+        global $wpdb;
+
+        $value = $wpdb->get_var('SELECT created_at FROM ' . self::tableName() . ' ORDER BY id DESC LIMIT 1');
+
+        return is_string($value) && $value !== '' ? $value : null;
+    }
+
+    /**
      * Returns the distinct calendar years and months that have submissions,
      * for the Submissions page's filter dropdowns.
      *

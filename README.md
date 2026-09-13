@@ -22,7 +22,7 @@ Was the lead successfully delivered to external systems?
 
 Convermetry works standalone — full analytics dashboard, form integrations, and webhook delivery inside one WordPress install — and is architected so a future Convermetry SaaS can receive `analytics_report` and `form_submission` messages from many installations, keyed by a shared, versioned payload schema.
 
-- **Version:** 0.8.0
+- **Version:** 0.9.0
 - **Requires WordPress:** 6.3+
 - **Requires PHP:** 8.3+
 - **License:** GPL-2.0-or-later
@@ -74,7 +74,7 @@ Convermetry works standalone — full analytics dashboard, form integrations, an
 
 1. Copy the `convermetry` folder into `wp-content/plugins/`.
 2. Activate **Convermetry** on the Plugins screen. Activation creates the seven custom tables and schedules the cleanup and webhook cron events.
-3. Visit **Convermetry** in the admin menu for analytics; configure endpoints under **Convermetry → Webhooks**, form behavior under **Convermetry → Forms**, and tracking/identity under **Convermetry → Settings**.
+3. Visit **Convermetry** in the admin menu. The Home screen introduces the plugin, reports what this installation is actually doing, and links to everything; reports live under **Convermetry → Analytics**, endpoints under **Convermetry → Webhooks**, form behavior under **Convermetry → Forms**, and tracking/identity under **Convermetry → Settings**.
 
 Activation never fatals when no third-party form plugin is installed — every provider integration is feature-detected at runtime.
 
@@ -82,7 +82,10 @@ Activation never fatals when no third-party form plugin is installed — every p
 
 ```text
 Convermetry
-    Analytics      — the reporting dashboard (top-level default)
+    Home           — what the plugin does, this installation's real status,
+                     the setup checklist, and links to everything (top-level
+                     default)
+    Analytics      — the reporting dashboard
     Submissions    — every server-confirmed lead, with its attribution, answers,
                      status and value
     Goals          — conversions that are not form submissions, and how they perform
@@ -985,7 +988,7 @@ Every outbound message shares one versioned envelope:
 {
     "schema_version": "1.0 | 2.0",
     "source": "convermetry",
-    "plugin_version": "0.8.0",
+    "plugin_version": "0.9.0",
     "message_type": "analytics_report | form_submission",
     "website_info": { },
     "generated_at": "2026-08-22T14:00:00+00:00",
@@ -1013,7 +1016,7 @@ Every outbound message shares one versioned envelope:
 {
     "schema_version": "1.1",
     "source": "convermetry",
-    "plugin_version": "0.8.0",
+    "plugin_version": "0.9.0",
     "message_type": "analytics_report",
     "website_info": {
         "name": "Example Financial", "url": "https://example.com", "domain": "example.com",
@@ -1133,7 +1136,7 @@ Every outbound message shares one versioned envelope:
 {
     "schema_version": "2.0",
     "source": "convermetry",
-    "plugin_version": "0.8.0",
+    "plugin_version": "0.9.0",
     "message_type": "form_submission",
     "website_info": {
         "name": "Example Financial", "url": "https://example.com", "domain": "example.com",
@@ -1951,9 +1954,21 @@ convermetry/
 │   ├── Unit/                    # Pure logic; no WordPress, no database
 │   └── Integration/             # The real queries against a real MySQL server
 ├── assets/
-│   ├── css/admin.css            # Shared admin styles (cards, toggles, logs, forms, builders)
-│   ├── css/dashboard.css        # Analytics dashboard + print styles
-│   ├── js/admin.js              # Webhooks/Forms pages (repeater, builders, tests, filtering)
+│   ├── css/admin-ui.css         # Design-system tokens + the Home page's cvm-ui-* components
+│   ├── css/admin-common.css     # Older cvm-* components shared by 2+ admin screens
+│   ├── css/admin-home.css       # Home-only styling (none yet — reserved)
+│   ├── css/admin-about.css      # About-only styling
+│   ├── css/admin-activity-log.css   # Activity Log-only styling
+│   ├── css/admin-analytics.css  # Analytics-only styling + print/report styles
+│   ├── css/admin-submissions.css    # Submissions-only styling
+│   ├── css/admin-goals.css      # Goals-only styling
+│   ├── css/admin-funnels.css    # Funnels-only styling
+│   ├── css/admin-forms.css      # Forms-only styling
+│   ├── css/admin-notifications.css  # Notifications-only styling (none yet — reserved)
+│   ├── css/admin-webhooks.css   # Webhooks-only styling
+│   ├── css/admin-settings.css   # Settings-only styling (none yet — reserved)
+│   ├── fonts/                   # Self-hosted Play (headings), OFL-licensed
+│   ├── js/admin.js              # Webhooks/Forms/Notifications pages (repeater, builders, tests)
 │   ├── js/dashboard.js          # Chart navigation/tooltips, panel state, print prep
 │   ├── js/activity-log.js       # Activity Log accordions, filters, pagination, API card
 │   ├── js/submissions.js        # Submissions list, filters, pagination, lazy detail panels
@@ -1963,9 +1978,9 @@ convermetry/
 └── src/
     ├── Autoloader.php           # Minimal PSR-4 autoloader (no Composer)
     ├── Plugin.php               # Composition root
-    ├── Admin/                   # AnalyticsPage, SubmissionsPage, GoalsPage, FunnelsPage,
-    │                             # FormsPage, NotificationsPage, WebhooksPage,
-    │                             # ActivityLogPage, SettingsPage, AboutPage
+    ├── Admin/                   # HomePage, AdminAssets, AnalyticsPage, SubmissionsPage,
+    │                             # GoalsPage, FunnelsPage, FormsPage, NotificationsPage,
+    │                             # WebhooksPage, ActivityLogPage, SettingsPage, AboutPage
     ├── Analytics/               # ReportQuery (shared read path), Reports, GoalReports,
     │                             # FunnelReport, FormEngagementReport, LeadReports,
     │                             # ReportQueryException, SubmissionContext

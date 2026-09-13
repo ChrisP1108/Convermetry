@@ -1,0 +1,14 @@
+/**
+ * Convermetry — Notifications page.
+ *
+ * Reserved for styling exclusive to Convermetry → Notifications
+ * (src/Admin/NotificationsPage.php). The page currently needs none: its
+ * cards and headings are covered by assets/css/admin-common.css, and its
+ * "Send test email" feedback (.cvm-test-result, .cvm-test-ok, .cvm-test-fail)
+ * is the same shared rule Webhooks' endpoint tests use, also in
+ * admin-common.css — see that file's header for the shared-class map.
+ *
+ * This file is enqueued on the Notifications screen regardless, so a future
+ * Notifications-only rule has an obvious, already-wired home rather than
+ * being added to the shared stylesheet "just this once."
+ */

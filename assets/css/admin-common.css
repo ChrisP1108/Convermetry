@@ -1,0 +1,684 @@
+/**
+ * Convermetry — shared admin styles.
+ *
+ * Loaded on every Convermetry admin screen (see AdminAssets), for the same
+ * reason assets/css/admin-ui.css is: this file's rules are used by two or
+ * more admin pages, so it is the one place they are declared. A class that
+ * belongs to exactly one page lives in that page's own stylesheet instead
+ * (assets/css/admin-<page>.css) — see that file's header for which page it is.
+ *
+ * The pairing to know:
+ *
+ *  - assets/css/admin-ui.css is the DESIGN SYSTEM — colour, type, radius and
+ *    spacing TOKENS, plus the new `cvm-ui-*` component classes the Home page
+ *    is built from.
+ *  - This file is the OLDER, still-shipping `cvm-*` component classes that
+ *    predate that system and that more than one screen depends on. Its
+ *    "Design-system alignment" section below is the bridge between the two:
+ *    it points the old classes' typography and button colours at the same
+ *    --cvm-ui-* custom properties (admin-ui.css declares them on `.cvm-wrap`
+ *    as well as `.cvm-ui` for exactly this reason), so both class systems
+ *    read from the one token source. Everything else here is unchanged,
+ *    literal-value CSS moved out of the old, single assets/css/admin.css
+ *    without altering a single property — this is a reorganisation, not a
+ *    restyle.
+ *
+ * Which pages use what, so a future edit here can tell what it will touch:
+ *
+ *   .cvm-wrap, headings, .button-primary/.button-secondary  — every screen
+ *   .cvm-card, .cvm-cards, .cvm-card-title                  — About, Activity
+ *                                                              Log, Analytics,
+ *                                                              Forms,
+ *                                                              Notifications,
+ *                                                              Settings,
+ *                                                              Webhooks
+ *   .cvm-toggle*                                             — Activity Log,
+ *                                                              Webhooks
+ *   .cvm-retention-notice                                    — Activity Log,
+ *                                                              Analytics,
+ *                                                              Submissions
+ *   .cvm-delivery-toolbar, .cvm-clear-form, .cvm-export-buttons,
+ *   .cvm-btn-danger                                          — Activity Log,
+ *                                                              Submissions
+ *     (.cvm-btn-danger also: Funnels, Goals)
+ *   .cvm-accordion*, .cvm-badge*, .cvm-empty-msg             — Activity Log,
+ *                                                              Submissions
+ *     (.cvm-empty-msg also: Funnels)
+ *   .cvm-acc-*, .cvm-search-*, .cvm-page-*, .cvm-pagination  — Activity Log,
+ *                                                              Submissions
+ *     (client-rendered by assets/js/activity-log.js and assets/js/submissions.js)
+ *   .cvm-test-result, .cvm-test-ok, .cvm-test-fail           — Notifications,
+ *                                                              Webhooks
+ *     (both features' "send a test" feedback — assets/js/admin.js drives both)
+ *   .cvm-kv-*                                                — Forms, Webhooks
+ *   .cvm-status-chip and its state modifiers                 — Funnels, Goals,
+ *                                                              Submissions
+ *   .cvm-goals-intro, .cvm-period-filter, .cvm-goals-table,
+ *   .cvm-goal-meta, .cvm-inline-form, .cvm-btn-danger-link,
+ *   .cvm-goal-editor                                         — Funnels, Goals
+ *     (.cvm-goals-table / .cvm-goal-meta / .cvm-num also: Forms, whose own
+ *     "Engagement & abandonment" tables reuse the Goals table look)
+ */
+
+/* Smooth scrolling ---------------------------------------------------------
+   Used by every page with in-page anchors — the About page's sticky section
+   nav is the main one, but any future "jump to" link benefits equally. */
+
+html {
+    scroll-behavior: smooth;
+}
+
+.cvm-wrap {
+    max-width: 1200px;
+}
+
+/* Design-system alignment ----------------------------------------------
+   Brings this stylesheet's headings and buttons in line with the Home page's
+   design system instead of keeping a second, hand-copied set of the same
+   values: every property below is a var() onto a --cvm-ui-* custom property,
+   and every one of those is declared exactly once, in
+   assets/css/admin-ui.css's token block — which declares them on .cvm-wrap as
+   well as .cvm-ui for exactly this reason (see that file's header). Nothing
+   here is a literal colour, size, or radius; changing the brand palette or
+   the button shape is an edit to that one token block, not to two
+   stylesheets. This section only assigns typeface, shape, and colour —
+   layout, spacing, and every page's markup/copy are untouched.
+   ------------------------------------------------------------------- */
+
+.cvm-wrap h1,
+.cvm-wrap h2,
+.cvm-wrap h3,
+.cvm-wrap h4,
+.cvm-wrap .cvm-card-title,
+.cvm-wrap .cvm-about-section-title {
+    font-family: var(--cvm-ui-font-display);
+}
+
+/* Shape for every WordPress button on a Convermetry screen — .button-link
+   excluded, since those are deliberately unstyled inline text actions (e.g.
+   the "Remove" links in the Goals/Funnels list rows), not buttons. Colour is
+   untouched here, so semantic variants that set their own colour with
+   !important (.cvm-btn-danger, .cvm-remove-webhook-btn, WP core's own
+   .delete) keep it. */
+.cvm-wrap .button:not(.button-link) {
+    border-radius: var(--cvm-ui-radius-control);
+    font-weight: 600;
+}
+
+/* The homepage's own button sizing and palette apply to .button-primary and
+   .button-secondary specifically: across every Convermetry screen, those two
+   classes are used only for a page or panel's deliberate action (Save
+   Settings, Save Webhook Settings, Save Funnel, Clear All Submissions, Export
+   to CSV, Cancel) and never for a small inline control — those use a bare
+   .button or a custom class instead. That split is what lets this rule size
+   up the real calls to action to match "Get Started" / "Explore Convermetry"
+   without also enlarging every "Remove" and "+ Add" button in a repeating row. */
+.cvm-wrap .button-primary,
+.cvm-wrap .button-secondary {
+    padding: var(--cvm-ui-button-padding);
+    font-size: var(--cvm-ui-size-body);
+    line-height: 1.2;
+}
+
+.cvm-wrap .button-primary {
+    background: var(--cvm-ui-color-brand);
+    border-color: var(--cvm-ui-color-brand-border);
+    color: #fff;
+    box-shadow: var(--cvm-ui-shadow-button);
+}
+
+.cvm-wrap .button-primary:hover,
+.cvm-wrap .button-primary:focus {
+    background: var(--cvm-ui-color-brand-hover);
+    color: #fff;
+}
+
+.cvm-wrap .button-secondary {
+    background: var(--cvm-ui-color-surface);
+    border-color: var(--cvm-ui-color-button-border);
+    color: var(--cvm-ui-color-heading);
+}
+
+.cvm-wrap .button-secondary:hover,
+.cvm-wrap .button-secondary:focus {
+    border-color: var(--cvm-ui-color-accent);
+    color: var(--cvm-ui-color-accent);
+}
+
+/* Semantic danger buttons (Clear All Submissions/Logs) already carry
+   button-secondary above for shape and sizing; their own red comes from
+   .cvm-btn-danger's !important color/border-color declarations further down
+   this file, which this section does not touch. */
+
+/* Summary cards -------------------------------------------------------
+   About, Activity Log, Analytics, Forms, Notifications, Settings, Webhooks. */
+
+.cvm-cards {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    margin: 20px 0;
+}
+
+.cvm-card {
+    background: #fff;
+    border: 1px solid #dcdcde;
+    border-radius: 8px;
+    padding: 20px;
+    flex: 1 1 200px;
+    box-shadow: 0 1px 1px rgba(0, 0, 0, 0.04);
+}
+
+.cvm-card-title {
+    margin-top: 0;
+    margin-bottom: 16px;
+    font-size: 14px;
+    font-weight: 600;
+    color: #1d2327;
+    border-bottom: 1px solid #f0f0f1;
+    padding-bottom: 12px;
+}
+
+/* Toggle switch --------------------------------------------------------
+   Activity Log (the deliveries-API on/off switch) and Webhooks (the master
+   delivery switch). */
+
+.cvm-toggle-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.cvm-toggle {
+    position: relative;
+    display: inline-block;
+    width: 52px;
+    height: 28px;
+    flex-shrink: 0;
+    cursor: pointer;
+}
+
+.cvm-toggle input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+    position: absolute;
+}
+
+.cvm-toggle-slider {
+    position: absolute;
+    inset: 0;
+    background-color: #c3c4c7;
+    border-radius: 28px;
+    transition: background-color 0.25s ease;
+}
+
+.cvm-toggle-slider::before {
+    content: '';
+    position: absolute;
+    width: 20px;
+    height: 20px;
+    left: 4px;
+    top: 4px;
+    background-color: #fff;
+    border-radius: 50%;
+    transition: transform 0.25s ease;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+.cvm-toggle input:checked + .cvm-toggle-slider {
+    background-color: #2271b1;
+}
+
+.cvm-toggle input:checked + .cvm-toggle-slider::before {
+    transform: translateX(24px);
+}
+
+.cvm-toggle input:focus-visible + .cvm-toggle-slider {
+    outline: 2px solid #2271b1;
+    outline-offset: 2px;
+}
+
+.cvm-toggle-label {
+    font-weight: 600;
+    font-size: 13px;
+    color: #1d2327;
+    min-width: 52px;
+}
+
+/* Retention notice -------------------------------------------------------
+   Activity Log, Analytics (the "period clamped to retention" warning),
+   Submissions. */
+
+.cvm-retention-notice {
+    margin-bottom: 16px !important;
+}
+
+/* Delivery toolbar and danger buttons -------------------------------------
+   Activity Log and Submissions' "Clear All …" toolbars. .cvm-btn-danger is
+   also used, on its own, by Funnels and Goals' inline "Remove" links. */
+
+.cvm-delivery-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
+    margin-bottom: 20px;
+}
+
+.cvm-delivery-toolbar .cvm-clear-form {
+    margin: 0;
+}
+
+.cvm-export-buttons {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.cvm-btn-danger {
+    color: #d63638 !important;
+    border-color: #d63638 !important;
+}
+
+.cvm-btn-danger:hover {
+    background: #d63638 !important;
+    color: #fff !important;
+}
+
+/* Accordion --------------------------------------------------------------
+   Activity Log's own accordion list, and the rotating-arrow rule Submissions'
+   row accordion shares with it. */
+
+.cvm-accordion {
+    background: #fff;
+    border: 1px solid #c3c4c7;
+    border-radius: 4px;
+    margin-bottom: 20px;
+    box-shadow: 0 1px 1px rgba(0, 0, 0, 0.04);
+    overflow: hidden;
+}
+
+.cvm-accordion-header {
+    width: 100%;
+    background: #f6f7f7;
+    border: none;
+    border-bottom: 1px solid #c3c4c7;
+    padding: 14px 20px;
+    text-align: left;
+    font-size: 14px;
+    font-weight: 600;
+    color: #1d2327;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    transition: background-color 0.15s ease;
+}
+
+.cvm-accordion-header:hover {
+    background: #ececec;
+}
+
+.cvm-accordion-header[aria-expanded="true"] {
+    background: #fff;
+}
+
+.cvm-accordion-title {
+    flex: 1;
+}
+
+.cvm-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 26px;
+    height: 22px;
+    padding: 0 7px;
+    background: #2271b1;
+    color: #fff;
+    border-radius: 11px;
+    font-size: 12px;
+    font-weight: 700;
+    flex-shrink: 0;
+}
+
+.cvm-badge-error {
+    background: #d63638;
+}
+
+.cvm-accordion-arrow {
+    font-size: 10px;
+    color: #757575;
+    flex-shrink: 0;
+    transition: transform 0.2s ease;
+}
+
+.cvm-accordion-header[aria-expanded="true"] .cvm-accordion-arrow,
+.cvm-submission-summary[aria-expanded="true"] .cvm-accordion-arrow {
+    transform: rotate(180deg);
+}
+
+.cvm-accordion-body {
+    padding: 16px 20px;
+}
+
+/* Generic empty-state message ----------------------------------------------
+   Activity Log's log list, Submissions' list and detail panels, and Funnels'
+   "could not be measured" / "no sessions reached this step" states. */
+
+.cvm-empty-msg {
+    color: #757575;
+    font-style: italic;
+    padding: 6px 0;
+    font-size: 13px;
+}
+
+/* Accordion controls: filters, search, per-page --------------------------
+   Client-rendered by assets/js/activity-log.js and assets/js/submissions.js,
+   which build the same markup for both screens' list toolbars. */
+
+.cvm-acc-controls {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+    padding: 10px 0 14px;
+    border-bottom: 1px solid #f0f0f1;
+    margin-bottom: 14px;
+}
+
+.cvm-acc-filters {
+    display: flex;
+    align-items: stretch;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.cvm-acc-search {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.cvm-acc-search .cvm-search-input {
+    align-self: stretch;
+}
+
+.cvm-search-input {
+    font-size: 13px;
+    padding: 4px 8px;
+    border: 1px solid #c3c4c7;
+    border-radius: 3px;
+    background: #fff;
+    color: #1d2327;
+    width: 200px;
+}
+
+.cvm-search-input:focus {
+    border-color: #2271b1;
+    outline: none;
+    box-shadow: 0 0 0 1px #2271b1;
+}
+
+.cvm-search-clear {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    padding: 0;
+    border: 1px solid #c3c4c7;
+    border-radius: 3px;
+    background: #fff;
+    color: #50575e;
+    font-size: 12px;
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.cvm-search-clear:hover {
+    background: #f0f0f1;
+    border-color: #a0a0a8;
+    color: #1d2327;
+}
+
+.cvm-acc-filters select,
+.cvm-acc-perpage select {
+    font-size: 13px;
+    padding: 4px 6px;
+    border: 1px solid #c3c4c7;
+    border-radius: 3px;
+    background: #fff;
+    color: #1d2327;
+    cursor: pointer;
+}
+
+.cvm-acc-perpage label {
+    font-size: 13px;
+    color: #50575e;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    white-space: nowrap;
+}
+
+/* Pagination ---------------------------------------------------------------
+   Same client-rendered pair as the controls above. */
+
+.cvm-pagination {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 10px;
+    padding: 14px 0 4px;
+    border-top: 1px solid #f0f0f1;
+    margin-top: 10px;
+}
+
+.cvm-page-info {
+    font-size: 13px;
+    color: #50575e;
+}
+
+.cvm-page-buttons {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-wrap: wrap;
+}
+
+.cvm-page-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 30px;
+    height: 28px;
+    padding: 0 8px;
+    border: 1px solid #c3c4c7;
+    border-radius: 3px;
+    background: #fff;
+    color: #1d2327;
+    font-size: 13px;
+    cursor: pointer;
+    line-height: 1;
+    transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.cvm-page-btn:hover {
+    background: #f0f0f1;
+    border-color: #a0a0a8;
+}
+
+.cvm-page-btn-active {
+    background: #2271b1;
+    border-color: #2271b1;
+    color: #fff;
+    font-weight: 700;
+    pointer-events: none;
+}
+
+.cvm-page-ellipsis {
+    font-size: 13px;
+    color: #757575;
+    padding: 0 4px;
+    line-height: 28px;
+}
+
+/* "Send a test" feedback --------------------------------------------------
+   Shared by Webhooks' per-endpoint test buttons and Notifications' "Send
+   test email" — both features report through the same span classes (see
+   assets/js/admin.js, which drives both). */
+
+.cvm-test-result {
+    margin-left: 10px;
+    font-size: 12px;
+}
+
+.cvm-test-ok {
+    color: #00751a;
+}
+
+.cvm-test-fail {
+    color: #b32d2e;
+}
+
+/* Key/value builders -------------------------------------------------------
+   Forms (per-form headers/params) and Webhooks (global headers/params) —
+   the same repeater UI, driven by assets/js/admin.js on both screens. */
+
+.cvm-kv-builder {
+    margin: 8px 0 16px;
+}
+
+.cvm-kv-row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    margin-bottom: 6px;
+    flex-wrap: wrap;
+}
+
+.cvm-kv-row .cvm-kv-key {
+    max-width: 220px;
+}
+
+.cvm-kv-row .cvm-kv-value {
+    max-width: 320px;
+}
+
+/* Status chip ----------------------------------------------------------
+   Funnels and Goals' own enabled/paused pill, and Submissions' delivery
+   status chip — same base class, a shared set of state colours. */
+
+.cvm-status-chip {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 1.6;
+    white-space: nowrap;
+}
+
+.cvm-status-delivered {
+    background: #edfaef;
+    color: #0a7c2f;
+    border: 1px solid #b7e4c1;
+}
+
+.cvm-status-partial {
+    background: #fcf6e6;
+    color: #8a6116;
+    border: 1px solid #eadcb4;
+}
+
+.cvm-status-failed {
+    background: #fcf0f1;
+    color: #b32d2e;
+    border: 1px solid #f0c2c3;
+}
+
+.cvm-status-pending {
+    background: #f0f6fc;
+    color: #1c5d99;
+    border: 1px solid #c5d9ea;
+}
+
+/* Neutral by design: no webhook configured (or a paused goal/funnel) is a
+   normal state, not an error. */
+.cvm-status-not_sent {
+    background: #f6f7f7;
+    color: #757575;
+    border: 1px solid #dcdcde;
+}
+
+/* Goals ↔ Funnels shared editor chrome -------------------------------------
+   Funnels was built alongside Goals and deliberately reuses its intro
+   paragraph, period filter, results-table, inline-remove-form and editor-
+   panel classes rather than duplicating them under a "funnel" name.
+   .cvm-goals-table / .cvm-goal-meta / .cvm-num are also used by Forms, whose
+   "Engagement & abandonment" report tables reuse the same look. */
+
+.cvm-goals-intro {
+    max-width: 70em;
+}
+
+.cvm-period-filter {
+    margin: 16px 0;
+}
+
+.cvm-goals-table {
+    margin-top: 12px;
+}
+
+.cvm-goals-table th.cvm-num,
+.cvm-goals-table td.cvm-num {
+    text-align: right;
+    white-space: nowrap;
+}
+
+.cvm-goals-table code {
+    font-size: 12px;
+    background: #f0f0f1;
+    padding: 2px 6px;
+    border-radius: 3px;
+}
+
+/* Secondary detail under a goal/form-row's name: how it counts, what it is
+   worth. */
+
+.cvm-goal-meta {
+    margin-top: 4px;
+    color: #646970;
+    font-size: 12px;
+}
+
+/* Keeps the Remove form on the same line as Edit — a block-level form
+   would otherwise push it onto its own row. */
+
+.cvm-inline-form {
+    display: inline;
+}
+
+.cvm-btn-danger-link {
+    color: #b32d2e;
+    cursor: pointer;
+}
+
+.cvm-btn-danger-link:hover {
+    color: #8a2424;
+}
+
+.cvm-goal-editor {
+    margin-top: 28px;
+    padding: 4px 20px 12px;
+    background: #fff;
+    border: 1px solid #c3c4c7;
+    border-radius: 4px;
+    max-width: 70em;
+}

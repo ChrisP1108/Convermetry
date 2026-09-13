@@ -1,0 +1,34 @@
+/**
+ * Convermetry — Goals page.
+ *
+ * Styling exclusive to Convermetry → Goals (src/Admin/GoalsPage.php). Most of
+ * the Goals screen's look — the intro paragraph, period filter, results
+ * table, inline-remove form, status chip, and editor panel — is shared with
+ * Funnels and lives in assets/css/admin-common.css, which loads before this
+ * file; see that file's header for the shared-class map. What remains here is
+ * specific to the goal DEFINITION form.
+ */
+
+.cvm-goal-actions {
+    white-space: nowrap;
+}
+
+/* The "this goal has never fired" explanation, attached to its own row so it
+   spans the full table width rather than squeezing into one cell. */
+
+.cvm-goal-note td {
+    padding-top: 0;
+    border-top: none;
+    color: #646970;
+    font-size: 12px;
+}
+
+.cvm-goal-form .cvm-goal-type,
+.cvm-goal-form .cvm-goal-operator {
+    margin-right: 6px;
+    margin-bottom: 4px;
+}
+
+.cvm-goal-form .cvm-goal-value[hidden] {
+    display: none;
+}

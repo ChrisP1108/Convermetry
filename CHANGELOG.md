@@ -5,6 +5,88 @@ All notable changes to Convermetry are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.9.0
+
+### Added
+
+- **A Convermetry Home screen.** The top-level menu item now opens an
+  introduction to the plugin instead of an analytics dashboard of an empty
+  database: what Convermetry does, a Getting Started checklist, a status grid,
+  quick links to every screen, and the visit-to-lead journey. Everything it
+  reports is read from the installation — there is no sample data on it, a
+  failed read renders as an em dash rather than as a zero, and a step is ticked
+  off only when the plugin has observed the thing it describes (settings saved,
+  a provider active, an event recorded, a submission captured).
+
+- **A Convermetry admin design system** (`assets/css/admin-ui.css`): design
+  tokens plus the components built on them — cards, buttons, status pills,
+  grids, icon tiles, typography, flow diagrams. Every selector is scoped under
+  `.cvm-ui` and the classes are prefixed `cvm-ui-`, so it cannot affect a screen
+  that has not opted in and does not collide with the existing `.cvm-card` /
+  `.cvm-badge` styles the other screens still use. Fonts are system stacks; no
+  external font or framework is loaded.
+
+- `Convermetry\Admin\Icons`, a small catalogue of inline SVGs. Every icon is
+  decorative (`aria-hidden`, `focusable="false"`) and takes its colours from CSS
+  tokens rather than from hard-coded hex values.
+
+- `Reports::sessionCount()`, `Reports::hasEvents()` and
+  `FormSubmissions::latestCreatedAt()` — the bounded reads the Home page needs,
+  none of which load a data set to summarize it.
+
+### Changed
+
+- **Analytics moved from `admin.php?page=convermetry` to
+  `admin.php?page=convermetry-analytics`.** It keeps every report, filter,
+  chart, and export, and stays the first entry under the menu; only the slug
+  changed, because the top-level slug now opens Home. No other screen's URL
+  changed.
+
+- Shared admin stylesheets are enqueued by a new `Convermetry\Admin\AdminAssets`
+  rather than by the Analytics page. They used to be guarded by a substring test
+  against the Analytics slug, which matched every Convermetry screen only
+  because that slug happened to be `convermetry`; moving Analytics would have
+  silently unstyled nine screens.
+
+- **The admin heading typeface is now Play**, self-hosted from `assets/fonts/`
+  (latin + latin-ext, OFL-licensed — see that directory's README), matching the
+  Home page design across every Convermetry screen. `.button-primary` and
+  `.button-secondary` on every screen now match the Home page's button
+  shape and palette as well; a bare `.button` (an inline "Remove", "+ Add", or
+  similar control) keeps its native WordPress size and only picks up the
+  shared corner radius, so dense rows and tables are unaffected. No page's
+  markup, copy, or behavior changed.
+
+- **`assets/css/admin.css` was split into one stylesheet per admin page**
+  (`assets/css/admin-<page>.css`), plus `assets/css/admin-common.css` for the
+  `cvm-*` component classes two or more pages still share (cards, the toggle
+  switch, the accordion/pagination list pattern, and so on) — see that file's
+  header for the full per-page map. Every property preserved its exact value;
+  this is a reorganization, not a restyle, verified by diffing every parsed
+  CSS rule between the old file and its replacements. Each admin page now
+  enqueues its own stylesheet from its own `enqueueAssets()`, depending on
+  `AdminAssets::COMMON_HANDLE`; `admin-common.css`'s "Design-system alignment"
+  section is what points every screen's headings and buttons at
+  `admin-ui.css`'s tokens. Two pages with no page-specific rule today
+  (Settings, Notifications) and the Home page (fully covered by the design
+  system already) each still get their own reserved, already-wired
+  stylesheet, so a future page-specific rule has an obvious home.
+
+- **`assets/css/dashboard.css` renamed to `assets/css/admin-analytics.css`**,
+  matching every other screen's `assets/css/admin-<page>.css`. Its style
+  handle changed with it, from `cvm-dashboard` to `cvm-analytics`; the script
+  handle and `assets/js/dashboard.js` (the chart behavior) are unrelated and
+  keep their name.
+
+- **The Analytics period filter ("Last 7/30/90 days") now uses the same
+  `.button` / `.button-primary` / `.button-secondary` classes as the Goals and
+  Funnels period filters**, instead of its own `.cvm-period-btn` skin — one
+  button look for "select a reporting period" everywhere it appears, styled
+  from `admin-common.css` like every other button on these three screens. The
+  retired skin's now-unused CSS (the joined-segment border, the mobile
+  equal-width override) was removed from `admin-analytics.css` along with it;
+  the wrapper wraps and spaces the buttons but no longer draws them.
+
 ## 0.8.0
 
 Production-hardening release. Focused on build safety, durable webhook endpoint

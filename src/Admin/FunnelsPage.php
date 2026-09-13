@@ -58,7 +58,7 @@ final class FunnelsPage
     public static function addMenu(): void
     {
         add_submenu_page(
-            AnalyticsPage::MENU_SLUG,
+            HomePage::MENU_SLUG,
             'Convermetry Funnels',
             'Funnels',
             Capability::required(Capability::FUNNELS_MANAGE),
@@ -78,6 +78,13 @@ final class FunnelsPage
         if (!str_contains($hook, self::MENU_SLUG)) {
             return;
         }
+
+        wp_enqueue_style(
+            'cvm-funnels',
+            CVM_PLUGIN_URL . 'assets/css/admin-funnels.css',
+            [AdminAssets::COMMON_HANDLE],
+            CVM_VERSION
+        );
 
         wp_enqueue_script(
             'cvm-funnels',

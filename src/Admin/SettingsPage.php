@@ -40,6 +40,7 @@ final class SettingsPage
     {
         add_action('admin_menu', [self::class, 'addMenu']);
         add_action('admin_init', [self::class, 'registerSettings']);
+        add_action('admin_enqueue_scripts', [self::class, 'enqueueAssets']);
     }
 
     /**
@@ -50,12 +51,34 @@ final class SettingsPage
     public static function addMenu(): void
     {
         add_submenu_page(
-            AnalyticsPage::MENU_SLUG,
+            HomePage::MENU_SLUG,
             'Convermetry Settings',
             'Settings',
             Capability::required(Capability::SETTINGS_MANAGE),
             self::MENU_SLUG,
             [self::class, 'render']
+        );
+    }
+
+    /**
+     * Enqueues this page's own stylesheet on this screen only. The shared
+     * stylesheets (design tokens, cross-page components) are already
+     * enqueued for every Convermetry screen by {@see AdminAssets}.
+     *
+     * @param string $hook The current admin page hook suffix.
+     * @return void
+     */
+    public static function enqueueAssets(string $hook): void
+    {
+        if (!str_contains($hook, self::MENU_SLUG)) {
+            return;
+        }
+
+        wp_enqueue_style(
+            'cvm-settings',
+            CVM_PLUGIN_URL . 'assets/css/admin-settings.css',
+            [AdminAssets::COMMON_HANDLE],
+            CVM_VERSION
         );
     }
 

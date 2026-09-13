@@ -1,0 +1,14 @@
+/**
+ * Convermetry — Settings page.
+ *
+ * Reserved for styling exclusive to Convermetry → Settings
+ * (src/Admin/SettingsPage.php). The page currently needs none: its cards,
+ * card titles, headings, and buttons are all covered by
+ * assets/css/admin-common.css (shared with the other screens) and
+ * assets/css/admin-ui.css (the design-system tokens both draw from) — see
+ * admin-common.css's header for the shared-class map.
+ *
+ * This file is enqueued on the Settings screen regardless, so a future
+ * Settings-only rule has an obvious, already-wired home rather than being
+ * added to the shared stylesheet "just this once."
+ */
