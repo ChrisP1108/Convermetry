@@ -216,7 +216,7 @@ final class HomePage
                 <div class="cvm-ui-hero__main">
                     <div class="cvm-ui-hero__brand">
                         <span class="cvm-ui-icon cvm-ui-icon--brand"><?php Icons::render('logo', 28); ?></span>
-                        <span class="cvm-ui-wordmark">Convermetry</span>
+                        <span class="cvm-ui-wordmark">Convermetry<sup class="cvm-sup">TM</sup></span>
                         <span class="cvm-ui-tag">
                             <?php echo esc_html(sprintf('for WordPress · v%s', CVM_VERSION)); ?>
                         </span>
