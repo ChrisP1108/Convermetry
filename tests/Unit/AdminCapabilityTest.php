@@ -183,7 +183,12 @@ final class AdminCapabilityTest extends TestCase
      */
     public function testNoAdminSurfaceStillHardCodesTheCapability(): void
     {
-        foreach (glob(self::PLUGIN_DIR . 'src/Admin/*.php') ?: [] as $file) {
+        $files = array_merge(
+            glob(self::PLUGIN_DIR . 'src/Admin/*.php') ?: [],
+            glob(self::PLUGIN_DIR . 'src/Admin/Pages/*.php') ?: []
+        );
+
+        foreach ($files as $file) {
             if (basename($file) === 'Capability.php') {
                 continue; // Where the default is legitimately written down.
             }

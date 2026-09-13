@@ -6,7 +6,7 @@ namespace Convermetry\Tests\Unit;
 
 use Brain\Monkey;
 use Brain\Monkey\Functions;
-use Convermetry\Admin\SubmissionsPage;
+use Convermetry\Admin\Pages\SubmissionsPage;
 use PHPUnit\Framework\TestCase;
 
 /**

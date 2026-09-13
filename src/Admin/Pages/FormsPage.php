@@ -1,13 +1,16 @@
 <?php
 declare(strict_types=1);
 
-namespace Convermetry\Admin;
+namespace Convermetry\Admin\Pages;
 
 if (!defined('ABSPATH')) exit;
 
+use Convermetry\Admin\AdminAssets;
+use Convermetry\Admin\Capability;
 use Convermetry\Analytics\FormEngagementReport;
 use Convermetry\Analytics\ReportQueryException;
 use Convermetry\Database\MigrationRunner;
+use Convermetry\Forms\Atomic\AtomicFormsBridge;
 use Convermetry\Forms\FormProviderRegistry;
 use Convermetry\Forms\FormSettings;
 
@@ -386,7 +389,9 @@ final class FormsPage
         <h1>Convermetry Forms</h1>
         <p class="description" style="max-width:760px;">Convermetry automatically detects supported form plugins and discovers
         their forms. Detected forms are <strong>included by default</strong> — a new form starts recording conversions and delivering
-        webhooks without any setup. Exclude a form to stop processing it; its configuration is preserved and restored when re-enabled.</p>
+        webhooks without any setup. Exclude a form to stop processing it; its configuration is preserved and restored when re-enabled.
+        <strong>Elementor Atomic forms are the one exception</strong>: they only run the actions you choose in the Elementor editor, so
+        each one needs the Convermetry action added before anything is captured — see below.</p>
         <?php
 
         self::renderEngagement();
@@ -411,6 +416,8 @@ final class FormsPage
         ?>
         </div>
         <?php
+
+        self::renderAtomicSetupNotice(isset($availableProviders[AtomicFormsBridge::PROVIDER_KEY]));
 
         if ($availableProviders === []) {
             ?>
@@ -495,6 +502,41 @@ final class FormsPage
     }
 
     /**
+     * Explains the one setup step Convermetry cannot perform for the site owner.
+     *
+     * Elementor's Atomic forms run an explicit "Actions after submit" list, so a
+     * form captures nothing until "Convermetry" is added to it. Convermetry
+     * deliberately does not add it: that would mean rewriting saved Elementor
+     * documents behind the owner's back, and a plugin that edits another
+     * plugin's content without being asked is a worse problem than a manual
+     * step. So the step is stated plainly, in the place someone goes looking.
+     *
+     * Rendered whenever the Atomic provider is available — not only when an
+     * Atomic form has been discovered — because the most likely moment to need
+     * these instructions is right after building the first one.
+     *
+     * @param bool $atomicAvailable Whether the Atomic provider is active.
+     * @return void
+     */
+    private static function renderAtomicSetupNotice(bool $atomicAvailable): void
+    {
+        if (!$atomicAvailable) {
+            return;
+        }
+
+        ?>
+        <div class="notice notice-warning inline"><p><strong>Elementor Atomic forms require one extra step.</strong>
+        Open the form in the Elementor editor, select the Atomic form element, add <strong>Convermetry</strong> under
+        <strong>Actions after submit</strong>, and save or update the page or template. Convermetry captures submissions from that
+        form once the action is enabled — submissions made before then are not recorded and cannot be recovered.
+        <strong>Classic Elementor forms are captured automatically</strong> and need none of this.</p>
+        <p class="description">Atomic forms below are listed as soon as Convermetry finds them in your Elementor content, which
+        happens whether or not the action has been added. Marking one <strong>Included</strong> here does not add the action for
+        you, and Convermetry cannot tell from the outside which forms have it.</p></div>
+        <?php
+    }
+
+    /**
      * Renders one discovered form's configuration block.
      *
      * @param array{provider: string, provider_label: string, native_id: string, name: string} $form Discovered form.
@@ -535,7 +577,16 @@ final class FormsPage
         <tr><th scope="row">Status</th><td>
         <label><input type="checkbox" class="cvm-form-excluded-toggle" name="<?php echo esc_attr($name . '[excluded]'); ?>" value="1" <?php echo checked($config['excluded'], true, false); ?>>
         Exclude this form</label>
-        <p class="description">Excluded forms are not recorded or delivered. Their configuration is preserved.</p></td></tr>
+        <p class="description">Excluded forms are not recorded or delivered. Their configuration is preserved.
+        <?php
+        if ($form['provider'] === AtomicFormsBridge::PROVIDER_KEY) {
+            ?>
+            <br><strong>Atomic form:</strong> leaving this included does not switch capture on by itself — this form also needs
+            <strong>Convermetry</strong> added under <strong>Actions after submit</strong> in the Elementor editor.
+            <?php
+        }
+        ?>
+        </p></td></tr>
         <tr><th scope="row">Page URL parameters</th><td>
         <label><input type="checkbox" name="<?php echo esc_attr($name . '[include_page_params]'); ?>" value="1" <?php echo checked($config['include_page_params'], true, false); ?>>
         Include page URL parameters for this form (regardless of the global setting)</label></td></tr></table>

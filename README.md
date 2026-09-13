@@ -22,7 +22,7 @@ Was the lead successfully delivered to external systems?
 
 Convermetry works standalone — full analytics dashboard, form integrations, and webhook delivery inside one WordPress install — and is architected so a future Convermetry SaaS can receive `analytics_report` and `form_submission` messages from many installations, keyed by a shared, versioned payload schema.
 
-- **Version:** 0.9.0
+- **Version:** 0.10.0
 - **Requires WordPress:** 6.3+
 - **Requires PHP:** 8.3+
 - **License:** GPL-2.0-or-later
@@ -43,6 +43,7 @@ Convermetry works standalone — full analytics dashboard, form integrations, an
 9. [Campaign & channel attribution](#campaign--channel-attribution)
 10. [Session → submission → conversion correlation](#session--submission--conversion-correlation)
 11. [Supported form providers](#supported-form-providers)
+    - [Elementor: classic forms vs Atomic forms](#elementor-classic-forms-vs-atomic-forms)
 12. [Custom form integration API](#custom-form-integration-api)
     - [Arguments](#arguments) · [The result object](#the-result-object) · [What both paths do](#what-both-paths-do)
 13. [Notifications](#notifications)
@@ -142,7 +143,11 @@ See [Submissions](#submissions) below.
 
 ### Forms
 
-Shows each supported provider as **Active** or **Unavailable**, automatically discovers every active provider's forms (cached for five minutes), and offers filtering by provider, name/id text, and included/excluded state. Per form:
+Shows each supported provider as **Active** or **Unavailable**, automatically discovers every active provider's forms (cached for five minutes), and offers filtering by provider, name/id text, and included/excluded state.
+
+Detected forms are included by default and need no setup — with one exception, called out on the page itself: **Elementor Atomic forms** only run the actions selected in the Elementor editor, so each one needs **Convermetry** added under *Actions after submit* before anything is captured. See [Elementor: classic forms vs Atomic forms](#elementor-classic-forms-vs-atomic-forms).
+
+Per form:
 
 | Setting | Meaning |
 |---|---|
@@ -555,7 +560,8 @@ Providers are feature-detected — nothing loads or breaks when a plugin is abse
 
 | Provider | Availability check | Server-confirmed hook | Native identity |
 |---|---|---|---|
-| Elementor Pro | `ELEMENTOR_PRO_VERSION` / `\ElementorPro\Plugin` | `elementor_pro/forms/new_record` | Form **name** (settings key; widget id travels as `native_form_id`) |
+| Elementor Pro (classic forms) | `ELEMENTOR_PRO_VERSION` / `\ElementorPro\Plugin` | `elementor_pro/forms/new_record` | Widget id (settings fall back to the legacy **name** key until the next save) |
+| Elementor Pro — Atomic Forms | `ELEMENTOR_PRO_VERSION` / `\ElementorPro\Plugin` | `convermetry` action on `elementor_pro/atomic_forms/actions/register` — **opt in per form**, see below | `<document id>:<element id>` |
 | Gravity Forms | `GFAPI` | `gform_after_submission` | Form id |
 | WPForms | `wpforms()` | `wpforms_process_complete` | Form id |
 | Contact Form 7 | `WPCF7_ContactForm` | `wpcf7_mail_sent` | Form post id |
@@ -578,6 +584,46 @@ Two providers filter events the hook alone would over-report:
 4. A background worker (kicked within seconds via a spawned cron) builds, enriches, freezes, and sends the payloads, retrying on failure.
 
 An external webhook outage can never make a valid form submission appear to fail. The optional **Show error to visitor** mode (Webhooks page) runs delivery synchronously for Elementor Pro forms and surfaces failures on the form via Elementor's AJAX handler.
+
+## Elementor: classic forms vs Atomic forms
+
+Elementor has two form systems, and Convermetry treats them as two providers because they behave differently in every way that matters.
+
+| | Classic form widget | **Atomic form** element (`e-form`) |
+|---|---|---|
+| Capture | Automatic — every submission fires `elementor_pro/forms/new_record` | **Opt in per form**, in the editor (below) |
+| Identity | Widget id | `<document id>:<element id>` |
+| Settings key | `elementor:<widget id>` | `elementor_atomic:<document id>:<element id>` |
+| Discovery | Automatic | Automatic — **listing a form is not capture**, see below |
+
+### Required setup for every Atomic form
+
+Atomic forms run an explicit list of **Actions after submit**, so nothing reaches Convermetry until the action is added:
+
+1. Open the page or template in the **Elementor editor**.
+2. Select the **Atomic form element**.
+3. Add **Convermetry** under **Actions after submit**.
+4. **Save/Update** the page or template.
+
+Convermetry captures submissions from that form once the action is enabled. Submissions made before then are not recorded and cannot be recovered. **Classic Elementor forms need none of this** — they are captured automatically.
+
+Convermetry never edits your saved Elementor documents, so it cannot add the action for you and cannot tell from the outside which forms have it. Atomic forms appear on the **Forms** screen as soon as they are found in your Elementor content, whether or not the action has been added — marking one **Included** there does not switch capture on by itself.
+
+The action stays registered for as long as Convermetry is active, including when webhook delivery is switched off or no endpoints exist. That is deliberate: an action saved on a form and then unregistered would be reported by Elementor as an invalid action type and would fail the visitor's submission. With nothing to deliver, it records the lead and reports a successful no-op.
+
+### Attribution on Atomic forms
+
+Atomic forms do not serialize the `<form>`. Elementor's own frontend builds the request field by field and posts it to `admin-ajax.php`, so a hidden input — the transport every other provider uses — is silently dropped. Convermetry appends its three correlation values (`cvm_conversion_id`, `cvm_session_id`, `cvm_context`) to that request instead, as top-level fields:
+
+- They are **never** added to Elementor's `form_fields`, so they are never submitted data and never appear on a lead, in an export, in a notification, or in a payload.
+- The request is only touched when it is a **same-origin** POST carrying Elementor's own Atomic action, and never for a form marked `data-cvm-ignore`.
+- Any error leaves the original request untouched: instrumentation never breaks a submission.
+- Without the tracker (JavaScript blocked, tracking disabled), the submission is still captured server-side with a server-generated conversion id and **no fabricated session attribution**.
+
+### Known limitations
+
+- **A failure in *Show error to visitor* mode may not be shown to the visitor.** Convermetry returns a failed action result, which Elementor records in its action results and submission log. Elementor Pro 4.2.3 only switches an Atomic form into its error state for actions that fail through its own internal failure path, so a returned failure — from this action or from Elementor's own native Webhook action — does not by itself display an error. The failure is always recorded in the Activity Log. The default **background** mode is unaffected: failed deliveries are queued and retried exactly as for classic forms.
+- **Elementor Pro's Atomic action API is not published.** Convermetry's use of it was built against the documented contract and behaviour reported for **Elementor Pro 4.2.3**; the Elementor *core* side (the `e-form` element, its `form-name` prop, the actions-after-submit control, and the `elementor/atomic-widgets/controls` filter) was verified against Elementor's published source. Every Elementor symbol is guarded, so a version that differs registers nothing rather than breaking the site.
 
 ## Custom form integration API
 
@@ -865,9 +911,8 @@ submitted the form; visitor autoresponders are out of scope.
 | Visitor journey | **off** | The pages this visitor viewed. Browsing history for an identifiable person. |
 | IP address | **off** | Personal data in the EU/UK; only available when IP storage is on in Settings. |
 
-Per-form rules use the same keys as the Forms page (`provider:identity`).
-Elementor forms are keyed by **name**, so renaming an Elementor form resets its
-rule to the scope default.
+Per-form rules use the same keys as the Forms page (`provider:identity`), so a
+form keeps its rule when it is renamed.
 
 Subject tokens — a fixed allowlist, substituted literally. There is no
 expression language and no PHP evaluation:
@@ -988,7 +1033,7 @@ Every outbound message shares one versioned envelope:
 {
     "schema_version": "1.0 | 2.0",
     "source": "convermetry",
-    "plugin_version": "0.9.0",
+    "plugin_version": "0.10.0",
     "message_type": "analytics_report | form_submission",
     "website_info": { },
     "generated_at": "2026-08-22T14:00:00+00:00",
@@ -1016,7 +1061,7 @@ Every outbound message shares one versioned envelope:
 {
     "schema_version": "1.1",
     "source": "convermetry",
-    "plugin_version": "0.9.0",
+    "plugin_version": "0.10.0",
     "message_type": "analytics_report",
     "website_info": {
         "name": "Example Financial", "url": "https://example.com", "domain": "example.com",
@@ -1136,7 +1181,7 @@ Every outbound message shares one versioned envelope:
 {
     "schema_version": "2.0",
     "source": "convermetry",
-    "plugin_version": "0.9.0",
+    "plugin_version": "0.10.0",
     "message_type": "form_submission",
     "website_info": {
         "name": "Example Financial", "url": "https://example.com", "domain": "example.com",
@@ -1206,6 +1251,7 @@ Label availability differs by provider, and Convermetry does not guess:
 | Provider | `id` | `label` |
 |---|---|---|
 | Elementor | field ID | the field's title |
+| Elementor Atomic | field (element) ID | the field's editor label, else the ID |
 | Gravity Forms | field ID | the field label |
 | WPForms | field ID | the field name |
 | Ninja Forms | field ID (or key) | the field label, else its key |
@@ -1991,8 +2037,10 @@ convermetry/
     ├── Forms/                   # FormProviderInterface, FormProviderRegistry, FormSettings,
     │   │                        # SubmissionService, SubmissionResult, SubmissionFields,
     │   │                        # SubmissionField, SubmissionFieldList
-    │   └── Providers/           # Elementor, GravityForms, WPForms, ContactForm7,
-    │                             # FluentForms, NinjaForms, FormidableForms
+    │   ├── Atomic/              # AtomicFormsBridge (registration, identity, translation),
+    │   │                        # ConvermetryAtomicAction (the only Elementor-coupled class)
+    │   └── Providers/           # Elementor, ElementorAtomic, GravityForms, WPForms,
+    │                             # ContactForm7, FluentForms, NinjaForms, FormidableForms
     ├── Funnels/                 # FunnelSettings, FunnelRepository, StepCompiler
     ├── Goals/                   # GoalSettings, GoalRepository, GoalMatcher (pure),
     │                             # GoalRecorder, GoalCompletions

@@ -238,8 +238,8 @@ final class LeadGoalFunnelHookTest extends TestCase
     public static function adminPages(): array
     {
         return [
-            'goals'   => ['src/Admin/GoalsPage.php'],
-            'funnels' => ['src/Admin/FunnelsPage.php'],
+            'goals'   => ['src/Admin/Pages/GoalsPage.php'],
+            'funnels' => ['src/Admin/Pages/FunnelsPage.php'],
         ];
     }
 }

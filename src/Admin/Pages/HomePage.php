@@ -1,10 +1,17 @@
 <?php
 declare(strict_types=1);
 
-namespace Convermetry\Admin;
+namespace Convermetry\Admin\Pages;
 
 if (!defined('ABSPATH')) exit;
 
+use Convermetry\Admin\AdminAssets;
+use Convermetry\Admin\Capability;
+use Convermetry\Admin\HomeSetupStep;
+use Convermetry\Admin\HomeStatus;
+use Convermetry\Admin\HomeStatusItem;
+use Convermetry\Admin\HomeStatusLevel;
+use Convermetry\Admin\Icons;
 use Convermetry\Forms\FormProviderRegistry;
 
 /**
@@ -364,6 +371,23 @@ final class HomePage
         $completed = HomeStatus::completedCount($steps);
         $percent   = $total > 0 ? (int) round($completed / $total * 100) : 0;
 
+        $expansions = array_values(array_filter([
+            [
+                'title' => 'Define Your Goals',
+                'body'  => 'Measure valuable actions such as phone clicks, booking clicks, and visits to '
+                    . 'key pages.',
+                'label' => 'Manage Goals',
+                'url'   => HomeStatus::urlFor(GoalsPage::MENU_SLUG, Capability::GOALS_MANAGE),
+            ],
+            [
+                'title' => 'Build Your Funnels',
+                'body'  => 'See how visitors move through a sequence of steps and where they drop off '
+                    . 'before converting.',
+                'label' => 'Manage Funnels',
+                'url'   => HomeStatus::urlFor(FunnelsPage::MENU_SLUG, Capability::FUNNELS_MANAGE),
+            ],
+        ], static fn(array $expansion): bool => $expansion['url'] !== ''));
+
         ?>
         <section class="cvm-ui-card cvm-ui-card--panel cvm-ui-section"
                  id="<?php echo esc_attr(self::ANCHOR_GETTING_STARTED); ?>"
@@ -409,6 +433,20 @@ final class HomePage
                     <?php self::stepCard($step, $index + 1); ?>
                 <?php endforeach; ?>
             </ol>
+
+            <?php if ($expansions !== []) : ?>
+                <div class="cvm-ui-section-header">
+                    <h3 class="cvm-ui-heading cvm-ui-heading--xs" id="cvm-home-expand">
+                        Go Further with Goals and Funnels
+                    </h3>
+                </div>
+
+                <div class="cvm-ui-grid cvm-ui-grid--steps">
+                    <?php foreach ($expansions as $expansion) : ?>
+                        <?php self::expansionCard($expansion); ?>
+                    <?php endforeach; ?>
+                </div>
+            <?php endif; ?>
         </section>
         <?php
     }
@@ -460,6 +498,20 @@ final class HomePage
                 'title' => 'Submissions',
                 'body'  => 'Review captured leads and associated attribution information.',
                 'url'   => HomeStatus::urlFor(SubmissionsPage::MENU_SLUG, Capability::SUBMISSIONS_VIEW),
+            ],
+            [
+                'icon'  => 'chart-sm',
+                'teal'  => false,
+                'title' => 'Goals',
+                'body'  => 'Define conversion goals and review their performance.',
+                'url'   => HomeStatus::urlFor(GoalsPage::MENU_SLUG, Capability::GOALS_MANAGE),
+            ],
+            [
+                'icon'  => 'share',
+                'teal'  => false,
+                'title' => 'Funnels',
+                'body'  => 'Explore conversion paths and identify where visitors drop off.',
+                'url'   => HomeStatus::urlFor(FunnelsPage::MENU_SLUG, Capability::FUNNELS_MANAGE),
             ],
             [
                 'icon'  => 'list-sm',
@@ -728,6 +780,36 @@ final class HomePage
                 </a>
             <?php endif; ?>
         </li>
+        <?php
+    }
+
+    /**
+     * One "Go Further with Goals and Funnels" card.
+     *
+     * Styled as a nested card exactly like {@see stepCard()} — same panel,
+     * same visual family — but carrying an "Optional" badge in place of a
+     * Done/Next one, and left out of the numbered list entirely: neither
+     * counts towards setup progress, because going further than the four
+     * required steps is, by definition, not required.
+     *
+     * @param array{title: string, body: string, label: string, url: string} $expansion One card's content.
+     * @return void
+     */
+    private static function expansionCard(array $expansion): void
+    {
+        ?>
+        <article class="cvm-ui-card cvm-ui-card--nested">
+            <div class="cvm-ui-step__header">
+                <h4 class="cvm-ui-card-title cvm-ui-card-title--sm"><?php echo esc_html($expansion['title']); ?></h4>
+                <span class="cvm-ui-badge cvm-ui-badge--neutral cvm-ui-step__badge">Optional</span>
+            </div>
+
+            <p class="cvm-ui-text cvm-ui-text--sm cvm-ui-card__fill"><?php echo esc_html($expansion['body']); ?></p>
+
+            <a class="cvm-ui-link" href="<?php echo esc_url($expansion['url']); ?>">
+                <?php echo esc_html($expansion['label']); ?> <span aria-hidden="true">&rarr;</span>
+            </a>
+        </article>
         <?php
     }
 

@@ -248,7 +248,7 @@ final class HookCatalogTest extends TestCase
      */
     private static function aboutScreenHooks(): array
     {
-        $source = (string) file_get_contents(self::PLUGIN_DIR . 'src/Admin/AboutPage.php');
+        $source = (string) file_get_contents(self::PLUGIN_DIR . 'src/Admin/Pages/AboutPage.php');
 
         $start = strpos($source, 'private const array HOOKS = [');
         self::assertIsInt($start, 'The HOOKS catalogue is missing from AboutPage.php.');

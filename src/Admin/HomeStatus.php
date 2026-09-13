@@ -5,10 +5,18 @@ namespace Convermetry\Admin;
 
 if (!defined('ABSPATH')) exit;
 
+use Convermetry\Admin\Pages\AnalyticsPage;
+use Convermetry\Admin\Pages\FormsPage;
+use Convermetry\Admin\Pages\SettingsPage;
+use Convermetry\Admin\Pages\SubmissionsPage;
 use Convermetry\Analytics\ReportQueryException;
 use Convermetry\Analytics\Reports;
 use Convermetry\Database\FormSubmissions;
 use Convermetry\Forms\FormProviderRegistry;
+use Convermetry\Funnels\FunnelRepository;
+use Convermetry\Funnels\FunnelSettings;
+use Convermetry\Goals\GoalRepository;
+use Convermetry\Goals\GoalSettings;
 use Convermetry\Settings\Options;
 use Convermetry\Webhook\AnalyticsDispatcher;
 use Convermetry\Webhook\DeliveryLog;
@@ -40,7 +48,12 @@ use Convermetry\Webhook\FormDeliveryQueue;
  * one COUNT(*) on submissions, and one COUNT(DISTINCT session_id) bounded to
  * seven days by the created_at index. Nothing here loads a data set to
  * summarize it, and nothing is cached, so what the page says is what is
- * currently true.
+ * currently true. The Goals and Funnels cards add no query of their own: they
+ * read {@see GoalRepository::visible()} and {@see FunnelRepository::visible()},
+ * each a single already-memoized option read, never {@see \Convermetry\Analytics\GoalReports}
+ * or {@see \Convermetry\Analytics\FunnelReport} — this page reports whether
+ * goals and funnels are CONFIGURED, not what they measured, which is the one
+ * claim cheap enough to make on every menu click.
  *
  * The decision methods are static and take plain facts, with no database and no
  * WordPress state of their own, so the rules about what counts as "Attention
@@ -133,13 +146,16 @@ final class HomeStatus
     }
 
     /**
-     * The six cards of the "Convermetry Status" grid, in display order.
+     * The eight cards of the "Convermetry Status" grid, in display order.
      *
      * @return list<HomeStatusItem>
      */
     public function items(): array
     {
         $this->load();
+
+        $goals   = GoalRepository::visible();
+        $funnels = FunnelRepository::visible();
 
         return [
             $this->analyticsTracking(),
@@ -163,6 +179,15 @@ final class HomeStatus
                 'Time since the most recent captured form submission.'
             ),
             self::deliveryQueueState($this->pendingDeliveries),
+            self::goalsState(
+                count(array_filter($goals, GoalSettings::isActive(...))),
+                count($goals),
+                Options::goalsEnabled()
+            ),
+            self::funnelsState(
+                count(array_filter($funnels, FunnelSettings::isActive(...))),
+                count($funnels)
+            ),
         ];
     }
 
@@ -360,6 +385,126 @@ final class HomeStatus
                 '%d %s configured to receive form submissions.',
                 $endpointCount,
                 $endpointCount === 1 ? 'endpoint is' : 'endpoints are'
+            )
+        );
+    }
+
+    /**
+     * The state of conversion goal configuration.
+     *
+     * Deliberately stops at "enabled". Confirming that an enabled goal has
+     * ever actually matched anything would mean running a goal report on
+     * every Home page load — the one thing this card must not do — so unlike
+     * {@see analyticsTrackingState()} there is no "Active" tier here that
+     * claims completions are being recorded, only that the configuration
+     * would allow it.
+     *
+     * @param int  $enabledCount    Visible goals with their own switch on.
+     * @param int  $visibleCount    Every non-deleted goal, on or off.
+     * @param bool $matchingEnabled Whether the global goal-matching switch
+     *                              ({@see Options::goalsEnabled()}) is on.
+     * @return HomeStatusItem
+     */
+    public static function goalsState(int $enabledCount, int $visibleCount, bool $matchingEnabled): HomeStatusItem
+    {
+        if ($visibleCount < 1) {
+            return HomeStatusItem::state(
+                'Goals',
+                HomeStatusLevel::Neutral,
+                'Not Configured',
+                'No goals have been defined yet. Measure valuable actions such as phone clicks, booking '
+                    . 'clicks, and visits to key pages.'
+            );
+        }
+
+        if (!$matchingEnabled) {
+            return HomeStatusItem::state(
+                'Goals',
+                HomeStatusLevel::Warning,
+                'Paused',
+                sprintf(
+                    '%d %s defined, but goal matching is switched off in Settings, so none of them are '
+                        . 'being recorded.',
+                    $visibleCount,
+                    $visibleCount === 1 ? 'goal is' : 'goals are'
+                )
+            );
+        }
+
+        if ($enabledCount < 1) {
+            return HomeStatusItem::state(
+                'Goals',
+                HomeStatusLevel::Warning,
+                'Paused',
+                sprintf(
+                    '%d %s defined, but every one of them is currently disabled.',
+                    $visibleCount,
+                    $visibleCount === 1 ? 'goal is' : 'goals are'
+                )
+            );
+        }
+
+        return HomeStatusItem::state(
+            'Goals',
+            HomeStatusLevel::Success,
+            'Enabled',
+            sprintf(
+                '%d of %d %s enabled to measure valuable visitor actions.',
+                $enabledCount,
+                $visibleCount,
+                $visibleCount === 1 ? 'goal is' : 'goals are'
+            )
+        );
+    }
+
+    /**
+     * The state of funnel configuration.
+     *
+     * A funnel has no matching switch of its own — see
+     * {@see \Convermetry\Funnels\FunnelRepository}'s class docblock — it is a
+     * question asked of activity already being recorded, not something that
+     * is itself recorded. So unlike {@see goalsState()} there is no "global
+     * switch is off" tier here; enabled-but-empty and disabled are the only
+     * two ways a configured funnel falls short of reporting.
+     *
+     * @param int $enabledCount Visible funnels with their own switch on.
+     * @param int $visibleCount Every non-deleted funnel, on or off.
+     * @return HomeStatusItem
+     */
+    public static function funnelsState(int $enabledCount, int $visibleCount): HomeStatusItem
+    {
+        if ($visibleCount < 1) {
+            return HomeStatusItem::state(
+                'Funnels',
+                HomeStatusLevel::Neutral,
+                'Not Configured',
+                'No funnels have been defined yet. Build one to see how visitors move through a '
+                    . 'sequence of steps and where they drop off.'
+            );
+        }
+
+        if ($enabledCount < 1) {
+            return HomeStatusItem::state(
+                'Funnels',
+                HomeStatusLevel::Warning,
+                'Paused',
+                sprintf(
+                    '%d %s defined, but every one of them is currently disabled.',
+                    $visibleCount,
+                    $visibleCount === 1 ? 'funnel is' : 'funnels are'
+                )
+            );
+        }
+
+        return HomeStatusItem::state(
+            'Funnels',
+            HomeStatusLevel::Success,
+            'Enabled',
+            sprintf(
+                '%d of %d %s enabled to report on visitor drop-off.',
+                $enabledCount,
+                $visibleCount,
+                $visibleCount === 1 ? 'funnel is' : 'funnels are'
             )
         );
     }

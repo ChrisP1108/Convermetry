@@ -1100,6 +1100,155 @@
     window.addEventListener('load', seedCorrelationFields);
 
     /* ------------------------------------------------------------------ *
+     *  Elementor Pro Atomic Forms — a different transport entirely.
+     *
+     *  Every other supported plugin serializes the FORM, so a hidden input is
+     *  enough. Atomic does not: its Alpine submit handler hand-builds a
+     *  FormData from the fields it knows about — each one matched by
+     *  input[data-interaction-id] and copied into form_fields[i][…] — and POSTs
+     *  that to admin-ajax. A hidden input Convermetry appended is matched by
+     *  nothing and is silently dropped, so seeding one would look correct and
+     *  attribute nothing.
+     *
+     *  So the three correlation values are appended to that request instead, as
+     *  TOP-LEVEL fields. Two consequences are deliberate: they arrive in $_POST
+     *  exactly where Correlation::fromCurrentRequest() already looks, and they
+     *  stay out of form_fields — so they are never submitted data, never reach
+     *  Elementor's own submissions, and never appear in a lead, an export, a
+     *  notification, or a payload.
+     *
+     *  Scope is kept as narrow as the problem: one wrapper around fetch that
+     *  ignores everything except a same-origin POST whose FormData carries
+     *  Elementor's own Atomic action, and which restores the original call
+     *  untouched on any error. The visitor's submission is never blocked by it.
+     * ------------------------------------------------------------------ */
+
+    const ATOMIC_ACTION = 'elementor_pro_atomic_forms_send_form';
+    const ATOMIC_FORM_SELECTOR = '[data-element_type="e-form"]';
+
+    /** The Atomic form element one submission came from, or null. */
+    function atomicFormElement(formId) {
+        if (!formId || !document.querySelector) {
+            return null;
+        }
+        try {
+            const forms = document.querySelectorAll(ATOMIC_FORM_SELECTOR);
+            for (let i = 0; i < forms.length; i++) {
+                if (forms[i].getAttribute('data-id') === String(formId)) {
+                    return forms[i];
+                }
+            }
+        } catch (e) {
+            return null;
+        }
+        return null;
+    }
+
+    /**
+     * Appends the correlation values to an Atomic submission and returns the
+     * conversion token that travelled, or null when the request was left alone.
+     *
+     * Returns null — changing nothing — for a form the site owner opted out of
+     * with data-cvm-ignore, and for one inside the admin bar, matching the rule
+     * every other form on the page is held to.
+     */
+    function correlateAtomicRequest(body, formId) {
+        const form = atomicFormElement(formId);
+
+        if (form && (inAdminBar(form) || form.hasAttribute('data-cvm-ignore'))) {
+            return null;
+        }
+
+        // A fresh token per submission attempt, remembered against the form
+        // element so the success handler below reports the SAME conversion the
+        // server just recorded rather than inventing a second one.
+        const token = 'c' + randomHex(16);
+        if (form && formTokens) {
+            formTokens.set(form, token);
+        }
+
+        body.set(FIELD_CONVERSION, token);
+        body.set(FIELD_SESSION, sessionId());
+        try {
+            body.set(FIELD_CONTEXT, JSON.stringify(correlationContext()));
+        } catch (e) {
+            // The token and session still travel without the snapshot.
+        }
+
+        return token;
+    }
+
+    /** Whether a fetch call is Elementor's Atomic form submission. */
+    function isAtomicSubmission(input, init) {
+        if (!init || !init.body || typeof FormData !== 'function' || !(init.body instanceof FormData)) {
+            return false;
+        }
+
+        try {
+            if (init.body.get('action') !== ATOMIC_ACTION) {
+                return false;
+            }
+
+            // Same-origin only, on the same reasoning as correlatableForm():
+            // session attribution is never handed to another origin.
+            const url = (typeof input === 'string' || input instanceof URL)
+                ? String(input)
+                : (input && input.url) || '';
+
+            return new URL(url, location.href).origin === location.origin;
+        } catch (e) {
+            return false;
+        }
+    }
+
+    if (typeof window.fetch === 'function' && typeof FormData === 'function') {
+        const nativeFetch = window.fetch;
+
+        window.fetch = function (input, init) {
+            let token = null;
+
+            try {
+                if (isAtomicSubmission(input, init)) {
+                    token = correlateAtomicRequest(init.body, init.body.get('form_id'));
+                }
+            } catch (e) {
+                token = null; // Never let instrumentation break a submission.
+            }
+
+            // Bound to window, not to `this`: the tracker runs in strict mode,
+            // so a bare fetch() call passes an undefined receiver and the
+            // browser rejects the invocation.
+            const response = nativeFetch.apply(window, arguments);
+
+            if (!token || !response || typeof response.then !== 'function') {
+                return response;
+            }
+
+            // A CONFIRMED conversion only: Elementor answers this request after
+            // its server side ran the form's actions, and the body reports
+            // whether it accepted the submission. An attempt is already tracked
+            // by the submit listener below and is not a conversion.
+            return response.then(function (res) {
+                try {
+                    if (res && res.ok && typeof res.clone === 'function') {
+                        res.clone().json().then(function (data) {
+                            if (data && data.success) {
+                                trackConversion('elementor-atomic-form', token);
+                            }
+                        }).catch(function () {
+                            // Not JSON, or already consumed — no conversion claimed.
+                        });
+                    }
+                } catch (e) {
+                    // Reporting must never disturb the response itself.
+                }
+
+                return res;
+            });
+        };
+    }
+
+    /* ------------------------------------------------------------------ *
      *  Form submissions — captured before any handler can preventDefault.
      *  Recorded at submit time, so these are attempts, not confirmed
      *  successes (client validation or the server may still reject them).

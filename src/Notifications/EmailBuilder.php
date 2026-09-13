@@ -5,7 +5,7 @@ namespace Convermetry\Notifications;
 
 if (!defined('ABSPATH')) exit;
 
-use Convermetry\Admin\SubmissionsPage;
+use Convermetry\Admin\Pages\SubmissionsPage;
 use Convermetry\Analytics\SubmissionContext;
 use Convermetry\Forms\SubmissionFields;
 use Convermetry\Support\SensitiveKeys;

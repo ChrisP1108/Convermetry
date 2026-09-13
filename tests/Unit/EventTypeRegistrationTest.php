@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Convermetry\Tests\Unit;
 
-use Convermetry\Admin\SettingsPage;
+use Convermetry\Admin\Pages\SettingsPage;
 use Convermetry\Settings\Options;
 use PHPUnit\Framework\TestCase;
 

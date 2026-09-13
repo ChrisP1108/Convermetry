@@ -1,10 +1,12 @@
 <?php
 declare(strict_types=1);
 
-namespace Convermetry\Admin;
+namespace Convermetry\Admin\Pages;
 
 if (!defined('ABSPATH')) exit;
 
+use Convermetry\Admin\AdminAssets;
+use Convermetry\Admin\Capability;
 use Convermetry\Settings\Options;
 use Convermetry\Settings\WebhookEndpoint;
 use Convermetry\Webhook\AnalyticsDispatcher;

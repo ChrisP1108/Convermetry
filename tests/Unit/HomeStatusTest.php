@@ -178,6 +178,107 @@ final class HomeStatusTest extends TestCase
         self::assertStringNotContainsString('did not succeed', $unknown->description);
     }
 
+    // ------------------------------------------------------------------- goals
+
+    public function testNoGoalsIsNotConfiguredRatherThanFailing(): void
+    {
+        $none = HomeStatus::goalsState(0, 0, true);
+
+        self::assertSame(HomeStatusLevel::Neutral, $none->level);
+        self::assertSame('Not Configured', $none->label);
+    }
+
+    /**
+     * Goals defined with the global matching switch off is the same silent
+     * trap as an endpoint saved with delivery switched off: the screen looks
+     * configured and nothing is actually being matched.
+     */
+    public function testGoalsDefinedWithMatchingSwitchedOffReadAsPaused(): void
+    {
+        $paused = HomeStatus::goalsState(2, 3, false);
+
+        self::assertSame(HomeStatusLevel::Warning, $paused->level);
+        self::assertSame('Paused', $paused->label);
+        self::assertStringContainsString('goal matching is switched off', $paused->description);
+    }
+
+    /**
+     * Matching is on globally, but every individual goal is switched off —
+     * a different way of recording nothing that the global switch alone
+     * cannot reveal.
+     */
+    public function testGoalsWithNoneIndividuallyEnabledReadAsPaused(): void
+    {
+        $paused = HomeStatus::goalsState(0, 3, true);
+
+        self::assertSame(HomeStatusLevel::Warning, $paused->level);
+        self::assertSame('Paused', $paused->label);
+        self::assertStringContainsString('currently disabled', $paused->description);
+    }
+
+    public function testEnabledGoalsReportTheirCountWithoutClaimingConversions(): void
+    {
+        $ok = HomeStatus::goalsState(2, 3, true);
+
+        self::assertSame(HomeStatusLevel::Success, $ok->level);
+        self::assertSame('Enabled', $ok->label);
+        self::assertStringContainsString('2 of 3 goals are enabled', $ok->description);
+
+        // Configured must never be spelled as "recording" or "converting" —
+        // this card cannot know that without running a report.
+        self::assertStringNotContainsString('recorded', $ok->description);
+        self::assertStringNotContainsString('convert', strtolower($ok->description));
+    }
+
+    public function testASingleEnabledGoalUsesSingularGrammar(): void
+    {
+        $one = HomeStatus::goalsState(1, 1, true);
+
+        self::assertStringContainsString('1 of 1 goal is enabled', $one->description);
+    }
+
+    // ----------------------------------------------------------------- funnels
+
+    public function testNoFunnelsIsNotConfiguredRatherThanFailing(): void
+    {
+        $none = HomeStatus::funnelsState(0, 0);
+
+        self::assertSame(HomeStatusLevel::Neutral, $none->level);
+        self::assertSame('Not Configured', $none->label);
+    }
+
+    /**
+     * Unlike goals, funnels have no global matching switch — a funnel is a
+     * question asked of activity already recorded, not something recorded on
+     * its own — so this state can only be reached by every funnel's own
+     * switch being off.
+     */
+    public function testFunnelsWithNoneEnabledReadAsPaused(): void
+    {
+        $paused = HomeStatus::funnelsState(0, 2);
+
+        self::assertSame(HomeStatusLevel::Warning, $paused->level);
+        self::assertSame('Paused', $paused->label);
+        self::assertStringContainsString('currently disabled', $paused->description);
+    }
+
+    public function testEnabledFunnelsReportTheirCountWithoutClaimingResults(): void
+    {
+        $ok = HomeStatus::funnelsState(2, 2);
+
+        self::assertSame(HomeStatusLevel::Success, $ok->level);
+        self::assertSame('Enabled', $ok->label);
+        self::assertStringContainsString('2 of 2 funnels are enabled', $ok->description);
+        self::assertStringNotContainsString('convert', strtolower($ok->description));
+    }
+
+    public function testASingleEnabledFunnelUsesSingularGrammar(): void
+    {
+        $one = HomeStatus::funnelsState(1, 1);
+
+        self::assertStringContainsString('1 of 1 funnel is enabled', $one->description);
+    }
+
     // ----------------------------------------------------- background processing
 
     public function testEverythingScheduledIsRunningNormally(): void

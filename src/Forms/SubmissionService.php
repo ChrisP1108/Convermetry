@@ -75,6 +75,13 @@ final class SubmissionService
      * @param string           $identity       The identity per-form settings are keyed by, when it
      *                                         differs from the native id (e.g. Elementor keys by
      *                                         form NAME while the widget id travels as native_form_id).
+     * @param string           $pageUrl        LAST-RESORT submitting page URL, for providers whose own
+     *                                         request carries one (Elementor's Atomic context supplies
+     *                                         context['referrer']). Used only when the tracker sent no
+     *                                         page URL and the request had no Referer header, and only
+     *                                         after the caller validated it against this site's hosts —
+     *                                         which is why providers pass it here instead of rewriting
+     *                                         $_SERVER to smuggle it in.
      * @return SubmissionResult
      */
     public function record(
@@ -86,7 +93,8 @@ final class SubmissionService
         bool $sync = false,
         array $runtimeQuery = [],
         array $runtimeHeaders = [],
-        string $identity = ''
+        string $identity = '',
+        string $pageUrl = ''
     ): SubmissionResult {
         $provider = sanitize_key($provider);
         $formName = sanitize_text_field($formName);
@@ -164,7 +172,7 @@ final class SubmissionService
         }
 
         $device = wp_is_mobile() ? 'mobile' : 'desktop';
-        $page   = $this->pageInfo($correlation);
+        $page   = $this->pageInfo($correlation, $pageUrl);
 
         // The confirmed conversion, recorded through the shared analytics
         // write path under the tracker's own conversion token — the frontend
@@ -594,14 +602,26 @@ final class SubmissionService
      * form is on, so the referrer reliably carries the originating URL and
      * its query string (the legacy behavior this preserves).
      *
-     * @param Correlation $correlation Correlation data.
+     * $providerPageUrl is the last resort, below both: a URL the form plugin
+     * itself reported for this submission, already validated by the provider
+     * that passed it. It matters for Elementor's Atomic forms, which post the
+     * submitting page in their own context, and it stays ranked last because a
+     * provider's idea of the page is hearsay compared to the tracker's own
+     * same-host-checked value.
+     *
+     * @param Correlation $correlation     Correlation data.
+     * @param string      $providerPageUrl Provider-reported page URL, or ''.
      * @return array{url: string, query: array<string, string>}
      */
-    private function pageInfo(Correlation $correlation): array
+    private function pageInfo(Correlation $correlation, string $providerPageUrl = ''): array
     {
         $referer = isset($_SERVER['HTTP_REFERER'])
             ? sanitize_text_field(wp_unslash((string) $_SERVER['HTTP_REFERER']))
             : '';
+
+        if ($referer === '') {
+            $referer = $providerPageUrl;
+        }
 
         $url   = $correlation->pageUrl;
         $query = [];

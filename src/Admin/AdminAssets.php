@@ -5,6 +5,9 @@ namespace Convermetry\Admin;
 
 if (!defined('ABSPATH')) exit;
 
+use Convermetry\Admin\Pages\AnalyticsPage;
+use Convermetry\Admin\Pages\HomePage;
+
 /**
  * The two stylesheets every Convermetry admin screen shares.
  *

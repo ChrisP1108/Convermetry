@@ -33,6 +33,7 @@ parameters:
     # absent, so there is no package to require — see the stub file's header.
     scanFiles:
         - phpstan/stubs/form-plugins.php
+        - phpstan/stubs/elementor-atomic.php
 
     # `global $wpdb;` is annotated at each use site rather than being declared
     # here, so the type is visible to IDEs as well as to PHPStan.

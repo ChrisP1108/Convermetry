@@ -125,7 +125,7 @@ final class OperationsHookTest extends TestCase
     {
         self::assertStringNotContainsString(
             'convermetry_settings_saved',
-            (string) file_get_contents(self::PLUGIN_DIR . 'src/Admin/SettingsPage.php'),
+            (string) file_get_contents(self::PLUGIN_DIR . 'src/Admin/Pages/SettingsPage.php'),
             'Sanitization is not persistence.'
         );
     }

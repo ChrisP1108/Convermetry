@@ -5,6 +5,51 @@ All notable changes to Convermetry are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.10.0
+
+### Added
+
+- **Elementor Pro Atomic Forms support**, alongside — never replacing —
+  classic Elementor forms. A new `elementor_atomic` provider registers a
+  `Convermetry` action with Elementor Pro's Atomic Action_Runner and adds it to
+  the Atomic form root's "Actions after submit" control; classic forms keep
+  capturing automatically, but an Atomic form requires that one editor step
+  before Convermetry sees its submissions, and the Forms page now says so
+  prominently next to the provider and every discovered Atomic form. Atomic
+  submissions run through the same `SubmissionService::record()` pipeline as
+  every other provider — the same exclusions, per-form overrides, field
+  redaction, storage, conversion recording, notifications, delivery, and
+  deduplication — with no payload, queue, retry, or settings code duplicated.
+
+- **Atomic form identity is document-scoped** (`<post id>:<element id>`)
+  rather than name-based: two forms sharing a display name, or the same
+  template reused across pages, stay distinct and keep independent settings.
+  Discovery walks `_elementor_data` directly (as classic Elementor discovery
+  already does), so template-only forms in `elementor_library` are found too.
+
+- **Session attribution now reaches Atomic submissions.** Atomic's frontend
+  does not serialize the `<form>` — Elementor hand-builds its own request — so
+  a hidden input would be silently dropped. The tracker now attaches
+  `cvm_conversion_id`, `cvm_session_id`, and `cvm_context` directly to that
+  request as top-level fields (never as submitted form data), gated by the
+  same same-origin and `data-cvm-ignore` rules every other form already
+  follows.
+
+- Two new "Go Further with Goals and Funnels" cards on the Home page's Getting
+  Started panel, and separate Goals and Funnels cards in the Convermetry
+  Status grid and Quick Access — all built from the existing design system
+  with no new CSS. The status cards report configured/enabled counts (and,
+  for Goals, the global goal-matching switch) without ever implying that
+  configuration alone proves a conversion was recorded.
+
+### Changed
+
+- **Every admin page class moved from `src/Admin/` to `src/Admin/Pages/`**
+  (namespace `Convermetry\Admin\Pages`), separating the pages themselves from
+  the helper classes (`Capability`, `Icons`, `HomeStatus`, and friends) that
+  support them. No admin URL, slug, or behavior changed — this is a source
+  reorganization only.
+
 ## 0.9.0
 
 ### Added

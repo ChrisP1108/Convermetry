@@ -15,10 +15,10 @@ use Convermetry\Support\KeyValuePairs;
  *
  *  - 'cvm_settings'         — tracking toggles, privacy, retention, and the
  *                             website/client identity sent in every payload
- *                             (managed by Admin\SettingsPage).
+ *                             (managed by Admin\Pages\SettingsPage).
  *  - 'cvm_webhook_settings' — webhook endpoints, delivery types, signing,
  *                             schedule, global headers/query parameters, and
- *                             form failure mode (managed by Admin\WebhooksPage).
+ *                             form failure mode (managed by Admin\Pages\WebhooksPage).
  *
  * This class is the only place that knows either option's shape and defaults;
  * every other subsystem reads configuration through the typed getters below
@@ -87,7 +87,7 @@ final class Options
      *
      * Adding a type here obliges you to add it in two more places or it will
      * misbehave silently: {@see self::defaults()} (or it defaults to off) and
-     * the label map in {@see \Convermetry\Admin\SettingsPage::renderTrackingSection()}
+     * the label map in {@see \Convermetry\Admin\Pages\SettingsPage::renderTrackingSection()}
      * (or no checkbox renders, and the next settings save turns it off).
      * EventTypeRegistrationTest asserts all three agree.
      */

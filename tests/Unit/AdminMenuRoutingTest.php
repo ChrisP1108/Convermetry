@@ -6,21 +6,21 @@ namespace Convermetry\Tests\Unit;
 
 use Brain\Monkey;
 use Brain\Monkey\Functions;
-use Convermetry\Admin\AboutPage;
-use Convermetry\Admin\ActivityLogPage;
 use Convermetry\Admin\AdminAssets;
-use Convermetry\Admin\AnalyticsPage;
 use Convermetry\Admin\Capability;
-use Convermetry\Admin\FormsPage;
-use Convermetry\Admin\FunnelsPage;
-use Convermetry\Admin\GoalsPage;
-use Convermetry\Admin\HomePage;
 use Convermetry\Admin\HomeStatus;
 use Convermetry\Admin\Icons;
-use Convermetry\Admin\NotificationsPage;
-use Convermetry\Admin\SettingsPage;
-use Convermetry\Admin\SubmissionsPage;
-use Convermetry\Admin\WebhooksPage;
+use Convermetry\Admin\Pages\AboutPage;
+use Convermetry\Admin\Pages\ActivityLogPage;
+use Convermetry\Admin\Pages\AnalyticsPage;
+use Convermetry\Admin\Pages\FormsPage;
+use Convermetry\Admin\Pages\FunnelsPage;
+use Convermetry\Admin\Pages\GoalsPage;
+use Convermetry\Admin\Pages\HomePage;
+use Convermetry\Admin\Pages\NotificationsPage;
+use Convermetry\Admin\Pages\SettingsPage;
+use Convermetry\Admin\Pages\SubmissionsPage;
+use Convermetry\Admin\Pages\WebhooksPage;
 use PHPUnit\Framework\TestCase;
 
 /**
@@ -406,7 +406,7 @@ final class AdminMenuRoutingTest extends TestCase
      */
     public function testTheHomePageShipsNoJavaScript(): void
     {
-        $source = (string) file_get_contents(__DIR__ . '/../../src/Admin/HomePage.php');
+        $source = (string) file_get_contents(__DIR__ . '/../../src/Admin/Pages/HomePage.php');
 
         self::assertStringNotContainsString('wp_enqueue_script', $source);
         self::assertStringNotContainsString('<script', $source);
@@ -422,7 +422,7 @@ final class AdminMenuRoutingTest extends TestCase
     public function testEveryIconTheAdminScreensAskForExists(): void
     {
         $sources = [
-            (string) file_get_contents(__DIR__ . '/../../src/Admin/HomePage.php'),
+            (string) file_get_contents(__DIR__ . '/../../src/Admin/Pages/HomePage.php'),
             (string) file_get_contents(__DIR__ . '/../../src/Admin/HomeStatusLevel.php'),
         ];
 

@@ -6,6 +6,7 @@ namespace Convermetry\Forms;
 if (!defined('ABSPATH')) exit;
 
 use Convermetry\Forms\Providers\ContactForm7Provider;
+use Convermetry\Forms\Providers\ElementorAtomicProvider;
 use Convermetry\Forms\Providers\ElementorProvider;
 use Convermetry\Forms\Providers\FluentFormsProvider;
 use Convermetry\Forms\Providers\FormidableFormsProvider;
@@ -58,6 +59,7 @@ final class FormProviderRegistry
 
         $providers = [
             new ElementorProvider(),
+            new ElementorAtomicProvider(),
             new GravityFormsProvider(),
             new WPFormsProvider(),
             new ContactForm7Provider(),
@@ -226,6 +228,11 @@ final class FormProviderRegistry
      * is one fact about one provider, and it has to stay consistent between the
      * admin screen that reads a form's configuration and the submission path
      * that applies it.
+     *
+     * The Atomic provider ('elementor_atomic') deliberately does NOT match here.
+     * It has no name-keyed history to migrate, and granting it one would let a
+     * classic Elementor form's settings apply to a same-named Atomic form —
+     * inheriting a legacy identity that was never its own.
      *
      * @param string $providerKey Provider key.
      * @param string $name        The form's display name.

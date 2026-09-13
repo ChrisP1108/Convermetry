@@ -64,7 +64,7 @@ final class Autoloader
     /**
      * Resolves a fully-qualified class name to a file path and includes it.
      *
-     * @param string $class Fully-qualified class name (e.g. "Convermetry\Admin\AnalyticsPage").
+     * @param string $class Fully-qualified class name (e.g. "Convermetry\Admin\Pages\AnalyticsPage").
      * @return void
      */
     private function autoload(string $class): void
