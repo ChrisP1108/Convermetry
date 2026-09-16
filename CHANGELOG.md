@@ -5,6 +5,83 @@ All notable changes to Convermetry are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.11.0
+
+### Added
+
+- **Bricks Builder native form support.** A new `bricks` provider adds a
+  **Convermetry** choice to the Bricks Form element's *Actions after successful
+  form submit* control (`bricks/elements/form/controls`) and handles the
+  submission Bricks dispatches to `bricks/form/action/convermetry`. Like
+  Elementor Atomic, capture is **opt in per form**: nothing is recorded until a
+  site owner ticks that action and saves. Bricks submissions run through the
+  same `SubmissionService::record()` pipeline as every other provider — the same
+  exclusions, per-form overrides, field redaction, storage, conversion
+  recording, notifications, delivery and deduplication — with no payload, queue,
+  retry or settings code duplicated. Scope is the **native** Bricks Form element
+  only; third-party Bricks form add-ons are neither supported nor discovered.
+
+- **Provider registration now runs in two passes.** Bricks is a theme, and
+  WordPress loads a theme's `functions.php` after `plugins_loaded` — where
+  Convermetry initialises — so a Bricks site truthfully answered "Bricks is not
+  here" at the only moment the registry asked. Registration now repeats on
+  `after_setup_theme`, guarded per provider key: a provider available at boot
+  registers there and is never touched again, one that only becomes available
+  with the theme registers exactly once in the second pass, and nothing is
+  wired twice. Availability is a `BRICKS_VERSION` check, so a **Bricks child
+  theme** is detected exactly like the parent. Bricks **1.12.2+** is required —
+  the release that added named custom form actions; an older Bricks is reported
+  Unavailable, with a notice explaining why, and registers nothing.
+
+- **Bricks form identity is the form element id**, on its own — the same thing
+  Bricks' own Form Submissions groups entries by. Bricks reports `postId` as the
+  post a submission came *from*, which for a header, footer, popup or reused
+  template is not the document defining the form, so a document-scoped key would
+  split one form's settings across every page it appears on. Discovery walks
+  Bricks' three content-area meta keys (`_bricks_page_content_2`,
+  `_bricks_page_header_2`, `_bricks_page_footer_2`) through the WordPress
+  metadata API, covering `bricks_template` posts as well as pages, skipping
+  revisions, trash and auto-drafts, and deduplicating by element id.
+
+- **Session attribution reaches Bricks submissions** through Bricks' own
+  documented `bricks/form/submit` event: the three correlation values
+  (`cvm_conversion_id`, `cvm_session_id`, `cvm_context`) are set on the prepared
+  `event.detail.formData` as top-level entries, never as `form-field-<id>`
+  values. `bricks/form/success` records the confirmed conversion under **the
+  same token the server received**, and `bricks/form/error` records a
+  `form_error` without ever reading Bricks' response body. Bricks form tags also
+  carry a server-rendered `data-cvm-form-key` matching the server-side identity.
+
+### Changed
+
+- The Forms page, the About page's provider tables, the Webhooks failure-mode
+  description and the README no longer describe Elementor Atomic as the only
+  opt-in provider; both builder integrations are now covered, including what
+  *Included* does and does not mean for them.
+
+### Notes
+
+- **This integration has not been run against a Bricks install.** It was built
+  against the Bricks Academy documentation for the Form element, custom form
+  actions, the Content Area and Form schemas, `bricks/element/render_attributes`
+  and the frontend form events, and Convermetry's own half of that contract is
+  covered by automated tests — including the tracker's handlers executed against
+  dispatched events. The runtime half (that ticking the action dispatches
+  `bricks/form/action/convermetry`, that mutating `event.detail.formData` reaches
+  the request Bricks sends, how template-defined forms are stored and reported,
+  and what Bricks shows a visitor for a failed action) is listed as unverified
+  in the README's Bricks known limitations.
+
+### Security
+
+- **Bricks password fields are never recorded.** Field mapping is driven by
+  Bricks' field *definitions* rather than the submitted array, because Bricks
+  field ids are opaque six-character strings that name-based redaction cannot
+  classify. A `password` field is dropped outright, and a submitted
+  `form-field-*` key with no definition is not recorded at all — an unknown type
+  could be a credential. Uploads carry only the URLs Bricks exposes; the
+  physical file path is never read.
+
 ## 0.10.0
 
 ### Added

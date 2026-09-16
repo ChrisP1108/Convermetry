@@ -11,6 +11,7 @@ use Convermetry\Analytics\FormEngagementReport;
 use Convermetry\Analytics\ReportQueryException;
 use Convermetry\Database\MigrationRunner;
 use Convermetry\Forms\Atomic\AtomicFormsBridge;
+use Convermetry\Forms\Bricks\BricksFormsBridge;
 use Convermetry\Forms\FormProviderRegistry;
 use Convermetry\Forms\FormSettings;
 
@@ -390,8 +391,10 @@ final class FormsPage
         <p class="description" style="max-width:760px;">Convermetry automatically detects supported form plugins and discovers
         their forms. Detected forms are <strong>included by default</strong> — a new form starts recording conversions and delivering
         webhooks without any setup. Exclude a form to stop processing it; its configuration is preserved and restored when re-enabled.
-        <strong>Elementor Atomic forms are the one exception</strong>: they only run the actions you choose in the Elementor editor, so
-        each one needs the Convermetry action added before anything is captured — see below.</p>
+        <strong>Builder forms that run an explicit action list are the exception</strong> — Elementor Atomic forms and Bricks Builder
+        forms only run the actions you choose in their own editor, so each one needs the Convermetry action added before anything is
+        captured. Both are listed here as soon as they are found, whether or not that action has been added; the notices below say
+        what to do.</p>
         <?php
 
         self::renderEngagement();
@@ -418,12 +421,13 @@ final class FormsPage
         <?php
 
         self::renderAtomicSetupNotice(isset($availableProviders[AtomicFormsBridge::PROVIDER_KEY]));
+        self::renderBricksSetupNotice(isset($availableProviders[BricksFormsBridge::PROVIDER_KEY]));
 
         if ($availableProviders === []) {
             ?>
-            <div class="notice notice-info inline"><p>No supported form plugin is currently active. Install and activate
-            Elementor Pro, Gravity Forms, WPForms, Contact Form 7, or Fluent Forms — or integrate a custom form with <code>convermetry_submit_form()</code>
-            (see the About page).</p></div></div>
+            <div class="notice notice-info inline"><p>No supported form plugin or builder is currently active. Install and activate
+            Elementor Pro, Bricks Builder, Gravity Forms, WPForms, Contact Form 7, or Fluent Forms — or integrate a custom form with
+            <code>convermetry_submit_form()</code> (see the About page).</p></div></div>
             <?php
             return;
         }
@@ -537,6 +541,72 @@ final class FormsPage
     }
 
     /**
+     * The setup step, and the two limits, that apply to Bricks Builder forms.
+     *
+     * Bricks forms run an explicit "Actions after successful form submit" list,
+     * so a form captures nothing until "Convermetry" is one of the selected
+     * actions. Convermetry deliberately does not add it: that would mean
+     * rewriting saved Bricks content behind the owner's back, and a plugin that
+     * edits a builder's documents without being asked is a worse problem than a
+     * manual step.
+     *
+     * Rendered whenever the Bricks provider is available — not only when a
+     * Bricks form has been discovered — because the most likely moment to need
+     * these instructions is right after building the first one. A Bricks that is
+     * installed but older than the release with named custom actions gets a
+     * different notice, since for that site there is no step to take.
+     *
+     * @param bool $bricksAvailable Whether the Bricks provider is active.
+     * @return void
+     */
+    private static function renderBricksSetupNotice(bool $bricksAvailable): void
+    {
+        if (!$bricksAvailable) {
+            self::renderBricksVersionNotice();
+
+            return;
+        }
+
+        ?>
+        <div class="notice notice-warning inline"><p><strong>Bricks Builder forms require one extra step.</strong>
+        Open the page or template in Bricks, select the <strong>Form</strong> element, tick <strong>Convermetry</strong> under
+        <strong>Actions after successful form submit</strong>, and save. Convermetry captures submissions from that form once the
+        action is selected — submissions made before then are not recorded and cannot be recovered.</p>
+        <p class="description">Bricks forms below are listed as soon as Convermetry finds them in your Bricks content, which happens
+        whether or not the action has been selected. Marking one <strong>Included</strong> here does not select the action for you,
+        and Convermetry cannot tell from the outside which forms have it.</p>
+        <p class="description">Each Bricks form is identified by its <strong>element ID</strong>, so one form used in a header,
+        footer, popup or reusable template keeps a single configuration across every page it appears on. Two limits are worth
+        knowing: a form placed inside a Bricks <strong>component</strong> is not listed here (Bricks stores component definitions
+        outside page content), and <strong>password</strong> fields are never recorded, exported, emailed or delivered. Only the
+        native Bricks Form element is supported; third-party Bricks form add-ons are not.</p></div>
+        <?php
+    }
+
+    /**
+     * Says so when Bricks is installed but predates named custom form actions.
+     *
+     * Without this the provider card simply reads "Unavailable" next to an
+     * obviously-present Bricks, which reads as a bug rather than as a version
+     * requirement.
+     *
+     * @return void
+     */
+    private static function renderBricksVersionNotice(): void
+    {
+        if (!BricksFormsBridge::isInstalled() || BricksFormsBridge::isSupported()) {
+            return;
+        }
+
+        ?>
+        <div class="notice notice-info inline"><p><strong>Bricks <?php echo esc_html(BricksFormsBridge::installedVersion()); ?>
+        is installed, but Convermetry needs Bricks <?php echo esc_html(BricksFormsBridge::MIN_VERSION); ?> or newer.</strong>
+        Named custom form actions arrived in that release; on an older Bricks the Convermetry action could be selected in the editor
+        but would never run. Update Bricks to capture its form submissions.</p></div>
+        <?php
+    }
+
+    /**
      * Renders one discovered form's configuration block.
      *
      * @param array{provider: string, provider_label: string, native_id: string, name: string} $form Discovered form.
@@ -583,6 +653,13 @@ final class FormsPage
             ?>
             <br><strong>Atomic form:</strong> leaving this included does not switch capture on by itself — this form also needs
             <strong>Convermetry</strong> added under <strong>Actions after submit</strong> in the Elementor editor.
+            <?php
+        }
+
+        if ($form['provider'] === BricksFormsBridge::PROVIDER_KEY) {
+            ?>
+            <br><strong>Bricks form:</strong> leaving this included does not switch capture on by itself — this form also needs
+            <strong>Convermetry</strong> ticked under <strong>Actions after successful form submit</strong> in Bricks.
             <?php
         }
         ?>

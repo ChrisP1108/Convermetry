@@ -42,6 +42,29 @@ jobs:
       - name: Unit suite
         run: composer test
 
+  tracker:
+    name: Tracker JavaScript
+    runs-on: ubuntu-latest
+
+    # The PHP suites pin the tracker's contract by reading its source, which is
+    # all a PHP suite with no browser can do. This job executes it: the real
+    # tracker.js runs in a shimmed browser under Node, the form plugins' own
+    # CustomEvents are dispatched at it, and what actually happens to the
+    # outgoing FormData and to the conversion token is asserted. It caught two
+    # real defects the source assertions could not see.
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Syntax check the tracker
+        run: node --check assets/js/tracker.js
+
+      - name: Tracker behaviour
+        run: node tests/js/bricks-tracker.test.mjs
+
   analyse:
     name: Static analysis (PHPStan level 8)
     runs-on: ubuntu-latest

@@ -2623,7 +2623,16 @@ email            email    Wrong format (e.g. not an email address)    131');
         with no form plugin at all — and their forms are discovered automatically. Detected forms are <strong>included by default</strong>,
         so a new form needs no setup; exclusions and per-form configuration live on the <strong>Forms</strong> page.</p>
         <table class="cvm-about-table"><thead><tr><th scope="col">Provider</th><th scope="col">Server-side hook and notes</th></tr></thead><tbody>
-        <tr><td>Elementor Pro</td><td><code>elementor_pro/forms/new_record</code>. Per-form settings key by form <strong>name</strong>.</td></tr>
+        <tr><td>Elementor Pro</td><td><code>elementor_pro/forms/new_record</code>. Per-form settings key by the widget id,
+        falling back to the legacy form <strong>name</strong> key until the next save.</td></tr>
+        <tr><td>Elementor Pro — Atomic Forms</td><td>The <code>convermetry</code> action, registered on
+        <code>elementor_pro/atomic_forms/actions/register</code>. <strong>Opt in per form</strong>: nothing is captured until
+        <em>Convermetry</em> is added under <em>Actions after submit</em> in the Elementor editor. Settings key by
+        <code>&lt;document id&gt;:&lt;element id&gt;</code>.</td></tr>
+        <tr><td>Bricks Builder</td><td>The <code>convermetry</code> action, dispatched on
+        <code>bricks/form/action/convermetry</code> (Bricks 1.12.2+). <strong>Opt in per form</strong>: nothing is captured until
+        <em>Convermetry</em> is ticked under <em>Actions after successful form submit</em> in Bricks. Settings key by the form
+        <strong>element id</strong>. Native Bricks Form element only.</td></tr>
         <tr><td>Gravity Forms</td><td><code>gform_after_submission</code>, via public APIs.</td></tr>
         <tr><td>WPForms</td><td><code>wpforms_process_complete</code>.</td></tr>
         <tr><td>Contact Form 7</td><td><code>wpcf7_mail_sent</code>.</td></tr>
@@ -2633,8 +2642,11 @@ email            email    Wrong format (e.g. not an email address)    131');
         form ids are normalized to the numeric form id.</td></tr>
         <tr><td>Formidable Forms</td><td><code>frm_after_create_entry</code> at priority 30. Repeater/embedded child entries
         and saved drafts are skipped.</td></tr></tbody></table>
-        <p>Per-form settings key by the provider's own form id for every provider except Elementor Pro, which keys by form
-        name. Custom forms integrate through the <a href="#developer">public API</a>, and third-party adapters register with the <a href="#hook-convermetry_form_providers"><code>convermetry_form_providers</code></a>
+        <p>Per-form settings key by the provider's own most stable form identity. <strong>Two providers are opt in per form</strong>
+        — Elementor Atomic and Bricks Builder both run an explicit list of actions after submit, so a form of theirs captures nothing
+        until the Convermetry action is selected in that builder's editor. Convermetry never edits saved builder content to add it,
+        and cannot tell from the outside which forms have it; the <strong>Forms</strong> page says so beside those rows. Custom forms
+        integrate through the <a href="#developer">public API</a>, and third-party adapters register with the <a href="#hook-convermetry_form_providers"><code>convermetry_form_providers</code></a>
         filter.</p>
         <?php
         self::cardEnd();
@@ -2998,6 +3010,10 @@ if (!hash_equals($expected, $_SERVER[\'HTTP_X_CONVERMETRY_SIGNATURE\'] ?? \'\'))
         <p>Label availability differs by provider, and Convermetry does not guess:</p>
         <table class="cvm-about-table"><thead><tr><th scope="col">Provider</th><th scope="col"><code>id</code></th><th scope="col"><code>label</code></th></tr></thead><tbody>
         <tr><td>Elementor</td><td>field ID</td><td>the field's title</td></tr>
+        <tr><td>Elementor Atomic</td><td>field (element) ID</td><td>the field's editor label, else the ID</td></tr>
+        <tr><td>Bricks Builder</td><td>field ID</td><td>the field label, else the ID. Only fields Bricks <em>defines</em> are
+        mapped, and <strong>password</strong> fields are dropped outright — Bricks field IDs are opaque, so the field type is the
+        only thing that can tell a credential from a comment</td></tr>
         <tr><td>Gravity Forms</td><td>field ID</td><td>the field label</td></tr>
         <tr><td>WPForms</td><td>field ID</td><td>the field name</td></tr>
         <tr><td>Ninja Forms</td><td>field ID (or key)</td><td>the field label, else its key</td></tr>

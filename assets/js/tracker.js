@@ -36,8 +36,9 @@
  *                   can preventDefault — note these are submission *attempts*
  *  - form_success : CONFIRMED form submissions — recorded only when the form
  *                   plugin reports that the server accepted the submission
- *                   (Elementor Pro, Contact Form 7, WPForms, Gravity Forms),
- *                   or when custom code dispatches a "convermetry:conversion" event.
+ *                   (Elementor Pro, Bricks Builder, Contact Form 7, WPForms,
+ *                   Gravity Forms), or when custom code dispatches a
+ *                   "convermetry:conversion" event.
  *                   Each carries a unique conversion id and a snapshot of the
  *                   session's campaign attribution at conversion time.
  *  - hover        : pointer resting on an interactive element for the
@@ -921,6 +922,15 @@
      *  form element is replaced by the confirmation markup. */
     const gfTokens = {};
 
+    /** Forms whose token was refreshed by the native submit listener for the
+     *  CURRENT attempt, and not yet consumed by a plugin's own serialization
+     *  hook. Exactly one thing reads it: the Bricks submit handler, which fires
+     *  after the native submit event for the same attempt and must reuse that
+     *  attempt's token rather than mint a second one. Membership is one-shot —
+     *  consuming it removes the form, so the NEXT attempt gets a fresh token
+     *  instead of silently re-reporting the previous conversion. */
+    const freshTokens = (typeof WeakSet === 'function') ? new WeakSet() : null;
+
     /** Creates or updates one hidden input on a form. */
     function setHiddenField(form, name, value) {
         let input = null;
@@ -1269,6 +1279,9 @@
         // the fields. Only for forms the server actually correlates.
         if (correlatableForm(form)) {
             ensureCorrelationFields(form, true);
+            if (freshTokens) {
+                freshTokens.add(form);
+            }
         }
 
         track('form_submit', {
@@ -1381,6 +1394,201 @@
         setTimeout(bindJQueryFormEvents, 3000);
         setTimeout(bindJQueryFormEvents, 8000);
     }
+
+    /* ------------------------------------------------------------------ *
+     *  Bricks Builder forms — the theme's own documented CustomEvents.
+     *
+     *  Bricks submits over AJAX and publishes three document-level events for
+     *  exactly this purpose:
+     *
+     *    bricks/form/submit   after Bricks has prepared the form data and
+     *                         BEFORE the request is sent — event.detail carries
+     *                         { elementId, formData }
+     *    bricks/form/success  after a successful form AJAX response
+     *    bricks/form/error    after an error response
+     *
+     *  So the three correlation values are set on detail.formData rather than
+     *  injected as hidden inputs: that is the documented, supported point at
+     *  which the outgoing request can still be changed, and it needs no wrapper
+     *  around fetch and no knowledge of Bricks' endpoint. They travel as
+     *  TOP-LEVEL entries, which means they arrive in $_POST exactly where
+     *  Correlation::fromCurrentRequest() already looks, and they are never
+     *  form-field-<id> values — so they are never submitted data, never reach
+     *  Bricks' own Form Submissions, and never appear in a lead, an export, a
+     *  notification, or a payload.
+     *
+     *  ONE TOKEN PER ATTEMPT. A Bricks form carries the server-rendered
+     *  data-cvm-form-key, which makes correlatableForm() recognise it, so the
+     *  native submit listener may already have minted this attempt's token
+     *  before Bricks prepared its request. That token is reused here. Minting a
+     *  second one would split one submission between two conversion ids — the
+     *  server recording one and the browser reporting the other — which is
+     *  precisely the double count the shared token exists to prevent. The
+     *  success event consumes that token, and reports nothing at all when there
+     *  is none: the server-side action has recorded the conversion either way,
+     *  so staying quiet is never worse than claiming a token the server never
+     *  received.
+     *
+     *  Listeners are on `document`, so a form inserted later — an AJAX popup, a
+     *  tabbed step, a query-filter re-render — is covered without rescanning.
+     * ------------------------------------------------------------------ */
+
+    /** Bricks element ids are short alphanumeric strings; anything else is not
+     *  one, and must never be interpolated into a selector. */
+    const BRICKS_ID = /^[A-Za-z0-9_-]{1,64}$/;
+
+    /** The provider prefix the server records Bricks submissions under. */
+    const BRICKS_KEY_PREFIX = 'bricks:';
+
+    /** Conversion token for the in-flight attempt, keyed by Bricks element id —
+     *  the success and error events report the element id, not the element. */
+    const bricksTokens = {};
+
+    /** A validated Bricks element id from an event detail, or ''. */
+    function bricksElementId(raw) {
+        const id = (typeof raw === 'string' || typeof raw === 'number') ? String(raw) : '';
+        return BRICKS_ID.test(id) ? id : '';
+    }
+
+    /** The <form> element a Bricks event fired for, or null.
+     *  data-cvm-form-key is preferred because the server rendered it from the
+     *  same element id Bricks is reporting; #brxe-<id> is Bricks' own default
+     *  markup, and covers a form rendered before this attribute existed. */
+    function bricksFormElement(elementId) {
+        if (!elementId || !document.querySelector) {
+            return null;
+        }
+        try {
+            return document.querySelector('[' + FORM_ATTR + '="' + BRICKS_KEY_PREFIX + elementId + '"]') ||
+                document.getElementById('brxe-' + elementId);
+        } catch (e) {
+            return null;
+        }
+    }
+
+    /** The conversion token for this attempt: the one the native submit
+     *  listener just minted when there is one, otherwise a fresh token. */
+    function bricksToken(form, elementId) {
+        let token = null;
+
+        if (form && freshTokens && freshTokens.has(form)) {
+            freshTokens.delete(form);
+            token = tokenFor(form);
+        }
+
+        if (!token) {
+            token = 'c' + randomHex(16);
+        }
+
+        if (form && formTokens) {
+            formTokens.set(form, token);
+        }
+        if (elementId) {
+            bricksTokens[elementId] = token;
+        }
+
+        return token;
+    }
+
+    document.addEventListener('bricks/form/submit', function (e) {
+        try {
+            const detail = e && e.detail;
+            const formData = detail && detail.formData;
+
+            // Only a real FormData-like body can be amended; anything else is a
+            // Bricks that changed shape, and is left completely alone.
+            if (!formData || typeof formData.set !== 'function') {
+                return;
+            }
+
+            const elementId = bricksElementId(detail.elementId);
+            const form = bricksFormElement(elementId);
+
+            // The same rules every other form on the page is held to.
+            if (form && (inAdminBar(form) || form.hasAttribute('data-cvm-ignore'))) {
+                return;
+            }
+
+            const token = bricksToken(form, elementId);
+
+            formData.set(FIELD_CONVERSION, token);
+            formData.set(FIELD_SESSION, sessionId());
+            formData.set(FIELD_CONTEXT, JSON.stringify(correlationContext()));
+        } catch (err) {
+            // Instrumentation must never break a visitor's submission: the
+            // token and session may already have travelled, and Bricks sends
+            // the request either way.
+        }
+    });
+
+    document.addEventListener('bricks/form/success', function (e) {
+        const elementId = bricksElementId(e && e.detail && e.detail.elementId);
+        const form = bricksFormElement(elementId);
+
+        if (form && !trackableForm(form)) {
+            return;
+        }
+
+        // The token THIS attempt's submit handler minted and sent, and nothing
+        // else. Reusing it is what makes the server's confirmed conversion and
+        // this event one conversion rather than two.
+        const token = elementId ? bricksTokens[elementId] : '';
+
+        // Its absence means no attempt of ours is in flight: a success whose
+        // submit event was never seen, or a repeat of one already reported. The
+        // right answer is to report NOTHING. The server-side action has already
+        // recorded this conversion under a token of its own, so claiming one
+        // here would make one submission count as two — and there is no case
+        // where reporting beats staying quiet, because the server's record
+        // exists either way.
+        if (!token) {
+            return;
+        }
+
+        delete bricksTokens[elementId]; // Consumed: one attempt, one conversion.
+
+        trackConversion('bricks-form-' + elementId, token);
+    });
+
+    document.addEventListener('bricks/form/error', function (e) {
+        if (!config.events.form_error) {
+            return;
+        }
+
+        const elementId = bricksElementId(e && e.detail && e.detail.elementId);
+        const form = bricksFormElement(elementId);
+
+        if (form && !trackableForm(form)) {
+            return;
+        }
+
+        // The attempt did not convert, so its token is dropped rather than left
+        // for a later success event to claim.
+        if (elementId) {
+            delete bricksTokens[elementId];
+        }
+
+        if (form) {
+            const state = stateFor(form);
+            if (state) {
+                if (state.errors >= MAX_ERRORS_PER_FORM) {
+                    return;
+                }
+                state.errors++;
+            }
+        }
+
+        // detail.res is Bricks' own response body. It can echo submitted values
+        // and endpoint messages, so it is deliberately never read: the only
+        // thing reported is THAT the server rejected this form.
+        track('form_error', {
+            element_tag: 'form',
+            form_key: form ? formIdentity(form) : (elementId ? BRICKS_KEY_PREFIX + elementId : ''),
+            field_id: '',
+            field_type: 'form',
+            error_type: 'invalid'
+        });
+    });
 
     /* ------------------------------------------------------------------ *
      *  Form engagement — the path between seeing a form and submitting it

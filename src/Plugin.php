@@ -50,7 +50,9 @@ use Convermetry\Webhook\FormDeliveryQueue;
  *  - ScriptLoader         — enqueues the frontend tracker script with its config
  *  - AnalyticsDispatcher  — scheduled analytics-report webhook delivery
  *  - FormDeliveryQueue    — background form-submission webhook delivery
- *  - FormProviderRegistry — form-plugin integrations (feature-detected)
+ *  - FormProviderRegistry — form-plugin and form-builder integrations
+ *                           (feature-detected; theme-based ones register on
+ *                           after_setup_theme, see registerHooks())
  *  - SubmissionService    — the pipeline every confirmed submission flows through
  *  - DeliveryLogController — read-only deliveries REST API
  *  - Admin pages          — Home, Analytics, Submissions, Forms, Webhooks,
@@ -148,6 +150,13 @@ final class Plugin
 
         // Form-provider hooks are feature-detected: providers whose plugin is
         // absent register nothing, so nothing here can fatal without them.
+        //
+        // The registry registers in TWO passes — here, and again on
+        // after_setup_theme. This method runs on plugins_loaded, which is before
+        // WordPress loads the active theme's functions.php, so a provider whose
+        // integration is a THEME (Bricks) is honestly unavailable at this
+        // moment. The second pass is guarded per provider key, so nothing
+        // already registered here is touched again.
         $this->formRegistry->registerHooks($this->submissionService);
 
         // Public custom-form API: fire-and-forget submissions with

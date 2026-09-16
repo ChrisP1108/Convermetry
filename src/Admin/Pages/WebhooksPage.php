@@ -513,8 +513,11 @@ final class WebhooksPage
         <strong>Retry in background</strong> (recommended) — the visitor always sees the form's normal success state; failed deliveries
         retry automatically.</label>
         <label style="display:block;"><input type="radio" name="cvm_failure_mode" value="show_error" <?php echo checked($settings['failure_mode'] === 'show_error', true, false); ?>>
-        <strong>Show error to visitor</strong> — delivery runs during the submission and a failure is shown on the form (supported
-        for Elementor Pro forms; other providers always use background delivery).</label></td></tr></table></div>
+        <strong>Show error to visitor</strong> — delivery runs during the submission and a failure is reported back to the form
+        (supported for Elementor Pro and Bricks Builder forms; every other provider always uses background delivery). Only a
+        genuinely failed delivery is reported: an excluded form, a submission a filter declined, and a site with no endpoints
+        configured all stay silent. Whether the form then <em>displays</em> an error is the builder's own decision &mdash; see the
+        README for what each one does with a failed action.</label></td></tr></table></div>
         <?php
 
         // ── Request customization card ─────────────────────────────────

@@ -22,7 +22,7 @@ Was the lead successfully delivered to external systems?
 
 Convermetry works standalone — full analytics dashboard, form integrations, and webhook delivery inside one WordPress install — and is architected so a future Convermetry SaaS can receive `analytics_report` and `form_submission` messages from many installations, keyed by a shared, versioned payload schema.
 
-- **Version:** 0.10.0
+- **Version:** 0.11.0
 - **Requires WordPress:** 6.3+
 - **Requires PHP:** 8.3+
 - **License:** GPL-2.0-or-later
@@ -44,6 +44,7 @@ Convermetry works standalone — full analytics dashboard, form integrations, an
 10. [Session → submission → conversion correlation](#session--submission--conversion-correlation)
 11. [Supported form providers](#supported-form-providers)
     - [Elementor: classic forms vs Atomic forms](#elementor-classic-forms-vs-atomic-forms)
+    - [Bricks Builder forms](#bricks-builder-forms)
 12. [Custom form integration API](#custom-form-integration-api)
     - [Arguments](#arguments) · [The result object](#the-result-object) · [What both paths do](#what-both-paths-do)
 13. [Notifications](#notifications)
@@ -145,7 +146,7 @@ See [Submissions](#submissions) below.
 
 Shows each supported provider as **Active** or **Unavailable**, automatically discovers every active provider's forms (cached for five minutes), and offers filtering by provider, name/id text, and included/excluded state.
 
-Detected forms are included by default and need no setup — with one exception, called out on the page itself: **Elementor Atomic forms** only run the actions selected in the Elementor editor, so each one needs **Convermetry** added under *Actions after submit* before anything is captured. See [Elementor: classic forms vs Atomic forms](#elementor-classic-forms-vs-atomic-forms).
+Detected forms are included by default and need no setup — with two exceptions, both called out on the page itself. **Elementor Atomic forms** and **Bricks Builder forms** run only the actions selected in their own builder's editor, so each one needs the **Convermetry** action added before anything is captured. See [Elementor: classic forms vs Atomic forms](#elementor-classic-forms-vs-atomic-forms) and [Bricks Builder forms](#bricks-builder-forms).
 
 Per form:
 
@@ -548,7 +549,9 @@ The critical link between analytics and leads is **token-based — never timesta
    - `cvm_context` — a compact JSON snapshot of the session's attribution, entrance referrer/direct marker, landing page, and page URL.
 2. The form plugin processes the submission normally. When its **server-side success hook** fires, Convermetry's provider adapter extracts and strictly validates those fields from the request (all transport shapes are handled, including Fluent Forms' serialized `data` blob), and **strips every `cvm_*` field** from the submission data.
 3. The confirmed conversion is recorded as a `form_success` analytics event under **that same conversion token**, together with a durable row in the form-submissions table (session id, attribution context, sanitized lead data).
-4. The tracker's own frontend success listeners (Elementor `submit_success`, CF7 `wpcf7mailsent`, WPForms `wpformsAjaxSubmitSuccess`, Gravity Forms `gform_confirmation_loaded`) reuse the **same token** for their `form_success` event — so whichever paths fire, every report deduplicates them into **one** conversion by `conversion_id`.
+4. The tracker's own frontend success listeners (Elementor `submit_success`, Bricks `bricks/form/success`, CF7 `wpcf7mailsent`, WPForms `wpformsAjaxSubmitSuccess`, Gravity Forms `gform_confirmation_loaded`) reuse the **same token** for their `form_success` event — so whichever paths fire, every report deduplicates them into **one** conversion by `conversion_id`.
+
+Two providers do not serialize the `<form>`, so a hidden input would be dropped: Elementor Atomic's request is amended as it is built, and Bricks' three values are set on the prepared `event.detail.formData` at its documented `bricks/form/submit` event. Both carry them as **top-level** entries, never as submitted fields, and both reuse the token the native submit listener already minted for that attempt rather than creating a second one.
 
 AJAX forms are fully supported (the capture-phase refresh runs before provider serialization). When the fields are absent (tracker disabled, privacy signals honored, JavaScript blocked, server-to-server submissions), the conversion id is generated server-side and the submission still records and delivers — just with an empty `analytics_context`. No cookies are used at any point.
 
@@ -562,6 +565,7 @@ Providers are feature-detected — nothing loads or breaks when a plugin is abse
 |---|---|---|---|
 | Elementor Pro (classic forms) | `ELEMENTOR_PRO_VERSION` / `\ElementorPro\Plugin` | `elementor_pro/forms/new_record` | Widget id (settings fall back to the legacy **name** key until the next save) |
 | Elementor Pro — Atomic Forms | `ELEMENTOR_PRO_VERSION` / `\ElementorPro\Plugin` | `convermetry` action on `elementor_pro/atomic_forms/actions/register` — **opt in per form**, see below | `<document id>:<element id>` |
+| Bricks Builder | `BRICKS_VERSION` ≥ 1.12.2 | `bricks/form/action/convermetry` — **opt in per form**, see below | Form **element id** |
 | Gravity Forms | `GFAPI` | `gform_after_submission` | Form id |
 | WPForms | `wpforms()` | `wpforms_process_complete` | Form id |
 | Contact Form 7 | `WPCF7_ContactForm` | `wpcf7_mail_sent` | Form post id |
@@ -569,7 +573,7 @@ Providers are feature-detected — nothing loads or breaks when a plugin is abse
 | Ninja Forms | `Ninja_Forms()` | `ninja_forms_after_submission` | Form id |
 | Formidable Forms | `FrmForm` / `FrmEntry` / `FrmField` | `frm_after_create_entry` (priority 30) | Form id |
 
-Elementor discovery walks `_elementor_data` post meta directly (public queries miss private post types such as `elementor_library`). Gravity Forms uses `GFAPI::get_forms()`; WPForms lists the `wpforms` post type; CF7 uses `WPCF7_ContactForm::find()`; Ninja Forms uses `Ninja_Forms()->form()->get_forms()`; Formidable uses `FrmForm::get_published_forms()`.
+Elementor discovery walks `_elementor_data` post meta directly (public queries miss private post types such as `elementor_library`). Bricks discovery walks its three content-area meta keys — `_bricks_page_content_2`, `_bricks_page_header_2`, `_bricks_page_footer_2` — for the same reason: the query is not restricted to public post types, so anything storing Bricks content is reached, `bricks_template` included, while revisions, trashed posts and auto-drafts are excluded. Gravity Forms uses `GFAPI::get_forms()`; WPForms lists the `wpforms` post type; CF7 uses `WPCF7_ContactForm::find()`; Ninja Forms uses `Ninja_Forms()->form()->get_forms()`; Formidable uses `FrmForm::get_published_forms()`.
 
 Two providers filter events the hook alone would over-report:
 
@@ -583,7 +587,7 @@ Two providers filter events the hook alone would over-report:
 3. Control returns immediately; the visitor is never delayed.
 4. A background worker (kicked within seconds via a spawned cron) builds, enriches, freezes, and sends the payloads, retrying on failure.
 
-An external webhook outage can never make a valid form submission appear to fail. The optional **Show error to visitor** mode (Webhooks page) runs delivery synchronously for Elementor Pro forms and surfaces failures on the form via Elementor's AJAX handler.
+An external webhook outage can never make a valid form submission appear to fail. The optional **Show error to visitor** mode (Webhooks page) runs delivery synchronously for Elementor Pro and Bricks Builder forms and reports a failure back through that builder's own result API; every other provider always uses background delivery. Only a genuinely failed delivery is reported: an excluded form, a submission a `convermetry_should_record_submission` callback declined, and a site with no endpoints configured all stay silent. What each builder then *does* with a failed action differs — see the known limitations under [Elementor](#known-limitations) and [Bricks](#bricks-known-limitations).
 
 ## Elementor: classic forms vs Atomic forms
 
@@ -624,6 +628,89 @@ Atomic forms do not serialize the `<form>`. Elementor's own frontend builds the 
 
 - **A failure in *Show error to visitor* mode may not be shown to the visitor.** Convermetry returns a failed action result, which Elementor records in its action results and submission log. Elementor Pro 4.2.3 only switches an Atomic form into its error state for actions that fail through its own internal failure path, so a returned failure — from this action or from Elementor's own native Webhook action — does not by itself display an error. The failure is always recorded in the Activity Log. The default **background** mode is unaffected: failed deliveries are queued and retried exactly as for classic forms.
 - **Elementor Pro's Atomic action API is not published.** Convermetry's use of it was built against the documented contract and behaviour reported for **Elementor Pro 4.2.3**; the Elementor *core* side (the `e-form` element, its `form-name` prop, the actions-after-submit control, and the `elementor/atomic-widgets/controls` filter) was verified against Elementor's published source. Every Elementor symbol is guarded, so a version that differs registers nothing rather than breaking the site.
+
+## Bricks Builder forms
+
+Bricks is a **theme**, not a plugin, and its native **Form** element runs an explicit list of *Actions after successful form submit*. Both of those shape the integration.
+
+| | |
+|---|---|
+| Scope | The **native Bricks Form element** (`name` = `form`). Third-party Bricks form add-ons are not supported and are not discovered. |
+| Requires | Bricks **1.12.2+** — the release that added named custom form actions (`bricks/form/action/{action}`). An older Bricks is reported *Unavailable* on the Forms page, with a notice saying why, and nothing is registered. |
+| Capture | **Opt in per form**, in the Bricks editor (below). |
+| Identity | The form **element id**, on its own — e.g. `yrnkmt`. |
+| Settings key | `bricks:<element id>` |
+| Discovery | Automatic, from Bricks' three content-area meta keys, across every post type that stores Bricks content — **listing a form is not capture**, see below. |
+
+### Required setup for every Bricks form
+
+1. Open the page or template in **Bricks**.
+2. Select the **Form** element.
+3. Tick **Convermetry** under **Actions after successful form submit**.
+4. **Save**.
+
+A **Convermetry** control group then appears in the panel with a one-line reminder that the form's actual configuration — custom payload form ID, exclusion, per-form webhook headers and query parameters — lives on Convermetry's own **Forms** screen. There is nothing to configure inside Bricks, deliberately: a second place for the same setting is a second place for it to disagree.
+
+Convermetry never edits your saved Bricks content, so it cannot tick that box for you and cannot tell from the outside which forms have it. Bricks forms appear on the **Forms** screen as soon as they are found in your Bricks content, whether or not the action has been selected — marking one **Included** there does not switch capture on by itself.
+
+The action stays registered for as long as Convermetry is active, including when webhook delivery is switched off or no endpoints exist. With nothing to deliver it still records the lead, the conversion and the notification, and reports a successful no-op.
+
+### Why the plugin waits for the theme
+
+Convermetry initialises on `plugins_loaded`. WordPress loads the active theme's `functions.php` **after** that, so at the only moment the provider registry used to ask "is Bricks here?", a Bricks site truthfully answers *no* — and a single-pass registry would wire nothing, on every Bricks site, silently.
+
+So provider registration runs in **two passes**: the existing one on `plugins_loaded`, and a second on `after_setup_theme`, guarded per provider key. A provider available at boot registers there and is never touched again; one that only becomes available with the theme registers exactly once, in the second pass. Availability is a `BRICKS_VERSION` check rather than a stylesheet-folder check, so a **Bricks child theme** — which still loads the parent's `functions.php` — is detected exactly like the parent.
+
+### Form identity is the element id, not the page
+
+Bricks reports `postId` as the post a submission was made **from**. For a form in a header, footer, popup, or a template reused across the site, that is *not* the document that defines the form — it is whatever page the visitor happened to be on. A `<post>:<element>` key would therefore split one form's configuration across every page it appears on, and would never match the identity discovery derives from the document that actually defines it.
+
+So identity is the **form element id alone**. That is what Bricks' own *Form Submissions* feature groups entries by, site-wide, and it agrees across page forms, header and footer templates, popups, reused templates and repeated render instances. The submitting post is still captured — as page context, which is what it is.
+
+One consequence worth knowing: **duplicating a WordPress document copies its Bricks element ids verbatim**, so the two copies of a form share one identity and one configuration. Bricks' own submissions dashboard groups them together for the same reason.
+
+### What is recorded, and what is not
+
+Field mapping is driven by the form's **field definitions**, not by the submitted array. Bricks field ids are opaque six-character strings — `4f2a9c` says nothing about what it holds — so a submitted value can only be classified by looking up its definition. That is the property the rule exists for:
+
+- **Password fields are never recorded**, exported, emailed or delivered. Name-based redaction cannot help here: it matches `password` in a field *name*, and a Bricks field is named `4f2a9c`. The field **type** is the only thing that can tell a credential from a comment.
+- **A submitted `form-field-*` key with no definition is not recorded** — its type is unknown, and an unknown type could be a password.
+- **Transport metadata is excluded by construction.** `postId`, `formId`, `referrer`, the nonce and the reCAPTCHA / hCaptcha / Turnstile response tokens all arrive as top-level keys, never as `form-field-<id>`, so none of them is even looked at. Convermetry's own `cvm_*` values travel the same top-level route and are stripped again by the normalizer regardless.
+- **Honeypot and HTML fields are skipped**, as they are in Bricks' own saved submissions.
+- **Uploads carry URLs only.** Bricks exposes both a physical `file` path and a `url` for each upload; only the URL travels. A media-library Image or Gallery pick falls back to the submitted value, narrowed to absolute `http(s)` URLs and numeric attachment ids.
+
+Everything else is preserved as submitted: native field ids, duplicate labels, multi-value fields, and empty or zero values.
+
+### Attribution on Bricks forms
+
+Bricks submits over AJAX and publishes three documented events. The tracker uses them rather than wrapping `fetch`:
+
+- **`bricks/form/submit`** fires after Bricks has prepared the form data and *before* the request is sent. The three correlation values (`cvm_conversion_id`, `cvm_session_id`, `cvm_context`) are set on `event.detail.formData` as **top-level** entries — so they arrive in `$_POST` exactly where Convermetry already looks, and are never `form-field-<id>` values. They therefore never become submitted data, never reach Bricks' own Form Submissions, and never appear on a lead, in an export, in a notification, or in a payload.
+- **`bricks/form/success`** records the confirmed conversion, reusing **the same token the server received**, so the browser and server paths deduplicate into one conversion. A success with no attempt of ours in flight — a repeat, or one whose submit event was never seen — reports *nothing*: the server-side action already recorded that conversion, and minting a token here would make one submission count as two.
+- **`bricks/form/error`** records a `form_error` and drops the attempt's token. Bricks' response body is deliberately never read: it can echo submitted values and endpoint messages, so the only thing reported is *that* the server rejected the form.
+
+The rules every other form is held to apply unchanged: `data-cvm-ignore` opts a form out, nothing inside the admin bar is instrumented, and any error in the instrumentation leaves Bricks' request on its way. Listeners are on `document`, so a form inserted later — an AJAX popup, a tabbed step, a query-filter re-render — is covered without rescanning.
+
+Bricks form tags also carry a server-rendered `data-cvm-form-key` (and `data-cvm-form-name` when the form is named), added through `bricks/element/render_attributes`. The tracker prefers that attribute over every DOM heuristic, and it is the same provider-scoped key the server records the submission under.
+
+Without the tracker (JavaScript blocked, tracking disabled, privacy signals honoured), the submission is still captured server-side with a server-generated conversion id and **no fabricated session attribution**.
+
+<a id="bricks-known-limitations"></a>
+### Known limitations
+
+- **Reaching this action does not guarantee the whole submission succeeds.** Bricks runs the selected actions in order (Redirect always last) and stops at the first that reports a failure. An action *after* Convermetry can still fail, and by then the submission is recorded. What a recorded submission means is "Bricks accepted this submission and started running its actions" — the same thing every other provider's success hook reports. Bricks validation, spam rejection (reCAPTCHA / hCaptcha / Turnstile / honeypot), max-entry and duplicate-entry limits and conditional action rules all run *before* the action list, so a rejected submission never reaches Convermetry at all.
+- **A failure in *Show error to visitor* mode halts the rest of the form's actions.** That is Bricks' own semantics for a failed action, which is exactly why only a genuinely failed synchronous delivery is ever reported as one: an exclusion, a declined recording, or a site with no endpoints reports nothing, so the visitor's confirmation email and redirect are never collateral damage. The visitor-facing message is generic; endpoint responses and submitted values are never shown.
+- **Forms inside a Bricks component are not discovered.** Bricks stores component definitions in the `bricks_components` option rather than in a document's content areas, and the identity such a form submits under has not been verified. Capture is unaffected — the action still runs and the submission is still recorded — but the form does not appear on the Forms screen, so it cannot be excluded or given a custom form ID there.
+- **Bricks' PHP API is not published as a package, and this integration has not been run against Bricks.** It was built against the Bricks Academy documentation for the Form element, custom form actions, the Content Area and Form schemas, `bricks/element/render_attributes`, and the frontend form events. No Bricks class is ever named: the submitted form object is duck-typed, so a Bricks that renamed a method records nothing rather than fatalling, and a Bricks whose control shape is unrecognised is left untouched rather than rebuilt.
+
+  What is covered by automated tests is Convermetry's own half of that contract — registration and its idempotency, the two-pass theme lifecycle, the editor option and control group, discovery over the documented content-area schema, identity agreement between discovery and submission, field mapping including the password and unmapped-field rules, the capture and failure semantics, and the tracker's handlers **executed** against dispatched events.
+
+  What is **not** verified, and is a live-site check on a real Bricks install:
+  - that ticking the action and saving causes Bricks to dispatch `bricks/form/action/convermetry`;
+  - that mutating `event.detail.formData` reaches the request Bricks actually sends, and therefore that `Correlation` receives the three values;
+  - that a form defined in a `bricks_template` header, footer, popup or reused template is stored in the content-area meta keys this discovery reads, and reports that same element id when submitted from another page;
+  - what Bricks displays to a visitor when an action sets an error result, and how a redirect interacts with it;
+  - what element id a form inside a Bricks **component** submits under.
 
 ## Custom form integration API
 
@@ -1033,7 +1120,7 @@ Every outbound message shares one versioned envelope:
 {
     "schema_version": "1.0 | 2.0",
     "source": "convermetry",
-    "plugin_version": "0.10.0",
+    "plugin_version": "0.11.0",
     "message_type": "analytics_report | form_submission",
     "website_info": { },
     "generated_at": "2026-08-22T14:00:00+00:00",
@@ -1061,7 +1148,7 @@ Every outbound message shares one versioned envelope:
 {
     "schema_version": "1.1",
     "source": "convermetry",
-    "plugin_version": "0.10.0",
+    "plugin_version": "0.11.0",
     "message_type": "analytics_report",
     "website_info": {
         "name": "Example Financial", "url": "https://example.com", "domain": "example.com",
@@ -1181,7 +1268,7 @@ Every outbound message shares one versioned envelope:
 {
     "schema_version": "2.0",
     "source": "convermetry",
-    "plugin_version": "0.10.0",
+    "plugin_version": "0.11.0",
     "message_type": "form_submission",
     "website_info": {
         "name": "Example Financial", "url": "https://example.com", "domain": "example.com",
@@ -1252,6 +1339,7 @@ Label availability differs by provider, and Convermetry does not guess:
 |---|---|---|
 | Elementor | field ID | the field's title |
 | Elementor Atomic | field (element) ID | the field's editor label, else the ID |
+| Bricks Builder | field ID | the field label, else the ID — see the [password and unmapped-field rule](#bricks-builder-forms) |
 | Gravity Forms | field ID | the field label |
 | WPForms | field ID | the field name |
 | Ninja Forms | field ID (or key) | the field label, else its key |
@@ -1818,10 +1906,13 @@ errors about undefined methods.
 ```bash
 composer lint              # php -l over every PHP file
 composer test              # unit suite — pure logic, no WordPress, no database
+composer test:js           # the tracker's form handlers, executed under Node
 composer test:integration  # the real queries against a real MySQL server
 ```
 
 The **unit** suite is deliberately database-free. There is no hand-rolled `$wpdb` mock anywhere in it: a mock only ever proves the test author's model of MySQL, and a green "delete cascade" built on one would make an unverified erasure guarantee look verified.
+
+The **JavaScript** suite boots the real `assets/js/tracker.js` in a minimal shimmed browser under Node, dispatches the CustomEvents a form plugin fires, and asserts what actually happens to the outgoing request and to the conversion token. Everything the PHP suites can say about the tracker is a *source* assertion — the code contains this string — which is genuinely useful and genuinely blind: it caught none of the two defects executing the same code found immediately (a repeated success event re-reporting a conversion, and a success with no attempt in flight inventing one). It needs only Node; there is no build step and no dependency.
 
 The **integration** suite exists because that boundary has a cost, and 0.5.0 paid it. The funnel report's statement is assembled outside-in, so the last step's placeholders appear first in the finished SQL; parameters were bound in step order and every one landed on the wrong placeholder. Nothing errored — they are all `%s` — so the query compared a page URL against a timestamp, matched nothing, and reported every funnel as zero, while a unit test asserting the SQL's *structure* stayed green. It now runs the generated SQL against a real server.
 
@@ -2039,8 +2130,11 @@ convermetry/
     │   │                        # SubmissionField, SubmissionFieldList
     │   ├── Atomic/              # AtomicFormsBridge (registration, identity, translation),
     │   │                        # ConvermetryAtomicAction (the only Elementor-coupled class)
-    │   └── Providers/           # Elementor, ElementorAtomic, GravityForms, WPForms,
-    │                             # ContactForm7, FluentForms, NinjaForms, FormidableForms
+    │   ├── Bricks/              # BricksFormsBridge (registration, identity, translation,
+    │   │                        # discovery walk) — names no Bricks class at all
+    │   └── Providers/           # Elementor, ElementorAtomic, BricksForms, GravityForms,
+    │                             # WPForms, ContactForm7, FluentForms, NinjaForms,
+    │                             # FormidableForms
     ├── Funnels/                 # FunnelSettings, FunnelRepository, StepCompiler
     ├── Goals/                   # GoalSettings, GoalRepository, GoalMatcher (pure),
     │                             # GoalRecorder, GoalCompletions
