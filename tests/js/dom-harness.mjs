@@ -95,12 +95,27 @@ export class FakeElement {
         return false;
     }
 
-    closest() {
+    /** Supports a single class selector ('.nf-form-cont'); anything else finds nothing. */
+    closest(selector) {
+        const match = /^\.([\w-]+)$/.exec(selector);
+        for (let node = this; match && node; node = node.parent) {
+            if (node.className.split(/\s+/).includes(match[1])) {
+                return node;
+            }
+        }
         return null;
     }
 
     contains(node) {
         return node === this;
+    }
+}
+
+/** A Blob that keeps its text, so a batch sent by sendBeacon can be read back. */
+class TextBlob extends Blob {
+    constructor(parts = [], options = {}) {
+        super(parts, options);
+        this.__text = parts.map(String).join('');
     }
 }
 
@@ -147,11 +162,14 @@ function makeEventTarget(self) {
  * @param {object} options
  * @param {FakeElement[]} options.forms Forms present in the document.
  * @param {object} options.config Overrides merged into ConvermetryConfig.
- * @returns {object} The harness: { window, document, forms, sent, dispatch, trackedEvents }
+ * @param {boolean} options.jquery Install a stand-in jQuery that records the
+ *                                 ajaxPrefilter callbacks the tracker registers.
+ * @returns {object} The harness: { window, document, forms, sent, dispatch, trackedEvents, prefilters }
  */
-export function bootTracker({ forms = [], config = {} } = {}) {
+export function bootTracker({ forms = [], config = {}, jquery = false } = {}) {
     const sent = [];
     const timers = [];
+    const prefilters = [];
 
     const documentElement = new FakeElement('html');
     const document = makeEventTarget({
@@ -227,7 +245,7 @@ export function bootTracker({ forms = [], config = {} } = {}) {
         console,
         URL,
         FormData,
-        Blob,
+        Blob: TextBlob,
         WeakMap,
         WeakSet,
         JSON,
@@ -270,6 +288,12 @@ export function bootTracker({ forms = [], config = {} } = {}) {
     };
     context.fetch = window.fetch;
 
+    if (jquery) {
+        // Only what the tracker calls: $(document).on(...) and $.ajaxPrefilter().
+        window.jQuery = () => ({ on: () => {} });
+        window.jQuery.ajaxPrefilter = (fn) => void prefilters.push(fn);
+    }
+
     createContext(context);
     runInContext(readFileSync(TRACKER, 'utf8'), context, { filename: 'tracker.js' });
 
@@ -291,6 +315,7 @@ export function bootTracker({ forms = [], config = {} } = {}) {
         sent,
         timers,
         trackedEvents,
+        prefilters,
         /**
          * Runs the tracker's periodic flush, as the browser's timer would.
          *

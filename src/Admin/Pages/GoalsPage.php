@@ -82,10 +82,11 @@ final class GoalsPage
         wp_enqueue_script(
             'cvm-goals',
             CVM_PLUGIN_URL . 'assets/js/goals.js',
-            [],
+            ['wp-i18n'],
             CVM_VERSION,
             true
         );
+        wp_set_script_translations('cvm-goals', 'convermetry');
     }
 
     /**
@@ -97,8 +98,8 @@ final class GoalsPage
     {
         add_submenu_page(
             HomePage::MENU_SLUG,
-            'Convermetry Goals',
-            'Goals',
+            __('Convermetry Goals', 'convermetry'),
+            __('Goals', 'convermetry'),
             Capability::required(Capability::GOALS_MANAGE),
             self::MENU_SLUG,
             [self::class, 'render']
@@ -118,9 +119,11 @@ final class GoalsPage
             return;
         }
 
+        // phpcs:disable WordPress.Security.NonceVerification.Missing, WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- the nonce was verified by self::isRequest() above; every field is sanitized by GoalSettings::sanitize() below.
         $submitted = isset($_POST['goal']) && is_array($_POST['goal'])
             ? wp_unslash($_POST['goal'])
             : [];
+        // phpcs:enable WordPress.Security.NonceVerification.Missing, WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
 
         // The stored goal is looked up by the id in the POST, but the id is
         // never taken FROM the POST into the saved record — GoalSettings keeps
@@ -157,7 +160,8 @@ final class GoalsPage
             return;
         }
 
-        $goalId = sanitize_text_field((string) ($_POST['goal_id'] ?? ''));
+        // phpcs:ignore WordPress.Security.NonceVerification.Missing -- verified by self::isRequest() above.
+        $goalId = sanitize_text_field(wp_unslash((string) ($_POST['goal_id'] ?? '')));
 
         if (GoalSettings::isValidId($goalId)) {
             GoalRepository::softDelete($goalId, gmdate('Y-m-d H:i:s'));
@@ -175,8 +179,8 @@ final class GoalsPage
      */
     private static function isRequest(string $action, string $nonce): bool
     {
-        return ($_SERVER['REQUEST_METHOD'] ?? '') === 'POST'
-            && ($_POST['cvm_action'] ?? '') === $action
+        return sanitize_text_field(wp_unslash($_SERVER['REQUEST_METHOD'] ?? '')) === 'POST'
+            && sanitize_key(wp_unslash($_POST['cvm_action'] ?? '')) === $action
             && isset($_POST['cvm_nonce'])
             && wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['cvm_nonce'])), $nonce)
             && Capability::currentUserCan(Capability::GOALS_MANAGE);
@@ -224,25 +228,20 @@ final class GoalsPage
 
         ?>
         <div class="wrap cvm-wrap cvm-goals-wrap">
-        <h1>Goals</h1>
+        <h1><?php esc_html_e('Goals', 'convermetry'); ?></h1>
         <?php
 
         self::renderNotices();
 
         ?>
-        <p class="description cvm-goals-intro">A goal is an important visitor action that is not a form submission — a phone
-        number tapped, a PDF opened, a booking link followed, a pricing page reached. Convermetry matches these on the server as activity
-        arrives, so completions carry the same channel and campaign attribution as everything else and can be broken down the same
-        way.</p>
+        <p class="description cvm-goals-intro"><?php esc_html_e('A goal is an important visitor action that is not a form submission — a phone number tapped, a PDF opened, a booking link followed, a pricing page reached. Convermetry matches these on the server as activity arrives, so completions carry the same channel and campaign attribution as everything else and can be broken down the same way.', 'convermetry'); ?></p>
         <?php
 
         // Nothing on this page can work against a half-migrated schema, so it
         // says so plainly rather than rendering controls that would fail.
         if (MigrationRunner::isPending()) {
             ?>
-            <div class="notice notice-warning inline"><p><strong>Preparing.</strong> Convermetry is still applying a database
-            update from the last plugin upgrade. Goals will become available as soon as it finishes — this page will work normally
-            then, and no data is lost in the meantime.</p></div></div>
+            <div class="notice notice-warning inline"><p><?php echo wp_kses_post(__('<strong>Preparing.</strong> Convermetry is still applying a database update from the last plugin upgrade. Goals will become available as soon as it finishes — this page will work normally then, and no data is lost in the meantime.', 'convermetry')); ?></p></div></div>
             <?php
             return;
         }
@@ -273,9 +272,9 @@ final class GoalsPage
         $error = isset($_GET['cvm_goal_error']) ? sanitize_key((string) $_GET['cvm_goal_error']) : '';
 
         $message = match ($saved) {
-            'created' => 'Goal created. It starts counting from now — completions are not applied retroactively.',
-            'updated' => 'Goal updated.',
-            'deleted' => 'Goal removed. Its past completions are kept and still appear in reports for earlier periods.',
+            'created' => __('Goal created. It starts counting from now — completions are not applied retroactively.', 'convermetry'),
+            'updated' => __('Goal updated.', 'convermetry'),
+            'deleted' => __('Goal removed. Its past completions are kept and still appear in reports for earlier periods.', 'convermetry'),
             default   => '',
         };
 
@@ -286,10 +285,10 @@ final class GoalsPage
         }
 
         $problem = match ($error) {
-            'invalid' => 'That goal could not be saved. A goal needs a name, and every rule except '
-                . '"phone link", "email link", and "external link" needs something to match against.',
+            'invalid' => __('That goal could not be saved. A goal needs a name, and every rule except "phone link", "email link", and "external link" needs something to match against.', 'convermetry'),
             'limit'   => sprintf(
-                'You have reached the limit of %d goals. Remove one you no longer need to add another.',
+                /* translators: %d: the maximum number of goals. */
+                __('You have reached the limit of %d goals. Remove one you no longer need to add another.', 'convermetry'),
                 GoalSettings::MAX_GOALS
             ),
             default   => '',
@@ -318,32 +317,40 @@ final class GoalsPage
     {
         if (!Options::goalsEnabled()) {
             ?>
-            <div class="notice notice-warning inline"><p><strong>Goal matching is switched off.</strong> Goals below are
-            kept but nothing is being recorded. Turn it back on under <a href="<?php echo esc_url(add_query_arg(['page' => SettingsPage::MENU_SLUG], self_admin_url('admin.php'))); ?>">Settings
-            &rarr; Tracking</a>.</p></div>
+            <div class="notice notice-warning inline"><p><?php
+            echo wp_kses_post(sprintf(
+                /* translators: %s: URL of the Convermetry Settings screen. */
+                __('<strong>Goal matching is switched off.</strong> Goals below are kept but nothing is being recorded. Turn it back on under <a href="%s">Settings → Tracking</a>.', 'convermetry'),
+                esc_url(add_query_arg(['page' => SettingsPage::MENU_SLUG], self_admin_url('admin.php')))
+            ));
+            ?></p></div>
             <?php
 
             return;
         }
 
-        $labels = [
-            'pageview'     => ['Page views', 'page and URL goals'],
-            'click'        => ['Link &amp; button clicks', 'click goals'],
-            'custom_event' => ['Custom events', 'custom event goals'],
+        $settingsUrl = esc_url(add_query_arg(['page' => SettingsPage::MENU_SLUG], self_admin_url('admin.php')));
+
+        // One complete sentence per case rather than a sentence with the two
+        // nouns slotted in: which article and case a noun takes varies by
+        // language, and a translator cannot fix that from inside a fragment.
+        $warnings = [
+            /* translators: %s: URL of the Convermetry Settings screen. */
+            'pageview'     => __('You have page and URL goals configured, but <strong>Page views</strong> tracking is switched off in <a href="%s">Settings</a>, so those goals cannot record anything.', 'convermetry'),
+            /* translators: %s: URL of the Convermetry Settings screen. */
+            'click'        => __('You have click goals configured, but <strong>Link & button clicks</strong> tracking is switched off in <a href="%s">Settings</a>, so those goals cannot record anything.', 'convermetry'),
+            /* translators: %s: URL of the Convermetry Settings screen. */
+            'custom_event' => __('You have custom event goals configured, but <strong>Custom events</strong> tracking is switched off in <a href="%s">Settings</a>, so those goals cannot record anything.', 'convermetry'),
         ];
 
-        foreach ($labels as $type => [$setting, $describes]) {
+        foreach ($warnings as $type => $warning) {
             if (!GoalRepository::needsEventType($type) || Options::isTypeEnabled($type)) {
                 continue;
             }
 
-            printf(
-                '<div class="notice notice-warning inline"><p>You have %s configured, but <strong>%s</strong> '
-                . 'tracking is switched off in <a href="%s">Settings</a>, so those goals cannot record anything.</p></div>',
-                esc_html($describes),
-                wp_kses($setting, ['amp' => []]),
-                esc_url(add_query_arg(['page' => SettingsPage::MENU_SLUG], self_admin_url('admin.php')))
-            );
+            echo '<div class="notice notice-warning inline"><p>'
+                . wp_kses_post(sprintf($warning, $settingsUrl))
+                . '</p></div>';
         }
     }
 
@@ -363,14 +370,19 @@ final class GoalsPage
             return;
         }
 
-        printf(
-            '<div class="notice notice-warning inline"><p><strong>Overlapping goals.</strong> %d goal '
-            . 'completions were not recorded because single visitor actions matched more than %d goals at '
-            . 'once. Narrow the overlapping rules so each action counts towards the goals you actually '
-            . 'want.</p></div>',
-            (int) $overflow['count'],
+        $count = (int) $overflow['count'];
+
+        echo '<div class="notice notice-warning inline"><p>' . wp_kses_post(sprintf(
+            /* translators: 1: number of goal completions not recorded, 2: maximum goals one action may complete. */
+            _n(
+                '<strong>Overlapping goals.</strong> %1$d goal completion was not recorded because single visitor actions matched more than %2$d goals at once. Narrow the overlapping rules so each action counts towards the goals you actually want.',
+                '<strong>Overlapping goals.</strong> %1$d goal completions were not recorded because single visitor actions matched more than %2$d goals at once. Narrow the overlapping rules so each action counts towards the goals you actually want.',
+                $count,
+                'convermetry'
+            ),
+            $count,
             \Convermetry\Goals\GoalMatcher::MAX_MATCHES_PER_EVENT
-        );
+        )) . '</p></div>';
     }
 
     /**
@@ -390,10 +402,14 @@ final class GoalsPage
                 self_admin_url('admin.php')
             );
             printf(
-                '<a href="%s" class="button %s">Last %d days</a> ',
+                '<a href="%s" class="button %s">%s</a> ',
                 esc_url($url),
                 $days === $active ? 'button-primary' : 'button-secondary',
-                $days
+                esc_html(sprintf(
+                    /* translators: %d: number of days in the reporting period. */
+                    _n('Last %d day', 'Last %d days', $days, 'convermetry'),
+                    $days
+                ))
             );
         }
         ?>
@@ -412,9 +428,7 @@ final class GoalsPage
     {
         if ($goals === []) {
             ?>
-            <div class="notice notice-info inline"><p>No goals yet. Add one below — <strong>Phone link clicks</strong>
-            and <strong>Email link clicks</strong> need no configuration beyond a name, and are the quickest way to see whether this
-            is measuring what you expect.</p></div>
+            <div class="notice notice-info inline"><p><?php echo wp_kses_post(__('No goals yet. Add one below — <strong>Phone link clicks</strong> and <strong>Email link clicks</strong> need no configuration beyond a name, and are the quickest way to see whether this is measuring what you expect.', 'convermetry')); ?></p></div>
             <?php
 
             return;
@@ -428,8 +442,7 @@ final class GoalsPage
             $lastSeen = GoalReports::lastSeen();
         } catch (ReportQueryException) {
             ?>
-            <div class="notice notice-error inline"><p>Goal performance could not be loaded — a database query failed.
-            The goals themselves are listed below and are unaffected.</p></div>
+            <div class="notice notice-error inline"><p><?php esc_html_e('Goal performance could not be loaded — a database query failed. The goals themselves are listed below and are unaffected.', 'convermetry'); ?></p></div>
             <?php
             $summary  = ['goals' => [], 'sessions' => 0];
             $lastSeen = [];
@@ -442,11 +455,11 @@ final class GoalsPage
 
         ?>
         <table class="widefat striped cvm-goals-table"><thead><tr>
-        <th scope="col">Goal</th><th scope="col">Rule</th>
-        <th scope="col" class="cvm-num">Completions</th>
-        <th scope="col" class="cvm-num">Sessions</th>
-        <th scope="col" class="cvm-num">Rate</th>
-        <th scope="col" class="cvm-num">Value</th>
+        <th scope="col"><?php esc_html_e('Goal', 'convermetry'); ?></th><th scope="col"><?php esc_html_e('Rule', 'convermetry'); ?></th>
+        <th scope="col" class="cvm-num"><?php esc_html_e('Completions', 'convermetry'); ?></th>
+        <th scope="col" class="cvm-num"><?php esc_html_e('Sessions', 'convermetry'); ?></th>
+        <th scope="col" class="cvm-num"><?php esc_html_e('Rate', 'convermetry'); ?></th>
+        <th scope="col" class="cvm-num"><?php esc_html_e('Value', 'convermetry'); ?></th>
         <th scope="col">&nbsp;</th></tr></thead><tbody>
         <?php
 
@@ -458,11 +471,18 @@ final class GoalsPage
         </tbody></table>
         <?php
 
-        printf(
-            '<p class="description">Rates are the share of sessions in this period that completed the goal '
-            . '(%s sessions in total). A goal counting once per session can never exceed 100%%.</p>',
-            esc_html(number_format_i18n((int) ($summary['sessions'] ?? 0)))
-        );
+        $sessions = (int) ($summary['sessions'] ?? 0);
+
+        echo '<p class="description">' . esc_html(sprintf(
+            /* translators: %s: number of sessions in the period. */
+            _n(
+                'Rates are the share of sessions in this period that completed the goal (%s session in total). A goal counting once per session can never exceed 100%%.',
+                'Rates are the share of sessions in this period that completed the goal (%s sessions in total). A goal counting once per session can never exceed 100%%.',
+                $sessions,
+                'convermetry'
+            ),
+            number_format_i18n($sessions)
+        )) . '</p>';
     }
 
     /**
@@ -485,17 +505,19 @@ final class GoalsPage
         <?php
         if (empty($goal['enabled'])) {
             ?>
-             <span class="cvm-status-chip cvm-status-not_sent">Paused</span>
+             <span class="cvm-status-chip cvm-status-not_sent"><?php esc_html_e('Paused', 'convermetry'); ?></span>
             <?php
         }
         ?>
         <div class="cvm-goal-meta">
-        <?php echo esc_html(!empty($goal['once_per_session']) ? 'Once per session' : 'Every occurrence'); ?>
+        <?php echo esc_html(!empty($goal['once_per_session']) ? __('Once per session', 'convermetry') : __('Every occurrence', 'convermetry')); ?>
         <?php
         if (($goal['goal_value'] ?? null) !== null) {
-            ?>
-             &middot; worth <?php echo esc_html(Money::format((string) $goal['goal_value'], Options::leadCurrency())); ?>
-            <?php
+            echo ' &middot; ' . esc_html(sprintf(
+                /* translators: %s: the monetary value of one goal completion, with currency. */
+                __('worth %s', 'convermetry'),
+                Money::format((string) $goal['goal_value'], Options::leadCurrency())
+            ));
         }
         ?>
         </div></td>
@@ -518,17 +540,24 @@ final class GoalsPage
         <td class="cvm-goal-actions">
         <?php
         printf(
-            '<button type="button" class="button-link cvm-goal-edit" data-goal="%s">Edit</button> ',
-            esc_attr((string) wp_json_encode($goal))
+            '<button type="button" class="button-link cvm-goal-edit" data-goal="%s">%s</button> ',
+            esc_attr((string) wp_json_encode($goal)),
+            esc_html__('Edit', 'convermetry')
         );
+
+        // JSON-encoded so the message reaches confirm() as a quoted string
+        // literal. It used to be printed bare, which made the handler a syntax
+        // error — and a throwing onsubmit lets the form submit, so Remove
+        // deleted the goal without ever asking.
+        $confirm = (string) wp_json_encode(__('Remove this goal? Its past completions are kept and still appear in reports for earlier periods.', 'convermetry'));
         ?>
-        <form method="post" class="cvm-inline-form" onsubmit="return confirm(<?php echo esc_attr("Remove this goal? Its past completions are kept and still appear in reports for earlier periods."); ?>);">
+        <form method="post" class="cvm-inline-form" onsubmit="return confirm(<?php echo esc_attr($confirm); ?>);">
         <?php
         wp_nonce_field('cvm_delete_goal', 'cvm_nonce');
         ?>
         <input type="hidden" name="cvm_action" value="delete_goal">
         <input type="hidden" name="goal_id" value="<?php echo esc_attr($goalId); ?>">
-        <button type="submit" class="button-link cvm-btn-danger-link">Remove</button></form></td></tr>
+        <button type="submit" class="button-link cvm-btn-danger-link"><?php esc_html_e('Remove', 'convermetry'); ?></button></form></td></tr>
         <?php
 
         // A goal that has never fired is nearly always a rule that matches
@@ -536,8 +565,7 @@ final class GoalsPage
         // wonder whether the feature works.
         if ($completions === 0 && $seen === '' && !empty($goal['enabled'])) {
             ?>
-            <tr class="cvm-goal-note"><td colspan="7"><em>This goal has never recorded a completion. Check that the rule
-            matches what visitors actually do — a URL rule should be the path as it appears in the address bar, such as <code>/thank-you/</code>.</em></td></tr>
+            <tr class="cvm-goal-note"><td colspan="7"><em><?php echo wp_kses_post(__('This goal has never recorded a completion. Check that the rule matches what visitors actually do — a URL rule should be the path as it appears in the address bar, such as <code>/thank-you/</code>.', 'convermetry')); ?></em></td></tr>
             <?php
         }
     }
@@ -560,20 +588,27 @@ final class GoalsPage
 
         if ($type === 'click') {
             return match ($operator) {
-                'tel'      => 'Click on any tel: link',
-                'mailto'   => 'Click on any mailto: link',
-                'external' => 'Click leaving this site',
-                'selector' => 'Click matching ' . $value,
-                'equals'   => 'Click where the link is ' . $value,
-                default    => 'Click where the link contains ' . $value,
+                'tel'      => __('Click on any tel: link', 'convermetry'),
+                'mailto'   => __('Click on any mailto: link', 'convermetry'),
+                'external' => __('Click leaving this site', 'convermetry'),
+                /* translators: %s: CSS selector. */
+                'selector' => sprintf(__('Click matching %s', 'convermetry'), $value),
+                /* translators: %s: link URL or text the click must match. */
+                'equals'   => sprintf(__('Click where the link is %s', 'convermetry'), $value),
+                /* translators: %s: link URL or text the click must contain. */
+                default    => sprintf(__('Click where the link contains %s', 'convermetry'), $value),
             };
         }
 
         return match ($operator) {
-            'equals'      => 'Page is ' . $value,
-            'starts_with' => 'Page starts with ' . $value,
-            'ends_with'   => 'Page ends with ' . $value,
-            default       => 'Page contains ' . $value,
+            /* translators: %s: page path. */
+            'equals'      => sprintf(__('Page is %s', 'convermetry'), $value),
+            /* translators: %s: page path prefix. */
+            'starts_with' => sprintf(__('Page starts with %s', 'convermetry'), $value),
+            /* translators: %s: page path suffix. */
+            'ends_with'   => sprintf(__('Page ends with %s', 'convermetry'), $value),
+            /* translators: %s: text the page path must contain. */
+            default       => sprintf(__('Page contains %s', 'convermetry'), $value),
         };
     }
 
@@ -586,7 +621,7 @@ final class GoalsPage
     {
         ?>
         <div class="cvm-goal-editor">
-            <h2 id="cvm-goal-editor-title">Add a goal</h2>
+            <h2 id="cvm-goal-editor-title"><?php esc_html_e('Add a goal', 'convermetry'); ?></h2>
 
             <form method="post" class="cvm-goal-form">
                 <?php wp_nonce_field('cvm_save_goal', 'cvm_nonce'); ?>
@@ -595,24 +630,24 @@ final class GoalsPage
 
                 <table class="form-table" role="presentation">
                     <tr>
-                        <th scope="row"><label for="cvm-goal-name">Name</label></th>
+                        <th scope="row"><label for="cvm-goal-name"><?php esc_html_e('Name', 'convermetry'); ?></label></th>
                         <td>
                             <input type="text" id="cvm-goal-name" name="goal[name]" class="regular-text" required
                                    maxlength="<?php echo esc_attr((string) GoalSettings::MAX_NAME_LEN); ?>">
-                            <p class="description">How this goal appears in reports, e.g. "Phone number tapped".</p>
+                            <p class="description"><?php esc_html_e('How this goal appears in reports, e.g. "Phone number tapped".', 'convermetry'); ?></p>
                         </td>
                     </tr>
 
                     <tr>
-                        <th scope="row"><label for="cvm-goal-type">What counts</label></th>
+                        <th scope="row"><label for="cvm-goal-type"><?php esc_html_e('What counts', 'convermetry'); ?></label></th>
                         <td>
                             <select id="cvm-goal-type" name="goal[type]" class="cvm-goal-type">
-                                <option value="click">A click</option>
-                                <option value="url">Reaching a page</option>
-                                <option value="custom_event">A custom event from your own code</option>
+                                <option value="click"><?php esc_html_e('A click', 'convermetry'); ?></option>
+                                <option value="url"><?php esc_html_e('Reaching a page', 'convermetry'); ?></option>
+                                <option value="custom_event"><?php esc_html_e('A custom event from your own code', 'convermetry'); ?></option>
                             </select>
 
-                            <select name="goal[operator]" class="cvm-goal-operator" aria-label="Matching rule">
+                            <select name="goal[operator]" class="cvm-goal-operator" aria-label="<?php esc_attr_e('Matching rule', 'convermetry'); ?>">
                                 <?php foreach (self::operatorLabels() as $type => $operators): ?>
                                     <?php foreach ($operators as $operator => $label): ?>
                                         <option value="<?php echo esc_attr($operator); ?>"
@@ -628,66 +663,60 @@ final class GoalsPage
                                    placeholder="/thank-you/">
 
                             <p class="description cvm-goal-value-help">
-                                For a page, use the path as it appears in the address bar
-                                (<code>/thank-you/</code>). Phone, email, and external-link rules need no value.
+                                <?php echo wp_kses_post(__('For a page, use the path as it appears in the address bar (<code>/thank-you/</code>). Phone, email, and external-link rules need no value.', 'convermetry')); ?>
                             </p>
                         </td>
                     </tr>
 
                     <tr>
-                        <th scope="row">Counting</th>
+                        <th scope="row"><?php esc_html_e('Counting', 'convermetry'); ?></th>
                         <td>
                             <label>
                                 <input type="checkbox" name="goal[once_per_session]" value="1" checked>
-                                Count once per visit
+                                <?php esc_html_e('Count once per visit', 'convermetry'); ?>
                             </label>
                             <p class="description">
-                                On: a visitor who taps the phone number five times counts once — usually what you
-                                want for a contact action. Off: every occurrence counts, which suits repeatable
-                                actions such as downloads.
+                                <?php esc_html_e('On: a visitor who taps the phone number five times counts once — usually what you want for a contact action. Off: every occurrence counts, which suits repeatable actions such as downloads.', 'convermetry'); ?>
                             </p>
                         </td>
                     </tr>
 
                     <tr>
-                        <th scope="row"><label for="cvm-goal-value-amount">Value</label></th>
+                        <th scope="row"><label for="cvm-goal-value-amount"><?php esc_html_e('Value', 'convermetry'); ?></label></th>
                         <td>
                             <input type="text" id="cvm-goal-value-amount" name="goal[goal_value]" class="small-text"
                                    placeholder="0.00">
                             <span class="description"><?php echo esc_html(Options::leadCurrency()); ?></span>
                             <p class="description">
-                                Optional. What one completion is worth to you, used to total attributed value.
-                                Leave blank if you would rather just count them.
+                                <?php esc_html_e('Optional. What one completion is worth to you, used to total attributed value. Leave blank if you would rather just count them.', 'convermetry'); ?>
                             </p>
                         </td>
                     </tr>
 
                     <tr class="cvm-goal-dynamic-row">
-                        <th scope="row">Value from your code</th>
+                        <th scope="row"><?php esc_html_e('Value from your code', 'convermetry'); ?></th>
                         <td>
                             <label>
                                 <input type="checkbox" name="goal[dynamic_value]" value="1">
-                                Use the value passed to <code>Convermetry.track()</code> when one is supplied
+                                <?php echo wp_kses_post(__('Use the value passed to <code>Convermetry.track()</code> when one is supplied', 'convermetry')); ?>
                             </label>
                             <p class="description">
-                                Custom events only. Your code may pass a number, e.g.
-                                <code>Convermetry.track('booking', { value: 250 })</code>. Only a numeric value is
-                                read — no other data from that call is ever stored.
+                                <?php echo wp_kses_post(__('Custom events only. Your code may pass a number, e.g. <code>Convermetry.track(\'booking\', { value: 250 })</code>. Only a numeric value is read — no other data from that call is ever stored.', 'convermetry')); ?>
                             </p>
                         </td>
                     </tr>
 
                     <tr>
-                        <th scope="row">Status</th>
+                        <th scope="row"><?php esc_html_e('Status', 'convermetry'); ?></th>
                         <td>
-                            <label><input type="checkbox" name="goal[enabled]" value="1" checked> Actively counting</label>
+                            <label><input type="checkbox" name="goal[enabled]" value="1" checked> <?php esc_html_e('Actively counting', 'convermetry'); ?></label>
                         </td>
                     </tr>
                 </table>
 
                 <p class="submit">
-                    <button type="submit" class="button button-primary">Save goal</button>
-                    <button type="button" class="button button-secondary cvm-goal-cancel" hidden>Cancel</button>
+                    <button type="submit" class="button button-primary"><?php esc_html_e('Save goal', 'convermetry'); ?></button>
+                    <button type="button" class="button button-secondary cvm-goal-cancel" hidden><?php esc_html_e('Cancel', 'convermetry'); ?></button>
                 </p>
             </form>
         </div>
@@ -704,21 +733,21 @@ final class GoalsPage
     {
         return [
             'click' => [
-                'tel'      => 'on a phone number link',
-                'mailto'   => 'on an email link',
-                'external' => 'that leaves this site',
-                'contains' => 'where the link contains',
-                'equals'   => 'where the link is exactly',
-                'selector' => 'matching the CSS selector',
+                'tel'      => _x('on a phone number link', 'goal rule: a click…', 'convermetry'),
+                'mailto'   => _x('on an email link', 'goal rule: a click…', 'convermetry'),
+                'external' => _x('that leaves this site', 'goal rule: a click…', 'convermetry'),
+                'contains' => _x('where the link contains', 'goal rule: a click…', 'convermetry'),
+                'equals'   => _x('where the link is exactly', 'goal rule: a click…', 'convermetry'),
+                'selector' => _x('matching the CSS selector', 'goal rule: a click…', 'convermetry'),
             ],
             'url' => [
-                'equals'      => 'where the page is exactly',
-                'contains'    => 'where the page contains',
-                'starts_with' => 'where the page starts with',
-                'ends_with'   => 'where the page ends with',
+                'equals'      => _x('where the page is exactly', 'goal rule: reaching a page…', 'convermetry'),
+                'contains'    => _x('where the page contains', 'goal rule: reaching a page…', 'convermetry'),
+                'starts_with' => _x('where the page starts with', 'goal rule: reaching a page…', 'convermetry'),
+                'ends_with'   => _x('where the page ends with', 'goal rule: reaching a page…', 'convermetry'),
             ],
             'custom_event' => [
-                'name' => 'named',
+                'name' => _x('named', 'goal rule: a custom event…', 'convermetry'),
             ],
         ];
     }

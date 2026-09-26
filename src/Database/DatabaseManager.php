@@ -503,12 +503,15 @@ final class DatabaseManager
             }
         }
 
-        $verb = $batchId !== null ? 'INSERT IGNORE INTO ' : 'INSERT INTO ';
+        // One of two fixed verbs; the column list is the COLUMNS constant (plus
+        // the two batch columns) and each row tuple is %s/%d placeholders, so
+        // every value is bound — only the row count varies the statement.
+        $verb = $batchId !== null ? 'INSERT IGNORE INTO' : 'INSERT INTO';
 
         $inserted = $wpdb->query($wpdb->prepare(
-            $verb . self::tableName() . " ({$columnSql}) VALUES "
-                . implode(', ', array_fill(0, count($prepared), $placeholders)),
-            $values
+            // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared, WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- see the comment above: fixed verb, fixed columns, placeholder tuples, values bound.
+            "{$verb} %i ({$columnSql}) VALUES " . implode(', ', array_fill(0, count($prepared), $placeholders)),
+            array_merge([self::tableName()], $values)
         ));
 
         return $inserted === false ? false : (int) $inserted;
@@ -560,13 +563,11 @@ final class DatabaseManager
             return;
         }
 
-        $placeholders = implode(', ', array_fill(0, count($matchedSeqs), '%d'));
-
         $rows = $wpdb->get_results(
             $wpdb->prepare(
-                'SELECT id, batch_seq FROM ' . self::tableName()
-                . " WHERE batch_id = %s AND batch_seq IN ({$placeholders})",
-                array_merge([$batchId], $matchedSeqs)
+                'SELECT id, batch_seq FROM %i WHERE batch_id = %s AND batch_seq IN ('
+                . implode(', ', array_fill(0, count($matchedSeqs), '%d')) . ')',
+                array_merge([self::tableName(), $batchId], $matchedSeqs)
             ),
             ARRAY_A
         );
@@ -733,6 +734,96 @@ final class DatabaseManager
     }
 
     /**
+     * The analytics events of one session, oldest first — the website
+     * activity the personal-data exporter reports alongside a submission made
+     * in that session.
+     *
+     * Served by the session_type_id index. Bounded by $limit because a session
+     * is a visitor's activity for as long as they keep interacting, and an
+     * export page must stay a bounded response.
+     *
+     * @param string $sessionId Analytics session id.
+     * @param int    $limit     Maximum rows to return.
+     * @return array<int, array<string, mixed>>
+     */
+    public static function eventsForSession(string $sessionId, int $limit): array
+    {
+        global $wpdb;
+
+        if ($sessionId === '') {
+            return [];
+        }
+
+        $rows = $wpdb->get_results(
+            $wpdb->prepare(
+                'SELECT event_type, page_url, page_title, element_label, target_url, referrer, device,'
+                . ' channel, utm_source, utm_medium, utm_campaign, ip_address, created_at'
+                . ' FROM %i WHERE session_id = %s ORDER BY id ASC LIMIT %d',
+                self::tableName(),
+                $sessionId,
+                $limit
+            ),
+            ARRAY_A
+        );
+
+        return is_array($rows) ? $rows : [];
+    }
+
+    /**
+     * Removes the visitor's IP address from the analytics events linked to an
+     * erased submission. Returns the rows changed.
+     *
+     * Two links, because either can be missing: every event of the session the
+     * submission was made in, and the conversion's own form_success event,
+     * which carries the conversion id in event_value (a submission recorded
+     * without the tracker has no session, but a browser-side form_success can
+     * still exist under the same id).
+     *
+     * The rows are ANONYMIZED, not deleted. Stripped of the IP they are a
+     * random session id plus pages and attribution, no longer linked to the
+     * erased lead once its submission row is gone, and deleting them would
+     * rewrite historical traffic reports for everyone else. The conversion
+     * lookup is confined to a window around the submission so it runs on the
+     * type_date index instead of scanning every conversion ever recorded.
+     *
+     * @param string $sessionId    The submission's analytics session id ('' when none).
+     * @param string $conversionId The submission's conversion id.
+     * @param string $createdAt    The submission's created_at (UTC).
+     * @return int Rows changed.
+     */
+    public static function anonymizeForErasure(string $sessionId, string $conversionId, string $createdAt): int
+    {
+        global $wpdb;
+
+        $changed = 0;
+
+        if ($sessionId !== '') {
+            $result = $wpdb->query($wpdb->prepare(
+                "UPDATE %i SET ip_address = '' WHERE session_id = %s AND ip_address <> ''",
+                self::tableName(),
+                $sessionId
+            ));
+            $changed += is_int($result) ? $result : 0;
+        }
+
+        $time = strtotime($createdAt . ' UTC');
+
+        if ($conversionId !== '' && $time !== false) {
+            $result = $wpdb->query($wpdb->prepare(
+                "UPDATE %i SET ip_address = '' WHERE event_type = 'form_success'"
+                . " AND created_at >= %s AND created_at < %s AND event_value = %s AND ip_address <> ''",
+                self::tableName(),
+                gmdate('Y-m-d H:i:s', $time - DAY_IN_SECONDS),
+                gmdate('Y-m-d H:i:s', $time + DAY_IN_SECONDS),
+                $conversionId
+            ));
+            $changed += is_int($result) ? $result : 0;
+        }
+
+        return $changed;
+    }
+
+    /**
      * Deletes rows older than the configured retention window, and purges
      * expired rate-limit-counter option rows.
      *
@@ -843,7 +934,8 @@ final class DatabaseManager
             }
 
             $deleted = $wpdb->query($wpdb->prepare(
-                "DELETE FROM {$table} WHERE created_at < %s LIMIT %d",
+                'DELETE FROM %i WHERE created_at < %s LIMIT %d',
+                $table,
                 $cutoff,
                 self::CLEANUP_CHUNK
             ));
@@ -893,7 +985,9 @@ final class DatabaseManager
 
         for ($chunk = 0; $chunk < self::CLEANUP_RATE_LIMIT_MAX_CHUNKS; $chunk++) {
             $deleted = $wpdb->query($wpdb->prepare(
-                "DELETE FROM {$wpdb->options} WHERE option_name LIKE 'cvm\\_rl\\_%%' LIMIT %d",
+                'DELETE FROM %i WHERE option_name LIKE %s LIMIT %d',
+                $wpdb->options,
+                $wpdb->esc_like('cvm_rl_') . '%',
                 self::CLEANUP_RATE_LIMIT_CHUNK
             ));
 
@@ -944,7 +1038,8 @@ final class DatabaseManager
         }
 
         $held = (string) $wpdb->get_var($wpdb->prepare(
-            "SELECT option_value FROM {$wpdb->options} WHERE option_name = %s",
+            'SELECT option_value FROM %i WHERE option_name = %s',
+            $wpdb->options,
             self::CLEANUP_LOCK_OPTION
         ));
 
@@ -960,7 +1055,8 @@ final class DatabaseManager
         }
 
         $wpdb->query($wpdb->prepare(
-            "DELETE FROM {$wpdb->options} WHERE option_name = %s AND option_value = %s",
+            'DELETE FROM %i WHERE option_name = %s AND option_value = %s',
+            $wpdb->options,
             self::CLEANUP_LOCK_OPTION,
             $held
         ));
@@ -985,7 +1081,8 @@ final class DatabaseManager
         global $wpdb;
 
         $inserted = $wpdb->query($wpdb->prepare(
-            "INSERT IGNORE INTO {$wpdb->options} (option_name, option_value, autoload) VALUES (%s, %s, 'off')",
+            "INSERT IGNORE INTO %i (option_name, option_value, autoload) VALUES (%s, %s, 'off')",
+            $wpdb->options,
             self::CLEANUP_LOCK_OPTION,
             $value
         ));
@@ -1013,7 +1110,8 @@ final class DatabaseManager
         global $wpdb;
 
         $updated = $wpdb->query($wpdb->prepare(
-            "UPDATE {$wpdb->options} SET option_value = %s WHERE option_name = %s AND option_value LIKE %s",
+            'UPDATE %i SET option_value = %s WHERE option_name = %s AND option_value LIKE %s',
+            $wpdb->options,
             $lock . '|' . time() . '|' . $renewals,
             self::CLEANUP_LOCK_OPTION,
             $wpdb->esc_like($lock) . '|%'
@@ -1038,7 +1136,8 @@ final class DatabaseManager
         global $wpdb;
 
         $wpdb->query($wpdb->prepare(
-            "DELETE FROM {$wpdb->options} WHERE option_name = %s AND option_value LIKE %s",
+            'DELETE FROM %i WHERE option_name = %s AND option_value LIKE %s',
+            $wpdb->options,
             self::CLEANUP_LOCK_OPTION,
             $wpdb->esc_like($lock) . '|%'
         ));

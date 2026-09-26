@@ -161,41 +161,59 @@ final class QueueDurabilityTest extends TestCase
             }
 
             /**
-             * Records the bound arguments as well as interpolating them.
+             * Records the bound VALUES as well as interpolating them.
              *
              * The options statements carry JSON values full of commas, quotes
              * and braces; parsing those back out of an interpolated string
-             * would be testing the parser. The arguments are kept instead, and
+             * would be testing the parser. The values are kept instead, and
              * every wp_options branch below reads them rather than the SQL.
+             *
+             * %i is modelled the way wpdb::prepare() treats it: an identifier
+             * quoted into the statement, not a value — so it is interpolated
+             * but never lands in lastArgs, and the options branches keep
+             * reading the option name as the first bound value.
              *
              * @param array<int, mixed> $args
              */
             public function prepare(string $sql, ...$args): string
             {
-                $this->lastArgs = $args;
+                if (count($args) === 1 && is_array($args[0])) {
+                    $args = $args[0];
+                }
+
+                $values = [];
 
                 // Good enough for routing: the assertions care which endpoint a
                 // statement names, not its exact escaping.
-                foreach ($args as $arg) {
-                    if (is_array($arg)) {
-                        continue;
-                    }
-                    $sql = preg_replace('/%[dsf]/', (string) $arg, $sql, 1) ?? $sql;
-                }
+                $sql = (string) preg_replace_callback(
+                    '/%[dsfi]/',
+                    static function (array $match) use (&$args, &$values): string {
+                        $arg = array_shift($args);
+                        if ($match[0] === '%i') {
+                            return '`' . (string) $arg . '`';
+                        }
+                        $values[] = $arg;
+
+                        return is_array($arg) ? '' : (string) $arg;
+                    },
+                    $sql
+                );
+
+                $this->lastArgs = $values;
 
                 return $sql;
             }
 
             public function query(string $sql): int|false
             {
-                if (str_contains($sql, "INSERT INTO {$this->options}")) {
+                if (str_contains($sql, "INSERT INTO `{$this->options}`")) {
                     return $this->test->writeOption(
                         (string) ($this->lastArgs[0] ?? ''),
                         (string) ($this->lastArgs[1] ?? '')
                     );
                 }
 
-                if (str_contains($sql, "DELETE FROM {$this->options}")) {
+                if (str_contains($sql, "DELETE FROM `{$this->options}`")) {
                     return $this->test->deleteOption((string) ($this->lastArgs[0] ?? ''));
                 }
 
@@ -204,11 +222,11 @@ final class QueueDurabilityTest extends TestCase
 
             public function get_var(string $sql): ?string
             {
-                if (str_contains($sql, "SELECT option_value FROM {$this->options}")) {
+                if (str_contains($sql, "SELECT option_value FROM `{$this->options}`")) {
                     return $this->test->readOption((string) ($this->lastArgs[0] ?? ''));
                 }
 
-                if (str_contains($sql, "SELECT option_name FROM {$this->options}")) {
+                if (str_contains($sql, "SELECT option_name FROM `{$this->options}`")) {
                     $name = (string) ($this->lastArgs[0] ?? '');
 
                     return $this->test->readOption($name) === null ? null : $name;
@@ -224,7 +242,7 @@ final class QueueDurabilityTest extends TestCase
             /** @return array<int, mixed> */
             public function get_results(string $sql, string $output = 'ARRAY_A'): array
             {
-                if (str_contains($sql, "FROM {$this->options}")) {
+                if (str_contains($sql, "FROM `{$this->options}`")) {
                     return $this->test->listOptions(
                         (string) ($this->lastArgs[0] ?? ''),
                         (int) ($this->lastArgs[1] ?? 0),

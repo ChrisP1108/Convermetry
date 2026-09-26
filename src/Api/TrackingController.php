@@ -702,7 +702,7 @@ final class TrackingController
         // update_option) so they bypass — and can never pollute — WordPress's
         // option caches.
         $charged = $wpdb->query($wpdb->prepare(
-            "INSERT INTO {$wpdb->options} (option_name, option_value, autoload)
+            "INSERT INTO %i (option_name, option_value, autoload)
              VALUES (%s, CONCAT(FLOOR(UNIX_TIMESTAMP() / %d), '|', %d), 'off')
              ON DUPLICATE KEY UPDATE option_value = IF(
                  option_value REGEXP '^[0-9]+[|][0-9]+$'
@@ -715,6 +715,7 @@ final class TrackingController
                  ),
                  CONCAT(FLOOR(UNIX_TIMESTAMP() / %d), '|', %d)
              )",
+            $wpdb->options,
             $key,
             self::RATE_LIMIT_WINDOW,
             $events,
@@ -737,7 +738,8 @@ final class TrackingController
         }
 
         $value = $wpdb->get_var($wpdb->prepare(
-            "SELECT option_value FROM {$wpdb->options} WHERE option_name = %s",
+            "SELECT option_value FROM %i WHERE option_name = %s",
+            $wpdb->options,
             $key
         ));
 

@@ -18,6 +18,8 @@
 (function () {
     'use strict';
 
+    const { __ } = wp.i18n;
+
     const form = document.querySelector('.cvm-goal-form');
     if (!form) {
         return;
@@ -122,7 +124,7 @@
         }
 
         if (title) {
-            title.textContent = 'Edit goal';
+            title.textContent = __('Edit goal', 'convermetry');
         }
         if (cancelBtn) {
             cancelBtn.hidden = false;
@@ -137,7 +139,7 @@
         form.reset();
         idField.value = '';
         if (title) {
-            title.textContent = 'Add a goal';
+            title.textContent = __('Add a goal', 'convermetry');
         }
         if (cancelBtn) {
             cancelBtn.hidden = true;

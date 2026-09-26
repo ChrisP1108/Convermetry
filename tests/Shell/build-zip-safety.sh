@@ -75,6 +75,11 @@ MD
 /** "plugin_version": "9.9.9" */
 PHP
 
+  # The files the build requires in every release.
+  printf '%s\n' '=== Convermetry ===' 'Stable tag: 9.9.9' '' 'Test.' > "$repo/readme.txt"
+  echo 'GPL' > "$repo/LICENSE"
+  echo '<?php' > "$repo/uninstall.php"
+
   printf '%s\n' '.git' '.distignore' 'build' 'tests' 'bin' 'composer.json' > "$repo/.distignore"
   echo 'body{}' > "$repo/assets/style.css"
   echo 'test' > "$repo/tests/SomeTest.php"
@@ -269,6 +274,81 @@ elif ! grep -q 'README.md version line' "$OUT_FILE"; then
   bad "mismatched version surfaces are rejected" "wrong error: $(head -3 "$OUT_FILE")"
 else
   ok "mismatched version surfaces are rejected"
+fi
+
+# readme.txt's Stable tag is what WordPress.org serves; it must agree too.
+repo="$(make_fixture)"
+sed -i.bak 's/^Stable tag: 9.9.9/Stable tag: 9.9.8/' "$repo/readme.txt"
+rm -f "$repo/readme.txt.bak"
+git -C "$repo" -c user.email=t@t.test -c user.name=t commit -qam drift 2>/dev/null
+out="$(dirname "$repo")/stable-drift"
+if ( cd "$repo" && ./bin/build-zip.sh "$out" ) >"$OUT_FILE" 2>&1; then
+  bad "a Stable tag that disagrees with the header is rejected" "build succeeded despite drift"
+elif ! grep -q 'readme.txt Stable tag' "$OUT_FILE"; then
+  bad "a Stable tag that disagrees with the header is rejected" "wrong error: $(head -3 "$OUT_FILE")"
+else
+  ok "a Stable tag that disagrees with the header is rejected"
+fi
+
+echo
+echo "no runtime file is silently omitted:"
+
+# A new class nobody has added to git yet used to be left out of the archive
+# while the build reported success.
+repo="$(make_fixture)"
+echo '<?php' > "$repo/src/Webhook/NewThing.php"
+out="$(dirname "$repo")/untracked"
+if ( cd "$repo" && ./bin/build-zip.sh "$out" ) >"$OUT_FILE" 2>&1; then
+  bad "an untracked runtime file stops the build" "build succeeded and would omit src/Webhook/NewThing.php"
+elif ! grep -q 'src/Webhook/NewThing.php' "$OUT_FILE"; then
+  bad "an untracked runtime file stops the build" "the error does not name the file: $(head -3 "$OUT_FILE")"
+else
+  ok "an untracked runtime file stops the build, naming it"
+fi
+
+# Intent-to-add is enough: the file is listed, and its working-tree content ships.
+repo="$(make_fixture)"
+echo '<?php // new' > "$repo/src/Webhook/NewThing.php"
+git -C "$repo" add -N src/Webhook/NewThing.php
+out="$(dirname "$repo")/intent-to-add"
+if ( cd "$repo" && ./bin/build-zip.sh "$out" ) >"$OUT_FILE" 2>&1 \
+   && unzip -p "$out/convermetry-9.9.9.zip" convermetry/src/Webhook/NewThing.php 2>/dev/null | grep -q 'new'; then
+  ok "a file added with git add -N ships with its working-tree content"
+else
+  bad "a file added with git add -N ships with its working-tree content" "$(head -5 "$OUT_FILE")"
+fi
+
+# Untracked files in excluded directories are development scratch, not omissions.
+repo="$(make_fixture)"
+echo 'scratch' > "$repo/tests/Scratch.php"
+assert_accepted "an untracked file under a .distignore'd directory is fine" "$repo" \
+  "$(dirname "$repo")/dev-scratch/convermetry-9.9.9.zip" "$(dirname "$repo")/dev-scratch"
+
+# A runtime file hidden by .gitignore is invisible to both git lists; the
+# staged tree is compared against the working tree to catch it.
+repo="$(make_fixture)"
+echo 'src/Webhook/Hidden.php' > "$repo/.gitignore"
+git -C "$repo" add .gitignore && git -C "$repo" -c user.email=t@t.test -c user.name=t commit -qm ignore 2>/dev/null
+echo '<?php' > "$repo/src/Webhook/Hidden.php"
+out="$(dirname "$repo")/gitignored"
+if ( cd "$repo" && ./bin/build-zip.sh "$out" ) >"$OUT_FILE" 2>&1; then
+  bad "a gitignored runtime file stops the build" "build succeeded and would omit src/Webhook/Hidden.php"
+elif ! grep -q 'src/Webhook/Hidden.php' "$OUT_FILE"; then
+  bad "a gitignored runtime file stops the build" "wrong error: $(head -3 "$OUT_FILE")"
+else
+  ok "a gitignored runtime file stops the build, naming it"
+fi
+
+# The files every release needs.
+repo="$(make_fixture)"
+git -C "$repo" rm -q readme.txt && git -C "$repo" -c user.email=t@t.test -c user.name=t commit -qm rm 2>/dev/null
+out="$(dirname "$repo")/no-readme"
+if ( cd "$repo" && ./bin/build-zip.sh "$out" ) >"$OUT_FILE" 2>&1; then
+  bad "a release without readme.txt is rejected" "build succeeded"
+elif ! grep -q "readme.txt" "$OUT_FILE"; then
+  bad "a release without readme.txt is rejected" "wrong error: $(head -3 "$OUT_FILE")"
+else
+  ok "a release without readme.txt is rejected"
 fi
 
 echo

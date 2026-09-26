@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Convermetry
  * Description: Visitor analytics, campaign attribution, and server-confirmed form conversion tracking with reliable webhook delivery. Connects every lead to its analytics session, traffic source, and campaign, and delivers analytics reports and form submissions to any number of webhook endpoints with signing, retries, and idempotency.
- * Version:     0.11.0
+ * Version:     1.0.0
  * Requires at least: 6.3
  * Requires PHP: 8.3
  * Author:      Chris Paschall
@@ -23,11 +23,11 @@ if (!defined('ABSPATH')) exit;
 if (version_compare(PHP_VERSION, '8.3', '<')) {
     add_action('admin_notices', function () {
         echo '<div class="notice notice-error"><p>';
-        printf(
-            '<strong>Convermetry</strong> requires PHP 8.3 or higher. '
-            . 'Your server is running PHP %s. Please contact your host to upgrade PHP before activating this plugin.',
+        echo wp_kses_post(sprintf(
+            /* translators: %s: the PHP version the server is running. */
+            __('<strong>Convermetry</strong> requires PHP 8.3 or higher. Your server is running PHP %s. Please contact your host to upgrade PHP before activating this plugin.', 'convermetry'),
             esc_html(PHP_VERSION)
-        );
+        ));
         echo '</p></div>';
     });
 
@@ -39,7 +39,7 @@ if (version_compare(PHP_VERSION, '8.3', '<')) {
  */
 } else {
 
-    define('CVM_VERSION', '0.11.0');
+    define('CVM_VERSION', '1.0.0');
     define('CVM_PLUGIN_FILE', __FILE__);
     define('CVM_PLUGIN_DIR', plugin_dir_path(__FILE__));
     define('CVM_PLUGIN_URL', plugin_dir_url(__FILE__));

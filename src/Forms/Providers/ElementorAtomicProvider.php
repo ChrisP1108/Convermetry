@@ -84,7 +84,8 @@ final class ElementorAtomicProvider implements FormProviderInterface
 
         /** @var string[] $postIds */
         $postIds = $wpdb->get_col($wpdb->prepare(
-            "SELECT DISTINCT post_id FROM {$wpdb->postmeta} WHERE meta_key = %s",
+            "SELECT DISTINCT post_id FROM %i WHERE meta_key = %s",
+            $wpdb->postmeta,
             '_elementor_data'
         ));
 

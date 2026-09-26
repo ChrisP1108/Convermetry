@@ -17,6 +17,8 @@
 (function () {
     'use strict';
 
+    const { __, sprintf } = wp.i18n;
+
     const form = document.querySelector('.cvm-funnel-form');
     if (!form) {
         return;
@@ -37,13 +39,10 @@
     const cancelBtn = form.querySelector('.cvm-funnel-cancel');
     const title = document.getElementById('cvm-funnel-editor-title');
 
-    /** Human labels for the page-step operators. */
-    const OPERATOR_LABELS = {
-        equals: 'is exactly',
-        contains: 'contains',
-        starts_with: 'starts with',
-        ends_with: 'ends with'
-    };
+    /** Human labels for the page-step operators, translated server-side
+     *  (FunnelsPage::operatorLabels()) so rows added here read exactly like
+     *  the rows the page rendered. */
+    const OPERATOR_LABELS = cfg.operatorLabels || {};
 
     function escapeHtml(text) {
         const node = document.createElement('span');
@@ -107,14 +106,16 @@
             '<select class="cvm-step-goal">' +
                 (Object.keys(goalMap).length
                     ? optionsHtml(goalMap, step.type === 'goal' ? step.value : '')
-                    : '<option value="">No goals configured yet</option>') +
+                    : '<option value="">' + escapeHtml(__('No goals configured yet', 'convermetry')) + '</option>') +
             '</select>' +
             '<input type="text" class="cvm-step-value" name="funnel[steps][' + index + '][value]" ' +
                 'value="' + escapeAttr(step.value || '') + '" placeholder="/services/">' +
             '<input type="text" class="cvm-step-label" name="funnel[steps][' + index + '][label]" ' +
-                'value="' + escapeAttr(step.label || '') + '" placeholder="Label (optional)">' +
+                'value="' + escapeAttr(step.label || '') + '" placeholder="' + escapeAttr(__('Label (optional)', 'convermetry')) + '">' +
             '<button type="button" class="button-link cvm-btn-danger-link cvm-step-remove" ' +
-                'aria-label="Remove step ' + (index + 1) + '">Remove</button>';
+                /* translators: %d: the funnel step's position. */
+                'aria-label="' + escapeAttr(sprintf(__('Remove step %d', 'convermetry'), index + 1)) + '">' +
+                escapeHtml(__('Remove', 'convermetry')) + '</button>';
 
         return row;
     }
@@ -146,7 +147,7 @@
         } else if (isPage) {
             value.placeholder = '/services/';
         } else {
-            value.placeholder = 'Any form — or a form key such as gravityforms:7';
+            value.placeholder = __('Any form — or a form key such as gravityforms:7', 'convermetry');
         }
     }
 
@@ -208,7 +209,7 @@
         });
 
         if (title) {
-            title.textContent = 'Edit funnel';
+            title.textContent = __('Edit funnel', 'convermetry');
         }
         if (cancelBtn) {
             cancelBtn.hidden = false;
@@ -223,7 +224,7 @@
         idField.value = '';
         resetRows();
         if (title) {
-            title.textContent = 'Add a funnel';
+            title.textContent = __('Add a funnel', 'convermetry');
         }
         if (cancelBtn) {
             cancelBtn.hidden = true;

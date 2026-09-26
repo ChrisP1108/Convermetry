@@ -138,7 +138,7 @@ final class NotificationSettings
         $subject = trim((string) preg_replace('/\s+/', ' ', sanitize_text_field($subject)));
 
         if ($subject === '') {
-            return (string) Options::notificationDefaults()['subject'];
+            return Options::defaultNotificationSubject();
         }
 
         return mb_substr($subject, 0, self::SUBJECT_MAX_LEN);

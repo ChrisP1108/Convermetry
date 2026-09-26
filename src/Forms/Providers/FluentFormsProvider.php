@@ -57,7 +57,7 @@ final class FluentFormsProvider implements FormProviderInterface
         }
 
         $rows = $wpdb->get_results(
-            "SELECT id, title FROM {$table} ORDER BY title ASC LIMIT 200",
+            $wpdb->prepare('SELECT id, title FROM %i ORDER BY title ASC LIMIT 200', $table),
             ARRAY_A
         );
 

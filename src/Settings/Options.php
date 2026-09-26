@@ -268,9 +268,29 @@ final class Options
      */
     public static function notificationSubjectTemplate(): string
     {
-        $subject = trim((string) (self::notificationAll()['subject'] ?? ''));
+        // Read from the saved option, not from notificationAll(): the merged
+        // defaults carry the untranslated English template, and a site that has
+        // never saved a subject should get the default in its own language.
+        $saved   = get_option(self::NOTIFICATION_OPTION_KEY, []);
+        $subject = is_array($saved) ? trim((string) ($saved['subject'] ?? '')) : '';
 
-        return $subject !== '' ? $subject : (string) self::notificationDefaults()['subject'];
+        return $subject !== '' ? $subject : self::defaultNotificationSubject();
+    }
+
+    /**
+     * The default subject template, translated.
+     *
+     * notificationDefaults() keeps the English literal: it is merged into every
+     * notification settings read, including the enabled-check that runs in a
+     * visitor's submission request, where loading a translation would be
+     * wasted work. This is the form a person actually sees or receives.
+     *
+     * @return string
+     */
+    public static function defaultNotificationSubject(): string
+    {
+        /* translators: Default email subject. Keep {form_name} and {site_name} exactly as written; they are replaced with the form's and the site's names. */
+        return __('New {form_name} submission on {site_name}', 'convermetry');
     }
 
     /**

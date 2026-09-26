@@ -29,6 +29,7 @@ use Convermetry\Goals\GoalRepository;
 use Convermetry\Leads\LeadEvents;
 use Convermetry\Notifications\NotificationDispatcher;
 use Convermetry\Notifications\NotificationQueue;
+use Convermetry\Privacy\PrivacyTools;
 use Convermetry\Settings\SettingsEvents;
 use Convermetry\Tracking\ScriptLoader;
 use Convermetry\Webhook\AnalyticsDispatcher;
@@ -55,6 +56,8 @@ use Convermetry\Webhook\FormDeliveryQueue;
  *                           after_setup_theme, see registerHooks())
  *  - SubmissionService    — the pipeline every confirmed submission flows through
  *  - DeliveryLogController — read-only deliveries REST API
+ *  - PrivacyTools         — suggested privacy-policy text and the core
+ *                           personal-data exporter/eraser integration
  *  - Admin pages          — Home, Analytics, Submissions, Forms, Webhooks,
  *                           Activity Log, Settings, About
  *
@@ -147,6 +150,12 @@ final class Plugin
         // email notifications work on a site with no webhooks configured, and
         // are governed by their own master toggle.
         NotificationDispatcher::init();
+
+        // Suggested policy text plus WordPress's email-based personal-data
+        // export and erasure. Registered outside the is_admin() block because
+        // the exporter and eraser run in admin-ajax requests the Tools screen
+        // starts, not on the screen itself.
+        PrivacyTools::init();
 
         // Form-provider hooks are feature-detected: providers whose plugin is
         // absent register nothing, so nothing here can fatal without them.

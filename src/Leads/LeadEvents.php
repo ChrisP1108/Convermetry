@@ -212,33 +212,24 @@ final class LeadEvents
             return false;
         }
 
-        // A null value is written as a literal NULL rather than bound, because
-        // %s would store the empty string and "" is not "no value recorded".
-        // The bound parameters are assembled in the same branch that chooses the
-        // placeholder, so the two can never fall out of step.
-        $params = [
+        // A null value must be stored as NULL, not as the empty string: "" is
+        // not "no value recorded". NULLIF() turns the '' bound for a null value
+        // back into NULL inside the statement, so the SQL is one fixed string
+        // and every value is bound. A real value is a decimal string such as
+        // "0.00", never '', so nothing else can be mistaken for "no value".
+        $inserted = $wpdb->query($wpdb->prepare(
+            'INSERT INTO %i'
+            . ' (lead_event_id, submission_id, from_status, to_status, value, currency, user_id, created_at)'
+            . " VALUES (%s, %s, %s, %s, NULLIF(%s, ''), %s, %d, %s)",
+            self::tableName(),
             $eventId !== '' ? $eventId : self::mintId(),
             $submissionId,
             $fromStatus,
             $toStatus,
-        ];
-
-        if ($value === null) {
-            $valuePlaceholder = 'NULL';
-        } else {
-            $valuePlaceholder = '%s';
-            $params[]         = $value;
-        }
-
-        $params[] = $currency;
-        $params[] = $userId;
-        $params[] = gmdate('Y-m-d H:i:s');
-
-        $inserted = $wpdb->query($wpdb->prepare(
-            'INSERT INTO ' . self::tableName()
-            . ' (lead_event_id, submission_id, from_status, to_status, value, currency, user_id, created_at)'
-            . ' VALUES (%s, %s, %s, %s, ' . $valuePlaceholder . ', %s, %d, %s)',
-            $params
+            $value ?? '',
+            $currency,
+            $userId,
+            gmdate('Y-m-d H:i:s')
         ));
 
         return $inserted === 1;
@@ -262,8 +253,8 @@ final class LeadEvents
         $rows = $wpdb->get_results(
             $wpdb->prepare(
                 'SELECT lead_event_id, from_status, to_status, value, currency, user_id, created_at'
-                . ' FROM ' . self::tableName()
-                . ' WHERE submission_id = %s ORDER BY id DESC LIMIT %d',
+                . ' FROM %i WHERE submission_id = %s ORDER BY id DESC LIMIT %d',
+                self::tableName(),
                 $submissionId,
                 $limit
             ),
@@ -297,7 +288,7 @@ final class LeadEvents
     {
         global $wpdb;
 
-        $wpdb->query('TRUNCATE TABLE ' . self::tableName());
+        $wpdb->query($wpdb->prepare('TRUNCATE TABLE %i', self::tableName()));
     }
 
     /**
@@ -329,7 +320,8 @@ final class LeadEvents
 
         do {
             $deleted = $wpdb->query($wpdb->prepare(
-                "DELETE FROM {$table} WHERE created_at < %s LIMIT %d",
+                'DELETE FROM %i WHERE created_at < %s LIMIT %d',
+                $table,
                 $cutoff,
                 self::CLEANUP_CHUNK
             ));

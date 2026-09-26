@@ -55,6 +55,8 @@ final class UninstallTest extends WordPressTestCase
         // than anything the options API would enumerate.
         update_option('cvm_settings', ['probe' => true]);
         update_option('cvm_webhook_settings', ['probe' => true]);
+        update_option('cvm_webhook_state_version', 2);
+        set_transient('cvm_privacy_erase_' . md5('probe'), ['cursor' => 1], HOUR_IN_SECONDS);
         $wpdb->query(
             "INSERT INTO {$wpdb->options} (option_name, option_value, autoload)"
             . " VALUES ('cvm_queue_repair_probe1', '{\"at\":1,\"refs\":[\"e\"]}', 'off')"
@@ -99,6 +101,17 @@ final class UninstallTest extends WordPressTestCase
             $wpdb->get_var("SELECT COUNT(*) FROM {$wpdb->options} WHERE option_name LIKE 'cvm\\_rl\\_%'"),
             'Rate-limit counters survived uninstall'
         );
+
+        // The promise is "no trace remains", so the check is every option the
+        // plugin can write — not a sample. cvm_webhook_state_version, written
+        // by the analytics dispatcher's state migration, used to survive
+        // because uninstall.php's list was written by hand and missed it.
+        $leftover = $wpdb->get_col(
+            "SELECT option_name FROM {$wpdb->options}"
+            . " WHERE option_name LIKE 'cvm\\_%' OR option_name LIKE '\\_transient\\_cvm\\_%'"
+            . " OR option_name LIKE '\\_transient\\_timeout\\_cvm\\_%'"
+        );
+        self::assertSame([], $leftover, 'Options survived uninstall: ' . implode(', ', (array) $leftover));
 
         // Read from the DATABASE, not through wp_next_scheduled(). The
         // uninstaller ran in its own process, so this one still holds the cron

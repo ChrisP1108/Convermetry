@@ -273,10 +273,11 @@ final class FormDeliveryQueue
             $endpointKey = md5($endpoint->url);
 
             $inserted = $wpdb->query($wpdb->prepare(
-                'INSERT IGNORE INTO ' . self::tableName()
+                'INSERT IGNORE INTO %i'
                 . ' (submission_row, submission_id, endpoint_key, endpoint_url, delivery_id,'
                 . " status, attempt, next_attempt_at, created_at)"
                 . " VALUES (%d, %s, %s, %s, %s, 'pending', 0, %s, %s)",
+                self::tableName(),
                 $submissionRow,
                 $submissionId,
                 $endpointKey,
@@ -390,7 +391,8 @@ final class FormDeliveryQueue
         }
 
         return (int) $wpdb->get_var($wpdb->prepare(
-            'SELECT COUNT(*) FROM ' . self::tableName() . ' WHERE submission_id = %s',
+            'SELECT COUNT(*) FROM %i WHERE submission_id = %s',
+            self::tableName(),
             $submissionId
         ));
     }
@@ -479,8 +481,9 @@ final class FormDeliveryQueue
 
         for ($chunk = 0; $chunk < self::REPAIR_MAX_CHUNKS; $chunk++) {
             $rows = $wpdb->get_results($wpdb->prepare(
-                "SELECT option_id, option_name, option_value FROM {$wpdb->options}"
+                'SELECT option_id, option_name, option_value FROM %i'
                 . ' WHERE option_name LIKE %s AND option_id > %d ORDER BY option_id ASC LIMIT %d',
+                $wpdb->options,
                 $wpdb->esc_like(self::REPAIR_PREFIX) . '%',
                 $after,
                 self::REPAIR_CHUNK
@@ -660,7 +663,8 @@ final class FormDeliveryQueue
         }
 
         $wpdb->query($wpdb->prepare(
-            "DELETE FROM {$wpdb->options} WHERE option_name = %s",
+            'DELETE FROM %i WHERE option_name = %s',
+            $wpdb->options,
             self::repairOptionName($submissionId)
         ));
 
@@ -722,7 +726,8 @@ final class FormDeliveryQueue
         }
 
         $value = $wpdb->get_var($wpdb->prepare(
-            "SELECT option_value FROM {$wpdb->options} WHERE option_name = %s",
+            'SELECT option_value FROM %i WHERE option_name = %s',
+            $wpdb->options,
             self::repairOptionName($submissionId)
         ));
 
@@ -740,7 +745,8 @@ final class FormDeliveryQueue
         global $wpdb;
 
         return $wpdb->get_var($wpdb->prepare(
-            "SELECT option_name FROM {$wpdb->options} WHERE option_name = %s",
+            'SELECT option_name FROM %i WHERE option_name = %s',
+            $wpdb->options,
             self::repairOptionName($submissionId)
         )) !== null;
     }
@@ -801,8 +807,9 @@ final class FormDeliveryQueue
         );
 
         $wpdb->query($wpdb->prepare(
-            "INSERT INTO {$wpdb->options} (option_name, option_value, autoload) VALUES (%s, %s, 'off')"
+            "INSERT INTO %i (option_name, option_value, autoload) VALUES (%s, %s, 'off')"
             . ' ON DUPLICATE KEY UPDATE option_value = %s',
+            $wpdb->options,
             self::repairOptionName($submissionId),
             $value,
             $value
@@ -852,8 +859,8 @@ final class FormDeliveryQueue
         global $wpdb;
 
         return (int) $wpdb->get_var($wpdb->prepare(
-            'SELECT COUNT(*) FROM ' . DeliveryLog::tableName()
-            . " WHERE submission_id = %s AND message_type = 'form_submission' AND endpoint_url = %s",
+            "SELECT COUNT(*) FROM %i WHERE submission_id = %s AND message_type = 'form_submission' AND endpoint_url = %s",
+            DeliveryLog::tableName(),
             $submissionId,
             $endpointUrl
         )) > 0;
@@ -877,8 +884,8 @@ final class FormDeliveryQueue
         global $wpdb;
 
         return (int) $wpdb->get_var($wpdb->prepare(
-            'SELECT COUNT(*) FROM ' . self::tableName()
-            . ' WHERE submission_id = %s AND endpoint_key = %s',
+            'SELECT COUNT(*) FROM %i WHERE submission_id = %s AND endpoint_key = %s',
+            self::tableName(),
             $submissionId,
             $endpointKey
         )) > 0;
@@ -1043,10 +1050,11 @@ final class FormDeliveryQueue
             }
 
             $inserted = $wpdb->query($wpdb->prepare(
-                'INSERT IGNORE INTO ' . self::tableName()
+                'INSERT IGNORE INTO %i'
                 . ' (submission_row, submission_id, endpoint_key, endpoint_url, delivery_id,'
                 . " status, attempt, next_attempt_at, created_at)"
                 . " VALUES (%d, %s, %s, %s, %s, 'pending', 0, %s, %s)",
+                self::tableName(),
                 (int) $submission['id'],
                 $submissionId,
                 $endpointKey,
@@ -1116,7 +1124,8 @@ final class FormDeliveryQueue
 
         // Reclaim rows stranded in 'sending' by a worker that died mid-pass.
         $wpdb->query($wpdb->prepare(
-            "UPDATE {$table} SET status = 'pending', claim = '' WHERE status = 'sending' AND claimed_at < %s",
+            "UPDATE %i SET status = 'pending', claim = '' WHERE status = 'sending' AND claimed_at < %s",
+            $table,
             gmdate('Y-m-d H:i:s', time() - self::CLAIM_TIMEOUT)
         ));
 
@@ -1132,10 +1141,11 @@ final class FormDeliveryQueue
         $token = md5(wp_generate_uuid4() . wp_rand());
 
         $wpdb->query($wpdb->prepare(
-            "UPDATE {$table} SET status = 'sending', claim = %s, claimed_at = %s
+            "UPDATE %i SET status = 'sending', claim = %s, claimed_at = %s
              WHERE status = 'pending' AND next_attempt_at <= %s
              ORDER BY next_attempt_at ASC
              LIMIT %d",
+            $table,
             $token,
             $now,
             $now,
@@ -1143,7 +1153,8 @@ final class FormDeliveryQueue
         ));
 
         $rows = $wpdb->get_results($wpdb->prepare(
-            "SELECT * FROM {$table} WHERE claim = %s AND status = 'sending' ORDER BY next_attempt_at ASC",
+            "SELECT * FROM %i WHERE claim = %s AND status = 'sending' ORDER BY next_attempt_at ASC",
+            $table,
             $token
         ), ARRAY_A);
 
@@ -1159,7 +1170,8 @@ final class FormDeliveryQueue
             if (microtime(true) >= $deadline) {
                 // Out of budget — release the remainder untouched.
                 $wpdb->query($wpdb->prepare(
-                    "UPDATE {$table} SET status = 'pending', claim = '' WHERE id = %d AND claim = %s",
+                    "UPDATE %i SET status = 'pending', claim = '' WHERE id = %d AND claim = %s",
+                    $table,
                     (int) $row['id'],
                     $token
                 ));
@@ -1491,9 +1503,10 @@ final class FormDeliveryQueue
     {
         global $wpdb;
 
-        return (int) $wpdb->get_var(
-            "SELECT COUNT(*) FROM " . self::tableName() . " WHERE status IN ('pending', 'sending')"
-        );
+        return (int) $wpdb->get_var($wpdb->prepare(
+            "SELECT COUNT(*) FROM %i WHERE status IN ('pending', 'sending')",
+            self::tableName()
+        ));
     }
 
     /**
@@ -1509,9 +1522,35 @@ final class FormDeliveryQueue
 
         $rows = $wpdb->get_results($wpdb->prepare(
             'SELECT id, submission_id, endpoint_url, delivery_id, status, attempt, next_attempt_at, created_at'
-            . ' FROM ' . self::tableName()
-            . " WHERE status IN ('pending', 'sending') ORDER BY next_attempt_at ASC LIMIT %d",
+            . " FROM %i WHERE status IN ('pending', 'sending') ORDER BY next_attempt_at ASC LIMIT %d",
+            self::tableName(),
             $limit
+        ), ARRAY_A);
+
+        return is_array($rows) ? $rows : [];
+    }
+
+    /**
+     * The queue rows still waiting to deliver one submission (frozen bodies
+     * excluded) — reported by the personal-data exporter as deliveries not yet
+     * made.
+     *
+     * @param string $submissionId The submission's globally unique id.
+     * @return array<int, array<string, mixed>>
+     */
+    public static function rowsForSubmission(string $submissionId): array
+    {
+        global $wpdb;
+
+        if ($submissionId === '') {
+            return [];
+        }
+
+        $rows = $wpdb->get_results($wpdb->prepare(
+            'SELECT endpoint_url, status, attempt, next_attempt_at, created_at'
+            . ' FROM %i WHERE submission_id = %s ORDER BY id ASC',
+            self::tableName(),
+            $submissionId
         ), ARRAY_A);
 
         return is_array($rows) ? $rows : [];
@@ -1535,9 +1574,10 @@ final class FormDeliveryQueue
 
         global $wpdb;
 
-        $next = $wpdb->get_var(
-            "SELECT MIN(next_attempt_at) FROM " . self::tableName() . " WHERE status IN ('pending', 'sending')"
-        );
+        $next = $wpdb->get_var($wpdb->prepare(
+            "SELECT MIN(next_attempt_at) FROM %i WHERE status IN ('pending', 'sending')",
+            self::tableName()
+        ));
 
         if (!is_string($next) || $next === '') {
             return;

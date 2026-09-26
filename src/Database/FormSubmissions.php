@@ -270,12 +270,13 @@ final class FormSubmissions
         // after an upgrade, and a site that creates rows faster than the daily
         // budgeted pass drains them would never converge.
         $inserted = $wpdb->query($wpdb->prepare(
-            'INSERT IGNORE INTO ' . self::tableName()
+            'INSERT IGNORE INTO %i'
             . ' (submission_id, conversion_id, session_id, provider, form_key, form_name,'
             . ' native_form_id, form_id, page_url, ip_address, channel, utm_campaign,'
             . ' utm_source, utm_medium, utm_id, landing_page,'
             . ' page_query, submission_data, context, runtime, delivery_state, created_at)'
             . ' VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)',
+            self::tableName(),
             $submission->submissionId,
             $submission->conversionId,
             $submission->sessionId,
@@ -343,7 +344,7 @@ final class FormSubmissions
         global $wpdb;
 
         $row = $wpdb->get_row(
-            $wpdb->prepare('SELECT * FROM ' . self::tableName() . ' WHERE id = %d', $id),
+            $wpdb->prepare('SELECT * FROM %i WHERE id = %d', self::tableName(), $id),
             ARRAY_A
         );
 
@@ -361,7 +362,7 @@ final class FormSubmissions
         global $wpdb;
 
         $row = $wpdb->get_row(
-            $wpdb->prepare('SELECT * FROM ' . self::tableName() . ' WHERE submission_id = %s', $submissionId),
+            $wpdb->prepare('SELECT * FROM %i WHERE submission_id = %s', self::tableName(), $submissionId),
             ARRAY_A
         );
 
@@ -386,8 +387,8 @@ final class FormSubmissions
 
         $row = $wpdb->get_row(
             $wpdb->prepare(
-                'SELECT id, form_key, provider, form_name FROM ' . self::tableName()
-                . ' WHERE submission_id = %s',
+                'SELECT id, form_key, provider, form_name FROM %i WHERE submission_id = %s',
+                self::tableName(),
                 $submissionId
             ),
             ARRAY_A
@@ -424,8 +425,8 @@ final class FormSubmissions
 
         $row = $wpdb->get_row(
             $wpdb->prepare(
-                'SELECT lead_status, lead_value, lead_currency FROM ' . self::tableName()
-                . ' WHERE submission_id = %s',
+                'SELECT lead_status, lead_value, lead_currency FROM %i WHERE submission_id = %s',
+                self::tableName(),
                 $submissionId
             ),
             ARRAY_A
@@ -543,16 +544,15 @@ final class FormSubmissions
         // buildEndpointOutcomes().
         $logRows = $wpdb->get_results($wpdb->prepare(
             'SELECT endpoint_url, endpoint_label, success, response_code, attempt, created_at'
-            . ' FROM ' . DeliveryLog::tableName()
-            . " WHERE submission_id = %s AND message_type = 'form_submission'"
+            . " FROM %i WHERE submission_id = %s AND message_type = 'form_submission'"
             . ' ORDER BY id ASC',
+            DeliveryLog::tableName(),
             $submissionId
         ), ARRAY_A);
 
         $queueRows = $wpdb->get_results($wpdb->prepare(
-            'SELECT endpoint_url, status, attempt, next_attempt_at'
-            . ' FROM ' . FormDeliveryQueue::tableName()
-            . ' WHERE submission_id = %s',
+            'SELECT endpoint_url, status, attempt, next_attempt_at FROM %i WHERE submission_id = %s',
+            FormDeliveryQueue::tableName(),
             $submissionId
         ), ARRAY_A);
 
@@ -566,7 +566,8 @@ final class FormSubmissions
         // times per delivery — on enqueue, after each attempt, after each retry
         // is scheduled — and most of those leave the state exactly as it was.
         $previous = (string) $wpdb->get_var($wpdb->prepare(
-            'SELECT delivery_state FROM ' . self::tableName() . ' WHERE submission_id = %s',
+            'SELECT delivery_state FROM %i WHERE submission_id = %s',
+            self::tableName(),
             $submissionId
         ));
 
@@ -764,9 +765,10 @@ final class FormSubmissions
         do {
             $rows = $wpdb->get_results(
                 $wpdb->prepare(
-                    "SELECT id, submission_id, context, channel, landing_page, delivery_state FROM {$table}"
-                    . ' WHERE ' . self::BACKFILL_PREDICATE
+                    // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- BACKFILL_PREDICATE is a class-constant literal with no input in it.
+                    'SELECT id, submission_id, context, channel, landing_page, delivery_state FROM %i WHERE ' . self::BACKFILL_PREDICATE
                     . ' ORDER BY id DESC LIMIT %d',
+                    $table,
                     self::BACKFILL_CHUNK
                 ),
                 ARRAY_A
@@ -850,10 +852,11 @@ final class FormSubmissions
     {
         global $wpdb;
 
-        return (bool) $wpdb->get_var(
-            'SELECT 1 FROM ' . self::tableName()
-            . ' WHERE ' . self::BACKFILL_PREDICATE . ' LIMIT 1'
-        );
+        return (bool) $wpdb->get_var($wpdb->prepare(
+            // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- BACKFILL_PREDICATE is a class-constant literal with no input in it.
+            'SELECT 1 FROM %i WHERE ' . self::BACKFILL_PREDICATE . ' LIMIT 1',
+            self::tableName()
+        ));
     }
 
     /**
@@ -988,9 +991,14 @@ final class FormSubmissions
         $values[] = $perPage;
         $values[] = ($page - 1) * $perPage;
 
-        $sql = 'SELECT * FROM ' . self::tableName() . " {$where} ORDER BY id DESC LIMIT %d OFFSET %d";
-
-        $rows = $wpdb->get_results($wpdb->prepare($sql, $values), ARRAY_A);
+        $rows = $wpdb->get_results(
+            $wpdb->prepare(
+                // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared, WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- $where is buildWhereClause() output: fixed SQL fragments whose %s/%d placeholders are bound to $values here.
+                "SELECT * FROM %i {$where} ORDER BY id DESC LIMIT %d OFFSET %d",
+                array_merge([self::tableName()], $values)
+            ),
+            ARRAY_A
+        );
 
         return is_array($rows) ? $rows : [];
     }
@@ -1007,9 +1015,13 @@ final class FormSubmissions
 
         [$where, $values] = self::buildWhereClause($filters);
 
-        $sql = 'SELECT COUNT(*) FROM ' . self::tableName() . " {$where}";
-
-        return (int) ($values ? $wpdb->get_var($wpdb->prepare($sql, $values)) : $wpdb->get_var($sql));
+        return (int) $wpdb->get_var(
+            $wpdb->prepare(
+                // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared, WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- $where is buildWhereClause() output: fixed SQL fragments whose %s/%d placeholders are bound to $values here.
+                "SELECT COUNT(*) FROM %i {$where}",
+                array_merge([self::tableName()], $values)
+            )
+        );
     }
 
     /**
@@ -1038,9 +1050,14 @@ final class FormSubmissions
         $values[] = $beforeId;
         $values[] = $limit;
 
-        $sql = 'SELECT * FROM ' . self::tableName() . " {$where} ORDER BY id DESC LIMIT %d";
-
-        $rows = $wpdb->get_results($wpdb->prepare($sql, $values), ARRAY_A);
+        $rows = $wpdb->get_results(
+            $wpdb->prepare(
+                // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared, WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- $where is buildWhereClause() output: fixed SQL fragments whose %s/%d placeholders are bound to $values here.
+                "SELECT * FROM %i {$where} ORDER BY id DESC LIMIT %d",
+                array_merge([self::tableName()], $values)
+            ),
+            ARRAY_A
+        );
 
         return is_array($rows) ? $rows : [];
     }
@@ -1061,7 +1078,7 @@ final class FormSubmissions
     {
         global $wpdb;
 
-        $value = $wpdb->get_var('SELECT created_at FROM ' . self::tableName() . ' ORDER BY id DESC LIMIT 1');
+        $value = $wpdb->get_var($wpdb->prepare('SELECT created_at FROM %i ORDER BY id DESC LIMIT 1', self::tableName()));
 
         return is_string($value) && $value !== '' ? $value : null;
     }
@@ -1081,10 +1098,13 @@ final class FormSubmissions
             array_diff_key($filters, ['year' => 0, 'month' => 0, 'search' => 0])
         );
 
-        $sql = "SELECT DISTINCT DATE_FORMAT(created_at, '%%Y-%%m') FROM " . self::tableName() . " {$where} ORDER BY 1 DESC";
-
-        // prepare() is required even without filter values to unescape the %%.
-        $rows = $wpdb->get_col($values ? $wpdb->prepare($sql, $values) : $wpdb->prepare($sql));
+        $rows = $wpdb->get_col(
+            $wpdb->prepare(
+                // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared, WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- $where is buildWhereClause() output: fixed SQL fragments whose %s/%d placeholders are bound to $values here.
+                "SELECT DISTINCT DATE_FORMAT(created_at, '%%Y-%%m') FROM %i {$where} ORDER BY 1 DESC",
+                array_merge([self::tableName()], $values)
+            )
+        );
 
         $years  = [];
         $months = [];
@@ -1125,12 +1145,69 @@ final class FormSubmissions
             return [];
         }
 
-        $rows = $wpdb->get_col(
-            "SELECT DISTINCT {$column} FROM " . self::tableName()
-            . " WHERE {$column} IS NOT NULL AND {$column} <> '' ORDER BY {$column} ASC LIMIT 200"
-        );
+        // The column is bound as an identifier (and was allowlisted above), so
+        // nothing about it is spliced into the statement as text.
+        $rows = $wpdb->get_col($wpdb->prepare(
+            "SELECT DISTINCT %i FROM %i WHERE %i IS NOT NULL AND %i <> '' ORDER BY %i ASC LIMIT 200",
+            $column,
+            self::tableName(),
+            $column,
+            $column,
+            $column
+        ));
 
         return is_array($rows) ? array_values(array_filter($rows, 'is_string')) : [];
+    }
+
+    /**
+     * Rows whose stored submission_data might contain an email address — the
+     * candidate set for WordPress's personal-data exporter and eraser.
+     *
+     * A CANDIDATE set, not a match set. The LIKE runs over the raw JSON, so
+     * "ann@example.com" is also found inside "joann@example.com", and in a
+     * message field that merely mentions the address. Every row must be
+     * confirmed by {@see \Convermetry\Privacy\PersonalDataMatcher} before it is
+     * exported or erased.
+     *
+     * Exactly two patterns are always bound (pass the same one twice when the
+     * email needs no second spelling) so the statement is a fixed string. The
+     * second spelling exists for rows written before the encoder switched to
+     * JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES — see
+     * {@see encodeJson()} — which store "/" and non-ASCII characters escaped.
+     *
+     * Case-insensitive regardless of the table's collation: both sides are
+     * lowercased, and the patterns must already be.
+     *
+     * Ordered by id so both pagination styles are stable: the exporter pages by
+     * OFFSET because it never deletes, the eraser by an id cursor because it
+     * does.
+     *
+     * @param array{0: string, 1: string} $patterns Two lowercase substrings, unescaped.
+     * @param int                         $afterId  Only rows with an id above this.
+     * @param int                         $offset   Rows to skip.
+     * @param int                         $limit    Maximum rows to return.
+     * @return array<int, array<string, mixed>>
+     */
+    public static function privacyCandidates(array $patterns, int $afterId, int $offset, int $limit): array
+    {
+        global $wpdb;
+
+        $rows = $wpdb->get_results(
+            $wpdb->prepare(
+                'SELECT * FROM %i WHERE id > %d'
+                . ' AND (LOWER(submission_data) LIKE %s OR LOWER(submission_data) LIKE %s)'
+                . ' ORDER BY id ASC LIMIT %d OFFSET %d',
+                self::tableName(),
+                $afterId,
+                '%' . $wpdb->esc_like($patterns[0]) . '%',
+                '%' . $wpdb->esc_like($patterns[1]) . '%',
+                $limit,
+                $offset
+            ),
+            ARRAY_A
+        );
+
+        return is_array($rows) ? $rows : [];
     }
 
     /**
@@ -1157,7 +1234,8 @@ final class FormSubmissions
         // Read the submission's globally unique id before the row goes away —
         // the queue is keyed by that, not by the numeric row id.
         $submissionId = (string) $wpdb->get_var($wpdb->prepare(
-            'SELECT submission_id FROM ' . self::tableName() . ' WHERE id = %d',
+            'SELECT submission_id FROM %i WHERE id = %d',
+            self::tableName(),
             $id
         ));
 
@@ -1220,11 +1298,11 @@ final class FormSubmissions
     {
         global $wpdb;
 
-        $wpdb->query('TRUNCATE TABLE ' . self::tableName());
+        $wpdb->query($wpdb->prepare('TRUNCATE TABLE %i', self::tableName()));
 
         // The queue carries form-submission deliveries only, so every row in
         // it belongs to a submission that no longer exists.
-        $wpdb->query('DELETE FROM ' . FormDeliveryQueue::tableName());
+        $wpdb->query($wpdb->prepare('DELETE FROM %i', FormDeliveryQueue::tableName()));
 
         // Same argument for queued notifications: every one of them refers to
         // a submission that has just been erased.
@@ -1412,7 +1490,8 @@ final class FormSubmissions
 
         do {
             $deleted = $wpdb->query($wpdb->prepare(
-                "DELETE FROM {$table} WHERE created_at < %s LIMIT %d",
+                'DELETE FROM %i WHERE created_at < %s LIMIT %d',
+                $table,
                 $cutoff,
                 self::CLEANUP_CHUNK
             ));

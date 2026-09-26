@@ -83,6 +83,7 @@ final class Correlation
      */
     public static function fromCurrentRequest(): self
     {
+        // phpcs:ignore WordPress.Security.NonceVerification.Missing -- this is a form plugin's own submission request, read after that plugin accepted it; the three correlation fields are validated strictly by fromFields() and nothing else is used.
         $post = wp_unslash($_POST);
         $post = is_array($post) ? $post : [];
 

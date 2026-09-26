@@ -22,7 +22,7 @@ Was the lead successfully delivered to external systems?
 
 Convermetry works standalone — full analytics dashboard, form integrations, and webhook delivery inside one WordPress install — and is architected so a future Convermetry SaaS can receive `analytics_report` and `form_submission` messages from many installations, keyed by a shared, versioned payload schema.
 
-- **Version:** 0.11.0
+- **Version:** 1.0.0
 - **Requires WordPress:** 6.3+
 - **Requires PHP:** 8.3+
 - **License:** GPL-2.0-or-later
@@ -551,7 +551,7 @@ The critical link between analytics and leads is **token-based — never timesta
 3. The confirmed conversion is recorded as a `form_success` analytics event under **that same conversion token**, together with a durable row in the form-submissions table (session id, attribution context, sanitized lead data).
 4. The tracker's own frontend success listeners (Elementor `submit_success`, Bricks `bricks/form/success`, CF7 `wpcf7mailsent`, WPForms `wpformsAjaxSubmitSuccess`, Gravity Forms `gform_confirmation_loaded`) reuse the **same token** for their `form_success` event — so whichever paths fire, every report deduplicates them into **one** conversion by `conversion_id`.
 
-Two providers do not serialize the `<form>`, so a hidden input would be dropped: Elementor Atomic's request is amended as it is built, and Bricks' three values are set on the prepared `event.detail.formData` at its documented `bricks/form/submit` event. Both carry them as **top-level** entries, never as submitted fields, and both reuse the token the native submit listener already minted for that attempt rather than creating a second one.
+Three providers do not serialize the `<form>`, so a hidden input would be dropped: Elementor Atomic's request is amended as it is built, Bricks' three values are set on the prepared `event.detail.formData` at its documented `bricks/form/submit` event, and Ninja Forms' `nf_ajax_submit` request (one `formData` JSON document built from its own models) is amended by a `jQuery.ajaxPrefilter`. All three carry them as **top-level** entries, never as submitted fields. Atomic and Bricks reuse the token the native submit listener already minted for that attempt rather than creating a second one; Ninja Forms gets a fresh token per request, since it has no client-side success event to share one with. The values are deliberately not put in the Ninja form model's `extra` data, which Ninja Forms saves with its own submission records.
 
 AJAX forms are fully supported (the capture-phase refresh runs before provider serialization). When the fields are absent (tracker disabled, privacy signals honored, JavaScript blocked, server-to-server submissions), the conversion id is generated server-side and the submission still records and delivers — just with an empty `analytics_context`. No cookies are used at any point.
 
@@ -1120,7 +1120,7 @@ Every outbound message shares one versioned envelope:
 {
     "schema_version": "1.0 | 2.0",
     "source": "convermetry",
-    "plugin_version": "0.11.0",
+    "plugin_version": "1.0.0",
     "message_type": "analytics_report | form_submission",
     "website_info": { },
     "generated_at": "2026-08-22T14:00:00+00:00",
@@ -1148,7 +1148,7 @@ Every outbound message shares one versioned envelope:
 {
     "schema_version": "1.1",
     "source": "convermetry",
-    "plugin_version": "0.11.0",
+    "plugin_version": "1.0.0",
     "message_type": "analytics_report",
     "website_info": {
         "name": "Example Financial", "url": "https://example.com", "domain": "example.com",
@@ -1268,7 +1268,7 @@ Every outbound message shares one versioned envelope:
 {
     "schema_version": "2.0",
     "source": "convermetry",
-    "plugin_version": "0.11.0",
+    "plugin_version": "1.0.0",
     "message_type": "form_submission",
     "website_info": {
         "name": "Example Financial", "url": "https://example.com", "domain": "example.com",
@@ -1815,10 +1815,11 @@ Helper functions: `convermetry_submit_form()` (result-aware submission) and `cvm
 ## Privacy
 
 - **Email notifications are opt-in and leave your retention window.** Convermetry → Notifications is off by default. When enabled, each notification is a copy of lead data in a mailbox Convermetry does not control: deleting a submission cancels anything still queued and guarantees no queued message can be rendered afterwards, but it **cannot recall a message already sent**. Retention, deletion, and export controls in this plugin do not reach those copies. The visitor-journey and IP-address toggles are off by default for the same reason, and credential-looking fields are never emailed at all. See [Notifications](#notifications).
-- **No cookies.** Session ids live in `localStorage` and rotate after 30 minutes of inactivity.
+- **No cookies — but browser storage.** The tracker keeps a random visit id (`cvm_session`) and the visit's attribution (`cvm_campaign`) in `localStorage`, and events not yet sent (`cvm_pending`) in `sessionStorage`. The visit id rotates after 30 minutes of inactivity. In the EU/UK the rules that govern cookies also apply to this storage.
+- **Tracking starts on activation, with no consent integration.** There is no consent banner and no consent-plugin integration. Where consent is required, have your consent tool block the `cvm-tracker` script handle, or return `false` from `convermetry_should_enqueue_tracker` until consent is given. Server-confirmed form submissions are still recorded — without analytics context — when the tracker does not run.
 - Tracked URLs are canonicalized to scheme + host + path — **no query strings are ever stored**. Referrers and click/form destinations are likewise stripped (whole `mailto:`/`tel:` destinations are kept — the address *is* the destination; strip via `convermetry_tracked_event` if unacceptable).
 - Campaign values are stored after sanitization, except values containing `@` (dropped as likely emails) — never put personal data in UTM parameters. Ad-click identifiers store only the parameter **name**; the value never leaves the browser.
-- **Visitor IP addresses are stored by default**, on both write paths: every analytics event (page views, clicks, hovers, scroll milestones, conversions) and every server-confirmed form submission. Turn it off with **Settings → Privacy → IP addresses**; new rows then record an empty value while existing rows are untouched and age out with retention. User agents are never stored on either path.
+- **Visitor IP addresses are stored by default**, on both write paths: every analytics event (page views, clicks, hovers, scroll milestones, conversions) and every server-confirmed form submission. Turn it off with **Settings → Tracking → IP addresses**; new rows then record an empty value while existing rows are untouched and age out with retention. User agents are never stored on either path.
   - **In the EU/UK an IP address is personal data.** Retaining it for general visitor activity — not only for leads someone actively submitted — normally has to be disclosed in your privacy policy and rest on a lawful basis. Consider whether your consent tooling should gate the tracker.
   - Addresses come from `REMOTE_ADDR` and are validated as real IPv4/IPv6 — remap behind a proxy or CDN with `convermetry_client_ip`.
   - To **anonymize rather than disable**, use `convermetry_tracked_event` to rewrite `ip_address` (e.g. zero the last octet) before the row is written; it runs on every analytics row.
@@ -1835,6 +1836,15 @@ Helper functions: `convermetry_submit_form()` (result-aware submission) and `cvm
 - **Goal definitions are not published to visitors.** Matching happens on the server. The one exception is a CSS-selector goal, whose selector must reach the browser to be evaluated; the ids reported back are re-validated server-side before anything is recorded.
 - Goal completions and lead status history age out on the **same retention window** as everything else, and both tables are dropped on uninstall.
 - Everything is deleted after the configurable retention window (7–365 days, default 90) by bounded, chunked cleanup jobs.
+
+### WordPress privacy tools
+
+- **Suggested policy text** is registered for **Settings → Privacy → Policy Guide**, generated from the current settings (IP storage, Do Not Track / Global Privacy Control, retention, whether webhooks and email notifications are configured). WordPress flags the guide when the text changes. It is a starting point, not legal advice, and it says so.
+- **Personal-data exporter and eraser** (`Convermetry\Privacy\PersonalDataExporter` / `PersonalDataEraser`) are registered with core's **Tools → Export / Erase Personal Data**. For an email address they find the form submissions whose submitted values contain that address **exactly** (case-insensitive) — a field that merely mentions the address inside other text is somebody else's lead and is not touched. The SQL narrowing is a substring search over `submission_data`, so every candidate is confirmed in PHP before it is exported or erased.
+- **Export** includes each submission (fields, page, IP, attribution, lead status/value), its lead history, where it was delivered (destination **host** only — endpoint URLs often embed secrets), and the analytics events of the session it was submitted in (capped at 200). Credential-looking fields are withheld.
+- **Erasure** deletes the submission through `FormSubmissions::deleteSubmission()` — the same cascade as the Delete button (queued deliveries, queued notifications, lead history, and the `convermetry_submission_deleted` action) — then replaces the request/response bodies of its Activity Log rows with an erasure marker (the audit row itself stays), blanks that conversion's `ip_address`/`session_id` in logged analytics reports, and blanks `ip_address` on the session's analytics events (which remain as anonymous traffic).
+- **Limits, reported on the Erase screen:** webhook payloads already accepted by a receiver and emails already sent cannot be recalled (the message names the destination hosts); an analytics report frozen for retry is re-sent exactly as frozen; a delivery already in flight may complete. Analytics from visits with no form submission is not linked to an email address and ages out with retention.
+- Paging is bounded: the exporter pages 5 candidates per request by offset (it never deletes); the eraser examines 20 per request and resumes from an id cursor held in a short-lived transient, because deletion would shift an offset.
 
 ## Database tables
 
@@ -1861,6 +1871,32 @@ in `composer.json` is dev-only, and `.distignore` keeps it out of the release ZI
 ```bash
 composer install           # dev toolchain: PHPUnit, Brain Monkey, PHPStan
 ```
+
+**Translations.** Every user-facing string uses the `convermetry` text domain;
+admin scripts load `wp-i18n` and are registered with `wp_set_script_translations()`.
+Regenerate the template after changing strings:
+
+```bash
+wp i18n make-pot . languages/convermetry.pot --slug=convermetry --domain=convermetry \
+  --exclude=vendor,tests,build,bin,phpstan,node_modules,.github
+```
+
+**Release ZIP.** `bin/build-zip.sh [output-dir]` stages tracked files minus
+`.distignore`, checks every version surface (plugin header, `CVM_VERSION`,
+README, payload examples, readme.txt `Stable tag`), and refuses to build when a
+runtime file would be silently left out — an untracked file (add it, or
+`git add -N` it), or one hidden by `.gitignore` — or when `readme.txt`,
+`LICENSE` or `uninstall.php` is missing.
+
+**WordPress.org listing assets** live in `.wordpress-org/` (icons, banners and
+`screenshot-N.png`, numbered to match `== Screenshots ==` in `readme.txt`). They
+are never part of the ZIP; they go in the SVN repository's top-level `assets/`
+directory. The icon and banners are drawn from the plugin's own logo mark,
+colors and bundled Play font; the screenshots come from a test site filled with
+fictional data (`www.example.com`, documentation-range IP addresses).
+
+**Plugin Check.** `docs/plugin-check-1.0.0.md` records what the official Plugin
+Check tool still reports against the release ZIP and why each finding stands.
 
 ---
 
@@ -2086,7 +2122,11 @@ Goal matching adds a small per-event cost on the server and has its own switch u
 convermetry/
 ├── convermetry.php              # Plugin header, PHP 8.3 guard, bootstrap, activation, helpers
 ├── uninstall.php                # Complete cleanup on plugin deletion (multisite-aware)
+├── readme.txt                   # The WordPress.org directory readme
 ├── README.md
+├── languages/convermetry.pot    # Translation template (wp i18n make-pot)
+├── docs/                        # Release records (Plugin Check findings); not shipped
+├── .wordpress-org/              # Directory listing icon, banners, screenshots; not shipped
 ├── tests/
 │   ├── Unit/                    # Pure logic; no WordPress, no database
 │   └── Integration/             # The real queries against a real MySQL server
@@ -2142,6 +2182,8 @@ convermetry/
     ├── Notifications/           # NotificationSettings, NotificationDispatcher,
     │                             # NotificationQueue, EmailBuilder, NotificationMailer,
     │                             # NotificationMessage, MailResult, SiteInfo
+    ├── Privacy/                 # PrivacyTools (registration), PrivacyPolicy (suggested text),
+    │                             # PersonalDataExporter, PersonalDataEraser, PersonalDataMatcher
     ├── Settings/                # Options (typed settings access), WebhookEndpoint
     ├── Support/                 # Http (the single safe outbound transport),
     │                             # SensitiveKeys (shared credential-name policy),

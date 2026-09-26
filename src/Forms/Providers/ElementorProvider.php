@@ -70,7 +70,8 @@ final class ElementorProvider implements FormProviderInterface
 
         /** @var string[] $postIds */
         $postIds = $wpdb->get_col($wpdb->prepare(
-            "SELECT DISTINCT post_id FROM {$wpdb->postmeta} WHERE meta_key = %s",
+            "SELECT DISTINCT post_id FROM %i WHERE meta_key = %s",
+            $wpdb->postmeta,
             '_elementor_data'
         ));
 
@@ -186,7 +187,7 @@ final class ElementorProvider implements FormProviderInterface
             && is_object($handler)
             && method_exists($handler, 'add_error_message')
         ) {
-            $handler->add_error_message('There was an issue submitting the form data through the webhook.');
+            $handler->add_error_message(__('There was an issue submitting the form data through the webhook.', 'convermetry'));
             if (property_exists($handler, 'is_success')) {
                 $handler->is_success = false;
             }

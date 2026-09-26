@@ -19,3 +19,8 @@ phpstan.neon
 phpstan
 bin
 .DS_Store
+# Release notes for maintainers and reviewers (e.g. the Plugin Check record).
+docs
+# WordPress.org listing assets (icon, banner, screenshots) live in SVN /assets,
+# never inside the plugin.
+.wordpress-org

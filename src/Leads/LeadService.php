@@ -60,7 +60,7 @@ final class LeadService
         $current = FormSubmissions::getLead($submissionId);
 
         if ($current === null) {
-            return self::failure('That submission no longer exists.');
+            return self::failure(__('That submission no longer exists.', 'convermetry'));
         }
 
         $fromStatus = LeadStatus::normalize($current['lead_status']);
@@ -70,7 +70,7 @@ final class LeadService
             if (!LeadStatus::isValid($status)) {
                 // Rejected rather than coerced. Silently storing 'new' when
                 // somebody meant 'won' would be worse than refusing.
-                return self::failure('That is not a recognized lead status.');
+                return self::failure(__('That is not a recognized lead status.', 'convermetry'));
             }
 
             $toStatus = $status;
@@ -91,8 +91,7 @@ final class LeadService
 
                 if ($parsed === null) {
                     return self::failure(
-                        'That value could not be read as an amount. Enter a number, optionally with a '
-                        . 'currency symbol and separators, for example 12,500.00'
+                        __('That value could not be read as an amount. Enter a number, optionally with a currency symbol and separators, for example 12,500.00', 'convermetry')
                     );
                 }
 
@@ -125,7 +124,7 @@ final class LeadService
         );
 
         if (!$stored) {
-            return self::failure('The lead could not be updated.');
+            return self::failure(__('The lead could not be updated.', 'convermetry'));
         }
 
         /**

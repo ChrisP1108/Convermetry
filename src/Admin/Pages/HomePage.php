@@ -64,15 +64,25 @@ final class HomePage
     /** Anchor id for the Learn More section. */
     private const string ANCHOR_LEARN_MORE = 'cvm-learn-more';
 
-    /** The visit-to-lead journey: [label, node modifier]. */
-    private const array JOURNEY = [
-        ['Traffic Source', ''],
-        ['Website Visit', ''],
-        ['Landing Page', ''],
-        ['Form Submission', ' cvm-ui-flow__node--accent'],
-        ['Lead', ' cvm-ui-flow__node--lead'],
-        ['Webhook / External System', ' cvm-ui-flow__node--teal'],
-    ];
+    /**
+     * The visit-to-lead journey: [label, node modifier].
+     *
+     * A method rather than a constant only because the labels are translated,
+     * and a constant expression cannot call a function.
+     *
+     * @return list<array{0: string, 1: string}>
+     */
+    private static function journeySteps(): array
+    {
+        return [
+            [__('Traffic Source', 'convermetry'), ''],
+            [__('Website Visit', 'convermetry'), ''],
+            [__('Landing Page', 'convermetry'), ''],
+            [__('Form Submission', 'convermetry'), ' cvm-ui-flow__node--accent'],
+            [__('Lead', 'convermetry'), ' cvm-ui-flow__node--lead'],
+            [__('Webhook / External System', 'convermetry'), ' cvm-ui-flow__node--teal'],
+        ];
+    }
 
     private static ?FormProviderRegistry $registry = null;
 
@@ -116,7 +126,7 @@ final class HomePage
         add_submenu_page(
             self::MENU_SLUG,
             'Convermetry',
-            'Home',
+            __('Home', 'convermetry'),
             Capability::required(Capability::ANALYTICS_VIEW),
             self::MENU_SLUG,
             [self::class, 'render']
@@ -208,7 +218,7 @@ final class HomePage
         // healthy case reads "Tracking active" here and "Active" on its own
         // status card. Every other state keeps the card's exact wording —
         // prefixing those would produce "Tracking Not Tracking".
-        $trackLabel = $trackLevel === HomeStatusLevel::Success ? 'Tracking active' : $tracking->label;
+        $trackLabel = $trackLevel === HomeStatusLevel::Success ? __('Tracking active', 'convermetry') : $tracking->label;
 
         ?>
         <section class="cvm-ui-hero" aria-labelledby="cvm-home-title">
@@ -218,27 +228,30 @@ final class HomePage
                         <span class="cvm-ui-icon cvm-ui-icon--brand"><?php Icons::render('logo', 28); ?></span>
                         <span class="cvm-ui-wordmark">Convermetry<sup class="cvm-sup">TM</sup></span>
                         <span class="cvm-ui-tag">
-                            <?php echo esc_html(sprintf('for WordPress · v%s', CVM_VERSION)); ?>
+                            <?php
+                            echo esc_html(sprintf(
+                                /* translators: %s: plugin version number. */
+                                __('for WordPress · v%s', 'convermetry'),
+                                CVM_VERSION
+                            ));
+                            ?>
                         </span>
                     </div>
 
-                    <h1 class="cvm-ui-title" id="cvm-home-title">Welcome to Convermetry</h1>
-                    <p class="cvm-ui-lede">Marketing analytics and lead tracking for WordPress.</p>
+                    <h1 class="cvm-ui-title" id="cvm-home-title"><?php esc_html_e('Welcome to Convermetry', 'convermetry'); ?></h1>
+                    <p class="cvm-ui-lede"><?php esc_html_e('Marketing analytics and lead tracking for WordPress.', 'convermetry'); ?></p>
                     <p class="cvm-ui-text cvm-ui-text--lg cvm-ui-measure">
-                        Convermetry brings website analytics, form submissions, marketing attribution, lead
-                        tracking, and delivery monitoring together inside WordPress&mdash;helping you understand
-                        not only what visitors are doing, but which marketing activity is generating real leads
-                        and conversions.
+                        <?php esc_html_e('Convermetry brings website analytics, form submissions, marketing attribution, lead tracking, and delivery monitoring together inside WordPress—helping you understand not only what visitors are doing, but which marketing activity is generating real leads and conversions.', 'convermetry'); ?>
                     </p>
 
                     <div class="cvm-ui-hero__actions">
                         <a class="cvm-ui-button cvm-ui-button--primary"
                            href="#<?php echo esc_attr(self::ANCHOR_GETTING_STARTED); ?>">
-                            Get Started <?php Icons::render('arrow-down', 14); ?>
+                            <?php esc_html_e('Get Started', 'convermetry'); ?> <?php Icons::render('arrow-down', 14); ?>
                         </a>
                         <?php if ($aboutUrl !== '') : ?>
                             <a class="cvm-ui-button cvm-ui-button--secondary" href="<?php echo esc_url($aboutUrl); ?>">
-                                About Convermetry
+                                <?php esc_html_e('About Convermetry', 'convermetry'); ?>
                             </a>
                         <?php endif; ?>
                     </div>
@@ -246,7 +259,7 @@ final class HomePage
 
                 <div class="cvm-ui-hero__panel">
                     <div class="cvm-ui-status-row">
-                        <span class="cvm-ui-eyebrow">At a glance</span>
+                        <span class="cvm-ui-eyebrow"><?php esc_html_e('At a glance', 'convermetry'); ?></span>
                         <span class="<?php echo esc_attr($trackLevel->pillClass()); ?>">
                             <?php Icons::render($trackLevel->icon(), 11); ?>
                             <?php echo esc_html($trackLabel); ?>
@@ -265,7 +278,7 @@ final class HomePage
                     </dl>
 
                     <p class="cvm-ui-hero__panel-note">
-                        Values are read from this site's own collected data each time the page loads.
+                        <?php esc_html_e('Values are read from this site\'s own collected data each time the page loads.', 'convermetry'); ?>
                     </p>
                 </div>
             </div>
@@ -284,37 +297,33 @@ final class HomePage
             [
                 'icon'  => 'chart',
                 'teal'  => false,
-                'title' => 'Understand Your Visitors',
-                'body'  => 'Track website activity, sessions, traffic sources, landing pages, campaign '
-                    . 'information, and other useful analytics directly inside WordPress.',
-                'label' => 'View Analytics',
+                'title' => __('Understand Your Visitors', 'convermetry'),
+                'body'  => __('Track website activity, sessions, traffic sources, landing pages, campaign information, and other useful analytics directly inside WordPress.', 'convermetry'),
+                'label' => __('View Analytics', 'convermetry'),
                 'url'   => HomeStatus::urlFor(AnalyticsPage::MENU_SLUG, Capability::ANALYTICS_VIEW),
             ],
             [
                 'icon'  => 'document',
                 'teal'  => false,
-                'title' => 'Track Your Leads',
-                'body'  => 'Capture supported form submissions and connect those leads with the visitor, page, '
-                    . 'campaign, and attribution information that helped generate them.',
-                'label' => 'View Submissions',
+                'title' => __('Track Your Leads', 'convermetry'),
+                'body'  => __('Capture supported form submissions and connect those leads with the visitor, page, campaign, and attribution information that helped generate them.', 'convermetry'),
+                'label' => __('View Submissions', 'convermetry'),
                 'url'   => HomeStatus::urlFor(SubmissionsPage::MENU_SLUG, Capability::SUBMISSIONS_VIEW),
             ],
             [
                 'icon'  => 'share',
                 'teal'  => true,
-                'title' => 'Deliver Your Data',
-                'body'  => 'Send form submissions to external systems using configurable webhooks, field '
-                    . 'mapping, delivery logging, retries, and failure handling.',
-                'label' => 'Manage Integrations',
+                'title' => __('Deliver Your Data', 'convermetry'),
+                'body'  => __('Send form submissions to external systems using configurable webhooks, field mapping, delivery logging, retries, and failure handling.', 'convermetry'),
+                'label' => __('Manage Integrations', 'convermetry'),
                 'url'   => HomeStatus::urlFor(WebhooksPage::MENU_SLUG, Capability::WEBHOOKS_MANAGE),
             ],
             [
                 'icon'  => 'code',
                 'teal'  => true,
-                'title' => 'Extend Convermetry',
-                'body'  => 'Use WordPress hooks, filters, and extensibility features to connect additional form '
-                    . 'providers, customize workflows, and integrate Convermetry with other systems.',
-                'label' => 'Learn About Integrations',
+                'title' => __('Extend Convermetry', 'convermetry'),
+                'body'  => __('Use WordPress hooks, filters, and extensibility features to connect additional form providers, customize workflows, and integrate Convermetry with other systems.', 'convermetry'),
+                'label' => __('Learn About Integrations', 'convermetry'),
                 'url'   => self::aboutSection('developer'),
             ],
         ];
@@ -323,12 +332,10 @@ final class HomePage
         <section class="cvm-ui-section cvm-ui-section--loose" aria-labelledby="cvm-home-value">
             <div class="cvm-ui-section-header cvm-ui-section-header--split">
                 <h2 class="cvm-ui-heading cvm-ui-heading--lg" id="cvm-home-value">
-                    Understand what turns website visitors into leads
+                    <?php esc_html_e('Understand what turns website visitors into leads', 'convermetry'); ?>
                 </h2>
                 <p class="cvm-ui-text cvm-ui-text--md cvm-ui-text--relaxed">
-                    Website traffic is only part of the story. Convermetry connects visitor activity, traffic
-                    sources, campaign attribution, form submissions, and lead delivery so you can better
-                    understand how your marketing efforts contribute to conversions.
+                    <?php esc_html_e('Website traffic is only part of the story. Convermetry connects visitor activity, traffic sources, campaign attribution, form submissions, and lead delivery so you can better understand how your marketing efforts contribute to conversions.', 'convermetry'); ?>
                 </p>
             </div>
 
@@ -373,17 +380,15 @@ final class HomePage
 
         $expansions = array_values(array_filter([
             [
-                'title' => 'Define Your Goals',
-                'body'  => 'Measure valuable actions such as phone clicks, booking clicks, and visits to '
-                    . 'key pages.',
-                'label' => 'Manage Goals',
+                'title' => __('Define Your Goals', 'convermetry'),
+                'body'  => __('Measure valuable actions such as phone clicks, booking clicks, and visits to key pages.', 'convermetry'),
+                'label' => __('Manage Goals', 'convermetry'),
                 'url'   => HomeStatus::urlFor(GoalsPage::MENU_SLUG, Capability::GOALS_MANAGE),
             ],
             [
-                'title' => 'Build Your Funnels',
-                'body'  => 'See how visitors move through a sequence of steps and where they drop off '
-                    . 'before converting.',
-                'label' => 'Manage Funnels',
+                'title' => __('Build Your Funnels', 'convermetry'),
+                'body'  => __('See how visitors move through a sequence of steps and where they drop off before converting.', 'convermetry'),
+                'label' => __('Manage Funnels', 'convermetry'),
                 'url'   => HomeStatus::urlFor(FunnelsPage::MENU_SLUG, Capability::FUNNELS_MANAGE),
             ],
         ], static fn(array $expansion): bool => $expansion['url'] !== ''));
@@ -394,23 +399,31 @@ final class HomePage
                  aria-labelledby="cvm-home-start">
             <div class="cvm-ui-split cvm-ui-split--baseline">
                 <div class="cvm-ui-split__main cvm-ui-section-header">
-                    <h2 class="cvm-ui-heading" id="cvm-home-start">Getting Started</h2>
+                    <h2 class="cvm-ui-heading" id="cvm-home-start"><?php esc_html_e('Getting Started', 'convermetry'); ?></h2>
                     <p class="cvm-ui-text cvm-ui-text--md">
-                        New to Convermetry? Follow these steps to begin collecting useful marketing and lead data.
+                        <?php esc_html_e('New to Convermetry? Follow these steps to begin collecting useful marketing and lead data.', 'convermetry'); ?>
                     </p>
                 </div>
 
                 <div class="cvm-ui-progress">
                     <div class="cvm-ui-progress__label">
-                        <span>Setup progress</span>
+                        <span><?php esc_html_e('Setup progress', 'convermetry'); ?></span>
                         <span class="cvm-ui-mono">
-                            <?php echo esc_html(sprintf('%d of %d steps', $completed, $total)); ?>
+                            <?php
+                            echo esc_html(sprintf(
+                                /* translators: 1: number of completed setup steps, 2: total number of setup steps. */
+                                _n('%1$d of %2$d step', '%1$d of %2$d steps', $total, 'convermetry'),
+                                $completed,
+                                $total
+                            ));
+                            ?>
                         </span>
                     </div>
                     <div class="cvm-ui-progress__track"
                          role="progressbar"
                          aria-label="<?php echo esc_attr(sprintf(
-                             'Setup progress: %d of %d steps completed',
+                             /* translators: 1: number of completed setup steps, 2: total number of setup steps. */
+                             _n('Setup progress: %1$d of %2$d step completed', 'Setup progress: %1$d of %2$d steps completed', $total, 'convermetry'),
                              $completed,
                              $total
                          )); ?>"
@@ -437,7 +450,7 @@ final class HomePage
             <?php if ($expansions !== []) : ?>
                 <div class="cvm-ui-section-header">
                     <h3 class="cvm-ui-heading cvm-ui-heading--xs" id="cvm-home-expand">
-                        Go Further with Goals and Funnels
+                        <?php esc_html_e('Go Further with Goals and Funnels', 'convermetry'); ?>
                     </h3>
                 </div>
 
@@ -462,9 +475,9 @@ final class HomePage
         ?>
         <section class="cvm-ui-section cvm-ui-section--tight" aria-labelledby="cvm-home-status">
             <div class="cvm-ui-section-header">
-                <h2 class="cvm-ui-heading" id="cvm-home-status">Convermetry Status</h2>
+                <h2 class="cvm-ui-heading" id="cvm-home-status"><?php esc_html_e('Convermetry Status', 'convermetry'); ?></h2>
                 <p class="cvm-ui-text cvm-ui-text--md cvm-ui-measure--wide">
-                    Quickly verify that the major parts of Convermetry are operating as expected.
+                    <?php esc_html_e('Quickly verify that the major parts of Convermetry are operating as expected.', 'convermetry'); ?>
                 </p>
             </div>
 
@@ -488,51 +501,50 @@ final class HomePage
             [
                 'icon'  => 'chart-sm',
                 'teal'  => false,
-                'title' => 'Analytics',
-                'body'  => 'View visitor activity, sessions, traffic sources, landing pages, and marketing data.',
+                'title' => __('Analytics', 'convermetry'),
+                'body'  => __('View visitor activity, sessions, traffic sources, landing pages, and marketing data.', 'convermetry'),
                 'url'   => HomeStatus::urlFor(AnalyticsPage::MENU_SLUG, Capability::ANALYTICS_VIEW),
             ],
             [
                 'icon'  => 'document-sm',
                 'teal'  => false,
-                'title' => 'Submissions',
-                'body'  => 'Review captured leads and associated attribution information.',
+                'title' => __('Submissions', 'convermetry'),
+                'body'  => __('Review captured leads and associated attribution information.', 'convermetry'),
                 'url'   => HomeStatus::urlFor(SubmissionsPage::MENU_SLUG, Capability::SUBMISSIONS_VIEW),
             ],
             [
                 'icon'  => 'chart-sm',
                 'teal'  => false,
-                'title' => 'Goals',
-                'body'  => 'Define conversion goals and review their performance.',
+                'title' => __('Goals', 'convermetry'),
+                'body'  => __('Define conversion goals and review their performance.', 'convermetry'),
                 'url'   => HomeStatus::urlFor(GoalsPage::MENU_SLUG, Capability::GOALS_MANAGE),
             ],
             [
                 'icon'  => 'share',
                 'teal'  => false,
-                'title' => 'Funnels',
-                'body'  => 'Explore conversion paths and identify where visitors drop off.',
+                'title' => __('Funnels', 'convermetry'),
+                'body'  => __('Explore conversion paths and identify where visitors drop off.', 'convermetry'),
                 'url'   => HomeStatus::urlFor(FunnelsPage::MENU_SLUG, Capability::FUNNELS_MANAGE),
             ],
             [
                 'icon'  => 'list-sm',
                 'teal'  => false,
-                'title' => 'Activity Log',
-                'body'  => 'Review important Convermetry events and system activity.',
+                'title' => __('Activity Log', 'convermetry'),
+                'body'  => __('Review important Convermetry events and system activity.', 'convermetry'),
                 'url'   => HomeStatus::urlFor(ActivityLogPage::MENU_SLUG, Capability::ACTIVITY_VIEW),
             ],
             [
                 'icon'  => 'gear-sm',
                 'teal'  => false,
-                'title' => 'Settings',
-                'body'  => 'Configure tracking, integrations, notifications, and plugin behavior.',
+                'title' => __('Settings', 'convermetry'),
+                'body'  => __('Configure tracking, integrations, notifications, and plugin behavior.', 'convermetry'),
                 'url'   => HomeStatus::urlFor(SettingsPage::MENU_SLUG, Capability::SETTINGS_MANAGE),
             ],
             [
                 'icon'  => 'info-sm',
                 'teal'  => true,
-                'title' => 'About Convermetry',
-                'body'  => 'Learn more about features, architecture, integrations, privacy approach, and '
-                    . 'extensibility.',
+                'title' => __('About Convermetry', 'convermetry'),
+                'body'  => __('Learn more about features, architecture, integrations, privacy approach, and extensibility.', 'convermetry'),
                 'url'   => HomeStatus::urlFor(AboutPage::MENU_SLUG, Capability::ANALYTICS_VIEW),
             ],
         ];
@@ -547,7 +559,7 @@ final class HomePage
         <section class="cvm-ui-section cvm-ui-section--tight"
                  id="<?php echo esc_attr(self::ANCHOR_QUICK_ACCESS); ?>"
                  aria-labelledby="cvm-home-quick">
-            <h2 class="cvm-ui-heading" id="cvm-home-quick">Quick Access</h2>
+            <h2 class="cvm-ui-heading" id="cvm-home-quick"><?php esc_html_e('Quick Access', 'convermetry'); ?></h2>
 
             <div class="cvm-ui-grid cvm-ui-grid--links">
                 <?php foreach ($links as $link) : ?>
@@ -581,14 +593,15 @@ final class HomePage
      */
     private static function journey(): void
     {
-        $last = count(self::JOURNEY) - 1;
+        $journey = self::journeySteps();
+        $last    = count($journey) - 1;
 
         ?>
         <section class="cvm-ui-card cvm-ui-card--panel" aria-labelledby="cvm-home-journey">
-            <h2 class="cvm-ui-heading" id="cvm-home-journey">Connect the Journey From Visit to Lead</h2>
+            <h2 class="cvm-ui-heading" id="cvm-home-journey"><?php esc_html_e('Connect the Journey From Visit to Lead', 'convermetry'); ?></h2>
 
             <ol class="cvm-ui-flow">
-                <?php foreach (self::JOURNEY as $index => [$label, $modifier]) : ?>
+                <?php foreach ($journey as $index => [$label, $modifier]) : ?>
                     <li class="cvm-ui-flow__item">
                         <span class="cvm-ui-flow__node<?php echo esc_attr($modifier); ?>">
                             <?php echo esc_html($label); ?>
@@ -601,8 +614,7 @@ final class HomePage
             </ol>
 
             <p class="cvm-ui-text cvm-ui-text--relaxed cvm-ui-measure--wide">
-                Convermetry connects marketing attribution with real form submissions so you can see more of the
-                journey between a visitor arriving on your website and becoming a lead.
+                <?php esc_html_e('Convermetry connects marketing attribution with real form submissions so you can see more of the journey between a visitor arriving on your website and becoming a lead.', 'convermetry'); ?>
             </p>
         </section>
         <?php
@@ -623,12 +635,10 @@ final class HomePage
             <span class="cvm-ui-icon cvm-ui-icon--md"><?php Icons::render('shield', 18); ?></span>
             <div class="cvm-ui-notice__body">
                 <h2 class="cvm-ui-heading cvm-ui-heading--xs" id="cvm-home-data">
-                    Your WordPress Data, Under Your Control
+                    <?php esc_html_e('Your WordPress Data, Under Your Control', 'convermetry'); ?>
                 </h2>
                 <p class="cvm-ui-text cvm-ui-text--relaxed cvm-ui-measure--wide">
-                    Convermetry is designed to provide useful marketing and conversion insights while keeping the
-                    WordPress website at the center of the data collection process. Configure the plugin according
-                    to your organization's privacy, retention, and compliance requirements.
+                    <?php esc_html_e('Convermetry is designed to provide useful marketing and conversion insights while keeping the WordPress website at the center of the data collection process. Configure the plugin according to your organization\'s privacy, retention, and compliance requirements.', 'convermetry'); ?>
                 </p>
             </div>
         </section>
@@ -650,18 +660,16 @@ final class HomePage
                  aria-labelledby="cvm-home-learn">
             <div class="cvm-ui-split__main cvm-ui-section-header">
                 <h2 class="cvm-ui-heading cvm-ui-heading--sm" id="cvm-home-learn">
-                    Want to Learn More About Convermetry?
+                    <?php esc_html_e('Want to Learn More About Convermetry?', 'convermetry'); ?>
                 </h2>
                 <p class="cvm-ui-text cvm-ui-text--relaxed cvm-ui-measure--wide">
-                    The About Convermetry page provides a more detailed explanation of analytics, attribution,
-                    form tracking, submissions, webhook delivery, integrations, developer hooks, and other
-                    Convermetry capabilities.
+                    <?php esc_html_e('The About Convermetry page provides a more detailed explanation of analytics, attribution, form tracking, submissions, webhook delivery, integrations, developer hooks, and other Convermetry capabilities.', 'convermetry'); ?>
                 </p>
             </div>
             <?php if ($aboutUrl !== '') : ?>
                 <a class="cvm-ui-button cvm-ui-button--primary cvm-ui-split__aside"
                    href="<?php echo esc_url($aboutUrl); ?>">
-                    Explore Convermetry <span aria-hidden="true">&rarr;</span>
+                    <?php esc_html_e('Explore Convermetry', 'convermetry'); ?> <span aria-hidden="true">&rarr;</span>
                 </a>
             <?php endif; ?>
         </section>
@@ -683,18 +691,16 @@ final class HomePage
         <section class="cvm-ui-card cvm-ui-card--quiet cvm-ui-split" aria-labelledby="cvm-home-cloud">
             <div class="cvm-ui-split__main cvm-ui-section-header">
                 <h2 class="cvm-ui-heading cvm-ui-heading--xs" id="cvm-home-cloud">
-                    Managing Multiple WordPress Websites?
+                    <?php esc_html_e('Managing Multiple WordPress Websites?', 'convermetry'); ?>
                 </h2>
                 <p class="cvm-ui-text cvm-ui-text--sm cvm-ui-measure--wide">
-                    Convermetry Cloud is being developed to bring analytics, leads, attribution, and reporting
-                    from multiple Convermetry-powered WordPress websites into one centralized platform.
+                    <?php esc_html_e('Convermetry Cloud is being developed to bring analytics, leads, attribution, and reporting from multiple Convermetry-powered WordPress websites into one centralized platform.', 'convermetry'); ?>
                 </p>
                 <p class="cvm-ui-text cvm-ui-text--xs cvm-ui-text--subtle">
-                    Convermetry Cloud will be especially useful for agencies and organizations that manage
-                    marketing across multiple websites.
+                    <?php esc_html_e('Convermetry Cloud will be especially useful for agencies and organizations that manage marketing across multiple websites.', 'convermetry'); ?>
                 </p>
             </div>
-            <span class="cvm-ui-badge cvm-ui-badge--neutral cvm-ui-split__aside">Coming Soon</span>
+            <span class="cvm-ui-badge cvm-ui-badge--neutral cvm-ui-split__aside"><?php esc_html_e('Coming Soon', 'convermetry'); ?></span>
         </section>
         <?php
     }
@@ -718,15 +724,21 @@ final class HomePage
             <div>
                 <p class="cvm-ui-text cvm-ui-text--sm cvm-ui-text--strong">Convermetry</p>
                 <p class="cvm-ui-text cvm-ui-text--xs cvm-ui-text--subtle">
-                    Marketing analytics and lead tracking for WordPress.
+                    <?php esc_html_e('Marketing analytics and lead tracking for WordPress.', 'convermetry'); ?>
                 </p>
             </div>
             <div class="cvm-ui-footer__links">
                 <?php if ($aboutUrl !== '') : ?>
-                    <a class="cvm-ui-link cvm-ui-link--meta" href="<?php echo esc_url($aboutUrl); ?>">Documentation</a>
+                    <a class="cvm-ui-link cvm-ui-link--meta" href="<?php echo esc_url($aboutUrl); ?>"><?php esc_html_e('Documentation', 'convermetry'); ?></a>
                 <?php endif; ?>
                 <span class="cvm-ui-mono cvm-ui-text cvm-ui-text--xs cvm-ui-text--subtle">
-                    <?php echo esc_html(sprintf('Version %s', CVM_VERSION)); ?>
+                    <?php
+                    echo esc_html(sprintf(
+                        /* translators: %s: plugin version number. */
+                        __('Version %s', 'convermetry'),
+                        CVM_VERSION
+                    ));
+                    ?>
                 </span>
             </div>
         </footer>
@@ -762,13 +774,19 @@ final class HomePage
                     <?php echo esc_html((string) $number); ?>
                 </span>
                 <h3 class="cvm-ui-card-title cvm-ui-card-title--sm">
-                    <span class="screen-reader-text"><?php echo esc_html(sprintf('Step %d: ', $number)); ?></span>
+                    <span class="screen-reader-text"><?php
+                    echo esc_html(sprintf(
+                        /* translators: %d: the step's position in the setup checklist. */
+                        __('Step %d:', 'convermetry'),
+                        $number
+                    ));
+                    ?> </span>
                     <?php echo esc_html($step->title); ?>
                 </h3>
                 <?php if ($step->complete) : ?>
-                    <span class="cvm-ui-badge cvm-ui-badge--success cvm-ui-step__badge">Done</span>
+                    <span class="cvm-ui-badge cvm-ui-badge--success cvm-ui-step__badge"><?php esc_html_e('Done', 'convermetry'); ?></span>
                 <?php elseif ($step->current) : ?>
-                    <span class="cvm-ui-badge cvm-ui-step__badge">Next</span>
+                    <span class="cvm-ui-badge cvm-ui-step__badge"><?php esc_html_e('Next', 'convermetry'); ?></span>
                 <?php endif; ?>
             </div>
 
@@ -801,7 +819,7 @@ final class HomePage
         <article class="cvm-ui-card cvm-ui-card--nested">
             <div class="cvm-ui-step__header">
                 <h4 class="cvm-ui-card-title cvm-ui-card-title--sm"><?php echo esc_html($expansion['title']); ?></h4>
-                <span class="cvm-ui-badge cvm-ui-badge--neutral cvm-ui-step__badge">Optional</span>
+                <span class="cvm-ui-badge cvm-ui-badge--neutral cvm-ui-step__badge"><?php esc_html_e('Optional', 'convermetry'); ?></span>
             </div>
 
             <p class="cvm-ui-text cvm-ui-text--sm cvm-ui-card__fill"><?php echo esc_html($expansion['body']); ?></p>

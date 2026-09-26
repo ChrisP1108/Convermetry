@@ -5,6 +5,90 @@ All notable changes to Convermetry are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 1.0.0
+
+First release prepared for the WordPress.org plugin directory.
+
+### Added
+
+- **WordPress privacy tools.** Suggested privacy-policy text for Settings →
+  Privacy → Policy Guide, generated from the current settings (IP storage,
+  Do Not Track / Global Privacy Control, retention, webhooks, notifications).
+  A personal-data **exporter** and **eraser** for Tools → Export / Erase
+  Personal Data: for an email address they find the form submissions whose
+  submitted values contain that exact address. Export covers the submission,
+  its lead history, delivery destinations (host only) and the analytics of the
+  visit. Erasure deletes the submission through the existing delete cascade,
+  replaces the bodies of its Activity Log rows with an erasure marker, blanks
+  that conversion's IP and session id in logged analytics reports, and blanks
+  the IP on the visit's analytics events. The erasure summary names the
+  webhook destinations the data had reached and states what cannot be recalled.
+- **Translations.** Every user-facing string in the admin screens, notices,
+  notification emails and admin scripts is translatable under the
+  `convermetry` text domain; admin scripts use `wp-i18n` with
+  `wp_set_script_translations()`. A translation template ships in
+  `languages/convermetry.pot`.
+- **readme.txt** for the WordPress.org directory, with the data-handling,
+  browser-storage and external-service disclosures.
+
+### Changed
+
+- Bumped the plugin version to 1.0.0 for WordPress.org submission preparation.
+- Every SQL statement binds table and column names with `%i` identifier
+  placeholders (WordPress 6.2+) instead of concatenating them; `LIKE` patterns
+  and `IN` lists are bound through `prepare()`.
+- Admin output is escaped where it is printed: rendered detail panels print
+  directly instead of echoing pre-built HTML, and report cells and
+  integration-supplied submission columns pass through `wp_kses_post()`.
+- Request input is unslashed and sanitized at the point it is read.
+- The release builder refuses to build when a runtime file would be silently
+  omitted (untracked, or hidden by `.gitignore`), when `readme.txt`, `LICENSE`
+  or `uninstall.php` is missing, or when `readme.txt`'s `Stable tag` disagrees
+  with the plugin header.
+
+### Fixed
+
+- **Remove on the Goals and Funnels screens deleted without asking.** The
+  confirmation message was printed into the `onsubmit` handler unquoted, which
+  made the handler a JavaScript syntax error — and a throwing `onsubmit` lets
+  the form submit. The message is now JSON-encoded, so the confirmation shows.
+- The About page and README pointed to a "Settings → Privacy" section that does
+  not exist; the IP address toggle is under Settings → Tracking.
+- **Uninstall left one option behind.** `cvm_webhook_state_version`, written by
+  the analytics dispatcher's state migration, was missing from `uninstall.php`'s
+  list, so deleting the plugin did not remove every trace as documented. The
+  end-to-end uninstall test now asserts that no `cvm_` option or transient
+  survives, rather than checking a sample.
+- **Ninja Forms leads arrived without their visit and campaign.** Ninja Forms 3
+  posts one `formData` JSON document built from its own models, not the
+  `<form>`, so the tracker's hidden correlation fields never reached the server
+  (and its `<form>` has no `method="post"`, so they were not injected either).
+  Submissions were recorded and delivered, but with an empty
+  `analytics_context`. The tracker now adds the three values to Ninja Forms'
+  `nf_ajax_submit` request as top-level fields through a `jQuery.ajaxPrefilter`,
+  where the existing server-side reader already looks. Found by submitting a
+  real Ninja Forms form in a browser; covered by `tests/js/ninja-tracker.test.mjs`.
+- **The Forms screen's Attempts column always showed 0.** The engagement report
+  counts `form_submit` events by `form_key`, but the tracker sent `form_submit`
+  without one (`form_view` and `form_start` carried it), so every attempt was
+  left out. `form_submit` now carries the form key. Attempts recorded before
+  this release have no form key and stay uncounted. Covered by
+  `tests/js/form-events.test.mjs`.
+- **Formidable Forms and Ninja Forms were missing from the Forms screen's
+  engagement report.** The tracker could not identify either form in the
+  browser: it looked for an `frm_` class that Formidable 6 no longer renders
+  (`frm-show-form`) and prefixed the key `formidableforms:` where the server
+  records `formidable:`, and it read the Ninja Forms id from the `<form>` when
+  Ninja Forms 3 puts it on the wrapping `<div id="nf-form-N-cont">`. Views,
+  starts and attempts now carry the same key the server records. Ninja Forms
+  submits without a native `submit` event, so its Attempts column stays empty.
+- The Analytics screen's "Other Events" card said it counted custom events
+  recorded via `cvm_track_event()`; it counts every type not shown in its own
+  card (form views, form starts, validation errors and custom events). The
+  description now says so.
+- The top label of the daily page-view chart's Y-axis was cut in half by the
+  chart's scroll container.
+
 ## 0.11.0
 
 ### Added

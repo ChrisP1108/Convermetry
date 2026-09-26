@@ -71,8 +71,8 @@ final class AnalyticsPage
     {
         add_submenu_page(
             HomePage::MENU_SLUG,
-            'Convermetry Analytics',
-            'Analytics',
+            __('Convermetry Analytics', 'convermetry'),
+            __('Analytics', 'convermetry'),
             Capability::required(Capability::ANALYTICS_VIEW),
             self::MENU_SLUG,
             [self::class, 'render']
@@ -110,10 +110,11 @@ final class AnalyticsPage
         wp_enqueue_script(
             'cvm-dashboard',
             CVM_PLUGIN_URL . 'assets/js/dashboard.js',
-            [],
+            ['wp-i18n'],
             CVM_VERSION,
             true
         );
+        wp_set_script_translations('cvm-dashboard', 'convermetry');
     }
 
     /**
@@ -162,7 +163,7 @@ final class AnalyticsPage
 
         ?>
         <div class="wrap cvm-wrap cvm-dash">
-        <h1>Convermetry Analytics</h1>
+        <h1><?php esc_html_e('Convermetry Analytics', 'convermetry'); ?></h1>
         <?php
 
         self::maybeRenderRateLimitNotice();
@@ -171,7 +172,7 @@ final class AnalyticsPage
 
         ?>
         <section class="cvm-overview" aria-labelledby="cvm-h-overview">
-        <h2 id="cvm-h-overview">Overview</h2>
+        <h2 id="cvm-h-overview"><?php esc_html_e('Overview', 'convermetry'); ?></h2>
         <?php
         if ($overviewFailed) {
             self::renderErrorNotice();
@@ -187,12 +188,12 @@ final class AnalyticsPage
         // nothing, and the <details> panels are already usable natively.
         ?>
         <div class="cvm-panel-toolbar" hidden>
-        <button type="button" class="button cvm-panels-expand">Expand all sections</button>
-        <button type="button" class="button cvm-panels-collapse">Collapse all sections</button>
-        <button type="button" class="button cvm-print-btn">Print / Save as PDF</button></div>
+        <button type="button" class="button cvm-panels-expand"><?php esc_html_e('Expand all sections', 'convermetry'); ?></button>
+        <button type="button" class="button cvm-panels-collapse"><?php esc_html_e('Collapse all sections', 'convermetry'); ?></button>
+        <button type="button" class="button cvm-print-btn"><?php esc_html_e('Print / Save as PDF', 'convermetry'); ?></button></div>
         <?php
 
-        self::panelStart('content', 'Content', 'Which pages draw traffic and where visitors arrive.', true);
+        self::panelStart('content', __('Content', 'convermetry'), __('Which pages draw traffic and where visitors arrive.', 'convermetry'), true);
         ?>
         <div class="cvm-tables">
         <?php
@@ -203,7 +204,7 @@ final class AnalyticsPage
         <?php
         self::panelEnd();
 
-        self::panelStart('engagement', 'Engagement', 'How visitors interact with your pages: clicks, form activity, and attention.');
+        self::panelStart('engagement', __('Engagement', 'convermetry'), __('How visitors interact with your pages: clicks, form activity, and attention.', 'convermetry'));
         ?>
         <div class="cvm-tables">
         <?php
@@ -215,7 +216,7 @@ final class AnalyticsPage
         <?php
         self::panelEnd();
 
-        self::panelStart('acquisition', 'Acquisition', 'Where traffic comes from: referrers, campaigns, and marketing channels.');
+        self::panelStart('acquisition', __('Acquisition', 'convermetry'), __('Where traffic comes from: referrers, campaigns, and marketing channels.', 'convermetry'));
         ?>
         <div class="cvm-tables">
         <?php
@@ -228,33 +229,33 @@ final class AnalyticsPage
         <?php
         self::panelEnd();
 
-        self::panelStart('devices', 'Devices', 'Mobile versus desktop share of page views.');
+        self::panelStart('devices', __('Devices', 'convermetry'), __('Mobile versus desktop share of page views.', 'convermetry'));
         self::renderDevices($start, $end);
         self::panelEnd();
 
-        self::panelStart('goals', 'Goals', 'Important visitor actions other than form submissions — phone taps, downloads, booking clicks, pricing-page visits.');
+        self::panelStart('goals', __('Goals', 'convermetry'), __('Important visitor actions other than form submissions — phone taps, downloads, booking clicks, pricing-page visits.', 'convermetry'));
         self::renderGoals($start, $end);
         self::panelEnd();
 
-        self::panelStart('outcomes', 'Lead outcomes', 'What the leads were actually worth. Counted by the date each lead arrived, with its status as it stands right now.');
+        self::panelStart('outcomes', __('Lead outcomes', 'convermetry'), __('What the leads were actually worth. Counted by the date each lead arrived, with its status as it stands right now.', 'convermetry'));
         ?>
         <div class="cvm-tables">
         <?php
-        self::renderLeadDimension($start, $end, 'channel', 'Leads by Channel');
-        self::renderLeadDimension($start, $end, 'campaign', 'Leads by Campaign');
-        self::renderLeadDimension($start, $end, 'landing_page', 'Landing Page Performance');
-        self::renderLeadDimension($start, $end, 'form', 'Leads by Form');
+        self::renderLeadDimension($start, $end, 'channel', __('Leads by Channel', 'convermetry'));
+        self::renderLeadDimension($start, $end, 'campaign', __('Leads by Campaign', 'convermetry'));
+        self::renderLeadDimension($start, $end, 'landing_page', __('Landing Page Performance', 'convermetry'));
+        self::renderLeadDimension($start, $end, 'form', __('Leads by Form', 'convermetry'));
         ?>
         </div>
         <?php
         self::renderTimeToLead($start, $end);
         self::panelEnd();
 
-        self::panelStart('conversions', 'Conversions', 'Individual confirmed conversions with their campaign attribution — server-confirmed submissions carry their provider and form identity.');
+        self::panelStart('conversions', __('Conversions', 'convermetry'), __('Individual confirmed conversions with their campaign attribution — server-confirmed submissions carry their provider and form identity.', 'convermetry'));
         self::renderRecentConversions($start, $end);
         self::panelEnd();
 
-        self::panelStart('recent', 'Recent Activity');
+        self::panelStart('recent', __('Recent Activity', 'convermetry'));
         self::renderRecentEvents();
         self::panelEnd();
 
@@ -342,10 +343,14 @@ final class AnalyticsPage
         // cvm-rate-limit-notice keeps this warning visible in the printed
         // report too — it flags that the numbers below may undercount.
         ?>
-        <div class="notice notice-warning cvm-rate-limit-notice"><p><strong>Convermetry:</strong> The site-wide event rate
-        limit was reached in the last 24 hours (first at <?php echo esc_html(gmdate('Y-m-d H:i', $hitAt)); ?> UTC), so some visitor
-        events were not recorded. If this is legitimate traffic rather than a flood, raise the limits with the <code>convermetry_rate_limits</code>
-        filter.</p></div>
+        <div class="notice notice-warning cvm-rate-limit-notice"><p><?php
+        echo wp_kses_post(sprintf(
+            /* translators: 1: UTC date and time the limit was first hit, 2: the name of a PHP filter. */
+            __('<strong>Convermetry:</strong> The site-wide event rate limit was reached in the last 24 hours (first at %1$s UTC), so some visitor events were not recorded. If this is legitimate traffic rather than a flood, raise the limits with the %2$s filter.', 'convermetry'),
+            esc_html(gmdate('Y-m-d H:i', $hitAt)),
+            '<code>convermetry_rate_limits</code>'
+        ));
+        ?></p></div>
         <?php
     }
 
@@ -364,10 +369,14 @@ final class AnalyticsPage
         }
 
         ?>
-        <div class="notice notice-warning cvm-retention-notice cvm-rate-limit-notice"><p><strong>Convermetry:</strong> The
-        selected <?php echo (int) $days; ?>-day period is longer than the configured data retention window (<?php echo (int) $retention; ?>
-        days), so events older than <?php echo (int) $retention; ?> days have already been deleted and cannot appear below. Choose
-        a shorter period, or raise <strong>Data retention</strong> in Settings.</p></div>
+        <div class="notice notice-warning cvm-retention-notice cvm-rate-limit-notice"><p><?php
+        echo wp_kses_post(sprintf(
+            /* translators: 1: selected period in days, 2: retention window in days. */
+            __('<strong>Convermetry:</strong> The selected %1$d-day period is longer than the configured data retention window (%2$d days), so events older than %2$d days have already been deleted and cannot appear below. Choose a shorter period, or raise <strong>Data retention</strong> in Settings.', 'convermetry'),
+            $days,
+            $retention
+        ));
+        ?></p></div>
         <?php
     }
 
@@ -449,12 +458,12 @@ final class AnalyticsPage
      */
     private static function renderPeriodFilter(int $active, int $effectiveDays): void
     {
-        $startLabel = self::utcDate('M j, Y', time() - ($effectiveDays - 1) * DAY_IN_SECONDS);
-        $endLabel   = self::utcDate('M j, Y', time());
+        $startLabel = self::utcDate(__('M j, Y', 'convermetry'), time() - ($effectiveDays - 1) * DAY_IN_SECONDS);
+        $endLabel   = self::utcDate(__('M j, Y', 'convermetry'), time());
 
         ?>
         <div class="cvm-period">
-        <nav class="cvm-period-group" aria-label="Reporting period">
+        <nav class="cvm-period-group" aria-label="<?php esc_attr_e('Reporting period', 'convermetry'); ?>">
         <?php
 
         foreach (self::periods() as $days) {
@@ -470,27 +479,48 @@ final class AnalyticsPage
             // design-system alignment section), rather than this page's own
             // now-retired .cvm-period-btn skin — one button look, shared.
             ?>
-            <a class="button <?php echo ($isActive ? 'button-primary' : 'button-secondary'); ?>"<?php echo ($isActive ? ' aria-current="page"' : ''); ?> href="<?php echo esc_url($url); ?>">Last
-            <?php echo (int) $days; ?> days</a>
+            <a class="button <?php echo ($isActive ? 'button-primary' : 'button-secondary'); ?>"<?php echo ($isActive ? ' aria-current="page"' : ''); ?> href="<?php echo esc_url($url); ?>"><?php
+            echo esc_html(sprintf(
+                /* translators: %d: number of days in the reporting period. */
+                _n('Last %d day', 'Last %d days', $days, 'convermetry'),
+                $days
+            ));
+            ?></a>
             <?php
         }
 
         ?>
         </nav>
-        <p class="cvm-period-range"><?php echo esc_html($startLabel); ?> &ndash; <?php echo esc_html($endLabel); ?>. Dates
-        are UTC; the current day is still collecting data.</p>
+        <p class="cvm-period-range"><?php
+        echo esc_html(sprintf(
+            /* translators: 1: first date of the period, 2: last date of the period. */
+            __('%1$s – %2$s. Dates are UTC; the current day is still collecting data.', 'convermetry'),
+            $startLabel,
+            $endLabel
+        ));
+        ?></p>
         <?php
 
         // Print-only report header (admin-analytics.css shows it in @media print).
         $generatedFormat = trim(get_option('date_format', 'F j, Y') . ' ' . get_option('time_format', 'g:i a'));
         $rangeNote = $active === $effectiveDays
-            ? ((string) $active . ' days')
-            : ($active . ' days selected; ' . $effectiveDays . ' days shown per data retention');
+            /* translators: %d: number of days in the reporting period. */
+            ? sprintf(_n('last %d day', 'last %d days', $active, 'convermetry'), $active)
+            /* translators: 1: selected number of days, 2: number of days actually shown after the retention limit. */
+            : sprintf(__('last %1$d days selected; %2$d days shown per data retention', 'convermetry'), $active, $effectiveDays);
         ?>
-        <p class="cvm-print-meta"><?php echo esc_html(get_bloginfo('name')); ?> &mdash; Convermetry analytics report &middot;
-        <?php echo esc_html($startLabel); ?> &ndash; <?php echo esc_html($endLabel); ?> (UTC, last <?php echo esc_html($rangeNote); ?>;
-        the final day was still collecting when generated) &middot; Generated <?php echo esc_html(get_date_from_gmt(gmdate('Y-m-d H:i:s'), $generatedFormat)); ?>
-        (<?php echo esc_html(self::siteTimezoneLabel()); ?>)</p></div>
+        <p class="cvm-print-meta"><?php
+        echo esc_html(sprintf(
+            /* translators: 1: site name, 2: first date, 3: last date, 4: period description, 5: generation date and time, 6: site timezone. */
+            __('%1$s — Convermetry analytics report · %2$s – %3$s (UTC, %4$s; the final day was still collecting when generated) · Generated %5$s (%6$s)', 'convermetry'),
+            get_bloginfo('name'),
+            $startLabel,
+            $endLabel,
+            $rangeNote,
+            get_date_from_gmt(gmdate('Y-m-d H:i:s'), $generatedFormat),
+            self::siteTimezoneLabel()
+        ));
+        ?></p></div>
         <?php
     }
 
@@ -512,16 +542,17 @@ final class AnalyticsPage
     private static function renderSummaryCards(array $totals, int $serverCount): void
     {
         $cards = [
-            'pageview'     => ['Page Views', ''],
-            'click'        => ['Clicks', ''],
-            'form_submit'  => ['Form Submit Attempts', 'Counted when a form is submitted, before the server confirms success.'],
-            'form_success' => ['Confirmed Conversions', 'Unique conversions, deduplicated across frontend and server detection.'],
-            'hover'        => ['Hovers', ''],
-            'scroll_depth' => ['Scroll Milestones', 'Times visitors reached 50% or 100% of a page.'],
+            'pageview'     => [__('Page Views', 'convermetry'), ''],
+            'click'        => [__('Clicks', 'convermetry'), ''],
+            'form_submit'  => [__('Form Submit Attempts', 'convermetry'), __('Counted when a form is submitted, before the server confirms success.', 'convermetry')],
+            'form_success' => [__('Confirmed Conversions', 'convermetry'), __('Unique conversions, deduplicated across frontend and server detection.', 'convermetry')],
+            'hover'        => [__('Hovers', 'convermetry'), ''],
+            'scroll_depth' => [__('Scroll Milestones', 'convermetry'), __('Times visitors reached 50% or 100% of a page.', 'convermetry')],
         ];
 
-        // Any custom event types recorded via cvm_track_event() are summed
-        // into a single "Other Events" card so nothing is invisible.
+        // Every other event type — form views, starts and validation errors,
+        // custom events, and anything recorded via cvm_track_event() — is
+        // summed into a single "Other Events" card so nothing is invisible.
         $other = array_sum(array_diff_key($totals, $cards));
 
         ?>
@@ -533,14 +564,14 @@ final class AnalyticsPage
             if ($type === 'form_success') {
                 self::renderStatCard(
                     number_format_i18n($serverCount),
-                    'Server-Confirmed Submissions',
-                    'Submissions a form plugin\'s server-side hook confirmed — the authoritative lead count.'
+                    __('Server-Confirmed Submissions', 'convermetry'),
+                    __('Submissions a form plugin\'s server-side hook confirmed — the authoritative lead count.', 'convermetry')
                 );
             }
         }
 
         if ($other > 0) {
-            self::renderStatCard(number_format_i18n($other), 'Other Events', 'Custom event types recorded via cvm_track_event().');
+            self::renderStatCard(number_format_i18n($other), __('Other Events', 'convermetry'), __('Event types not shown above, such as form views, form starts, validation errors and custom events.', 'convermetry'));
         }
         ?>
         </div>
@@ -621,7 +652,7 @@ final class AnalyticsPage
                 ? number_format_i18n(round($avg))
                 : number_format_i18n(round($avg, 1), 1);
         } else {
-            $avgLabel = '— (no completed days yet)';
+            $avgLabel = __('— (no completed days yet)', 'convermetry');
         }
 
         // X-axis label density: every day at 7, every 5th at 30, every 15th at 90.
@@ -633,19 +664,31 @@ final class AnalyticsPage
 
         ?>
         <div class="cvm-chart-frame">
-        <h3>Daily Page Views</h3>
+        <h3><?php esc_html_e('Daily Page Views', 'convermetry'); ?></h3>
         <p class="cvm-chart-summary">
-        <span>Total: <strong><?php echo esc_html(number_format_i18n($total)); ?></strong></span>
-        <span>Avg per completed day: <strong><?php echo esc_html($avgLabel); ?></strong></span>
+        <span><?php
+        /* translators: %s: total page views in the period. */
+        echo wp_kses_post(sprintf(__('Total: <strong>%s</strong>', 'convermetry'), esc_html(number_format_i18n($total))));
+        ?></span>
+        <span><?php
+        /* translators: %s: average page views per completed day. */
+        echo wp_kses_post(sprintf(__('Avg per completed day: <strong>%s</strong>', 'convermetry'), esc_html($avgLabel)));
+        ?></span>
         <?php
         if ($busiestDate !== '') {
             ?>
-            <span>Busiest day: <strong><?php echo esc_html(self::utcDate('M j', (int) strtotime($busiestDate . ' UTC'))); ?>
-            (<?php echo esc_html(number_format_i18n($busiestCount)); ?>)</strong></span>
+            <span><?php
+            echo wp_kses_post(sprintf(
+                /* translators: 1: date of the busiest day, 2: page views on that day. */
+                __('Busiest day: <strong>%1$s (%2$s)</strong>', 'convermetry'),
+                esc_html(self::utcDate(__('M j', 'convermetry'), (int) strtotime($busiestDate . ' UTC'))),
+                esc_html(number_format_i18n($busiestCount))
+            ));
+            ?></span>
             <?php
         }
         ?>
-        <span class="cvm-chart-key"><span class="cvm-chart-key-swatch" aria-hidden="true"></span>Today (still collecting)</span></p>
+        <span class="cvm-chart-key"><span class="cvm-chart-key-swatch" aria-hidden="true"></span><?php esc_html_e('Today (still collecting)', 'convermetry'); ?></span></p>
         <?php
 
         // A density bucket, not a class per exact day count: retention can
@@ -664,20 +707,26 @@ final class AnalyticsPage
         <span>0</span></div>
         <div class="cvm-chart-main">
         <div class="cvm-chart-plot">
-        <div class="cvm-chart-cols" role="group" aria-label="Daily page views: one button per day, oldest first">
+        <div class="cvm-chart-cols" role="group" aria-label="<?php esc_attr_e('Daily page views: one button per day, oldest first', 'convermetry'); ?>">
         <?php
 
         foreach ($daily as $point) {
-            $dateLabel = self::utcDate('M j, Y', (int) strtotime($point['date'] . ' UTC'));
+            $dateLabel = self::utcDate(__('M j, Y', 'convermetry'), (int) strtotime($point['date'] . ' UTC'));
             $isToday   = $point['date'] === $today;
             $height    = round($point['count'] / $scale * 100, 2);
-            $aria      = sprintf(
-                '%s: %s page view%s%s',
-                $dateLabel,
-                number_format_i18n($point['count']),
-                $point['count'] === 1 ? '' : 's',
-                $isToday ? ' (today, still collecting)' : ''
-            );
+            $aria      = $isToday
+                ? sprintf(
+                    /* translators: 1: date, 2: number of page views. */
+                    _n('%1$s: %2$s page view (today, still collecting)', '%1$s: %2$s page views (today, still collecting)', $point['count'], 'convermetry'),
+                    $dateLabel,
+                    number_format_i18n($point['count'])
+                )
+                : sprintf(
+                    /* translators: 1: date, 2: number of page views. */
+                    _n('%1$s: %2$s page view', '%1$s: %2$s page views', $point['count'], 'convermetry'),
+                    $dateLabel,
+                    number_format_i18n($point['count'])
+                );
 
             ?>
             <button type="button" class="cvm-chart-col<?php echo ($isToday ? ' is-today' : ''); ?>" data-date="<?php echo esc_attr($dateLabel); ?>" data-count="<?php echo esc_attr(number_format_i18n($point['count'])); ?>" aria-label="<?php echo esc_attr($aria); ?>"><span class="cvm-chart-bar" style="--cvm-h:<?php echo esc_attr((string) $height); ?>%"></span></button>
@@ -703,7 +752,7 @@ final class AnalyticsPage
             }
             $x = round((($i + 0.5) / max(1, $count)) * 100, 2);
             ?>
-            <span class="cvm-chart-xlabel" style="--cvm-x:<?php echo esc_attr((string) $x); ?>%"><?php echo esc_html(self::utcDate('M j', (int) strtotime($point['date'] . ' UTC'))); ?></span>
+            <span class="cvm-chart-xlabel" style="--cvm-x:<?php echo esc_attr((string) $x); ?>%"><?php echo esc_html(self::utcDate(__('M j', 'convermetry'), (int) strtotime($point['date'] . ' UTC'))); ?></span>
             <?php
         }
         ?>
@@ -716,17 +765,17 @@ final class AnalyticsPage
 
         ?>
         <details class="cvm-chart-data">
-        <summary>View data table</summary>
+        <summary><?php esc_html_e('View data table', 'convermetry'); ?></summary>
         <div class="cvm-table-scroll">
         <table class="wp-list-table widefat striped cvm-chart-data-table">
-        <caption class="screen-reader-text">Daily page views for the selected period</caption>
-        <thead><tr><th scope="col">Date</th><th scope="col" class="cvm-num">Page Views</th></tr></thead><tbody>
+        <caption class="screen-reader-text"><?php esc_html_e('Daily page views for the selected period', 'convermetry'); ?></caption>
+        <thead><tr><th scope="col"><?php esc_html_e('Date', 'convermetry'); ?></th><th scope="col" class="cvm-num"><?php esc_html_e('Page Views', 'convermetry'); ?></th></tr></thead><tbody>
         <?php
 
         foreach ($daily as $point) {
             $isToday = $point['date'] === $today;
             ?>
-            <tr><td><?php echo esc_html(self::utcDate('M j, Y', (int) strtotime($point['date'] . ' UTC'))); ?><?php echo ($isToday ? ' <em>(today, partial)</em>' : ''); ?></td><td class="cvm-num"><?php echo esc_html(number_format_i18n($point['count'])); ?></td></tr>
+            <tr><td><?php echo esc_html(self::utcDate(__('M j, Y', 'convermetry'), (int) strtotime($point['date'] . ' UTC'))); ?><?php echo ($isToday ? ' <em>' . esc_html__('(today, partial)', 'convermetry') . '</em>' : ''); ?></td><td class="cvm-num"><?php echo esc_html(number_format_i18n($point['count'])); ?></td></tr>
             <?php
         }
 
@@ -853,7 +902,11 @@ final class AnalyticsPage
             <?php
             foreach (array_values($cells) as $i => $cell) {
                 ?>
-                <td<?php echo (!empty($columns[$i]['num']) ? ' class="cvm-num"' : ''); ?>><?php echo $cell; ?></td>
+                <td<?php echo (!empty($columns[$i]['num']) ? ' class="cvm-num"' : ''); ?>><?php
+                // Cells arrive as HTML built by the cell*() helpers, which
+                // escape at the leaf; kses here keeps that promise checkable.
+                echo wp_kses_post($cell);
+                ?></td>
                 <?php
             }
             ?>
@@ -900,8 +953,7 @@ final class AnalyticsPage
     private static function renderErrorNotice(): void
     {
         ?>
-        <div class="notice notice-error inline cvm-report-error"><p>This section could not be loaded due to a database error.
-        Your data is safe — try refreshing shortly, or check your site's PHP error log if this continues.</p></div>
+        <div class="notice notice-error inline cvm-report-error"><p><?php esc_html_e('This section could not be loaded due to a database error. Your data is safe — try refreshing shortly, or check your site\'s PHP error log if this continues.', 'convermetry'); ?></p></div>
         <?php
     }
 
@@ -946,9 +998,9 @@ final class AnalyticsPage
         }
 
         $text = $label !== '' ? $label : self::urlDisplayText($url);
-        $sr   = self::isExternalUrl($url)
-            ? ' (external link, opens in a new tab)'
-            : ' (opens in a new tab)';
+        $sr   = ' ' . (self::isExternalUrl($url)
+            ? __('(external link, opens in a new tab)', 'convermetry')
+            : __('(opens in a new tab)', 'convermetry'));
 
         return '<a href="' . esc_url($url) . '" target="_blank" rel="noopener">' . esc_html($text)
             . '<span class="cvm-newtab" aria-hidden="true">&#8599;</span>'
@@ -1073,12 +1125,12 @@ final class AnalyticsPage
     private static function eventLabel(string $type): string
     {
         return match ($type) {
-            'pageview'     => 'Page View',
-            'click'        => 'Click',
-            'form_submit'  => 'Form Submit Attempt',
-            'form_success' => 'Confirmed Conversion',
-            'hover'        => 'Hover',
-            'scroll_depth' => 'Scroll Milestone',
+            'pageview'     => __('Page View', 'convermetry'),
+            'click'        => __('Click', 'convermetry'),
+            'form_submit'  => __('Form Submit Attempt', 'convermetry'),
+            'form_success' => __('Confirmed Conversion', 'convermetry'),
+            'hover'        => __('Hover', 'convermetry'),
+            'scroll_depth' => __('Scroll Milestone', 'convermetry'),
             default        => ucwords(str_replace(['_', '-'], ' ', $type)),
         };
     }
@@ -1088,23 +1140,23 @@ final class AnalyticsPage
      */
     private static function renderTopPages(string $start, string $end): void
     {
-        self::renderQueriedTable('Top Pages', static function () use ($start, $end): void {
+        self::renderQueriedTable(__('Top Pages', 'convermetry'), static function () use ($start, $end): void {
             $rows = Reports::topPages($start, $end);
 
             self::renderReportTable(
-                'Top Pages',
-                'The most-viewed pages (up to 10 shown). Sessions group one visit within a 30-minute inactivity window.',
+                __('Top Pages', 'convermetry'),
+                __('The most-viewed pages (up to 10 shown). Sessions group one visit within a 30-minute inactivity window.', 'convermetry'),
                 [
-                    ['label' => 'Page'],
-                    ['label' => 'Views', 'num' => true],
-                    ['label' => 'Sessions', 'num' => true],
+                    ['label' => __('Page', 'convermetry')],
+                    ['label' => __('Views', 'convermetry'), 'num' => true],
+                    ['label' => __('Sessions', 'convermetry'), 'num' => true],
                 ],
                 array_map(static fn(array $row): array => [
                     self::cellPage($row['page_url'], $row['page_title']),
                     self::cellNum($row['views']),
                     self::cellNum($row['sessions']),
                 ], $rows),
-                'No page views recorded in this period.'
+                __('No page views recorded in this period.', 'convermetry')
             );
         });
     }
@@ -1114,21 +1166,21 @@ final class AnalyticsPage
      */
     private static function renderLandingPages(string $start, string $end): void
     {
-        self::renderQueriedTable('Top Landing Pages', static function () use ($start, $end): void {
+        self::renderQueriedTable(__('Top Landing Pages', 'convermetry'), static function () use ($start, $end): void {
             $rows = Reports::topLandingPages($start, $end);
 
             self::renderReportTable(
-                'Top Landing Pages',
-                'The first page of each session that started in this period — where visitors actually arrive. Up to 10 shown.',
+                __('Top Landing Pages', 'convermetry'),
+                __('The first page of each session that started in this period — where visitors actually arrive. Up to 10 shown.', 'convermetry'),
                 [
-                    ['label' => 'Landing Page'],
-                    ['label' => 'Sessions', 'num' => true],
+                    ['label' => __('Landing Page', 'convermetry')],
+                    ['label' => __('Sessions', 'convermetry'), 'num' => true],
                 ],
                 array_map(static fn(array $row): array => [
                     self::cellPage($row['page_url'], $row['page_title']),
                     self::cellNum($row['sessions']),
                 ], $rows),
-                'No sessions recorded in this period.'
+                __('No sessions recorded in this period.', 'convermetry')
             );
         });
     }
@@ -1138,23 +1190,27 @@ final class AnalyticsPage
      */
     private static function renderTopClicks(string $start, string $end): void
     {
-        self::renderQueriedTable('Top Clicked Elements', static function () use ($start, $end): void {
+        self::renderQueriedTable(__('Top Clicked Elements', 'convermetry'), static function () use ($start, $end): void {
             $rows = Reports::topClicks($start, $end);
 
             self::renderReportTable(
-                'Top Clicked Elements',
-                'The links and buttons visitors click most (up to 10 shown).',
+                __('Top Clicked Elements', 'convermetry'),
+                __('The links and buttons visitors click most (up to 10 shown).', 'convermetry'),
                 [
-                    ['label' => 'Element'],
-                    ['label' => 'Destination'],
-                    ['label' => 'Clicks', 'num' => true],
+                    ['label' => __('Element', 'convermetry')],
+                    ['label' => __('Destination', 'convermetry')],
+                    ['label' => __('Clicks', 'convermetry'), 'num' => true],
                 ],
                 array_map(static fn(array $row): array => [
-                    self::cellText($row['element_label'] !== '' ? $row['element_label'] : '(unlabeled ' . $row['element_tag'] . ')'),
+                    self::cellText($row['element_label'] !== '' ? $row['element_label'] : sprintf(
+                        /* translators: %s: HTML tag name of the clicked element, such as "a" or "button". */
+                        __('(unlabeled %s)', 'convermetry'),
+                        $row['element_tag']
+                    )),
                     self::cellLink($row['target_url']),
                     self::cellNum($row['clicks']),
                 ], $rows),
-                'No clicks recorded in this period.'
+                __('No clicks recorded in this period.', 'convermetry')
             );
         });
     }
@@ -1164,23 +1220,23 @@ final class AnalyticsPage
      */
     private static function renderTopForms(string $start, string $end): void
     {
-        self::renderQueriedTable('Top Form Submit Attempts', static function () use ($start, $end): void {
+        self::renderQueriedTable(__('Top Form Submit Attempts', 'convermetry'), static function () use ($start, $end): void {
             $rows = Reports::topForms($start, $end);
 
             self::renderReportTable(
-                'Top Form Submit Attempts',
-                'Counted when a visitor submits the form — success is not confirmed (see Confirmed Conversions). Up to 10 shown.',
+                __('Top Form Submit Attempts', 'convermetry'),
+                __('Counted when a visitor submits the form — success is not confirmed (see Confirmed Conversions). Up to 10 shown.', 'convermetry'),
                 [
-                    ['label' => 'Form'],
-                    ['label' => 'Page'],
-                    ['label' => 'Attempts', 'num' => true],
+                    ['label' => __('Form', 'convermetry')],
+                    ['label' => __('Page', 'convermetry')],
+                    ['label' => __('Attempts', 'convermetry'), 'num' => true],
                 ],
                 array_map(static fn(array $row): array => [
-                    self::cellText($row['element_label'] !== '' ? $row['element_label'] : '(unnamed form)'),
+                    self::cellText($row['element_label'] !== '' ? $row['element_label'] : __('(unnamed form)', 'convermetry')),
                     self::cellLink($row['page_url']),
                     self::cellNum($row['submissions']),
                 ], $rows),
-                'No form submissions recorded in this period.'
+                __('No form submissions recorded in this period.', 'convermetry')
             );
         });
     }
@@ -1190,23 +1246,23 @@ final class AnalyticsPage
      */
     private static function renderTopHovers(string $start, string $end): void
     {
-        self::renderQueriedTable('Most Hovered Elements', static function () use ($start, $end): void {
+        self::renderQueriedTable(__('Most Hovered Elements', 'convermetry'), static function () use ($start, $end): void {
             $rows = Reports::topHovers($start, $end);
 
             self::renderReportTable(
-                'Most Hovered Elements',
-                'Elements the pointer rested on — where visitor attention lingers before (or without) a click. Up to 10 shown.',
+                __('Most Hovered Elements', 'convermetry'),
+                __('Elements the pointer rested on — where visitor attention lingers before (or without) a click. Up to 10 shown.', 'convermetry'),
                 [
-                    ['label' => 'Element'],
-                    ['label' => 'Type'],
-                    ['label' => 'Hovers', 'num' => true],
+                    ['label' => __('Element', 'convermetry')],
+                    ['label' => __('Type', 'convermetry')],
+                    ['label' => __('Hovers', 'convermetry'), 'num' => true],
                 ],
                 array_map(static fn(array $row): array => [
-                    self::cellText($row['element_label'] !== '' ? $row['element_label'] : '(unlabeled element)'),
+                    self::cellText($row['element_label'] !== '' ? $row['element_label'] : __('(unlabeled element)', 'convermetry')),
                     self::cellText($row['element_tag']),
                     self::cellNum($row['hovers']),
                 ], $rows),
-                'No hover activity recorded in this period.'
+                __('No hover activity recorded in this period.', 'convermetry')
             );
         });
     }
@@ -1216,21 +1272,21 @@ final class AnalyticsPage
      */
     private static function renderTopReferrers(string $start, string $end): void
     {
-        self::renderQueriedTable('Top Referrers', static function () use ($start, $end): void {
+        self::renderQueriedTable(__('Top Referrers', 'convermetry'), static function () use ($start, $end): void {
             $rows = Reports::topReferrers($start, $end);
 
             self::renderReportTable(
-                'Top Referrers',
-                'The external pages that sent this site the most traffic (up to 10 shown).',
+                __('Top Referrers', 'convermetry'),
+                __('The external pages that sent this site the most traffic (up to 10 shown).', 'convermetry'),
                 [
-                    ['label' => 'Referring Page'],
-                    ['label' => 'Pageviews', 'num' => true],
+                    ['label' => __('Referring Page', 'convermetry')],
+                    ['label' => __('Pageviews', 'convermetry'), 'num' => true],
                 ],
                 array_map(static fn(array $row): array => [
                     self::cellLink($row['referrer']),
                     self::cellNum($row['visits']),
                 ], $rows),
-                'No external referrers recorded in this period.'
+                __('No external referrers recorded in this period.', 'convermetry')
             );
         });
     }
@@ -1240,21 +1296,21 @@ final class AnalyticsPage
      */
     private static function renderCampaigns(string $start, string $end): void
     {
-        self::renderQueriedTable('Campaigns', static function () use ($start, $end): void {
+        self::renderQueriedTable(__('Campaigns', 'convermetry'), static function () use ($start, $end): void {
             $rows = Reports::topCampaigns($start, $end);
 
             self::renderReportTable(
-                'Campaigns',
-                'Session-attributed performance of utm-tagged visits (up to 10 shown, ranked by views, plus any campaigns that converted without a same-period pageview). Conv. rate is the share of sessions with at least one conversion.',
+                __('Campaigns', 'convermetry'),
+                __('Session-attributed performance of utm-tagged visits (up to 10 shown, ranked by views, plus any campaigns that converted without a same-period pageview). Conv. rate is the share of sessions with at least one conversion.', 'convermetry'),
                 [
-                    ['label' => 'Source'],
-                    ['label' => 'Medium'],
-                    ['label' => 'Campaign'],
-                    ['label' => 'ID'],
-                    ['label' => 'Sessions', 'num' => true],
-                    ['label' => 'Views', 'num' => true],
-                    ['label' => 'Conversions', 'num' => true],
-                    ['label' => 'Conv. Rate', 'num' => true],
+                    ['label' => __('Source', 'convermetry')],
+                    ['label' => __('Medium', 'convermetry')],
+                    ['label' => __('Campaign', 'convermetry')],
+                    ['label' => __('ID', 'convermetry')],
+                    ['label' => __('Sessions', 'convermetry'), 'num' => true],
+                    ['label' => __('Views', 'convermetry'), 'num' => true],
+                    ['label' => __('Conversions', 'convermetry'), 'num' => true],
+                    ['label' => __('Conv. Rate', 'convermetry'), 'num' => true],
                 ],
                 array_map(static fn(array $row): array => [
                     self::cellText($row['utm_source']),
@@ -1266,7 +1322,7 @@ final class AnalyticsPage
                     self::cellNum($row['conversions']),
                     self::cellText($row['sessions'] > 0 ? $row['conversion_rate'] . '%' : ''),
                 ], $rows),
-                'No campaign-tagged (utm) visits recorded in this period.',
+                __('No campaign-tagged (utm) visits recorded in this period.', 'convermetry'),
                 true
             );
         });
@@ -1278,22 +1334,22 @@ final class AnalyticsPage
      */
     private static function renderCampaignContent(string $start, string $end): void
     {
-        self::renderQueriedTable('Campaign Terms & Content', static function () use ($start, $end): void {
+        self::renderQueriedTable(__('Campaign Terms & Content', 'convermetry'), static function () use ($start, $end): void {
             $rows = Reports::topCampaignContent($start, $end);
 
             self::renderReportTable(
-                'Campaign Terms & Content',
-                'Keyword (utm_term) and creative (utm_content) performance, with campaign context. Up to 10 shown.',
+                __('Campaign Terms & Content', 'convermetry'),
+                __('Keyword (utm_term) and creative (utm_content) performance, with campaign context. Up to 10 shown.', 'convermetry'),
                 [
-                    ['label' => 'Source'],
-                    ['label' => 'Medium'],
-                    ['label' => 'Campaign'],
-                    ['label' => 'ID'],
-                    ['label' => 'Term'],
-                    ['label' => 'Content'],
-                    ['label' => 'Sessions', 'num' => true],
-                    ['label' => 'Views', 'num' => true],
-                    ['label' => 'Conversions', 'num' => true],
+                    ['label' => __('Source', 'convermetry')],
+                    ['label' => __('Medium', 'convermetry')],
+                    ['label' => __('Campaign', 'convermetry')],
+                    ['label' => __('ID', 'convermetry')],
+                    ['label' => __('Term', 'convermetry')],
+                    ['label' => __('Content', 'convermetry')],
+                    ['label' => __('Sessions', 'convermetry'), 'num' => true],
+                    ['label' => __('Views', 'convermetry'), 'num' => true],
+                    ['label' => __('Conversions', 'convermetry'), 'num' => true],
                 ],
                 array_map(static fn(array $row): array => [
                     self::cellText($row['utm_source']),
@@ -1306,7 +1362,7 @@ final class AnalyticsPage
                     self::cellNum($row['views']),
                     self::cellNum($row['conversions']),
                 ], $rows),
-                'No visits carrying utm_term or utm_content tags were recorded in this period. Campaigns that never tag keywords or creatives simply don\'t appear here.',
+                __('No visits carrying utm_term or utm_content tags were recorded in this period. Campaigns that never tag keywords or creatives simply don\'t appear here.', 'convermetry'),
                 true
             );
         });
@@ -1317,18 +1373,18 @@ final class AnalyticsPage
      */
     private static function renderChannels(string $start, string $end): void
     {
-        self::renderQueriedTable('Channels', static function () use ($start, $end): void {
+        self::renderQueriedTable(__('Channels', 'convermetry'), static function () use ($start, $end): void {
             $rows = Reports::channelBreakdown($start, $end);
 
             self::renderReportTable(
-                'Channels',
-                'Sessions and conversions per marketing channel, classified as events arrive. Conv. rate is the share of sessions with at least one conversion.',
+                __('Channels', 'convermetry'),
+                __('Sessions and conversions per marketing channel, classified as events arrive. Conv. rate is the share of sessions with at least one conversion.', 'convermetry'),
                 [
-                    ['label' => 'Channel'],
-                    ['label' => 'Sessions', 'num' => true],
-                    ['label' => 'Views', 'num' => true],
-                    ['label' => 'Conversions', 'num' => true],
-                    ['label' => 'Conv. Rate', 'num' => true],
+                    ['label' => __('Channel', 'convermetry')],
+                    ['label' => __('Sessions', 'convermetry'), 'num' => true],
+                    ['label' => __('Views', 'convermetry'), 'num' => true],
+                    ['label' => __('Conversions', 'convermetry'), 'num' => true],
+                    ['label' => __('Conv. Rate', 'convermetry'), 'num' => true],
                 ],
                 array_map(static fn(array $row): array => [
                     self::cellText($row['channel']),
@@ -1337,7 +1393,7 @@ final class AnalyticsPage
                     self::cellNum($row['conversions']),
                     self::cellText($row['sessions'] > 0 ? $row['conversion_rate'] . '%' : ''),
                 ], $rows),
-                'No channel data recorded in this period. Channels are classified as new events arrive, so this fills in from the moment of installation onward.'
+                __('No channel data recorded in this period. Channels are classified as new events arrive, so this fills in from the moment of installation onward.', 'convermetry')
             );
         });
     }
@@ -1347,7 +1403,7 @@ final class AnalyticsPage
      */
     private static function renderDevices(string $start, string $end): void
     {
-        self::renderQueriedTable('Devices', static function () use ($start, $end): void {
+        self::renderQueriedTable(__('Devices', 'convermetry'), static function () use ($start, $end): void {
             $devices = Reports::deviceBreakdown($start, $end);
             $total   = array_sum($devices);
 
@@ -1361,15 +1417,15 @@ final class AnalyticsPage
             }
 
             self::renderReportTable(
-                'Devices',
+                __('Devices', 'convermetry'),
                 '',
                 [
-                    ['label' => 'Device'],
-                    ['label' => 'Page Views', 'num' => true],
-                    ['label' => 'Share', 'num' => true],
+                    ['label' => __('Device', 'convermetry')],
+                    ['label' => __('Page Views', 'convermetry'), 'num' => true],
+                    ['label' => __('Share', 'convermetry'), 'num' => true],
                 ],
                 $rows,
-                'No page views recorded in this period.'
+                __('No page views recorded in this period.', 'convermetry')
             );
         });
     }
@@ -1381,7 +1437,7 @@ final class AnalyticsPage
      */
     private static function renderRecentConversions(string $start, string $end): void
     {
-        self::renderQueriedTable('Recent Conversions', static function () use ($start, $end): void {
+        self::renderQueriedTable(__('Recent Conversions', 'convermetry'), static function () use ($start, $end): void {
             $rows = Reports::recentConversions($start, $end, 15);
 
             $cells = [];
@@ -1394,9 +1450,10 @@ final class AnalyticsPage
                 ])));
 
                 $cells[] = [
-                    self::cellText((string) ($row['occurred_at'] ?? '') . ' UTC'),
+                    /* translators: %s: date and time in UTC. */
+                    self::cellText(sprintf(__('%s UTC', 'convermetry'), (string) ($row['occurred_at'] ?? ''))),
                     self::cellText((string) ($row['form'] ?? '')),
-                    self::cellText(!empty($row['server_confirmed']) ? ucfirst((string) ($row['provider'] ?? '')) : 'Frontend'),
+                    self::cellText(!empty($row['server_confirmed']) ? ucfirst((string) ($row['provider'] ?? '')) : __('Frontend', 'convermetry')),
                     self::cellText((string) ($attribution['channel'] ?? '')),
                     self::cellText($campaign),
                     self::cellLink((string) ($row['page_url'] ?? '')),
@@ -1406,20 +1463,20 @@ final class AnalyticsPage
             }
 
             self::renderReportTable(
-                'Recent Conversions',
-                'The latest confirmed conversions in this period (up to 15 shown), deduplicated by conversion id. "Frontend" rows were detected by the tracker only; provider rows were confirmed server-side. IP is blank when IP storage is off in Settings, or for a visitor whose Do Not Track / Global Privacy Control signal is honored.',
+                __('Recent Conversions', 'convermetry'),
+                __('The latest confirmed conversions in this period (up to 15 shown), deduplicated by conversion id. "Frontend" rows were detected by the tracker only; provider rows were confirmed server-side. IP is blank when IP storage is off in Settings, or for a visitor whose Do Not Track / Global Privacy Control signal is honored.', 'convermetry'),
                 [
-                    ['label' => 'When (UTC)'],
-                    ['label' => 'Form'],
-                    ['label' => 'Source'],
-                    ['label' => 'Channel'],
-                    ['label' => 'Campaign'],
-                    ['label' => 'Page'],
-                    ['label' => 'IP'],
-                    ['label' => 'Conversion ID'],
+                    ['label' => __('When (UTC)', 'convermetry')],
+                    ['label' => __('Form', 'convermetry')],
+                    ['label' => __('Source', 'convermetry')],
+                    ['label' => __('Channel', 'convermetry')],
+                    ['label' => __('Campaign', 'convermetry')],
+                    ['label' => __('Page', 'convermetry')],
+                    ['label' => __('IP', 'convermetry')],
+                    ['label' => __('Conversion ID', 'convermetry')],
                 ],
                 $cells,
-                'No confirmed conversions recorded in this period.',
+                __('No confirmed conversions recorded in this period.', 'convermetry'),
                 true
             );
         });
@@ -1437,7 +1494,7 @@ final class AnalyticsPage
      */
     private static function renderGoals(string $start, string $end): void
     {
-        self::renderQueriedTable('Goal Completions', static function () use ($start, $end): void {
+        self::renderQueriedTable(__('Goal Completions', 'convermetry'), static function () use ($start, $end): void {
             $summary = GoalReports::summary($start, $end, GoalRepository::names(), 25);
 
             $rows = [];
@@ -1454,18 +1511,17 @@ final class AnalyticsPage
             }
 
             self::renderReportTable(
-                'Goal Completions',
-                'A goal counting once per visit can never exceed 100% — its rate is the share of sessions '
-                . 'that completed it. Configure goals under Convermetry → Goals.',
+                __('Goal Completions', 'convermetry'),
+                __('A goal counting once per visit can never exceed 100% — its rate is the share of sessions that completed it. Configure goals under Convermetry → Goals.', 'convermetry'),
                 [
-                    ['label' => 'Goal'],
-                    ['label' => 'Completions', 'num' => true],
-                    ['label' => 'Sessions', 'num' => true],
-                    ['label' => 'Rate', 'num' => true],
-                    ['label' => 'Value', 'num' => true],
+                    ['label' => __('Goal', 'convermetry')],
+                    ['label' => __('Completions', 'convermetry'), 'num' => true],
+                    ['label' => __('Sessions', 'convermetry'), 'num' => true],
+                    ['label' => __('Rate', 'convermetry'), 'num' => true],
+                    ['label' => __('Value', 'convermetry'), 'num' => true],
                 ],
                 $rows,
-                'No goal completions in this period. Goals are configured under Convermetry → Goals.'
+                __('No goal completions in this period. Goals are configured under Convermetry → Goals.', 'convermetry')
             );
         });
     }
@@ -1503,23 +1559,22 @@ final class AnalyticsPage
 
             self::renderReportTable(
                 $title,
-                'Attributed Lead Value is the total recorded against these leads — not revenue, and not ROI: '
-                . 'Convermetry has no ad-spend data. Currencies are listed separately rather than added together.',
+                __('Attributed Lead Value is the total recorded against these leads — not revenue, and not ROI: Convermetry has no ad-spend data. Currencies are listed separately rather than added together.', 'convermetry'),
                 [
                     ['label' => match ($dimension) {
-                        'channel'      => 'Channel',
-                        'campaign'     => 'Campaign',
-                        'landing_page' => 'Landing Page',
-                        default        => 'Form',
+                        'channel'      => __('Channel', 'convermetry'),
+                        'campaign'     => __('Campaign', 'convermetry'),
+                        'landing_page' => __('Landing Page', 'convermetry'),
+                        default        => __('Form', 'convermetry'),
                     }],
-                    ['label' => 'Leads', 'num' => true],
-                    ['label' => 'Qualified', 'num' => true],
-                    ['label' => 'Won', 'num' => true],
-                    ['label' => 'Qual. Rate', 'num' => true],
-                    ['label' => 'Attributed Lead Value', 'num' => true],
+                    ['label' => __('Leads', 'convermetry'), 'num' => true],
+                    ['label' => __('Qualified', 'convermetry'), 'num' => true],
+                    ['label' => __('Won', 'convermetry'), 'num' => true],
+                    ['label' => __('Qual. Rate', 'convermetry'), 'num' => true],
+                    ['label' => __('Attributed Lead Value', 'convermetry'), 'num' => true],
                 ],
                 $rows,
-                'No leads recorded in this period.'
+                __('No leads recorded in this period.', 'convermetry')
             );
         });
     }
@@ -1533,13 +1588,13 @@ final class AnalyticsPage
      */
     private static function renderTimeToLead(string $start, string $end): void
     {
-        self::renderQueriedTable('Time to Lead', static function () use ($start, $end): void {
+        self::renderQueriedTable(__('Time to Lead', 'convermetry'), static function () use ($start, $end): void {
             $lag = LeadReports::timeToLead($start, $end);
 
             $rows = [];
             foreach ($lag['buckets'] as $label => $count) {
                 $rows[] = [
-                    esc_html($label),
+                    esc_html(LeadReports::bucketLabel($label)),
                     self::cellNum($count),
                     $lag['sampled'] > 0
                         ? esc_html(round($count / $lag['sampled'] * 100, 1) . '%')
@@ -1549,25 +1604,26 @@ final class AnalyticsPage
 
             foreach ($lag['medians'] as $channel => $seconds) {
                 $rows[] = [
-                    '<em>' . esc_html($channel) . ' — median</em>',
+                    '<em>' . esc_html(sprintf(
+                        /* translators: %s: marketing channel name. */
+                        __('%s — median', 'convermetry'),
+                        $channel
+                    )) . '</em>',
                     esc_html(self::humanDuration($seconds)),
                     '&mdash;',
                 ];
             }
 
             self::renderReportTable(
-                'Time to Lead',
-                'Measured from the first page view of the session that converted, so a visitor who researched '
-                . 'over several visits is measured from their final one — Convermetry keeps no persistent '
-                . 'visitor identity across sessions. Medians rather than averages: one lead that took three '
-                . 'weeks would drag an average past every real experience of the site.',
+                __('Time to Lead', 'convermetry'),
+                __('Measured from the first page view of the session that converted, so a visitor who researched over several visits is measured from their final one — Convermetry keeps no persistent visitor identity across sessions. Medians rather than averages: one lead that took three weeks would drag an average past every real experience of the site.', 'convermetry'),
                 [
-                    ['label' => 'Time to convert'],
-                    ['label' => 'Leads', 'num' => true],
-                    ['label' => 'Share', 'num' => true],
+                    ['label' => __('Time to convert', 'convermetry')],
+                    ['label' => __('Leads', 'convermetry'), 'num' => true],
+                    ['label' => __('Share', 'convermetry'), 'num' => true],
                 ],
                 $rows,
-                'No conversions with a measurable session start in this period.'
+                __('No conversions with a measurable session start in this period.', 'convermetry')
             );
         });
     }
@@ -1603,16 +1659,20 @@ final class AnalyticsPage
     private static function humanDuration(int $seconds): string
     {
         return match (true) {
-            $seconds < MINUTE_IN_SECONDS => $seconds . 's',
-            $seconds < HOUR_IN_SECONDS   => round($seconds / MINUTE_IN_SECONDS) . ' min',
-            $seconds < DAY_IN_SECONDS    => round($seconds / HOUR_IN_SECONDS, 1) . ' hrs',
-            default                      => round($seconds / DAY_IN_SECONDS, 1) . ' days',
+            /* translators: %s: number of seconds. */
+            $seconds < MINUTE_IN_SECONDS => sprintf(__('%ss', 'convermetry'), number_format_i18n($seconds)),
+            /* translators: %s: number of minutes. */
+            $seconds < HOUR_IN_SECONDS   => sprintf(__('%s min', 'convermetry'), number_format_i18n(round($seconds / MINUTE_IN_SECONDS))),
+            /* translators: %s: number of hours, possibly fractional. */
+            $seconds < DAY_IN_SECONDS    => sprintf(__('%s hrs', 'convermetry'), number_format_i18n(round($seconds / HOUR_IN_SECONDS, 1), 1)),
+            /* translators: %s: number of days, possibly fractional. */
+            default                      => sprintf(__('%s days', 'convermetry'), number_format_i18n(round($seconds / DAY_IN_SECONDS, 1), 1)),
         };
     }
 
     private static function renderRecentEvents(): void
     {
-        self::renderQueriedTable('Latest Events', static function (): void {
+        self::renderQueriedTable(__('Latest Events', 'convermetry'), static function (): void {
             $rows = Reports::recentEvents(15);
 
             // The site's own date/time display settings, as everywhere in wp-admin.
@@ -1635,20 +1695,21 @@ final class AnalyticsPage
             }
 
             self::renderReportTable(
-                'Latest Events',
+                __('Latest Events', 'convermetry'),
                 sprintf(
-                    'The latest 15 events, independent of the selected reporting period. Times are shown in the site timezone (%s).',
+                    /* translators: %s: the site's timezone. */
+                    __('The latest 15 events, independent of the selected reporting period. Times are shown in the site timezone (%s).', 'convermetry'),
                     self::siteTimezoneLabel()
                 ),
                 [
-                    ['label' => 'When'],
-                    ['label' => 'Event'],
-                    ['label' => 'Page'],
-                    ['label' => 'Detail'],
-                    ['label' => 'Device'],
+                    ['label' => __('When', 'convermetry')],
+                    ['label' => __('Event', 'convermetry')],
+                    ['label' => __('Page', 'convermetry')],
+                    ['label' => __('Detail', 'convermetry')],
+                    ['label' => __('Device', 'convermetry')],
                 ],
                 $cells,
-                'No events recorded yet. Visit the site\'s frontend to start collecting data.'
+                __('No events recorded yet. Visit the site\'s frontend to start collecting data.', 'convermetry')
             );
         });
     }

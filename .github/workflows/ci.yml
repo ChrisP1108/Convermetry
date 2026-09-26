@@ -63,7 +63,10 @@ jobs:
         run: node --check assets/js/tracker.js
 
       - name: Tracker behaviour
-        run: node tests/js/bricks-tracker.test.mjs
+        run: |
+          node tests/js/bricks-tracker.test.mjs
+          node tests/js/ninja-tracker.test.mjs
+          node tests/js/form-events.test.mjs
 
   analyse:
     name: Static analysis (PHPStan level 8)
@@ -290,6 +293,9 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Builder regression suite
+        run: bash tests/Shell/build-zip-safety.sh
+
       - name: Build the distributable ZIP
         run: bash bin/build-zip.sh
 
@@ -310,7 +316,7 @@ jobs:
             echo "::error::Development artifacts leaked into the release ZIP"
             exit 1
           fi
-          for required in convermetry.php uninstall.php README.md; do
+          for required in convermetry.php uninstall.php readme.txt LICENSE README.md languages/convermetry.pot; do
             unzip -l "$ZIP" | grep -q "convermetry/$required" || {
               echo "::error::Release ZIP is missing $required"; exit 1; }
           done

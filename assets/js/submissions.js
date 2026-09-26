@@ -14,8 +14,10 @@
 (function () {
     'use strict';
 
-    const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June',
-                       'July', 'August', 'September', 'October', 'November', 'December'];
+    const { __, sprintf } = wp.i18n;
+
+    // Localized by WordPress (AdminAssets::monthNames()).
+    const MONTH_NAMES = (typeof CVM_SUB !== 'undefined' && Array.isArray(CVM_SUB.monthNames)) ? CVM_SUB.monthNames : [];
 
     /**
      * Safely escapes a string for insertion into HTML.
@@ -75,10 +77,17 @@
         const heading = document.createElement('div');
         heading.className = 'cvm-submission-heading';
         heading.setAttribute('aria-hidden', 'true');
-        heading.innerHTML =
-            '<span>Date</span><span>Visitor / Lead</span><span>Form</span>' +
-            '<span>Page</span><span>Source</span><span>Campaign</span>' +
-            '<span>Lead</span><span>Delivery</span><span></span>';
+        heading.innerHTML = [
+            __('Date', 'convermetry'),
+            __('Visitor / Lead', 'convermetry'),
+            __('Form', 'convermetry'),
+            __('Page', 'convermetry'),
+            __('Source', 'convermetry'),
+            __('Campaign', 'convermetry'),
+            __('Lead', 'convermetry'),
+            __('Delivery', 'convermetry'),
+            ''
+        ].map(function (label) { return '<span>' + escapeHtml(label) + '</span>'; }).join('');
         root.appendChild(heading);
 
         const list = document.createElement('ul');
@@ -171,10 +180,10 @@
             const rowId = item ? item.dataset.rowId : null;
             if (!rowId) return;
 
-            if (!confirm('Delete this submission? The lead data it holds is removed permanently and cannot be recovered.')) return;
+            if (!confirm(__('Delete this submission? The lead data it holds is removed permanently and cannot be recovered.', 'convermetry'))) return;
 
             btn.disabled    = true;
-            btn.textContent = 'Deleting…';
+            btn.textContent = __('Deleting…', 'convermetry');
 
             const fd = new FormData();
             fd.append('action', 'cvm_delete_submission');
@@ -187,11 +196,11 @@
                     if (resp.success) {
                         fetchSubmissions();
                     } else {
-                        failDelete(btn, (resp.data && resp.data.message) || 'The submission could not be deleted.');
+                        failDelete(btn, (resp.data && resp.data.message) || __('The submission could not be deleted.', 'convermetry'));
                     }
                 })
                 .catch(function () {
-                    failDelete(btn, 'The submission could not be deleted.');
+                    failDelete(btn, __('The submission could not be deleted.', 'convermetry'));
                 });
         });
 
@@ -215,7 +224,7 @@
             if (!submissionId || !statusSelect || !valueInput) return;
 
             btn.disabled    = true;
-            btn.textContent = 'Saving…';
+            btn.textContent = __('Saving…', 'convermetry');
             if (feedback) feedback.textContent = '';
 
             const fd = new FormData();
@@ -231,13 +240,13 @@
                 .then(function (res) { return res.json(); })
                 .then(function (resp) {
                     btn.disabled    = false;
-                    btn.textContent = 'Save';
+                    btn.textContent = __('Save', 'convermetry');
 
                     if (!resp.success) {
                         if (feedback) {
                             feedback.className = 'cvm-lead-feedback cvm-lead-error';
                             feedback.textContent = (resp.data && resp.data.message) ||
-                                'The lead could not be updated.';
+                                __('The lead could not be updated.', 'convermetry');
                         }
                         return;
                     }
@@ -250,15 +259,15 @@
 
                     if (feedback) {
                         feedback.className = 'cvm-lead-feedback cvm-lead-saved';
-                        feedback.textContent = 'Saved';
+                        feedback.textContent = __('Saved', 'convermetry');
                     }
                 })
                 .catch(function () {
                     btn.disabled    = false;
-                    btn.textContent = 'Save';
+                    btn.textContent = __('Save', 'convermetry');
                     if (feedback) {
                         feedback.className = 'cvm-lead-feedback cvm-lead-error';
-                        feedback.textContent = 'The lead could not be updated.';
+                        feedback.textContent = __('The lead could not be updated.', 'convermetry');
                     }
                 });
         });
@@ -294,7 +303,7 @@
          */
         function failDelete(btn, message) {
             btn.disabled    = false;
-            btn.textContent = 'Delete Submission';
+            btn.textContent = __('Delete Submission', 'convermetry');
 
             const actions = btn.parentElement;
             if (!actions) return;
@@ -316,7 +325,7 @@
          * @param {HTMLElement} body
          */
         function loadDetail(item, body) {
-            body.innerHTML = '<p class="cvm-empty-msg">Loading…</p>';
+            body.innerHTML = '<p class="cvm-empty-msg">' + escapeHtml(__('Loading…', 'convermetry')) + '</p>';
 
             const fd = new FormData();
             fd.append('action', 'cvm_get_submission_detail');
@@ -331,12 +340,12 @@
                         body.dataset.loaded = '1';
                     } else {
                         body.innerHTML = '<p class="cvm-empty-msg">' +
-                            escapeHtml((resp.data && resp.data.message) || 'This submission could not be loaded.') +
+                            escapeHtml((resp.data && resp.data.message) || __('This submission could not be loaded.', 'convermetry')) +
                             '</p>';
                     }
                 })
                 .catch(function () {
-                    body.innerHTML = '<p class="cvm-empty-msg">This submission could not be loaded.</p>';
+                    body.innerHTML = '<p class="cvm-empty-msg">' + escapeHtml(__('This submission could not be loaded.', 'convermetry')) + '</p>';
                 });
         }
 
@@ -380,7 +389,7 @@
         function fetchSubmissions() {
             const seq = ++fetchSeq;
 
-            list.innerHTML         = '<li class="cvm-empty-msg">Loading…</li>';
+            list.innerHTML         = '<li class="cvm-empty-msg">' + escapeHtml(__('Loading…', 'convermetry')) + '</li>';
             paginationEl.innerHTML = '';
             syncExportLink();
 
@@ -407,7 +416,7 @@
                         return; // A newer request superseded this one.
                     }
                     if (!resp.success) {
-                        list.innerHTML = '<li class="cvm-empty-msg">Failed to load submissions.</li>';
+                        list.innerHTML = '<li class="cvm-empty-msg">' + escapeHtml(__('Failed to load submissions.', 'convermetry')) + '</li>';
                         return;
                     }
                     const data = resp.data;
@@ -425,14 +434,14 @@
                         updateDateOptions(controls, data.years || [], data.months || []);
                         initialized = true;
                     }
-                    updateListOptions(controls, '.cvm-filter-provider', data.providers || [], 'All Providers');
-                    updateListOptions(controls, '.cvm-filter-form', data.formNames || [], 'All Forms');
-                    updateListOptions(controls, '.cvm-filter-channel', data.channels || [], 'All Channels');
-                    updateListOptions(controls, '.cvm-filter-campaign', data.campaigns || [], 'All Campaigns');
+                    updateListOptions(controls, '.cvm-filter-provider', data.providers || [], __('All Providers', 'convermetry'));
+                    updateListOptions(controls, '.cvm-filter-form', data.formNames || [], __('All Forms', 'convermetry'));
+                    updateListOptions(controls, '.cvm-filter-channel', data.channels || [], __('All Channels', 'convermetry'));
+                    updateListOptions(controls, '.cvm-filter-campaign', data.campaigns || [], __('All Campaigns', 'convermetry'));
 
                     list.innerHTML = data.html !== ''
                         ? data.html
-                        : '<li class="cvm-empty-msg">' + emptyMessage(state) + '</li>';
+                        : '<li class="cvm-empty-msg">' + escapeHtml(emptyMessage(state)) + '</li>';
 
                     renderPagination(paginationEl, data.currentPage, data.totalPages, data.total, state.perPage, function (p) {
                         state.page = p;
@@ -441,7 +450,7 @@
                 })
                 .catch(function () {
                     if (seq === fetchSeq) {
-                        list.innerHTML = '<li class="cvm-empty-msg">Failed to load submissions.</li>';
+                        list.innerHTML = '<li class="cvm-empty-msg">' + escapeHtml(__('Failed to load submissions.', 'convermetry')) + '</li>';
                     }
                 });
         }
@@ -463,8 +472,8 @@
                          state.leadStatus !== '' || state.hasValue !== '';
 
         return filtered
-            ? 'No submissions match the current filters.'
-            : 'No form submissions have been recorded yet. Submit one of your forms to see it here.';
+            ? __('No submissions match the current filters.', 'convermetry')
+            : __('No form submissions have been recorded yet. Submit one of your forms to see it here.', 'convermetry');
     }
 
     /**
@@ -478,12 +487,12 @@
         const yearSelect  = controls.querySelector('.cvm-filter-year');
         const monthSelect = controls.querySelector('.cvm-filter-month');
 
-        yearSelect.innerHTML = '<option value="">All Years</option>';
+        yearSelect.innerHTML = '<option value="">' + escapeHtml(__('All Years', 'convermetry')) + '</option>';
         years.forEach(function (y) {
             yearSelect.innerHTML += '<option value="' + escapeAttr(y) + '">' + escapeHtml(y) + '</option>';
         });
 
-        monthSelect.innerHTML = '<option value="">All Months</option>';
+        monthSelect.innerHTML = '<option value="">' + escapeHtml(__('All Months', 'convermetry')) + '</option>';
         months.forEach(function (m) {
             const name = MONTH_NAMES[parseInt(m, 10) - 1] || m;
             monthSelect.innerHTML += '<option value="' + escapeAttr(m) + '">' + escapeHtml(name) + '</option>';
@@ -564,37 +573,41 @@
      * @returns {string}
      */
     function buildControlsHtml() {
+        const option = function (value, label) {
+            return '<option value="' + escapeAttr(value) + '">' + escapeHtml(label) + '</option>';
+        };
+
         return '<div class="cvm-acc-filters">' +
-                   '<select class="cvm-filter-year"><option value="">All Years</option></select>' +
-                   '<select class="cvm-filter-month"><option value="">All Months</option></select>' +
-                   '<span style="display:none"><select class="cvm-filter-provider"><option value="">All Providers</option></select></span>' +
-                   '<span style="display:none"><select class="cvm-filter-form"><option value="">All Forms</option></select></span>' +
-                   '<span style="display:none"><select class="cvm-filter-channel"><option value="">All Channels</option></select></span>' +
-                   '<span style="display:none"><select class="cvm-filter-campaign"><option value="">All Campaigns</option></select></span>' +
+                   '<select class="cvm-filter-year">' + option('', __('All Years', 'convermetry')) + '</select>' +
+                   '<select class="cvm-filter-month">' + option('', __('All Months', 'convermetry')) + '</select>' +
+                   '<span style="display:none"><select class="cvm-filter-provider">' + option('', __('All Providers', 'convermetry')) + '</select></span>' +
+                   '<span style="display:none"><select class="cvm-filter-form">' + option('', __('All Forms', 'convermetry')) + '</select></span>' +
+                   '<span style="display:none"><select class="cvm-filter-channel">' + option('', __('All Channels', 'convermetry')) + '</select></span>' +
+                   '<span style="display:none"><select class="cvm-filter-campaign">' + option('', __('All Campaigns', 'convermetry')) + '</select></span>' +
                    '<select class="cvm-filter-status">' +
-                       '<option value="">All Delivery States</option>' +
-                       '<option value="delivered">Delivered</option>' +
-                       '<option value="partial">Partially delivered</option>' +
-                       '<option value="failed">Failed</option>' +
-                       '<option value="pending">Queued</option>' +
-                       '<option value="not_sent">Not sent</option>' +
+                       option('', __('All Delivery States', 'convermetry')) +
+                       option('delivered', __('Delivered', 'convermetry')) +
+                       option('partial', __('Partially delivered', 'convermetry')) +
+                       option('failed', __('Failed', 'convermetry')) +
+                       option('pending', __('Queued', 'convermetry')) +
+                       option('not_sent', __('Not sent', 'convermetry')) +
                    '</select>' +
                    '<select class="cvm-filter-lead-status">' +
-                       '<option value="">All Lead Statuses</option>' +
+                       option('', __('All Lead Statuses', 'convermetry')) +
                        leadStatusOptions() +
                    '</select>' +
                    '<select class="cvm-filter-has-value">' +
-                       '<option value="">Any Value</option>' +
-                       '<option value="yes">Has a value</option>' +
-                       '<option value="no">No value recorded</option>' +
+                       option('', __('Any Value', 'convermetry')) +
+                       option('yes', __('Has a value', 'convermetry')) +
+                       option('no', __('No value recorded', 'convermetry')) +
                    '</select>' +
                    '<div class="cvm-acc-search">' +
-                       '<input type="text" class="cvm-search-input" placeholder="Search name, email, field values, IDs…" />' +
-                       '<button type="button" class="cvm-search-clear" aria-label="Clear search">✕</button>' +
+                       '<input type="text" class="cvm-search-input" placeholder="' + escapeAttr(__('Search name, email, field values, IDs…', 'convermetry')) + '" />' +
+                       '<button type="button" class="cvm-search-clear" aria-label="' + escapeAttr(__('Clear search', 'convermetry')) + '">✕</button>' +
                    '</div>' +
                '</div>' +
                '<div class="cvm-acc-perpage">' +
-                   '<label>Per page: <select class="cvm-per-page">' +
+                   '<label>' + escapeHtml(__('Per page:', 'convermetry')) + ' <select class="cvm-per-page">' +
                        '<option value="5">5</option>' +
                        '<option value="10" selected>10</option>' +
                        '<option value="25">25</option>' +
@@ -623,13 +636,14 @@
         const start = (currentPage - 1) * perPage + 1;
         const end   = Math.min(currentPage * perPage, totalItems);
 
-        let html = '<span class="cvm-page-info">Showing ' + start + '–' + end + ' of ' + totalItems + '</span>';
+        /* translators: 1: first item shown, 2: last item shown, 3: total number of items. */
+        let html = '<span class="cvm-page-info">' + escapeHtml(sprintf(__('Showing %1$d–%2$d of %3$d', 'convermetry'), start, end, totalItems)) + '</span>';
 
         if (totalPages > 1) {
             html += '<div class="cvm-page-buttons">';
 
             if (currentPage > 1) {
-                html += '<button class="cvm-page-btn" data-page="' + (currentPage - 1) + '" aria-label="Previous page">&#8249;</button>';
+                html += '<button class="cvm-page-btn" data-page="' + (currentPage - 1) + '" aria-label="' + escapeAttr(__('Previous page', 'convermetry')) + '">&#8249;</button>';
             }
 
             getPageNumbers(currentPage, totalPages).forEach(function (p) {
@@ -637,12 +651,13 @@
                     html += '<span class="cvm-page-ellipsis">&#8230;</span>';
                 } else {
                     const activeClass = p === currentPage ? ' cvm-page-btn-active' : '';
-                    html += '<button class="cvm-page-btn' + activeClass + '" data-page="' + p + '" aria-label="Page ' + p + '">' + p + '</button>';
+                    /* translators: %d: page number. */
+                    html += '<button class="cvm-page-btn' + activeClass + '" data-page="' + p + '" aria-label="' + escapeAttr(sprintf(__('Page %d', 'convermetry'), p)) + '">' + p + '</button>';
                 }
             });
 
             if (currentPage < totalPages) {
-                html += '<button class="cvm-page-btn" data-page="' + (currentPage + 1) + '" aria-label="Next page">&#8250;</button>';
+                html += '<button class="cvm-page-btn" data-page="' + (currentPage + 1) + '" aria-label="' + escapeAttr(__('Next page', 'convermetry')) + '">&#8250;</button>';
             }
 
             html += '</div>';

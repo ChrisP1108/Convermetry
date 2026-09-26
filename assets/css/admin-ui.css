@@ -702,8 +702,8 @@
 }
 
 .cvm-ui-icon--brand {
-    width: 46px;
-    height: 46px;
+    width: 40px;
+    height: 40px;
     border-radius: var(--cvm-ui-radius-lg);
     background: var(--cvm-ui-color-brand);
     border-color: var(--cvm-ui-color-brand);

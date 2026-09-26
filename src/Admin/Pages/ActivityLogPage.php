@@ -66,8 +66,8 @@ final class ActivityLogPage
     {
         add_submenu_page(
             HomePage::MENU_SLUG,
-            'Convermetry Activity Log',
-            'Activity Log',
+            __('Convermetry Activity Log', 'convermetry'),
+            __('Activity Log', 'convermetry'),
             Capability::required(Capability::ACTIVITY_VIEW),
             self::MENU_SLUG,
             [self::class, 'render']
@@ -96,10 +96,11 @@ final class ActivityLogPage
         wp_enqueue_script(
             'cvm-activity-log',
             CVM_PLUGIN_URL . 'assets/js/activity-log.js',
-            [],
+            ['wp-i18n'],
             CVM_VERSION,
             true
         );
+        wp_set_script_translations('cvm-activity-log', 'convermetry');
 
         wp_localize_script('cvm-activity-log', 'CVM_LOG', [
             'ajaxUrl'        => admin_url('admin-ajax.php'),
@@ -107,6 +108,7 @@ final class ActivityLogPage
             'deleteNonce'    => wp_create_nonce('cvm_delete_activity_log'),
             'apiToggleNonce' => wp_create_nonce('cvm_toggle_delivery_api'),
             'apiRegenNonce'  => wp_create_nonce('cvm_regen_delivery_api_key'),
+            'monthNames'     => AdminAssets::monthNames(),
         ]);
     }
 
@@ -119,9 +121,9 @@ final class ActivityLogPage
     public static function processClearLogs(): void
     {
         if (
-            ($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST' ||
+            sanitize_text_field(wp_unslash($_SERVER['REQUEST_METHOD'] ?? '')) !== 'POST' ||
             !isset($_POST['cvm_action']) ||
-            $_POST['cvm_action'] !== 'clear_activity_logs' ||
+            sanitize_key(wp_unslash($_POST['cvm_action'])) !== 'clear_activity_logs' ||
             !isset($_POST['cvm_clear_nonce']) ||
             !wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['cvm_clear_nonce'])), 'cvm_clear_activity_logs') ||
             !Capability::currentUserCan(Capability::ACTIVITY_MANAGE)
@@ -163,7 +165,7 @@ final class ActivityLogPage
             !isset($_GET['_wpnonce']) ||
             !wp_verify_nonce(sanitize_text_field(wp_unslash($_GET['_wpnonce'])), 'cvm_export_' . $type)
         ) {
-            wp_die('Invalid or expired export link.');
+            wp_die(esc_html__('Invalid or expired export link.', 'convermetry'), '', ['response' => 403]);
         }
 
         $type === 'csv' ? self::exportCsv() : self::exportJson();
@@ -186,10 +188,10 @@ final class ActivityLogPage
             !wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['nonce'])), 'cvm_get_activity_logs') ||
             !Capability::currentUserCan(Capability::ACTIVITY_VIEW)
         ) {
-            wp_send_json_error(['message' => 'Unauthorized.']);
+            wp_send_json_error(['message' => __('Unauthorized.', 'convermetry')]);
         }
 
-        $perPage = Pagination::perPage($_POST['per_page'] ?? Pagination::DEFAULT_PER_PAGE);
+        $perPage = Pagination::perPage(isset($_POST['per_page']) ? intval(wp_unslash($_POST['per_page'])) : Pagination::DEFAULT_PER_PAGE);
 
         $status = sanitize_key((string) ($_POST['status'] ?? ''));
 
@@ -208,7 +210,7 @@ final class ActivityLogPage
         // deleting the last row on the last page left this screen showing
         // "Showing 11-10 of 10" with no navigation to get back.
         $total  = DeliveryLog::getLogCount($filters);
-        $paging = Pagination::resolve($_POST['page'] ?? 1, $perPage, $total);
+        $paging = Pagination::resolve(isset($_POST['page']) ? intval(wp_unslash($_POST['page'])) : 1, $perPage, $total);
 
         $page       = $paging['page'];
         $totalPages = $paging['totalPages'];
@@ -246,12 +248,12 @@ final class ActivityLogPage
             !wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['nonce'])), 'cvm_delete_activity_log') ||
             !Capability::currentUserCan(Capability::ACTIVITY_MANAGE)
         ) {
-            wp_send_json_error(['message' => 'Unauthorized.']);
+            wp_send_json_error(['message' => __('Unauthorized.', 'convermetry')]);
         }
 
-        $id = (int) ($_POST['log_id'] ?? 0);
+        $id = isset($_POST['log_id']) ? intval(wp_unslash($_POST['log_id'])) : 0;
         if ($id <= 0) {
-            wp_send_json_error(['message' => 'Invalid log id.']);
+            wp_send_json_error(['message' => __('Invalid log id.', 'convermetry')]);
         }
 
         DeliveryLog::deleteLog($id);
@@ -274,7 +276,7 @@ final class ActivityLogPage
             !wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['nonce'])), 'cvm_toggle_delivery_api') ||
             !Capability::currentUserCan(Capability::API_MANAGE)
         ) {
-            wp_send_json_error(['message' => 'Unauthorized.']);
+            wp_send_json_error(['message' => __('Unauthorized.', 'convermetry')]);
         }
 
         $active = isset($_POST['active']) && $_POST['active'] === '1';
@@ -300,7 +302,7 @@ final class ActivityLogPage
             !wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['nonce'])), 'cvm_regen_delivery_api_key') ||
             !Capability::currentUserCan(Capability::API_MANAGE)
         ) {
-            wp_send_json_error(['message' => 'Unauthorized.']);
+            wp_send_json_error(['message' => __('Unauthorized.', 'convermetry')]);
         }
 
         wp_send_json_success(['key' => DeliveryLogController::generateKey()]);
@@ -329,25 +331,21 @@ final class ActivityLogPage
 
         ?>
         <div class="wrap cvm-wrap cvm-delivery-wrap">
-            <h1>Activity Log</h1>
+            <h1><?php esc_html_e('Activity Log', 'convermetry'); ?></h1>
 
             <?php if ($cleared): ?>
-                <div class="notice notice-success is-dismissible"><p>All activity logs have been cleared.</p></div>
+                <div class="notice notice-success is-dismissible"><p><?php esc_html_e('All activity logs have been cleared.', 'convermetry'); ?></p></div>
             <?php endif; ?>
 
             <!-- ── Deliveries API Card ────────────────────────────────────── -->
             <div class="cvm-card cvm-delivery-api-card">
-                <h2 class="cvm-card-title">Deliveries API</h2>
+                <h2 class="cvm-card-title"><?php esc_html_e('Deliveries API', 'convermetry'); ?></h2>
                 <p class="description" style="margin-bottom:12px;">
-                    Enable a read-only REST endpoint that returns activity log data as JSON, with
-                    <code>status</code>, <code>message_type</code>, <code>endpoint</code>, <code>provider</code>,
-                    and <code>form_id</code> filters.
-                    Pass the API key as the <code>Authorization</code> header on every request.
-                    This API is intended for <strong>server-to-server</strong> use — never embed the key in public frontend JavaScript, where any visitor could read it.
+                    <?php echo wp_kses_post(__('Enable a read-only REST endpoint that returns activity log data as JSON, with <code>status</code>, <code>message_type</code>, <code>endpoint</code>, <code>provider</code>, and <code>form_id</code> filters. Pass the API key as the <code>Authorization</code> header on every request. This API is intended for <strong>server-to-server</strong> use — never embed the key in public frontend JavaScript, where any visitor could read it.', 'convermetry')); ?>
                 </p>
 
                 <div class="cvm-toggle-row">
-                    <label class="cvm-toggle" for="cvm-delivery-api-toggle" aria-label="Toggle Deliveries API active state">
+                    <label class="cvm-toggle" for="cvm-delivery-api-toggle" aria-label="<?php esc_attr_e('Toggle Deliveries API active state', 'convermetry'); ?>">
                         <input
                             type="checkbox"
                             id="cvm-delivery-api-toggle"
@@ -356,28 +354,28 @@ final class ActivityLogPage
                         <span class="cvm-toggle-slider" aria-hidden="true"></span>
                     </label>
                     <span class="cvm-toggle-label" id="cvm-api-toggle-label">
-                        <?php echo $apiActive ? 'Active' : 'Inactive'; ?>
+                        <?php echo esc_html($apiActive ? __('Active', 'convermetry') : __('Inactive', 'convermetry')); ?>
                     </span>
                 </div>
 
                 <div id="cvm-api-key-section"<?php echo $apiActive ? '' : ' hidden'; ?>>
                     <table class="form-table" role="presentation" style="margin-top:12px;">
                         <tr>
-                            <th scope="row">Endpoint</th>
+                            <th scope="row"><?php esc_html_e('Endpoint', 'convermetry'); ?></th>
                             <td>
                                 <code><?php echo esc_url(rest_url('convermetry/v1/deliveries')); ?></code>
                             </td>
                         </tr>
                         <tr>
-                            <th scope="row">API Key</th>
+                            <th scope="row"><?php esc_html_e('API Key', 'convermetry'); ?></th>
                             <td>
                                 <div class="cvm-api-key-row">
-                                    <code id="cvm-api-key-value" data-masked="1"><?php echo $hasKey ? '••••••••••••••••••••' : '(no key generated yet)'; ?></code>
-                                    <button type="button" class="button cvm-copy-key-btn" hidden>Copy</button>
-                                    <button type="button" class="button cvm-regen-key-btn">Regenerate</button>
+                                    <code id="cvm-api-key-value" data-masked="1"><?php echo esc_html($hasKey ? '••••••••••••••••••••' : __('(no key generated yet)', 'convermetry')); ?></code>
+                                    <button type="button" class="button cvm-copy-key-btn" hidden><?php esc_html_e('Copy', 'convermetry'); ?></button>
+                                    <button type="button" class="button cvm-regen-key-btn"><?php esc_html_e('Regenerate', 'convermetry'); ?></button>
                                 </div>
                                 <p class="description" style="margin-top:6px;">
-                                    Only a hash of the key is stored, so the key is shown <strong>once</strong> — right after it is generated. Copy it then; if it is lost, regenerate a new one (any integrations using the old key stop working).
+                                    <?php echo wp_kses_post(__('Only a hash of the key is stored, so the key is shown <strong>once</strong> — right after it is generated. Copy it then; if it is lost, regenerate a new one (any integrations using the old key stop working).', 'convermetry')); ?>
                                 </p>
                             </td>
                         </tr>
@@ -387,9 +385,18 @@ final class ActivityLogPage
 
             <div class="notice notice-info inline cvm-retention-notice">
                 <p>
-                    <strong>Log retention policy:</strong>
-                    Entries older than <?php echo esc_html((string) Options::retentionDays()); ?> days are automatically removed daily.
-                    The retention period is shared with the analytics data and can be changed under <strong>Settings</strong>.
+                    <?php
+                    echo wp_kses_post(sprintf(
+                        /* translators: %d: retention period in days. */
+                        _n(
+                            '<strong>Log retention policy:</strong> Entries older than %d day are automatically removed daily. The retention period is shared with the analytics data and can be changed under <strong>Settings</strong>.',
+                            '<strong>Log retention policy:</strong> Entries older than %d days are automatically removed daily. The retention period is shared with the analytics data and can be changed under <strong>Settings</strong>.',
+                            Options::retentionDays(),
+                            'convermetry'
+                        ),
+                        Options::retentionDays()
+                    ));
+                    ?>
                 </p>
             </div>
 
@@ -400,9 +407,9 @@ final class ActivityLogPage
                     <button
                         type="submit"
                         class="button button-secondary cvm-btn-danger"
-                        onclick="return confirm('Are you sure you want to clear all activity logs? This cannot be undone.');"
+                        onclick="return confirm(<?php echo esc_attr((string) wp_json_encode(__('Are you sure you want to clear all activity logs? This cannot be undone.', 'convermetry'))); ?>);"
                     >
-                        Clear All Logs
+                        <?php esc_html_e('Clear All Logs', 'convermetry'); ?>
                     </button>
                 </form>
 
@@ -412,13 +419,13 @@ final class ActivityLogPage
                             href="<?php echo esc_url(wp_nonce_url(add_query_arg(['page' => self::MENU_SLUG, 'cvm_export' => 'csv'], self_admin_url('admin.php')), 'cvm_export_csv')); ?>"
                             class="button button-secondary"
                         >
-                            Export All To CSV
+                            <?php esc_html_e('Export All To CSV', 'convermetry'); ?>
                         </a>
                         <a
                             href="<?php echo esc_url(wp_nonce_url(add_query_arg(['page' => self::MENU_SLUG, 'cvm_export' => 'json'], self_admin_url('admin.php')), 'cvm_export_json')); ?>"
                             class="button button-secondary"
                         >
-                            Export All To JSON
+                            <?php esc_html_e('Export All To JSON', 'convermetry'); ?>
                         </a>
                     </div>
                 <?php endif; ?>
@@ -427,7 +434,7 @@ final class ActivityLogPage
             <!-- ── Successful Deliveries Accordion ─────────────────────────── -->
             <div class="cvm-accordion">
                 <button type="button" class="cvm-accordion-header" aria-expanded="false" aria-controls="cvm-acc-success">
-                    <span class="cvm-accordion-title">Successful Deliveries</span>
+                    <span class="cvm-accordion-title"><?php esc_html_e('Successful Deliveries', 'convermetry'); ?></span>
                     <span class="cvm-badge"><?php echo esc_html((string) $totalOk); ?></span>
                     <span class="cvm-accordion-arrow" aria-hidden="true">&#9660;</span>
                 </button>
@@ -439,7 +446,7 @@ final class ActivityLogPage
             <!-- ── Failed Deliveries Accordion ─────────────────────────────── -->
             <div class="cvm-accordion">
                 <button type="button" class="cvm-accordion-header" aria-expanded="false" aria-controls="cvm-acc-errors">
-                    <span class="cvm-accordion-title">Failed Deliveries</span>
+                    <span class="cvm-accordion-title"><?php esc_html_e('Failed Deliveries', 'convermetry'); ?></span>
                     <span class="cvm-badge cvm-badge-error"><?php echo esc_html((string) $totalErrors); ?></span>
                     <span class="cvm-accordion-arrow" aria-hidden="true">&#9660;</span>
                 </button>
@@ -463,18 +470,22 @@ final class ActivityLogPage
      */
     private static function kindLabel(string $messageType, string $kind, int $attempt): string
     {
-        $type = $messageType === 'form_submission' ? 'Form Submission' : 'Analytics Report';
+        $type = $messageType === 'form_submission' ? __('Form Submission', 'convermetry') : __('Analytics Report', 'convermetry');
 
         return match ($kind) {
-            'test'      => $type . ' · Test',
+            /* translators: %s: message type, "Form Submission" or "Analytics Report". */
+            'test'      => sprintf(__('%s · Test', 'convermetry'), $type),
             'retry'     => sprintf(
-                '%s · Retry %d/%d',
+                /* translators: 1: message type, 2: attempt number, 3: maximum attempts. */
+                __('%1$s · Retry %2$d/%3$d', 'convermetry'),
                 $type,
                 $attempt,
                 AnalyticsDispatcher::maxRetries() + ($messageType === 'form_submission' ? 1 : 0)
             ),
-            'immediate' => $type . ' · Immediate',
-            default     => $type . ' · Scheduled',
+            /* translators: %s: message type, "Form Submission" or "Analytics Report". */
+            'immediate' => sprintf(__('%s · Immediate', 'convermetry'), $type),
+            /* translators: %s: message type, "Form Submission" or "Analytics Report". */
+            default     => sprintf(__('%s · Scheduled', 'convermetry'), $type),
         };
     }
 
@@ -488,7 +499,7 @@ final class ActivityLogPage
     {
         $isError     = (int) ($entry['success'] ?? 0) === 0;
         $itemClass   = $isError ? 'cvm-log-error' : 'cvm-log-success';
-        $statusText  = $isError ? 'Error' : 'Success';
+        $statusText  = $isError ? __('Error', 'convermetry') : __('Success', 'convermetry');
         $statusClass = $isError ? 'error' : 'success';
         $timestamp   = (string) ($entry['created_at'] ?? '');
         $endpoint    = (string) ($entry['endpoint_url'] ?? '');
@@ -531,7 +542,10 @@ final class ActivityLogPage
         <li class="cvm-log-item <?php echo esc_attr($itemClass); ?>" data-log-id="<?php echo esc_attr((string) ($entry['id'] ?? '')); ?>">
 
             <div class="cvm-log-meta">
-                <span class="cvm-log-time"><?php echo esc_html($timestamp); ?> UTC</span>
+                <span class="cvm-log-time"><?php
+                /* translators: %s: date and time in UTC. */
+                echo esc_html(sprintf(__('%s UTC', 'convermetry'), $timestamp));
+                ?></span>
                 <?php if ($label !== ''): ?>
                     <span class="cvm-log-webhook-label"><?php echo esc_html($label); ?></span>
                 <?php endif; ?>
@@ -542,66 +556,69 @@ final class ActivityLogPage
                         (<?php echo esc_html((string) $code); ?>)
                     <?php endif; ?>
                 </span>
-                <button type="button" class="button cvm-log-delete-btn" aria-label="Delete log entry <?php echo esc_attr((string) ($entry['id'] ?? '')); ?>">Delete</button>
+                <button type="button" class="button cvm-log-delete-btn" aria-label="<?php
+                /* translators: %s: the Activity Log entry's numeric id. */
+                echo esc_attr(sprintf(__('Delete log entry %s', 'convermetry'), (string) ($entry['id'] ?? '')));
+                ?>"><?php esc_html_e('Delete', 'convermetry'); ?></button>
             </div>
 
             <?php if ($endpoint !== ''): ?>
                 <div class="cvm-log-url">
-                    <strong>Endpoint:</strong> <code><?php echo esc_html($endpoint); ?></code>
+                    <strong><?php esc_html_e('Endpoint:', 'convermetry'); ?></strong> <code><?php echo esc_html($endpoint); ?></code>
                 </div>
             <?php endif; ?>
 
             <?php if ($requestUrl !== '' && $requestUrl !== $endpoint): ?>
                 <div class="cvm-log-url">
-                    <strong>Request URL:</strong> <code><?php echo esc_html($requestUrl); ?></code>
+                    <strong><?php esc_html_e('Request URL:', 'convermetry'); ?></strong> <code><?php echo esc_html($requestUrl); ?></code>
                 </div>
             <?php endif; ?>
 
             <?php if ($deliveryId !== ''): ?>
                 <div class="cvm-log-url">
-                    <strong>Delivery ID:</strong> <code><?php echo esc_html($deliveryId); ?></code>
+                    <strong><?php esc_html_e('Delivery ID:', 'convermetry'); ?></strong> <code><?php echo esc_html($deliveryId); ?></code>
                 </div>
             <?php endif; ?>
 
             <?php if ((string) ($entry['submission_id'] ?? '') !== ''): ?>
                 <div class="cvm-log-url">
-                    <strong>Submission ID:</strong> <code><?php echo esc_html((string) $entry['submission_id']); ?></code>
+                    <strong><?php esc_html_e('Submission ID:', 'convermetry'); ?></strong> <code><?php echo esc_html((string) $entry['submission_id']); ?></code>
                     <?php if ((string) ($entry['conversion_id'] ?? '') !== ''): ?>
-                        &nbsp;<strong>Conversion ID:</strong> <code><?php echo esc_html((string) $entry['conversion_id']); ?></code>
+                        &nbsp;<strong><?php esc_html_e('Conversion ID:', 'convermetry'); ?></strong> <code><?php echo esc_html((string) $entry['conversion_id']); ?></code>
                     <?php endif; ?>
                 </div>
             <?php endif; ?>
 
             <?php if ((string) ($entry['form_provider'] ?? '') !== ''): ?>
                 <div class="cvm-log-url">
-                    <strong>Provider:</strong> <?php echo esc_html((string) $entry['form_provider']); ?>
+                    <strong><?php esc_html_e('Provider:', 'convermetry'); ?></strong> <?php echo esc_html((string) $entry['form_provider']); ?>
                     <?php if ((string) ($entry['form_name'] ?? '') !== ''): ?>
-                        &nbsp;<strong>Form:</strong> <?php echo esc_html((string) $entry['form_name']); ?>
+                        &nbsp;<strong><?php esc_html_e('Form:', 'convermetry'); ?></strong> <?php echo esc_html((string) $entry['form_name']); ?>
                     <?php endif; ?>
                 </div>
             <?php endif; ?>
 
             <?php if ($errorMessage !== ''): ?>
                 <div class="cvm-log-error-msg">
-                    <strong>Error:</strong> <?php echo esc_html($errorMessage); ?>
+                    <strong><?php esc_html_e('Error:', 'convermetry'); ?></strong> <?php echo esc_html($errorMessage); ?>
                 </div>
             <?php endif; ?>
 
             <?php if ($prettyHeaders !== ''): ?>
                 <details class="cvm-log-headers">
-                    <summary>Request headers (sensitive values redacted)</summary>
+                    <summary><?php esc_html_e('Request headers (sensitive values redacted)', 'convermetry'); ?></summary>
                     <pre><?php echo esc_html($prettyHeaders); ?></pre>
                 </details>
             <?php endif; ?>
 
             <div class="cvm-log-data">
-                <strong>Payload:</strong>
+                <strong><?php esc_html_e('Payload:', 'convermetry'); ?></strong>
                 <pre><?php echo esc_html((string) $prettyRequest); ?></pre>
             </div>
 
             <?php if ($rawResponse !== '' && $errorMessage === ''): ?>
                 <div class="cvm-log-response">
-                    <strong>Response:</strong>
+                    <strong><?php esc_html_e('Response:', 'convermetry'); ?></strong>
                     <pre><?php echo esc_html($rawResponse); ?></pre>
                 </div>
             <?php endif; ?>
@@ -645,6 +662,7 @@ final class ActivityLogPage
             exit;
         }
 
+        // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fwrite -- $output is php://output, the download response itself; no file is written, so WP_Filesystem does not apply.
         fwrite($output, "\xEF\xBB\xBF");
 
         // escape: '' is required, not cosmetic. Leaving it at the default
@@ -688,6 +706,7 @@ final class ActivityLogPage
             }
         } while (count($logs) === self::EXPORT_CHUNK);
 
+        // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fclose -- closes the php://output stream opened above; no file is involved.
         fclose($output);
         exit;
     }

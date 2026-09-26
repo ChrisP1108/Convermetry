@@ -117,6 +117,14 @@ check_version "CVM_VERSION in convermetry.php" \
 check_version "README.md version line" \
   "$(grep -m1 '^- \*\*Version:\*\*' README.md | awk '{print $3}')"
 
+# The directory reads the version it serves from readme.txt's Stable tag, not
+# from the plugin header, so a mismatch ships a release WordPress.org will not
+# offer (or offers under the wrong number).
+if [[ -f readme.txt ]]; then
+  check_version "readme.txt Stable tag" \
+    "$(grep -m1 -i '^Stable tag:' readme.txt | sed -E 's/^[Ss]table [Tt]ag:[[:space:]]*//' | tr -d '[:space:]')"
+fi
+
 # Payload examples in the README and the PayloadBuilder docblock hardcode the
 # version; the live payload builds it from CVM_VERSION, so only the prose copies
 # can rot. Only scan the copies that exist, so a minimal tree (the shell
@@ -160,23 +168,50 @@ trap cleanup EXIT
 STAGE="$STAGE_ROOT/$PLUGIN_SLUG"
 mkdir -p "$STAGE"
 
-# Read the ignore patterns once rather than re-reading the file per tracked path.
+# Read the ignore patterns once rather than re-reading the file per path.
 IGNORES=()
 while IFS= read -r pattern || [[ -n "$pattern" ]]; do
   [[ -z "$pattern" || "$pattern" == \#* ]] && continue
   IGNORES+=("$pattern")
 done < .distignore
 
-# Copy tracked files only, so untracked scratch files can never leak in.
-while IFS= read -r -d '' file; do
-  skip=0
+# Returns 0 when a path is excluded by .distignore.
+dist_ignored() {
+  local file="$1" pattern
   for pattern in ${IGNORES+"${IGNORES[@]}"}; do
     if [[ "$file" == "$pattern" || "$file" == "$pattern"/* ]]; then
-      skip=1
-      break
+      return 0
     fi
   done
-  [[ $skip -eq 1 ]] && continue
+  return 1
+}
+
+# Only tracked files are copied, so untracked scratch files can never leak in.
+# The price of that rule used to be paid silently: a NEW runtime file that
+# nobody had `git add`ed yet was simply left out of the archive, and the build
+# still reported success. Refuse instead, naming the files, so the choice is
+# made deliberately -- add it, or ignore it in .gitignore / .distignore.
+UNTRACKED=()
+while IFS= read -r -d '' file; do
+  dist_ignored "$file" && continue
+  UNTRACKED+=("$file")
+done < <(git ls-files --others --exclude-standard -z)
+
+if [[ ${#UNTRACKED[@]} -gt 0 ]]; then
+  {
+    echo "error: these files are not tracked by git, so the release would silently omit them:"
+    printf '  %s\n' "${UNTRACKED[@]}"
+    echo "Add them (git add, or git add -N to include uncommitted content), or exclude them in .gitignore or .distignore."
+  } >&2
+  exit 1
+fi
+
+# Copy tracked files only, so untracked scratch files can never leak in.
+while IFS= read -r -d '' file; do
+  dist_ignored "$file" && continue
+  # A path in the index can be missing from disk (deleted, not yet staged as
+  # deleted); there is nothing to ship, and cp would abort the build.
+  [[ -e "$file" ]] || continue
   mkdir -p "$STAGE/$(dirname "$file")"
   cp "$file" "$STAGE/$file"
 done < <(git ls-files -z)
@@ -184,7 +219,7 @@ done < <(git ls-files -z)
 # Fail loudly rather than shipping a contaminated archive.
 for forbidden in .git .github tests vendor node_modules build phpstan bin \
                  composer.json composer.lock phpunit.xml phpunit.integration.xml \
-                 phpunit.wordpress.xml \
+                 phpunit.wordpress.xml .wordpress-org \
                  phpstan.neon .distignore; do
   if [[ -e "$STAGE/$forbidden" ]]; then
     die "development artifact '$forbidden' reached the staged plugin"
@@ -194,6 +229,30 @@ done
 if [[ ! -f "$STAGE/convermetry.php" ]]; then
   die "staged plugin is missing its entry file"
 fi
+
+# Files WordPress.org and the running plugin cannot do without. readme.txt is
+# the directory listing; LICENSE the license text the header points to;
+# uninstall.php the only cleanup WordPress runs on delete.
+for required in convermetry.php uninstall.php readme.txt LICENSE; do
+  if [[ ! -f "$STAGE/$required" ]]; then
+    die "staged plugin is missing required file '$required'"
+  fi
+done
+
+# Every file in a runtime directory must have made it into the archive. The
+# untracked-file guard above covers new files; this also covers one that is
+# ignored by .gitignore (a stray pattern swallowing a class file or a font),
+# which git would otherwise hide from both lists.
+for runtime_dir in src assets languages; do
+  [[ -d "$runtime_dir" ]] || continue
+  while IFS= read -r -d '' file; do
+    file="${file#./}"
+    dist_ignored "$file" && continue
+    if [[ ! -f "$STAGE/$file" ]]; then
+      die "runtime file '$file' exists in the working tree but was not staged (is it gitignored?)"
+    fi
+  done < <(find "$runtime_dir" -type f ! -name '.DS_Store' -print0)
+done
 
 ZIP="$OUT_DIR/$PLUGIN_SLUG-$VERSION.zip"
 rm -f "$ZIP"

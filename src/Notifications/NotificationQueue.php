@@ -289,8 +289,8 @@ final class NotificationQueue
         global $wpdb;
 
         return (int) $wpdb->get_var($wpdb->prepare(
-            'SELECT COUNT(*) FROM ' . self::tableName()
-            . ' WHERE submission_id = %s AND recipient_key = %s',
+            'SELECT COUNT(*) FROM %i WHERE submission_id = %s AND recipient_key = %s',
+            self::tableName(),
             $submissionId,
             $recipientKey
         )) > 0;
@@ -335,10 +335,11 @@ final class NotificationQueue
             $recipientKey = self::recipientKey($recipient);
 
             $inserted = $wpdb->query($wpdb->prepare(
-                'INSERT IGNORE INTO ' . self::tableName()
+                'INSERT IGNORE INTO %i'
                 . ' (submission_id, recipient, recipient_key, settings_json, status, attempt,'
                 . " next_attempt_at, created_at)"
                 . " VALUES (%s, %s, %s, %s, 'pending', 0, %s, %s)",
+                self::tableName(),
                 $submissionId,
                 $recipient,
                 $recipientKey,
@@ -423,7 +424,8 @@ final class NotificationQueue
 
         // Reclaim rows stranded in 'sending' by a worker that died mid-pass.
         $wpdb->query($wpdb->prepare(
-            "UPDATE {$table} SET status = 'pending', claim = '' WHERE status = 'sending' AND claimed_at < %s",
+            "UPDATE %i SET status = 'pending', claim = '' WHERE status = 'sending' AND claimed_at < %s",
+            $table,
             gmdate('Y-m-d H:i:s', time() - self::CLAIM_TIMEOUT)
         ));
 
@@ -437,10 +439,11 @@ final class NotificationQueue
         $token = md5(wp_generate_uuid4() . wp_rand());
 
         $wpdb->query($wpdb->prepare(
-            "UPDATE {$table} SET status = 'sending', claim = %s, claimed_at = %s
+            "UPDATE %i SET status = 'sending', claim = %s, claimed_at = %s
              WHERE status = 'pending' AND next_attempt_at <= %s
              ORDER BY next_attempt_at ASC
              LIMIT %d",
+            $table,
             $token,
             $now,
             $now,
@@ -448,7 +451,8 @@ final class NotificationQueue
         ));
 
         $rows = $wpdb->get_results($wpdb->prepare(
-            "SELECT * FROM {$table} WHERE claim = %s AND status = 'sending' ORDER BY next_attempt_at ASC",
+            "SELECT * FROM %i WHERE claim = %s AND status = 'sending' ORDER BY next_attempt_at ASC",
+            $table,
             $token
         ), ARRAY_A);
 
@@ -462,7 +466,8 @@ final class NotificationQueue
         foreach ($rows as $row) {
             if (microtime(true) >= $deadline) {
                 $wpdb->query($wpdb->prepare(
-                    "UPDATE {$table} SET status = 'pending', claim = '' WHERE id = %d AND claim = %s",
+                    "UPDATE %i SET status = 'pending', claim = '' WHERE id = %d AND claim = %s",
+                    $table,
                     (int) $row['id'],
                     $token
                 ));
@@ -787,7 +792,7 @@ final class NotificationQueue
     {
         global $wpdb;
 
-        $deleted = $wpdb->query('DELETE FROM ' . self::tableName());
+        $deleted = $wpdb->query($wpdb->prepare('DELETE FROM %i', self::tableName()));
 
         if (is_int($deleted) && $deleted > 0) {
             self::announceCancellation('', '', 'admin_clear', $deleted);
@@ -813,7 +818,8 @@ final class NotificationQueue
         global $wpdb;
 
         $wpdb->query($wpdb->prepare(
-            'DELETE FROM ' . self::tableName() . ' WHERE created_at < %s LIMIT %d',
+            'DELETE FROM %i WHERE created_at < %s LIMIT %d',
+            self::tableName(),
             gmdate('Y-m-d H:i:s', time() - self::MAX_AGE),
             self::PURGE_CHUNK
         ));
@@ -828,9 +834,10 @@ final class NotificationQueue
     {
         global $wpdb;
 
-        return (int) $wpdb->get_var(
-            'SELECT COUNT(*) FROM ' . self::tableName() . " WHERE status IN ('pending','sending')"
-        );
+        return (int) $wpdb->get_var($wpdb->prepare(
+            "SELECT COUNT(*) FROM %i WHERE status IN ('pending','sending')",
+            self::tableName()
+        ));
     }
 
     /**
@@ -846,10 +853,10 @@ final class NotificationQueue
             return;
         }
 
-        $next = (string) $wpdb->get_var(
-            'SELECT MIN(next_attempt_at) FROM ' . self::tableName()
-            . " WHERE status IN ('pending','sending')"
-        );
+        $next = (string) $wpdb->get_var($wpdb->prepare(
+            "SELECT MIN(next_attempt_at) FROM %i WHERE status IN ('pending','sending')",
+            self::tableName()
+        ));
 
         if ($next === '') {
             return;

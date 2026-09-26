@@ -15,6 +15,18 @@
 (function () {
     'use strict';
 
+    const { __, sprintf } = wp.i18n;
+
+    /** Escapes text for insertion into HTML markup or an attribute value. */
+    function esc(text) {
+        return String(text)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
+    }
+
     function cfg(key) {
         return (typeof CVM_ADMIN !== 'undefined' && CVM_ADMIN[key]) ? CVM_ADMIN[key] : '';
     }
@@ -40,21 +52,21 @@
         keyInput.type = 'text';
         keyInput.className = 'regular-text code cvm-kv-key';
         keyInput.name = name + '[' + index + '][key]';
-        keyInput.placeholder = 'Key';
+        keyInput.placeholder = __('Key', 'convermetry');
         keyInput.value = key || '';
 
         const valueInput = document.createElement('input');
         valueInput.type = 'text';
         valueInput.className = 'regular-text code cvm-kv-value';
         valueInput.name = name + '[' + index + '][value]';
-        valueInput.placeholder = 'Value';
+        valueInput.placeholder = __('Value', 'convermetry');
         valueInput.value = value || '';
 
         const removeBtn = document.createElement('button');
         removeBtn.type = 'button';
         removeBtn.className = 'button cvm-kv-remove';
-        removeBtn.textContent = 'Remove';
-        removeBtn.setAttribute('aria-label', 'Remove this row');
+        removeBtn.textContent = __('Remove', 'convermetry');
+        removeBtn.setAttribute('aria-label', __('Remove this row', 'convermetry'));
         removeBtn.addEventListener('click', function () {
             row.remove();
         });
@@ -137,37 +149,50 @@
         block.className = 'cvm-webhook-block';
         block.dataset.webhookIndex = index;
 
+        const n = index + 1;
+
+        // Every translated string is escaped on the way into innerHTML: a
+        // translation is text, and may contain a quote or an angle bracket.
         block.innerHTML =
             '<div class="cvm-webhook-block-header">' +
-                '<strong class="cvm-webhook-block-title">Endpoint ' + (index + 1) + '</strong>' +
-                '<button type="button" class="button cvm-remove-webhook-btn" aria-label="Remove endpoint ' + (index + 1) + '">Remove</button>' +
+                /* translators: %d: the endpoint's position in the list. */
+                '<strong class="cvm-webhook-block-title">' + esc(sprintf(__('Endpoint %d', 'convermetry'), n)) + '</strong>' +
+                /* translators: %d: the endpoint's position in the list. */
+                '<button type="button" class="button cvm-remove-webhook-btn" aria-label="' + esc(sprintf(__('Remove endpoint %d', 'convermetry'), n)) + '">' +
+                    esc(__('Remove', 'convermetry')) + '</button>' +
             '</div>' +
             '<div class="cvm-webhook-url-row">' +
                 '<input type="url" class="cvm-webhook-url-input regular-text code"' +
                     ' name="cvm_webhooks[' + index + '][url]"' +
                     ' placeholder="https://example.com/convermetry-hook"' +
-                    ' aria-label="Endpoint ' + (index + 1) + ' URL">' +
+                    /* translators: %d: the endpoint's position in the list. */
+                    ' aria-label="' + esc(sprintf(__('Endpoint %d URL', 'convermetry'), n)) + '">' +
             '</div>' +
             '<div class="cvm-webhook-field">' +
                 '<input type="text" class="regular-text cvm-webhook-label-input"' +
                     ' name="cvm_webhooks[' + index + '][label]"' +
-                    ' placeholder="Label (optional — shown in the Activity Log)"' +
-                    ' aria-label="Endpoint ' + (index + 1) + ' label">' +
+                    ' placeholder="' + esc(__('Label (optional — shown in the Activity Log)', 'convermetry')) + '"' +
+                    /* translators: %d: the endpoint's position in the list. */
+                    ' aria-label="' + esc(sprintf(__('Endpoint %d label', 'convermetry'), n)) + '">' +
             '</div>' +
             '<div class="cvm-webhook-field">' +
                 '<input type="text" class="regular-text code cvm-webhook-secret-input" autocomplete="off"' +
                     ' name="cvm_webhooks[' + index + '][secret]"' +
-                    ' placeholder="Signing secret (optional — overrides the shared secret)"' +
-                    ' aria-label="Endpoint ' + (index + 1) + ' signing secret">' +
+                    ' placeholder="' + esc(__('Signing secret (optional — overrides the shared secret)', 'convermetry')) + '"' +
+                    /* translators: %d: the endpoint's position in the list. */
+                    ' aria-label="' + esc(sprintf(__('Endpoint %d signing secret', 'convermetry'), n)) + '">' +
             '</div>' +
             '<fieldset class="cvm-webhook-types">' +
-                '<legend class="screen-reader-text">Delivery types for endpoint ' + (index + 1) + '</legend>' +
-                '<label><input type="checkbox" name="cvm_webhooks[' + index + '][analytics]" value="1" checked> Analytics Reports</label> ' +
-                '<label><input type="checkbox" name="cvm_webhooks[' + index + '][forms]" value="1" checked> Form Submissions</label>' +
+                /* translators: %d: the endpoint's position in the list. */
+                '<legend class="screen-reader-text">' + esc(sprintf(__('Delivery types for endpoint %d', 'convermetry'), n)) + '</legend>' +
+                '<label><input type="checkbox" name="cvm_webhooks[' + index + '][analytics]" value="1" checked> ' +
+                    esc(__('Analytics Reports', 'convermetry')) + '</label> ' +
+                '<label><input type="checkbox" name="cvm_webhooks[' + index + '][forms]" value="1" checked> ' +
+                    esc(__('Form Submissions', 'convermetry')) + '</label>' +
             '</fieldset>' +
             '<div class="cvm-endpoint-tests">' +
-                '<button type="button" class="button cvm-test-endpoint" data-type="analytics">Send analytics test</button> ' +
-                '<button type="button" class="button cvm-test-endpoint" data-type="form">Send form test</button>' +
+                '<button type="button" class="button cvm-test-endpoint" data-type="analytics">' + esc(__('Send analytics test', 'convermetry')) + '</button> ' +
+                '<button type="button" class="button cvm-test-endpoint" data-type="form">' + esc(__('Send form test', 'convermetry')) + '</button>' +
                 '<span class="cvm-test-result" role="status" aria-live="polite"></span>' +
             '</div>';
 
@@ -194,7 +219,8 @@
 
             const title = block.querySelector('.cvm-webhook-block-title');
             if (title) {
-                title.textContent = 'Endpoint ' + (idx + 1);
+                /* translators: %d: the endpoint's position in the list. */
+                title.textContent = sprintf(__('Endpoint %d', 'convermetry'), idx + 1);
             }
 
             [['url', '.cvm-webhook-url-input'], ['label', '.cvm-webhook-label-input'], ['secret', '.cvm-webhook-secret-input']]
@@ -227,12 +253,12 @@
                 const url = urlInput ? urlInput.value.trim() : '';
 
                 if (!url) {
-                    if (result) result.textContent = 'Enter an endpoint URL first.';
+                    if (result) result.textContent = __('Enter an endpoint URL first.', 'convermetry');
                     return;
                 }
 
                 btn.disabled = true;
-                if (result) result.textContent = 'Sending…';
+                if (result) result.textContent = __('Sending…', 'convermetry');
 
                 const fd = new FormData();
                 fd.append('action', 'cvm_test_webhook');
@@ -247,17 +273,19 @@
                         if (!result) return;
                         if (resp.success) {
                             const d = resp.data || {};
-                            result.textContent = (d.ok ? '✓ ' : '✗ ') + (d.message || '') + (d.code ? ' (HTTP ' + d.code + ')' : '');
+                            result.textContent = (d.ok ? '✓ ' : '✗ ') + (d.message || '') +
+                                /* translators: %d: HTTP response status code. */
+                                (d.code ? ' ' + sprintf(__('(HTTP %d)', 'convermetry'), d.code) : '');
                             result.className = 'cvm-test-result ' + (d.ok ? 'cvm-test-ok' : 'cvm-test-fail');
                         } else {
-                            result.textContent = '✗ ' + ((resp.data && resp.data.message) || 'Test failed.');
+                            result.textContent = '✗ ' + ((resp.data && resp.data.message) || __('Test failed.', 'convermetry'));
                             result.className = 'cvm-test-result cvm-test-fail';
                         }
                     })
                     .catch(function () {
                         btn.disabled = false;
                         if (result) {
-                            result.textContent = '✗ The test request could not be sent.';
+                            result.textContent = '✗ ' + __('The test request could not be sent.', 'convermetry');
                             result.className = 'cvm-test-result cvm-test-fail';
                         }
                     });
@@ -304,7 +332,7 @@
         const label  = document.getElementById('cvm-webhook-toggle-label');
         if (toggle && label) {
             toggle.addEventListener('change', function () {
-                label.textContent = this.checked ? 'Active' : 'Inactive';
+                label.textContent = this.checked ? __('Active', 'convermetry') : __('Inactive', 'convermetry');
             });
         }
 
@@ -375,7 +403,7 @@
                 block.dataset.excluded = checkbox.checked ? '1' : '0';
                 const badge = block.querySelector('.cvm-form-state-badge');
                 if (badge) {
-                    badge.textContent = checkbox.checked ? 'Excluded' : 'Included';
+                    badge.textContent = checkbox.checked ? __('Excluded', 'convermetry') : __('Included', 'convermetry');
                     badge.className = 'cvm-form-state-badge ' + (checkbox.checked ? 'is-excluded' : 'is-included');
                 }
                 applyFilters();
@@ -420,7 +448,7 @@
 
             if (!recipient) {
                 if (result) {
-                    result.textContent = 'Enter a recipient address first.';
+                    result.textContent = __('Enter a recipient address first.', 'convermetry');
                     result.className = 'cvm-test-result cvm-test-fail';
                 }
                 return;
@@ -428,7 +456,7 @@
 
             btn.disabled = true;
             if (result) {
-                result.textContent = 'Sending…';
+                result.textContent = __('Sending…', 'convermetry');
                 result.className = 'cvm-test-result';
             }
 
@@ -444,13 +472,13 @@
                     if (!result) return;
                     const d = (resp && resp.data) || {};
                     const ok = resp && resp.success && d.ok;
-                    result.textContent = (ok ? '✓ ' : '✗ ') + (d.message || 'Test failed.');
+                    result.textContent = (ok ? '✓ ' : '✗ ') + (d.message || __('Test failed.', 'convermetry'));
                     result.className = 'cvm-test-result ' + (ok ? 'cvm-test-ok' : 'cvm-test-fail');
                 })
                 .catch(function () {
                     btn.disabled = false;
                     if (result) {
-                        result.textContent = '✗ The test request could not be sent.';
+                        result.textContent = '✗ ' + __('The test request could not be sent.', 'convermetry');
                         result.className = 'cvm-test-result cvm-test-fail';
                     }
                 });

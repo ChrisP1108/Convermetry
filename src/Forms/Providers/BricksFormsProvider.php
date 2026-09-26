@@ -139,13 +139,12 @@ final class BricksFormsProvider implements FormProviderInterface
     {
         global $wpdb;
 
-        $metaKeys     = BricksFormsBridge::CONTENT_META_KEYS;
-        $placeholders = implode(', ', array_fill(0, count($metaKeys), '%s'));
+        $metaKeys = BricksFormsBridge::CONTENT_META_KEYS;
 
         /** @var string[] $candidates */
         $candidates = $wpdb->get_col($wpdb->prepare(
-            "SELECT DISTINCT post_id FROM {$wpdb->postmeta} WHERE meta_key IN ({$placeholders})",
-            ...$metaKeys
+            'SELECT DISTINCT post_id FROM %i WHERE meta_key IN (' . implode(', ', array_fill(0, count($metaKeys), '%s')) . ')',
+            array_merge([$wpdb->postmeta], $metaKeys)
         ));
 
         $candidates = array_values(array_unique(array_filter(
@@ -157,17 +156,12 @@ final class BricksFormsProvider implements FormProviderInterface
             return [];
         }
 
-        $ids = implode(', ', array_map(static fn(int $id): string => (string) $id, $candidates));
-
         /** @var string[] $postIds */
-        $postIds = $wpdb->get_col(
-            // $ids is built from integers this method cast itself, so there is
-            // nothing left to parameterize; every other value here is a literal.
-            "SELECT ID FROM {$wpdb->posts}
-              WHERE ID IN ({$ids})
-                AND post_type <> 'revision'
-                AND post_status NOT IN ('trash', 'auto-draft')"
-        );
+        $postIds = $wpdb->get_col($wpdb->prepare(
+            'SELECT ID FROM %i WHERE ID IN (' . implode(', ', array_fill(0, count($candidates), '%d')) . ')'
+            . " AND post_type <> 'revision' AND post_status NOT IN ('trash', 'auto-draft')",
+            array_merge([$wpdb->posts], $candidates)
+        ));
 
         return array_values(array_map(static fn(mixed $id): int => (int) $id, (array) $postIds));
     }

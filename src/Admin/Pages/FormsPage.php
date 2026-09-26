@@ -70,8 +70,8 @@ final class FormsPage
     {
         add_submenu_page(
             HomePage::MENU_SLUG,
-            'Convermetry Forms',
-            'Forms',
+            __('Convermetry Forms', 'convermetry'),
+            __('Forms', 'convermetry'),
             Capability::required(Capability::FORMS_MANAGE),
             self::MENU_SLUG,
             [self::class, 'render']
@@ -100,10 +100,11 @@ final class FormsPage
         wp_enqueue_script(
             'cvm-admin',
             CVM_PLUGIN_URL . 'assets/js/admin.js',
-            [],
+            ['wp-i18n'],
             CVM_VERSION,
             true
         );
+        wp_set_script_translations('cvm-admin', 'convermetry');
     }
 
     /**
@@ -123,12 +124,14 @@ final class FormsPage
             || !isset($_POST['cvm_forms_nonce'])
             || !wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['cvm_forms_nonce'])), self::SAVE_ACTION)
         ) {
-            wp_die('Invalid request.');
+            wp_die(esc_html__('Invalid request.', 'convermetry'), '', ['response' => 403]);
         }
 
+        // phpcs:disable WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- sanitized field by field in the loop below and by FormSettings.
         $rawForms = isset($_POST['cvm_forms']) && is_array($_POST['cvm_forms'])
             ? wp_unslash($_POST['cvm_forms'])
             : [];
+        // phpcs:enable WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
 
         $configs  = [];
         $rendered = [];
@@ -206,7 +209,7 @@ final class FormsPage
     {
         if (isset($_GET['page']) && $_GET['page'] === self::MENU_SLUG && !empty($_GET['cvm_saved'])) {
             ?>
-            <div class="notice notice-success is-dismissible"><p>Form settings saved.</p></div>
+            <div class="notice notice-success is-dismissible"><p><?php esc_html_e('Form settings saved.', 'convermetry'); ?></p></div>
             <?php
         }
     }
@@ -249,26 +252,29 @@ final class FormsPage
         }
 
         ?>
-        <h2>Engagement &amp; abandonment</h2>
-        <p class="description" style="max-width:760px;">The last 30 days. <strong>Views</strong>, <strong>Started</strong>
-        and <strong>Abandoned</strong> count sessions and are observed in the visitor's browser; <strong>Attempts</strong> counts individual
-        submit presses; <strong>Successful</strong> counts submissions your form plugin confirmed on the server. A completion rate
-        above 100% is not an error — it means people are submitting with JavaScript blocked, so the browser-observed columns are
-        undercounting.</p>
+        <h2><?php esc_html_e('Engagement & abandonment', 'convermetry'); ?></h2>
+        <p class="description" style="max-width:760px;"><?php echo wp_kses_post(__('The last 30 days. <strong>Views</strong>, <strong>Started</strong> and <strong>Abandoned</strong> count sessions and are observed in the visitor\'s browser; <strong>Attempts</strong> counts individual submit presses; <strong>Successful</strong> counts submissions your form plugin confirmed on the server. A completion rate above 100% is not an error — it means people are submitting with JavaScript blocked, so the browser-observed columns are undercounting.', 'convermetry')); ?></p>
         <?php
 
         if ($forms === []) {
             ?>
-            <div class="notice notice-info inline"><p>No form engagement recorded yet. Form view, start, and validation-error
-            tracking are switched on under <strong>Settings &rarr; Tracking</strong>. Elementor forms are not included here — see
-            the note below.</p></div>
+            <div class="notice notice-info inline"><p><?php echo wp_kses_post(__('No form engagement recorded yet. Form view, start, and validation-error tracking are switched on under <strong>Settings → Tracking</strong>. Elementor forms are not included here — see the note below.', 'convermetry')); ?></p></div>
             <?php
         } else {
             ?>
             <table class="widefat striped cvm-goals-table"><thead><tr>
-            <th scope="col">Form</th>
+            <th scope="col"><?php esc_html_e('Form', 'convermetry'); ?></th>
             <?php
-            foreach (['Views', 'Started', 'Attempts', 'Successful', 'Abandoned', 'Start Rate', 'Completion Rate'] as $label) {
+            $columns = [
+                __('Views', 'convermetry'),
+                __('Started', 'convermetry'),
+                __('Attempts', 'convermetry'),
+                __('Successful', 'convermetry'),
+                __('Abandoned', 'convermetry'),
+                __('Start Rate', 'convermetry'),
+                __('Completion Rate', 'convermetry'),
+            ];
+            foreach ($columns as $label) {
                 ?>
                 <th scope="col" class="cvm-num"><?php echo esc_html($label); ?></th>
                 <?php
@@ -283,10 +289,11 @@ final class FormsPage
                 <td><strong><?php echo esc_html($form['form_name'] !== '' ? $form['form_name'] : $form['form_key']); ?></strong><div class="cvm-goal-meta"><code><?php echo esc_html($form['form_key']); ?></code>
                 <?php
                 if ($form['in_progress'] > 0) {
-                    printf(
-                        ' &middot; %d still in progress',
+                    echo ' &middot; ' . esc_html(sprintf(
+                        /* translators: %d: number of form starts not yet completed or abandoned. */
+                        _n('%d still in progress', '%d still in progress', (int) $form['in_progress'], 'convermetry'),
                         (int) $form['in_progress']
-                    );
+                    ));
                 }
                 ?>
                 </div></td>
@@ -315,22 +322,25 @@ final class FormsPage
             </tbody></table>
             <?php
 
-            printf(
-                '<p class="description">A start counts as abandoned once %d minutes pass with no confirmed '
-                . 'submission — anything more recent is shown as still in progress rather than being counted '
-                . 'against you.</p>',
+            echo '<p class="description">' . esc_html(sprintf(
+                /* translators: %d: minutes after which an unfinished form start counts as abandoned. */
+                _n(
+                    'A start counts as abandoned once %d minute passes with no confirmed submission — anything more recent is shown as still in progress rather than being counted against you.',
+                    'A start counts as abandoned once %d minutes pass with no confirmed submission — anything more recent is shown as still in progress rather than being counted against you.',
+                    FormEngagementReport::COMPLETION_WINDOW_MINUTES,
+                    'convermetry'
+                ),
                 FormEngagementReport::COMPLETION_WINDOW_MINUTES
-            );
+            )) . '</p>';
         }
 
         if ($friction !== []) {
             ?>
-            <h3>Most common friction points</h3>
-            <p class="description" style="max-width:760px;">Which fields fail validation most often. Convermetry records
-            the field's name, its type, and which check failed — <strong>never what the visitor typed</strong>.</p>
+            <h3><?php esc_html_e('Most common friction points', 'convermetry'); ?></h3>
+            <p class="description" style="max-width:760px;"><?php echo wp_kses_post(__('Which fields fail validation most often. Convermetry records the field\'s name, its type, and which check failed — <strong>never what the visitor typed</strong>.', 'convermetry')); ?></p>
             <table class="widefat striped cvm-goals-table"><thead><tr>
-            <th scope="col">Field</th><th scope="col">Type</th><th scope="col">Problem</th>
-            <th scope="col" class="cvm-num">Errors</th><th scope="col" class="cvm-num">Sessions</th></tr></thead><tbody>
+            <th scope="col"><?php esc_html_e('Field', 'convermetry'); ?></th><th scope="col"><?php esc_html_e('Type', 'convermetry'); ?></th><th scope="col"><?php esc_html_e('Problem', 'convermetry'); ?></th>
+            <th scope="col" class="cvm-num"><?php esc_html_e('Errors', 'convermetry'); ?></th><th scope="col" class="cvm-num"><?php esc_html_e('Sessions', 'convermetry'); ?></th></tr></thead><tbody>
             <?php
 
             foreach ($friction as $row) {
@@ -350,10 +360,7 @@ final class FormsPage
         }
 
         ?>
-        <div class="notice notice-info inline"><p><strong>Elementor forms are not included above.</strong> Elementor identifies
-        a form by its display name on the server while exposing a widget id in the browser, so the two cannot be matched reliably —
-        and an engagement figure attributed to the wrong form is worse than none. Elementor submissions are recorded and attributed
-        normally everywhere else in Convermetry.</p></div>
+        <div class="notice notice-info inline"><p><?php echo wp_kses_post(__('<strong>Elementor forms are not included above.</strong> Elementor identifies a form by its display name on the server while exposing a widget id in the browser, so the two cannot be matched reliably — and an engagement figure attributed to the wrong form is worse than none. Elementor submissions are recorded and attributed normally everywhere else in Convermetry.', 'convermetry')); ?></p></div>
         <?php
     }
 
@@ -366,14 +373,14 @@ final class FormsPage
     private static function errorLabel(string $errorType): string
     {
         return match ($errorType) {
-            'required'      => 'Left empty',
-            'type_mismatch' => 'Wrong format (e.g. not an email address)',
-            'pattern'       => 'Did not match the expected pattern',
-            'too_short'     => 'Too short',
-            'too_long'      => 'Too long',
-            'range'         => 'Outside the allowed range',
-            'step'          => 'Not an allowed increment',
-            default         => 'Invalid',
+            'required'      => __('Left empty', 'convermetry'),
+            'type_mismatch' => __('Wrong format (e.g. not an email address)', 'convermetry'),
+            'pattern'       => __('Did not match the expected pattern', 'convermetry'),
+            'too_short'     => __('Too short', 'convermetry'),
+            'too_long'      => __('Too long', 'convermetry'),
+            'range'         => __('Outside the allowed range', 'convermetry'),
+            'step'          => __('Not an allowed increment', 'convermetry'),
+            default         => __('Invalid', 'convermetry'),
         };
     }
 
@@ -387,14 +394,8 @@ final class FormsPage
 
         ?>
         <div class="wrap cvm-wrap">
-        <h1>Convermetry Forms</h1>
-        <p class="description" style="max-width:760px;">Convermetry automatically detects supported form plugins and discovers
-        their forms. Detected forms are <strong>included by default</strong> — a new form starts recording conversions and delivering
-        webhooks without any setup. Exclude a form to stop processing it; its configuration is preserved and restored when re-enabled.
-        <strong>Builder forms that run an explicit action list are the exception</strong> — Elementor Atomic forms and Bricks Builder
-        forms only run the actions you choose in their own editor, so each one needs the Convermetry action added before anything is
-        captured. Both are listed here as soon as they are found, whether or not that action has been added; the notices below say
-        what to do.</p>
+        <h1><?php esc_html_e('Convermetry Forms', 'convermetry'); ?></h1>
+        <p class="description" style="max-width:760px;"><?php echo wp_kses_post(__('Convermetry automatically detects supported form plugins and discovers their forms. Detected forms are <strong>included by default</strong> — a new form starts recording conversions and delivering webhooks without any setup. Exclude a form to stop processing it; its configuration is preserved and restored when re-enabled. <strong>Builder forms that run an explicit action list are the exception</strong> — Elementor Atomic forms and Bricks Builder forms only run the actions you choose in their own editor, so each one needs the Convermetry action added before anything is captured. Both are listed here as soon as they are found, whether or not that action has been added; the notices below say what to do.', 'convermetry')); ?></p>
         <?php
 
         self::renderEngagement();
@@ -413,7 +414,7 @@ final class FormsPage
             ?>
             <div class="cvm-card cvm-provider-card">
             <span class="cvm-card-label"><?php echo esc_html($provider->getLabel()); ?></span>
-            <span class="cvm-provider-status <?php echo ($available ? 'is-active' : 'is-unavailable'); ?>"><?php echo ($available ? 'Active' : 'Unavailable'); ?></span></div>
+            <span class="cvm-provider-status <?php echo ($available ? 'is-active' : 'is-unavailable'); ?>"><?php echo esc_html($available ? __('Active', 'convermetry') : __('Unavailable', 'convermetry')); ?></span></div>
             <?php
         }
         ?>
@@ -425,9 +426,7 @@ final class FormsPage
 
         if ($availableProviders === []) {
             ?>
-            <div class="notice notice-info inline"><p>No supported form plugin or builder is currently active. Install and activate
-            Elementor Pro, Bricks Builder, Gravity Forms, WPForms, Contact Form 7, or Fluent Forms — or integrate a custom form with
-            <code>convermetry_submit_form()</code> (see the About page).</p></div></div>
+            <div class="notice notice-info inline"><p><?php echo wp_kses_post(__('No supported form plugin or builder is currently active. Install and activate Elementor Pro, Bricks Builder, Gravity Forms, WPForms, Contact Form 7, or Fluent Forms — or integrate a custom form with <code>convermetry_submit_form()</code> (see the About page).', 'convermetry')); ?></p></div></div>
             <?php
             return;
         }
@@ -452,10 +451,10 @@ final class FormsPage
         ?>
         <input type="hidden" name="action" value="<?php echo esc_attr(self::SAVE_ACTION); ?>">
         <div class="cvm-form-filters">
-        <label class="screen-reader-text" for="cvm-form-search">Search forms</label>
-        <input type="search" id="cvm-form-search" placeholder="Search by form name or ID…">
-        <label class="screen-reader-text" for="cvm-form-provider-filter">Filter by provider</label>
-        <select id="cvm-form-provider-filter"><option value="">All Providers</option>
+        <label class="screen-reader-text" for="cvm-form-search"><?php esc_html_e('Search forms', 'convermetry'); ?></label>
+        <input type="search" id="cvm-form-search" placeholder="<?php esc_attr_e('Search by form name or ID…', 'convermetry'); ?>">
+        <label class="screen-reader-text" for="cvm-form-provider-filter"><?php esc_html_e('Filter by provider', 'convermetry'); ?></label>
+        <select id="cvm-form-provider-filter"><option value=""><?php esc_html_e('All Providers', 'convermetry'); ?></option>
         <?php
         foreach ($availableProviders as $provider) {
             ?>
@@ -464,17 +463,23 @@ final class FormsPage
         }
         ?>
         </select>
-        <label class="screen-reader-text" for="cvm-form-state-filter">Filter by state</label>
-        <select id="cvm-form-state-filter"><option value="">All States</option><option value="included">Included</option><option value="excluded">Excluded</option></select>
-        <span class="cvm-form-filter-summary"><span id="cvm-form-filter-count"><?php echo count($discovered); ?></span> of
-        <?php echo count($discovered); ?> forms shown</span></div>
+        <label class="screen-reader-text" for="cvm-form-state-filter"><?php esc_html_e('Filter by state', 'convermetry'); ?></label>
+        <select id="cvm-form-state-filter"><option value=""><?php esc_html_e('All States', 'convermetry'); ?></option><option value="included"><?php esc_html_e('Included', 'convermetry'); ?></option><option value="excluded"><?php esc_html_e('Excluded', 'convermetry'); ?></option></select>
+        <span class="cvm-form-filter-summary"><?php
+        // The count span is what forms admin.js rewrites as the filters change.
+        echo wp_kses_post(sprintf(
+            /* translators: 1: number of forms currently shown, 2: total number of forms. */
+            _n('%1$s of %2$d form shown', '%1$s of %2$d forms shown', count($discovered), 'convermetry'),
+            '<span id="cvm-form-filter-count">' . count($discovered) . '</span>',
+            count($discovered)
+        ));
+        ?></span></div>
         <div id="cvm-forms-list">
         <?php
 
         if ($discovered === []) {
             ?>
-            <div class="notice notice-info inline"><p>No forms were discovered yet. Create a form in one of the active
-            providers and revisit this page.</p></div>
+            <div class="notice notice-info inline"><p><?php esc_html_e('No forms were discovered yet. Create a form in one of the active providers and revisit this page.', 'convermetry'); ?></p></div>
             <?php
         }
 
@@ -486,7 +491,7 @@ final class FormsPage
         </div>
         <?php
 
-        submit_button('Save Form Settings');
+        submit_button(__('Save Form Settings', 'convermetry'));
 
         /**
          * Fires at the end of the Forms admin screen, after the settings form.
@@ -529,14 +534,8 @@ final class FormsPage
         }
 
         ?>
-        <div class="notice notice-warning inline"><p><strong>Elementor Atomic forms require one extra step.</strong>
-        Open the form in the Elementor editor, select the Atomic form element, add <strong>Convermetry</strong> under
-        <strong>Actions after submit</strong>, and save or update the page or template. Convermetry captures submissions from that
-        form once the action is enabled — submissions made before then are not recorded and cannot be recovered.
-        <strong>Classic Elementor forms are captured automatically</strong> and need none of this.</p>
-        <p class="description">Atomic forms below are listed as soon as Convermetry finds them in your Elementor content, which
-        happens whether or not the action has been added. Marking one <strong>Included</strong> here does not add the action for
-        you, and Convermetry cannot tell from the outside which forms have it.</p></div>
+        <div class="notice notice-warning inline"><p><?php echo wp_kses_post(__('<strong>Elementor Atomic forms require one extra step.</strong> Open the form in the Elementor editor, select the Atomic form element, add <strong>Convermetry</strong> under <strong>Actions after submit</strong>, and save or update the page or template. Convermetry captures submissions from that form once the action is enabled — submissions made before then are not recorded and cannot be recovered. <strong>Classic Elementor forms are captured automatically</strong> and need none of this.', 'convermetry')); ?></p>
+        <p class="description"><?php echo wp_kses_post(__('Atomic forms below are listed as soon as Convermetry finds them in your Elementor content, which happens whether or not the action has been added. Marking one <strong>Included</strong> here does not add the action for you, and Convermetry cannot tell from the outside which forms have it.', 'convermetry')); ?></p></div>
         <?php
     }
 
@@ -568,18 +567,9 @@ final class FormsPage
         }
 
         ?>
-        <div class="notice notice-warning inline"><p><strong>Bricks Builder forms require one extra step.</strong>
-        Open the page or template in Bricks, select the <strong>Form</strong> element, tick <strong>Convermetry</strong> under
-        <strong>Actions after successful form submit</strong>, and save. Convermetry captures submissions from that form once the
-        action is selected — submissions made before then are not recorded and cannot be recovered.</p>
-        <p class="description">Bricks forms below are listed as soon as Convermetry finds them in your Bricks content, which happens
-        whether or not the action has been selected. Marking one <strong>Included</strong> here does not select the action for you,
-        and Convermetry cannot tell from the outside which forms have it.</p>
-        <p class="description">Each Bricks form is identified by its <strong>element ID</strong>, so one form used in a header,
-        footer, popup or reusable template keeps a single configuration across every page it appears on. Two limits are worth
-        knowing: a form placed inside a Bricks <strong>component</strong> is not listed here (Bricks stores component definitions
-        outside page content), and <strong>password</strong> fields are never recorded, exported, emailed or delivered. Only the
-        native Bricks Form element is supported; third-party Bricks form add-ons are not.</p></div>
+        <div class="notice notice-warning inline"><p><?php echo wp_kses_post(__('<strong>Bricks Builder forms require one extra step.</strong> Open the page or template in Bricks, select the <strong>Form</strong> element, tick <strong>Convermetry</strong> under <strong>Actions after successful form submit</strong>, and save. Convermetry captures submissions from that form once the action is selected — submissions made before then are not recorded and cannot be recovered.', 'convermetry')); ?></p>
+        <p class="description"><?php echo wp_kses_post(__('Bricks forms below are listed as soon as Convermetry finds them in your Bricks content, which happens whether or not the action has been selected. Marking one <strong>Included</strong> here does not select the action for you, and Convermetry cannot tell from the outside which forms have it.', 'convermetry')); ?></p>
+        <p class="description"><?php echo wp_kses_post(__('Each Bricks form is identified by its <strong>element ID</strong>, so one form used in a header, footer, popup or reusable template keeps a single configuration across every page it appears on. Two limits are worth knowing: a form placed inside a Bricks <strong>component</strong> is not listed here (Bricks stores component definitions outside page content), and <strong>password</strong> fields are never recorded, exported, emailed or delivered. Only the native Bricks Form element is supported; third-party Bricks form add-ons are not.', 'convermetry')); ?></p></div>
         <?php
     }
 
@@ -599,10 +589,14 @@ final class FormsPage
         }
 
         ?>
-        <div class="notice notice-info inline"><p><strong>Bricks <?php echo esc_html(BricksFormsBridge::installedVersion()); ?>
-        is installed, but Convermetry needs Bricks <?php echo esc_html(BricksFormsBridge::MIN_VERSION); ?> or newer.</strong>
-        Named custom form actions arrived in that release; on an older Bricks the Convermetry action could be selected in the editor
-        but would never run. Update Bricks to capture its form submissions.</p></div>
+        <div class="notice notice-info inline"><p><?php
+        echo wp_kses_post(sprintf(
+            /* translators: 1: installed Bricks version, 2: minimum Bricks version Convermetry supports. */
+            __('<strong>Bricks %1$s is installed, but Convermetry needs Bricks %2$s or newer.</strong> Named custom form actions arrived in that release; on an older Bricks the Convermetry action could be selected in the editor but would never run. Update Bricks to capture its form submissions.', 'convermetry'),
+            esc_html(BricksFormsBridge::installedVersion()),
+            esc_html(BricksFormsBridge::MIN_VERSION)
+        ));
+        ?></p></div>
         <?php
     }
 
@@ -635,44 +629,41 @@ final class FormsPage
         <summary class="cvm-form-block-summary">
         <span class="cvm-form-block-name"><?php echo esc_html($form['name']); ?></span>
         <span class="cvm-form-block-provider"><?php echo esc_html($form['provider_label']); ?></span>
-        <span class="cvm-form-state-badge <?php echo ($config['excluded'] ? 'is-excluded' : 'is-included'); ?>"><?php echo ($config['excluded'] ? 'Excluded' : 'Included'); ?></span></summary>
+        <span class="cvm-form-state-badge <?php echo ($config['excluded'] ? 'is-excluded' : 'is-included'); ?>"><?php echo esc_html($config['excluded'] ? __('Excluded', 'convermetry') : __('Included', 'convermetry')); ?></span></summary>
         <div class="cvm-form-block-body">
         <input type="hidden" name="<?php echo esc_attr($name . '[key]'); ?>" value="<?php echo esc_attr($formKey); ?>">
         <table class="form-table" role="presentation">
-        <tr><th scope="row">Native Form ID</th><td><code><?php echo esc_html($form['native_id']); ?></code></td></tr>
-        <tr><th scope="row"><label for="cvm-form-id-<?php echo esc_attr($hash); ?>">Custom/External Form ID</label></th><td>
+        <tr><th scope="row"><?php esc_html_e('Native Form ID', 'convermetry'); ?></th><td><code><?php echo esc_html($form['native_id']); ?></code></td></tr>
+        <tr><th scope="row"><label for="cvm-form-id-<?php echo esc_attr($hash); ?>"><?php esc_html_e('Custom/External Form ID', 'convermetry'); ?></label></th><td>
         <input type="text" id="cvm-form-id-<?php echo esc_attr($hash); ?>" class="regular-text cvm-form-id-input" name="<?php echo esc_attr($name . '[form_id]'); ?>" value="<?php echo esc_attr($config['form_id']); ?>">
-        <p class="description">Sent as <code>form_id</code> in webhook payloads for this form. Leave blank to use the native
-        form ID.</p></td></tr>
-        <tr><th scope="row">Status</th><td>
+        <p class="description"><?php echo wp_kses_post(__('Sent as <code>form_id</code> in webhook payloads for this form. Leave blank to use the native form ID.', 'convermetry')); ?></p></td></tr>
+        <tr><th scope="row"><?php esc_html_e('Status', 'convermetry'); ?></th><td>
         <label><input type="checkbox" class="cvm-form-excluded-toggle" name="<?php echo esc_attr($name . '[excluded]'); ?>" value="1" <?php echo checked($config['excluded'], true, false); ?>>
-        Exclude this form</label>
-        <p class="description">Excluded forms are not recorded or delivered. Their configuration is preserved.
+        <?php esc_html_e('Exclude this form', 'convermetry'); ?></label>
+        <p class="description"><?php esc_html_e('Excluded forms are not recorded or delivered. Their configuration is preserved.', 'convermetry'); ?>
         <?php
         if ($form['provider'] === AtomicFormsBridge::PROVIDER_KEY) {
             ?>
-            <br><strong>Atomic form:</strong> leaving this included does not switch capture on by itself — this form also needs
-            <strong>Convermetry</strong> added under <strong>Actions after submit</strong> in the Elementor editor.
+            <?php echo wp_kses_post(__('<br><strong>Atomic form:</strong> leaving this included does not switch capture on by itself — this form also needs <strong>Convermetry</strong> added under <strong>Actions after submit</strong> in the Elementor editor.', 'convermetry')); ?>
             <?php
         }
 
         if ($form['provider'] === BricksFormsBridge::PROVIDER_KEY) {
             ?>
-            <br><strong>Bricks form:</strong> leaving this included does not switch capture on by itself — this form also needs
-            <strong>Convermetry</strong> ticked under <strong>Actions after successful form submit</strong> in Bricks.
+            <?php echo wp_kses_post(__('<br><strong>Bricks form:</strong> leaving this included does not switch capture on by itself — this form also needs <strong>Convermetry</strong> ticked under <strong>Actions after successful form submit</strong> in Bricks.', 'convermetry')); ?>
             <?php
         }
         ?>
         </p></td></tr>
-        <tr><th scope="row">Page URL parameters</th><td>
+        <tr><th scope="row"><?php esc_html_e('Page URL parameters', 'convermetry'); ?></th><td>
         <label><input type="checkbox" name="<?php echo esc_attr($name . '[include_page_params]'); ?>" value="1" <?php echo checked($config['include_page_params'], true, false); ?>>
-        Include page URL parameters for this form (regardless of the global setting)</label></td></tr></table>
-        <h4>URL Query Parameters <span class="description">(this form only — highest precedence)</span></h4>
+        <?php esc_html_e('Include page URL parameters for this form (regardless of the global setting)', 'convermetry'); ?></label></td></tr></table>
+        <h4><?php esc_html_e('URL Query Parameters', 'convermetry'); ?> <span class="description"><?php esc_html_e('(this form only — highest precedence)', 'convermetry'); ?></span></h4>
         <?php
         self::renderKvBuilder($name . '[query_params]', $config['query_params']);
 
         ?>
-        <h4>Request Headers <span class="description">(this form only)</span></h4>
+        <h4><?php esc_html_e('Request Headers', 'convermetry'); ?> <span class="description"><?php esc_html_e('(this form only)', 'convermetry'); ?></span></h4>
         <?php
         self::renderKvBuilder($name . '[headers]', $config['headers']);
 
@@ -698,15 +689,15 @@ final class FormsPage
         foreach ($pairs as $index => $pair) {
             ?>
             <div class="cvm-kv-row">
-            <input type="text" class="regular-text code cvm-kv-key" name="<?php echo esc_attr($name . '[' . $index . '][key]'); ?>" placeholder="Key" value="<?php echo esc_attr((string) ($pair['key'] ?? '')); ?>">
-            <input type="text" class="regular-text code cvm-kv-value" name="<?php echo esc_attr($name . '[' . $index . '][value]'); ?>" placeholder="Value" value="<?php echo esc_attr((string) ($pair['value'] ?? '')); ?>">
-            <button type="button" class="button cvm-kv-remove" aria-label="Remove this row">Remove</button></div>
+            <input type="text" class="regular-text code cvm-kv-key" name="<?php echo esc_attr($name . '[' . $index . '][key]'); ?>" placeholder="<?php esc_attr_e('Key', 'convermetry'); ?>" value="<?php echo esc_attr((string) ($pair['key'] ?? '')); ?>">
+            <input type="text" class="regular-text code cvm-kv-value" name="<?php echo esc_attr($name . '[' . $index . '][value]'); ?>" placeholder="<?php esc_attr_e('Value', 'convermetry'); ?>" value="<?php echo esc_attr((string) ($pair['value'] ?? '')); ?>">
+            <button type="button" class="button cvm-kv-remove" aria-label="<?php esc_attr_e('Remove this row', 'convermetry'); ?>"><?php esc_html_e('Remove', 'convermetry'); ?></button></div>
             <?php
         }
 
         ?>
         </div>
-        <button type="button" class="button cvm-kv-add">+ Add</button></div>
+        <button type="button" class="button cvm-kv-add"><?php esc_html_e('+ Add', 'convermetry'); ?></button></div>
         <?php
     }
 }

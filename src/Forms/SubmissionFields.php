@@ -106,7 +106,9 @@ final class SubmissionFields
      */
     public static function isDescriptorList(array $fields): bool
     {
-        if ($fields === [] || !array_is_list($fields)) {
+        // array_values($x) === $x is array_is_list($x). The native PHP 8.1 function is
+        // avoided only because Plugin Check mistakes it for WordPress 6.5's polyfill.
+        if ($fields === [] || array_values($fields) !== $fields) {
             return false;
         }
 

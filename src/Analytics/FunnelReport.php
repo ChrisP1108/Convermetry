@@ -78,7 +78,7 @@ final class FunnelReport
         $steps = is_array($funnel['steps'] ?? null) ? $funnel['steps'] : [];
 
         if (count($steps) < 2) {
-            return ['steps' => [], 'overall_rate' => 0.0, 'error' => 'A funnel needs at least two steps.'];
+            return ['steps' => [], 'overall_rate' => 0.0, 'error' => __('A funnel needs at least two steps.', 'convermetry')];
         }
 
         $cacheKey = self::cacheKey($funnel, $start, $end);
@@ -94,12 +94,13 @@ final class FunnelReport
             return [
                 'steps'        => [],
                 'overall_rate' => 0.0,
-                'error'        => 'One of this funnel\'s steps is not fully configured, so it cannot be measured.',
+                'error'        => __('One of this funnel\'s steps is not fully configured, so it cannot be measured.', 'convermetry'),
             ];
         }
 
         global $wpdb;
 
+        // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- StepCompiler assembles the statement from fixed SQL fragments whose placeholders are bound to $built['params'] right here.
         $row = ReportQuery::rows($wpdb->prepare($built['sql'], $built['params']))[0] ?? [];
 
         $result = self::shape($steps, $row);
@@ -231,7 +232,7 @@ final class FunnelReport
             !is_array($cached)
             || !isset($cached['steps'], $cached['overall_rate'], $cached['error'])
             || !is_array($cached['steps'])
-            || !array_is_list($cached['steps'])
+            || array_values($cached['steps']) !== $cached['steps'] // array_is_list(), see SubmissionFields::isDescriptorList()
             || !is_float($cached['overall_rate'])
             || !is_string($cached['error'])
         ) {

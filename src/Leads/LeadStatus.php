@@ -79,12 +79,12 @@ final class LeadStatus
     public static function labels(): array
     {
         return [
-            'new'         => 'New',
-            'qualified'   => 'Qualified',
-            'unqualified' => 'Unqualified',
-            'won'         => 'Won',
-            'lost'        => 'Lost',
-            'spam'        => 'Spam',
+            'new'         => _x('New', 'lead status', 'convermetry'),
+            'qualified'   => _x('Qualified', 'lead status', 'convermetry'),
+            'unqualified' => _x('Unqualified', 'lead status', 'convermetry'),
+            'won'         => _x('Won', 'lead status', 'convermetry'),
+            'lost'        => _x('Lost', 'lead status', 'convermetry'),
+            'spam'        => _x('Spam', 'lead status', 'convermetry'),
         ];
     }
 

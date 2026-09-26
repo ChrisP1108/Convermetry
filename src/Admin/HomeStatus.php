@@ -123,22 +123,26 @@ final class HomeStatus
 
         return [
             [
-                'label'    => sprintf('Sessions (%d days)', self::GLANCE_DAYS),
+                'label'    => sprintf(
+                    /* translators: %d: number of days the session count covers. */
+                    _n('Sessions (%d day)', 'Sessions (%d days)', self::GLANCE_DAYS, 'convermetry'),
+                    self::GLANCE_DAYS
+                ),
                 'value'    => self::figure($this->sessions),
                 'isFigure' => true,
             ],
             [
-                'label'    => 'Submissions',
+                'label'    => __('Submissions', 'convermetry'),
                 'value'    => self::figure($this->submissions),
                 'isFigure' => true,
             ],
             [
-                'label'    => 'Delivery queue',
+                'label'    => __('Delivery queue', 'convermetry'),
                 'value'    => self::figure($this->pendingDeliveries),
                 'isFigure' => true,
             ],
             [
-                'label'    => 'Latest submission',
+                'label'    => __('Latest submission', 'convermetry'),
                 'value'    => self::elapsed($this->latestSubmissionAt),
                 'isFigure' => false,
             ],
@@ -174,9 +178,9 @@ final class HomeStatus
                 defined('DISABLE_WP_CRON') && DISABLE_WP_CRON === true
             ),
             HomeStatusItem::measurement(
-                'Latest Submission',
+                __('Latest Submission', 'convermetry'),
                 self::elapsed($this->latestSubmissionAt),
-                'Time since the most recent captured form submission.'
+                __('Time since the most recent captured form submission.', 'convermetry')
             ),
             self::deliveryQueueState($this->pendingDeliveries),
             self::goalsState(
@@ -216,32 +220,30 @@ final class HomeStatus
 
         return self::markNextStep([
             new HomeSetupStep(
-                'Configure Convermetry',
-                'Review the plugin settings and configure the options appropriate for your website.',
-                'Open Settings',
+                __('Configure Convermetry', 'convermetry'),
+                __('Review the plugin settings and configure the options appropriate for your website.', 'convermetry'),
+                __('Open Settings', 'convermetry'),
                 self::urlFor(SettingsPage::MENU_SLUG, Capability::SETTINGS_MANAGE),
                 $settingsSaved
             ),
             new HomeSetupStep(
-                'Connect Your Forms',
-                'Verify that your supported WordPress forms are connected so Convermetry can capture '
-                    . 'submission and attribution data.',
-                'View Form Integrations',
+                __('Connect Your Forms', 'convermetry'),
+                __('Verify that your supported WordPress forms are connected so Convermetry can capture submission and attribution data.', 'convermetry'),
+                __('View Form Integrations', 'convermetry'),
                 self::urlFor(FormsPage::MENU_SLUG, Capability::FORMS_MANAGE),
                 $this->availableProviderNames() !== []
             ),
             new HomeSetupStep(
-                'Verify Tracking',
-                'Confirm that Convermetry is recording website activity and attribution information correctly.',
-                'View Analytics',
+                __('Verify Tracking', 'convermetry'),
+                __('Confirm that Convermetry is recording website activity and attribution information correctly.', 'convermetry'),
+                __('View Analytics', 'convermetry'),
                 self::urlFor(AnalyticsPage::MENU_SLUG, Capability::ANALYTICS_VIEW),
                 $this->hasEvents === true
             ),
             new HomeSetupStep(
-                'Review Your Leads',
-                'Once visitors begin submitting forms, review captured submissions, attribution information, '
-                    . 'and delivery status from the Convermetry dashboard.',
-                'View Submissions',
+                __('Review Your Leads', 'convermetry'),
+                __('Once visitors begin submitting forms, review captured submissions, attribution information, and delivery status from the Convermetry dashboard.', 'convermetry'),
+                __('View Submissions', 'convermetry'),
                 self::urlFor(SubmissionsPage::MENU_SLUG, Capability::SUBMISSIONS_VIEW),
                 $this->latestSubmissionAt !== null
             ),
@@ -265,37 +267,36 @@ final class HomeStatus
     {
         if (!$trackingEnabled) {
             return HomeStatusItem::state(
-                'Analytics Tracking',
+                __('Analytics Tracking', 'convermetry'),
                 HomeStatusLevel::Warning,
-                'Not Tracking',
-                'Every tracked interaction type is switched off under Settings, so no website activity is '
-                    . 'being recorded.'
+                __('Not Tracking', 'convermetry'),
+                __('Every tracked interaction type is switched off under Settings, so no website activity is being recorded.', 'convermetry')
             );
         }
 
         if ($hasEvents === null) {
             return HomeStatusItem::state(
-                'Analytics Tracking',
+                __('Analytics Tracking', 'convermetry'),
                 HomeStatusLevel::Neutral,
-                'Unavailable',
-                'Tracking is enabled. Convermetry could not read the events table to confirm activity.'
+                __('Unavailable', 'convermetry'),
+                __('Tracking is enabled. Convermetry could not read the events table to confirm activity.', 'convermetry')
             );
         }
 
         if (!$hasEvents) {
             return HomeStatusItem::state(
-                'Analytics Tracking',
+                __('Analytics Tracking', 'convermetry'),
                 HomeStatusLevel::Neutral,
-                'Awaiting Data',
-                'Tracking is enabled. No website activity has been recorded yet.'
+                __('Awaiting Data', 'convermetry'),
+                __('Tracking is enabled. No website activity has been recorded yet.', 'convermetry')
             );
         }
 
         return HomeStatusItem::state(
-            'Analytics Tracking',
+            __('Analytics Tracking', 'convermetry'),
             HomeStatusLevel::Success,
-            'Active',
-            'Convermetry is collecting website analytics.'
+            __('Active', 'convermetry'),
+            __('Convermetry is collecting website analytics.', 'convermetry')
         );
     }
 
@@ -312,24 +313,32 @@ final class HomeStatus
     {
         if ($providerNames === []) {
             return HomeStatusItem::state(
-                'Form Tracking',
+                __('Form Tracking', 'convermetry'),
                 HomeStatusLevel::Neutral,
-                'No Providers Detected',
-                'No supported form plugin is active. Custom forms can still be recorded through the '
-                    . 'Convermetry developer API.'
+                __('No Providers Detected', 'convermetry'),
+                __('No supported form plugin is active. Custom forms can still be recorded through the Convermetry developer API.', 'convermetry')
             );
         }
 
-        $named = count($providerNames) <= self::PROVIDERS_NAMED
+        $more  = count($providerNames) - self::PROVIDERS_NAMED;
+        $named = $more <= 0
             ? implode(', ', $providerNames)
-            : implode(', ', array_slice($providerNames, 0, self::PROVIDERS_NAMED))
-                . sprintf(' and %d more', count($providerNames) - self::PROVIDERS_NAMED);
+            : sprintf(
+                /* translators: 1: comma-separated list of form plugin names, 2: number of further form plugins not named. */
+                _n('%1$s and %2$d more', '%1$s and %2$d more', $more, 'convermetry'),
+                implode(', ', array_slice($providerNames, 0, self::PROVIDERS_NAMED)),
+                $more
+            );
 
         return HomeStatusItem::state(
-            'Form Tracking',
+            __('Form Tracking', 'convermetry'),
             HomeStatusLevel::Success,
-            'Active',
-            sprintf('Supported form providers are available for submission tracking: %s.', $named)
+            __('Active', 'convermetry'),
+            sprintf(
+                /* translators: %s: list of form plugin names. */
+                __('Supported form providers are available for submission tracking: %s.', 'convermetry'),
+                $named
+            )
         );
     }
 
@@ -348,43 +357,53 @@ final class HomeStatus
     ): HomeStatusItem {
         if ($endpointCount < 1) {
             return HomeStatusItem::state(
-                'Webhook Delivery',
+                __('Webhook Delivery', 'convermetry'),
                 HomeStatusLevel::Neutral,
-                'Not Configured',
-                'No webhook destinations have been set up yet. Add one to send submissions onward.'
+                __('Not Configured', 'convermetry'),
+                __('No webhook destinations have been set up yet. Add one to send submissions onward.', 'convermetry')
             );
         }
 
         if (!$deliveryActive) {
             return HomeStatusItem::state(
-                'Webhook Delivery',
+                __('Webhook Delivery', 'convermetry'),
                 HomeStatusLevel::Warning,
-                'Paused',
-                'Endpoints are configured, but webhook delivery is switched off, so nothing is being sent.'
+                __('Paused', 'convermetry'),
+                __('Endpoints are configured, but webhook delivery is switched off, so nothing is being sent.', 'convermetry')
             );
         }
 
         if ($recentFailures !== null && $recentFailures > 0) {
             return HomeStatusItem::state(
-                'Webhook Delivery',
+                __('Webhook Delivery', 'convermetry'),
                 HomeStatusLevel::Warning,
-                'Attention Required',
+                __('Attention Required', 'convermetry'),
                 sprintf(
-                    '%d recent %s did not succeed. Review the Activity Log and retry.',
-                    $recentFailures,
-                    $recentFailures === 1 ? 'delivery' : 'deliveries'
+                    /* translators: %d: number of failed webhook deliveries. */
+                    _n(
+                        '%d recent delivery did not succeed. Review the Activity Log and retry.',
+                        '%d recent deliveries did not succeed. Review the Activity Log and retry.',
+                        $recentFailures,
+                        'convermetry'
+                    ),
+                    $recentFailures
                 )
             );
         }
 
         return HomeStatusItem::state(
-            'Webhook Delivery',
+            __('Webhook Delivery', 'convermetry'),
             HomeStatusLevel::Success,
-            'Configured',
+            __('Configured', 'convermetry'),
             sprintf(
-                '%d %s configured to receive form submissions.',
-                $endpointCount,
-                $endpointCount === 1 ? 'endpoint is' : 'endpoints are'
+                /* translators: %d: number of webhook endpoints. */
+                _n(
+                    '%d endpoint is configured to receive form submissions.',
+                    '%d endpoints are configured to receive form submissions.',
+                    $endpointCount,
+                    'convermetry'
+                ),
+                $endpointCount
             )
         );
     }
@@ -409,50 +428,63 @@ final class HomeStatus
     {
         if ($visibleCount < 1) {
             return HomeStatusItem::state(
-                'Goals',
+                __('Goals', 'convermetry'),
                 HomeStatusLevel::Neutral,
-                'Not Configured',
-                'No goals have been defined yet. Measure valuable actions such as phone clicks, booking '
-                    . 'clicks, and visits to key pages.'
+                __('Not Configured', 'convermetry'),
+                __('No goals have been defined yet. Measure valuable actions such as phone clicks, booking clicks, and visits to key pages.', 'convermetry')
             );
         }
 
         if (!$matchingEnabled) {
             return HomeStatusItem::state(
-                'Goals',
+                __('Goals', 'convermetry'),
                 HomeStatusLevel::Warning,
-                'Paused',
+                __('Paused', 'convermetry'),
                 sprintf(
-                    '%d %s defined, but goal matching is switched off in Settings, so none of them are '
-                        . 'being recorded.',
-                    $visibleCount,
-                    $visibleCount === 1 ? 'goal is' : 'goals are'
+                    /* translators: %d: number of goals. */
+                    _n(
+                        '%d goal is defined, but goal matching is switched off in Settings, so none of them are being recorded.',
+                        '%d goals are defined, but goal matching is switched off in Settings, so none of them are being recorded.',
+                        $visibleCount,
+                        'convermetry'
+                    ),
+                    $visibleCount
                 )
             );
         }
 
         if ($enabledCount < 1) {
             return HomeStatusItem::state(
-                'Goals',
+                __('Goals', 'convermetry'),
                 HomeStatusLevel::Warning,
-                'Paused',
+                __('Paused', 'convermetry'),
                 sprintf(
-                    '%d %s defined, but every one of them is currently disabled.',
-                    $visibleCount,
-                    $visibleCount === 1 ? 'goal is' : 'goals are'
+                    /* translators: %d: number of goals. */
+                    _n(
+                        '%d goal is defined, but every one of them is currently disabled.',
+                        '%d goals are defined, but every one of them is currently disabled.',
+                        $visibleCount,
+                        'convermetry'
+                    ),
+                    $visibleCount
                 )
             );
         }
 
         return HomeStatusItem::state(
-            'Goals',
+            __('Goals', 'convermetry'),
             HomeStatusLevel::Success,
-            'Enabled',
+            __('Enabled', 'convermetry'),
             sprintf(
-                '%d of %d %s enabled to measure valuable visitor actions.',
+                /* translators: 1: number of enabled goals, 2: total number of goals. */
+                _n(
+                    '%1$d of %2$d goal is enabled to measure valuable visitor actions.',
+                    '%1$d of %2$d goals are enabled to measure valuable visitor actions.',
+                    $visibleCount,
+                    'convermetry'
+                ),
                 $enabledCount,
-                $visibleCount,
-                $visibleCount === 1 ? 'goal is' : 'goals are'
+                $visibleCount
             )
         );
     }
@@ -475,36 +507,45 @@ final class HomeStatus
     {
         if ($visibleCount < 1) {
             return HomeStatusItem::state(
-                'Funnels',
+                __('Funnels', 'convermetry'),
                 HomeStatusLevel::Neutral,
-                'Not Configured',
-                'No funnels have been defined yet. Build one to see how visitors move through a '
-                    . 'sequence of steps and where they drop off.'
+                __('Not Configured', 'convermetry'),
+                __('No funnels have been defined yet. Build one to see how visitors move through a sequence of steps and where they drop off.', 'convermetry')
             );
         }
 
         if ($enabledCount < 1) {
             return HomeStatusItem::state(
-                'Funnels',
+                __('Funnels', 'convermetry'),
                 HomeStatusLevel::Warning,
-                'Paused',
+                __('Paused', 'convermetry'),
                 sprintf(
-                    '%d %s defined, but every one of them is currently disabled.',
-                    $visibleCount,
-                    $visibleCount === 1 ? 'funnel is' : 'funnels are'
+                    /* translators: %d: number of funnels. */
+                    _n(
+                        '%d funnel is defined, but every one of them is currently disabled.',
+                        '%d funnels are defined, but every one of them is currently disabled.',
+                        $visibleCount,
+                        'convermetry'
+                    ),
+                    $visibleCount
                 )
             );
         }
 
         return HomeStatusItem::state(
-            'Funnels',
+            __('Funnels', 'convermetry'),
             HomeStatusLevel::Success,
-            'Enabled',
+            __('Enabled', 'convermetry'),
             sprintf(
-                '%d of %d %s enabled to report on visitor drop-off.',
+                /* translators: 1: number of enabled funnels, 2: total number of funnels. */
+                _n(
+                    '%1$d of %2$d funnel is enabled to report on visitor drop-off.',
+                    '%1$d of %2$d funnels are enabled to report on visitor drop-off.',
+                    $visibleCount,
+                    'convermetry'
+                ),
                 $enabledCount,
-                $visibleCount,
-                $visibleCount === 1 ? 'funnel is' : 'funnels are'
+                $visibleCount
             )
         );
     }
@@ -529,38 +570,40 @@ final class HomeStatus
         bool $reportDispatchHealthy,
         bool $wpCronDisabled,
     ): HomeStatusItem {
+        // Whole sentences rather than clauses joined with ", and": a list
+        // assembled from fragments cannot be translated grammatically.
         $problems = [];
 
         if (!$retentionScheduled) {
-            $problems[] = 'the daily data-retention task is not scheduled';
+            $problems[] = __('The daily data-retention task is not scheduled.', 'convermetry');
         }
 
         if (!$queueWorkerHealthy) {
-            $problems[] = 'submissions are waiting in the delivery queue with no worker scheduled';
+            $problems[] = __('Submissions are waiting in the delivery queue with no worker scheduled.', 'convermetry');
         }
 
         if (!$reportDispatchHealthy) {
-            $problems[] = 'scheduled analytics report delivery is not scheduled';
+            $problems[] = __('Scheduled analytics report delivery is not scheduled.', 'convermetry');
         }
 
         $cronNote = $wpCronDisabled
-            ? ' WP-Cron is disabled on this site, so these run from your server\'s own scheduler.'
+            ? ' ' . __('WP-Cron is disabled on this site, so these run from your server\'s own scheduler.', 'convermetry')
             : '';
 
         if ($problems !== []) {
             return HomeStatusItem::state(
-                'Background Processing',
+                __('Background Processing', 'convermetry'),
                 HomeStatusLevel::Warning,
-                'Attention Required',
-                sprintf('Convermetry found that %s.', implode(', and ', $problems)) . $cronNote
+                __('Attention Required', 'convermetry'),
+                implode(' ', $problems) . $cronNote
             );
         }
 
         return HomeStatusItem::state(
-            'Background Processing',
+            __('Background Processing', 'convermetry'),
             HomeStatusLevel::Success,
-            'Running Normally',
-            'Scheduled Convermetry processing tasks are operating normally.' . $cronNote
+            __('Running Normally', 'convermetry'),
+            __('Scheduled Convermetry processing tasks are operating normally.', 'convermetry') . $cronNote
         );
     }
 
@@ -573,9 +616,13 @@ final class HomeStatus
     public static function deliveryQueueState(?int $pending): HomeStatusItem
     {
         return HomeStatusItem::measurement(
-            'Delivery Queue',
-            $pending === null ? '— pending' : self::figure($pending) . ' pending',
-            'Submissions waiting to be delivered to external systems.'
+            __('Delivery Queue', 'convermetry'),
+            sprintf(
+                /* translators: %s: number of submissions waiting to be delivered, or a dash when unknown. */
+                __('%s pending', 'convermetry'),
+                self::figure($pending)
+            ),
+            __('Submissions waiting to be delivered to external systems.', 'convermetry')
         );
     }
 
@@ -640,7 +687,7 @@ final class HomeStatus
     public static function elapsed(?string $utcDatetime): string
     {
         if ($utcDatetime === null) {
-            return 'None yet';
+            return __('None yet', 'convermetry');
         }
 
         $timestamp = strtotime($utcDatetime . ' UTC');
@@ -648,7 +695,11 @@ final class HomeStatus
             return '—';
         }
 
-        return sprintf('%s ago', human_time_diff($timestamp, time()));
+        return sprintf(
+            /* translators: %s: a human-readable time span, such as "5 mins". */
+            __('%s ago', 'convermetry'),
+            human_time_diff($timestamp, time())
+        );
     }
 
     // ------------------------------------------------------------------- reading

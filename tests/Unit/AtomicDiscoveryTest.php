@@ -229,7 +229,7 @@ final class AtomicDiscoveryTest extends TestCase
         $code = (string) preg_replace('~/\*\*.*?\*/~s', '', $source);
 
         self::assertStringContainsString('_elementor_data', $code);
-        self::assertStringContainsString('{$wpdb->postmeta}', $code);
+        self::assertStringContainsString('$wpdb->postmeta', $code);
         self::assertStringNotContainsString('get_posts(', $code);
         self::assertStringNotContainsString('WP_Query', $code);
     }

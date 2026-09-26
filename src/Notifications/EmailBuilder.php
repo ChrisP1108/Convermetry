@@ -79,7 +79,7 @@ final class EmailBuilder
         $subject = trim((string) preg_replace('/\s+/', ' ', $subject));
         $subject = mb_substr($subject, 0, NotificationSettings::SUBJECT_MAX_LEN);
 
-        return $subject !== '' ? $subject : 'New form submission';
+        return $subject !== '' ? $subject : __('New form submission', 'convermetry');
     }
 
     /**
@@ -99,30 +99,32 @@ final class EmailBuilder
               . 'font-size:15px;line-height:1.5;color:#1d2327;max-width:640px;margin:0 auto;padding:24px;">';
 
         $html .= '<h1 style="font-size:20px;margin:0 0 4px;">'
-               . esc_html(self::text($submission['form_name'] ?? '', 'Form submission'))
+               . esc_html(self::text($submission['form_name'] ?? '', __('Form submission', 'convermetry')))
                . '</h1>';
 
         $html .= '<p style="margin:0 0 24px;color:#646970;font-size:13px;">'
                . esc_html(sprintf(
-                   'New submission on %s · %s',
-                   self::text($siteInfo->siteName, 'your site'),
-                   self::localDate($submission, 'F j, Y \a\t g:i a')
+                   /* translators: 1: site name, 2: date and time of the submission. */
+                   __('New submission on %1$s · %2$s', 'convermetry'),
+                   self::text($siteInfo->siteName, __('your site', 'convermetry')),
+                   /* translators: date and time format for the submission time, see https://www.php.net/manual/datetime.format.php */
+                   self::localDate($submission, __('F j, Y \a\t g:i a', 'convermetry'))
                ))
                . '</p>';
 
-        $html .= self::section('Submission', self::table([
-            ['label' => 'Form',            'value' => self::text($submission['form_name'] ?? '')],
-            ['label' => 'Provider',        'value' => self::text($submission['provider'] ?? '')],
-            ['label' => 'Conversion page', 'value' => self::text($submission['page_url'] ?? '')],
-            ['label' => 'Submission ID',   'value' => self::text($submission['submission_id'] ?? '')],
+        $html .= self::section(__('Submission', 'convermetry'), self::table([
+            ['label' => __('Form', 'convermetry'),            'value' => self::text($submission['form_name'] ?? '')],
+            ['label' => __('Provider', 'convermetry'),        'value' => self::text($submission['provider'] ?? '')],
+            ['label' => __('Conversion page', 'convermetry'), 'value' => self::text($submission['page_url'] ?? '')],
+            ['label' => __('Submission ID', 'convermetry'),   'value' => self::text($submission['submission_id'] ?? '')],
         ]));
 
         if (!empty($include['fields'])) {
             $fields = self::fields($submission);
             $html  .= self::section(
-                'Submitted fields',
+                __('Submitted fields', 'convermetry'),
                 $fields === []
-                    ? self::note('This submission recorded no field values.')
+                    ? self::note(__('This submission recorded no field values.', 'convermetry'))
                     : self::table($fields)
             );
         }
@@ -139,16 +141,15 @@ final class EmailBuilder
             if (!empty($include['ip'])) {
                 $ip = self::text($submission['ip_address'] ?? '');
                 if ($ip !== '') {
-                    $rows[] = ['label' => 'IP address', 'value' => $ip];
+                    $rows[] = ['label' => __('IP address', 'convermetry'), 'value' => $ip];
                 }
             }
 
             $html .= self::section(
-                'Analytics & attribution',
+                __('Analytics & attribution', 'convermetry'),
                 $explain
                     ? self::note(
-                        'Analytics context was unavailable for this submission — the visitor\'s '
-                        . 'session could not be correlated. The lead itself was recorded normally.'
+                        __('Analytics context was unavailable for this submission — the visitor\'s session could not be correlated. The lead itself was recorded normally.', 'convermetry')
                     ) . ($rows !== [] ? self::table($rows) : '')
                     : self::table($rows)
             );
@@ -157,21 +158,18 @@ final class EmailBuilder
         if (!empty($include['journey'])) {
             $pages = self::journeyItems($context);
             $html .= self::section(
-                'Recent pages',
+                __('Recent pages', 'convermetry'),
                 $pages === []
-                    ? self::note('No page history was recorded for this visit.')
+                    ? self::note(__('No page history was recorded for this visit.', 'convermetry'))
                     : self::list($pages)
             );
         }
 
         $html .= '<p style="margin:24px 0 0;"><a href="' . esc_url(self::detailUrl($submission, $siteInfo)) . '"'
-               . ' style="color:#2271b1;">View this submission in WordPress</a></p>';
+               . ' style="color:#2271b1;">' . esc_html__('View this submission in WordPress', 'convermetry') . '</a></p>';
 
         $html .= '<p style="margin:16px 0 0;color:#646970;font-size:12px;">'
-               . esc_html(
-                   'Sent by Convermetry. This email is a copy of lead data and is not covered by '
-                   . 'Convermetry\'s retention or deletion controls.'
-               )
+               . esc_html__('Sent by Convermetry. This email is a copy of lead data and is not covered by Convermetry\'s retention or deletion controls.', 'convermetry')
                . '</p>';
 
         $html .= '</div>';
@@ -225,14 +223,14 @@ final class EmailBuilder
         $pageviews   = (int) ($context['pageview_count'] ?? 0);
 
         $candidates = [
-            ['label' => 'Channel',       'value' => self::text($context['channel'] ?? '')],
-            ['label' => 'UTM source',    'value' => self::text($attribution['utm_source'] ?? '')],
-            ['label' => 'UTM medium',    'value' => self::text($attribution['utm_medium'] ?? '')],
-            ['label' => 'UTM campaign',  'value' => self::text($attribution['utm_campaign'] ?? '')],
-            ['label' => 'Landing page',  'value' => self::text($landing['url'] ?? '')],
-            ['label' => 'Device',        'value' => self::text($context['device'] ?? '')],
-            ['label' => 'Pages viewed',  'value' => $pageviews > 0 ? (string) $pageviews : ''],
-            ['label' => 'Session start', 'value' => self::text($context['session_started_at'] ?? '')],
+            ['label' => __('Channel', 'convermetry'),       'value' => self::text($context['channel'] ?? '')],
+            ['label' => __('UTM source', 'convermetry'),    'value' => self::text($attribution['utm_source'] ?? '')],
+            ['label' => __('UTM medium', 'convermetry'),    'value' => self::text($attribution['utm_medium'] ?? '')],
+            ['label' => __('UTM campaign', 'convermetry'),  'value' => self::text($attribution['utm_campaign'] ?? '')],
+            ['label' => __('Landing page', 'convermetry'),  'value' => self::text($landing['url'] ?? '')],
+            ['label' => __('Device', 'convermetry'),        'value' => self::text($context['device'] ?? '')],
+            ['label' => __('Pages viewed', 'convermetry'),  'value' => $pageviews > 0 ? (string) $pageviews : ''],
+            ['label' => __('Session start', 'convermetry'), 'value' => self::text($context['session_started_at'] ?? '')],
         ];
 
         return array_values(array_filter(
@@ -322,9 +320,9 @@ final class EmailBuilder
             'ip_address'      => self::TEST_IP,
             'created_at'      => gmdate('Y-m-d H:i:s'),
             'submission_data' => (string) wp_json_encode([
-                ['id' => 'name',    'label' => 'Full name',     'value' => 'Test Person'],
-                ['id' => 'email',   'label' => 'Email address', 'value' => 'test@example.com'],
-                ['id' => 'message', 'label' => 'Message',       'value' => 'This is a Convermetry test — not a real submission.'],
+                ['id' => 'name',    'label' => __('Full name', 'convermetry'),     'value' => __('Test Person', 'convermetry')],
+                ['id' => 'email',   'label' => __('Email address', 'convermetry'), 'value' => 'test@example.com'],
+                ['id' => 'message', 'label' => __('Message', 'convermetry'),       'value' => __('This is a Convermetry test — not a real submission.', 'convermetry')],
             ]),
         ];
 
@@ -345,7 +343,11 @@ final class EmailBuilder
         $subject = self::subject((string) ($snapshot['subject'] ?? ''), $submission, $context, $siteInfo);
 
         return [
-            'subject' => '[Test] ' . $subject,
+            'subject' => sprintf(
+                /* translators: %s: the notification email subject. */
+                __('[Test] %s', 'convermetry'),
+                $subject
+            ),
             'html'    => self::body($submission, $context, $snapshot, $siteInfo),
         ];
     }
@@ -477,7 +479,7 @@ final class EmailBuilder
         }
 
         return mb_strcut($html, 0, self::MAX_BODY_BYTES)
-             . '</table></div><p>[This notification was truncated because it exceeded the size limit.]</p></div>';
+             . '</table></div><p>' . esc_html__('[This notification was truncated because it exceeded the size limit.]', 'convermetry') . '</p></div>';
     }
 
     /**

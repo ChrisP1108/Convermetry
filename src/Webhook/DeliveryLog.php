@@ -97,6 +97,15 @@ final class DeliveryLog
     private const int CLEANUP_TIME_BUDGET = 20;
 
     /**
+     * Most analytics-report rows one erasure reads for one conversion. A
+     * conversion appears in the report for the window it happened in, once
+     * per analytics endpoint and retry, so this is far above what a real site
+     * produces; it exists so a pathological table cannot turn one erasure
+     * request into an unbounded read.
+     */
+    private const int ERASURE_REPORT_SCAN_LIMIT = 500;
+
+    /**
      * Returns the fully-prefixed deliveries table name.
      *
      * @return string
@@ -447,9 +456,14 @@ final class DeliveryLog
         $values[] = $perPage;
         $values[] = ($page - 1) * $perPage;
 
-        $sql = 'SELECT * FROM ' . self::tableName() . " {$where} ORDER BY id DESC LIMIT %d OFFSET %d";
-
-        $rows = $wpdb->get_results($wpdb->prepare($sql, $values), ARRAY_A);
+        $rows = $wpdb->get_results(
+            $wpdb->prepare(
+                // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared, WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- $where is buildWhereClause() output: fixed SQL fragments whose %s/%d placeholders are bound to $values here.
+                "SELECT * FROM %i {$where} ORDER BY id DESC LIMIT %d OFFSET %d",
+                array_merge([self::tableName()], $values)
+            ),
+            ARRAY_A
+        );
 
         return is_array($rows) ? $rows : [];
     }
@@ -466,9 +480,13 @@ final class DeliveryLog
 
         [$where, $values] = self::buildWhereClause($filters);
 
-        $sql = 'SELECT COUNT(*) FROM ' . self::tableName() . " {$where}";
-
-        return (int) ($values ? $wpdb->get_var($wpdb->prepare($sql, $values)) : $wpdb->get_var($sql));
+        return (int) $wpdb->get_var(
+            $wpdb->prepare(
+                // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared, WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- $where is buildWhereClause() output: fixed SQL fragments whose %s/%d placeholders are bound to $values here.
+                "SELECT COUNT(*) FROM %i {$where}",
+                array_merge([self::tableName()], $values)
+            )
+        );
     }
 
     /**
@@ -491,7 +509,8 @@ final class DeliveryLog
 
         $rows = $wpdb->get_results(
             $wpdb->prepare(
-                'SELECT * FROM ' . self::tableName() . ' WHERE id < %d ORDER BY id DESC LIMIT %d',
+                'SELECT * FROM %i WHERE id < %d ORDER BY id DESC LIMIT %d',
+                self::tableName(),
                 $beforeId,
                 $limit
             ),
@@ -514,10 +533,13 @@ final class DeliveryLog
 
         [$where, $values] = self::buildWhereClause(array_diff_key($filters, ['year' => 0, 'month' => 0, 'search' => 0, 'created_from' => 0, 'created_before' => 0]));
 
-        $sql = "SELECT DISTINCT DATE_FORMAT(created_at, '%%Y-%%m') FROM " . self::tableName() . " {$where} ORDER BY 1 DESC";
-
-        // prepare() is required even without filter values to unescape the %%.
-        $rows = $wpdb->get_col($values ? $wpdb->prepare($sql, $values) : $wpdb->prepare($sql));
+        $rows = $wpdb->get_col(
+            $wpdb->prepare(
+                // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared, WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- $where is buildWhereClause() output: fixed SQL fragments whose %s/%d placeholders are bound to $values here.
+                "SELECT DISTINCT DATE_FORMAT(created_at, '%%Y-%%m') FROM %i {$where} ORDER BY 1 DESC",
+                array_merge([self::tableName()], $values)
+            )
+        );
 
         $years  = [];
         $months = [];
@@ -551,9 +573,10 @@ final class DeliveryLog
     {
         global $wpdb;
 
-        $rows = $wpdb->get_col(
-            'SELECT DISTINCT endpoint_url FROM ' . self::tableName() . " WHERE endpoint_url <> '' ORDER BY endpoint_url ASC"
-        );
+        $rows = $wpdb->get_col($wpdb->prepare(
+            "SELECT DISTINCT endpoint_url FROM %i WHERE endpoint_url <> '' ORDER BY endpoint_url ASC",
+            self::tableName()
+        ));
 
         return is_array($rows) ? array_values(array_filter($rows, 'is_string')) : [];
     }
@@ -568,9 +591,10 @@ final class DeliveryLog
     {
         global $wpdb;
 
-        $rows = $wpdb->get_col(
-            'SELECT DISTINCT form_provider FROM ' . self::tableName() . " WHERE form_provider <> '' ORDER BY form_provider ASC"
-        );
+        $rows = $wpdb->get_col($wpdb->prepare(
+            "SELECT DISTINCT form_provider FROM %i WHERE form_provider <> '' ORDER BY form_provider ASC",
+            self::tableName()
+        ));
 
         return is_array($rows) ? array_values(array_filter($rows, 'is_string')) : [];
     }
@@ -585,9 +609,10 @@ final class DeliveryLog
     {
         global $wpdb;
 
-        $rows = $wpdb->get_col(
-            'SELECT DISTINCT form_name FROM ' . self::tableName() . " WHERE form_name <> '' ORDER BY form_name ASC LIMIT 200"
-        );
+        $rows = $wpdb->get_col($wpdb->prepare(
+            "SELECT DISTINCT form_name FROM %i WHERE form_name <> '' ORDER BY form_name ASC LIMIT 200",
+            self::tableName()
+        ));
 
         return is_array($rows) ? array_values(array_filter($rows, 'is_string')) : [];
     }
@@ -606,6 +631,204 @@ final class DeliveryLog
     }
 
     /**
+     * The delivery attempts recorded for one submission, oldest first.
+     *
+     * Metadata only — the stored bodies are never selected. This is what the
+     * personal-data exporter reports as "where this lead was sent", and a
+     * request body carrying the lead a second time adds nothing to that.
+     *
+     * @param string $submissionId The submission's globally unique id.
+     * @param int    $limit        Maximum rows to return.
+     * @return array<int, array<string, mixed>>
+     */
+    public static function forSubmission(string $submissionId, int $limit = 100): array
+    {
+        global $wpdb;
+
+        if ($submissionId === '') {
+            return [];
+        }
+
+        $rows = $wpdb->get_results(
+            $wpdb->prepare(
+                'SELECT id, success, endpoint_url, endpoint_label, kind, attempt, response_code, created_at'
+                . ' FROM %i WHERE submission_id = %s ORDER BY id ASC LIMIT %d',
+                self::tableName(),
+                $submissionId,
+                $limit
+            ),
+            ARRAY_A
+        );
+
+        return is_array($rows) ? $rows : [];
+    }
+
+    /**
+     * Replaces the stored request and response bodies of every attempt made
+     * for one submission with an erasure marker. Returns the rows changed.
+     *
+     * Used by the personal-data eraser. The row itself survives: that a
+     * delivery was attempted, to which endpoint, when, and with what status
+     * code is a record of something the site did, and erasing a lead must not
+     * silently destroy the outbound audit trail (the same reasoning as
+     * {@see \Convermetry\Database\FormSubmissions::deleteSubmission()}).
+     * What it carried does not survive:
+     *
+     *  - request_data is the lead itself — field values, IP, attribution.
+     *  - response_data can echo the lead back; receivers often do.
+     *  - request_url can carry the visitor's page query string when page URL
+     *    parameters are passed through, so it is reset to the configured
+     *    endpoint URL.
+     *
+     * Whole-body replacement rather than field-level redaction, deliberately:
+     * payload extensions and filters can put the lead's data under keys this
+     * class has never heard of, and a stored body may be truncated JSON that
+     * cannot be parsed and rewritten at all.
+     *
+     * @param string $submissionId The submission's globally unique id.
+     * @param string $marker       The JSON written in place of each body.
+     * @return int Rows changed.
+     */
+    public static function erasePayloadsForSubmission(string $submissionId, string $marker): int
+    {
+        global $wpdb;
+
+        if ($submissionId === '') {
+            return 0;
+        }
+
+        $changed = $wpdb->query($wpdb->prepare(
+            'UPDATE %i SET request_data = %s, response_data = %s, request_url = endpoint_url WHERE submission_id = %s',
+            self::tableName(),
+            $marker,
+            $marker,
+            $submissionId
+        ));
+
+        return is_int($changed) ? $changed : 0;
+    }
+
+    /**
+     * Removes one conversion's visitor identifiers from the logged copies of
+     * analytics reports. Returns the rows changed.
+     *
+     * An analytics report is aggregate data with one exception:
+     * conversions.recent[] lists individual conversions, each with the
+     * visitor's IP address and session id. When a lead is erased, the entries
+     * for its conversion keep their conversion id and attribution (which are
+     * no longer linked to anyone once the submission is gone) and lose their
+     * ip_address and session_id.
+     *
+     * Bounded by construction: only analytics_report rows created on or after
+     * $since are scanned — a report can only describe a conversion that had
+     * already happened — and only rows whose body mentions the conversion id
+     * are read. A body that is not parseable JSON (one cut at the 64 KB
+     * storage cap) cannot be rewritten field by field, so it is replaced with
+     * $marker as a whole.
+     *
+     * @param string $conversionId The erased submission's conversion id.
+     * @param string $since        UTC datetime; reports created before it are not scanned.
+     * @param string $marker       The JSON written in place of an unparseable body.
+     * @return int Rows changed.
+     */
+    public static function eraseConversionFromReports(string $conversionId, string $since, string $marker): int
+    {
+        global $wpdb;
+
+        if ($conversionId === '') {
+            return 0;
+        }
+
+        $rows = $wpdb->get_results(
+            $wpdb->prepare(
+                'SELECT id, request_data FROM %i'
+                . ' WHERE message_type = %s AND created_at >= %s AND request_data LIKE %s'
+                . ' ORDER BY id ASC LIMIT %d',
+                self::tableName(),
+                MessageType::AnalyticsReport->value,
+                $since,
+                '%' . $wpdb->esc_like($conversionId) . '%',
+                self::ERASURE_REPORT_SCAN_LIMIT
+            ),
+            ARRAY_A
+        );
+
+        $changed = 0;
+
+        foreach (is_array($rows) ? $rows : [] as $row) {
+            $body    = (string) ($row['request_data'] ?? '');
+            $erased  = self::withoutConversionIdentifiers($body, $conversionId);
+            $newBody = $erased ?? $marker;
+
+            if ($newBody === $body) {
+                continue;
+            }
+
+            $updated = $wpdb->update(
+                self::tableName(),
+                ['request_data' => $newBody],
+                ['id' => (int) $row['id']],
+                ['%s'],
+                ['%d']
+            );
+
+            $changed += is_int($updated) ? $updated : 0;
+        }
+
+        return $changed;
+    }
+
+    /**
+     * A stored analytics-report body with the IP address and session id of
+     * one conversion blanked, or null when the body cannot be parsed.
+     *
+     * Pure: no database, no WordPress state beyond wp_json_encode().
+     *
+     * @param string $body         Stored request_data.
+     * @param string $conversionId Conversion whose identifiers are removed.
+     * @return string|null The rewritten body (unchanged when the conversion is
+     *                     not listed), or null when $body is not a JSON object.
+     */
+    public static function withoutConversionIdentifiers(string $body, string $conversionId): ?string
+    {
+        if ($body === '' || !json_validate($body)) {
+            return null;
+        }
+
+        $decoded = json_decode($body, true);
+        if (!is_array($decoded)) {
+            return null;
+        }
+
+        $recent = $decoded['analytics']['conversions']['recent'] ?? null;
+        if (!is_array($recent)) {
+            return $body;
+        }
+
+        $touched = false;
+        foreach ($recent as $index => $conversion) {
+            if (!is_array($conversion) || (string) ($conversion['conversion_id'] ?? '') !== $conversionId) {
+                continue;
+            }
+
+            foreach (['ip_address', 'session_id'] as $key) {
+                if (array_key_exists($key, $conversion)) {
+                    $recent[$index][$key] = '';
+                    $touched              = true;
+                }
+            }
+        }
+
+        if (!$touched) {
+            return $body;
+        }
+
+        $decoded['analytics']['conversions']['recent'] = $recent;
+
+        return (string) wp_json_encode($decoded);
+    }
+
+    /**
      * Removes all rows (TRUNCATE also resets the auto-increment counter).
      *
      * @return void
@@ -614,7 +837,7 @@ final class DeliveryLog
     {
         global $wpdb;
 
-        $wpdb->query('TRUNCATE TABLE ' . self::tableName());
+        $wpdb->query($wpdb->prepare('TRUNCATE TABLE %i', self::tableName()));
     }
 
     /**
@@ -644,7 +867,8 @@ final class DeliveryLog
         do {
             $deleted = $wpdb->query(
                 $wpdb->prepare(
-                    "DELETE FROM {$table} WHERE created_at < %s LIMIT %d",
+                    "DELETE FROM %i WHERE created_at < %s LIMIT %d",
+                    $table,
                     $cutoff,
                     self::CLEANUP_CHUNK
                 )

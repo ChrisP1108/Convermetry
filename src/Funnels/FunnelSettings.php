@@ -311,13 +311,13 @@ final class FunnelSettings
         $value = (string) ($step['value'] ?? '');
 
         return match ((string) ($step['type'] ?? '')) {
-            'page'         => $value !== '' ? $value : 'A page',
-            'goal'         => 'Goal completed',
-            'form_view'    => 'Form seen',
-            'form_start'   => 'Form started',
-            'form_submit'  => 'Submission attempted',
-            'form_success' => 'Submission confirmed',
-            default        => 'Step',
+            'page'         => $value !== '' ? $value : __('A page', 'convermetry'),
+            'goal'         => __('Goal completed', 'convermetry'),
+            'form_view'    => __('Form seen', 'convermetry'),
+            'form_start'   => __('Form started', 'convermetry'),
+            'form_submit'  => __('Submission attempted', 'convermetry'),
+            'form_success' => __('Submission confirmed', 'convermetry'),
+            default        => __('Step', 'convermetry'),
         };
     }
 

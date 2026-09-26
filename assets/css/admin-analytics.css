@@ -117,9 +117,12 @@
     background: repeating-linear-gradient(45deg, #2271b1 0 3px, #a7c7e7 3px 6px);
 }
 
+/* overflow-x: auto clips vertically too, so the top Y-axis label (lifted by
+   half its height, below) needs room inside the scroller or it is cut in half. */
 .cvm-dash .cvm-chart-scroll {
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
+    padding-top: 8px;
 }
 
 .cvm-dash .cvm-chart-layout {

@@ -38,6 +38,9 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../vendor/autoload.php';
 
+// After the autoloader, so Patchwork can still redefine any of these per test.
+require_once __DIR__ . '/stubs/i18n.php';
+
 if (!defined('ABSPATH')) {
     define('ABSPATH', __DIR__ . '/');
 }

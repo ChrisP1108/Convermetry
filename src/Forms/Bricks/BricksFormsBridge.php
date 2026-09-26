@@ -371,9 +371,7 @@ final class BricksFormsBridge
         $controls['convermetryInfo'] = [
             'group'   => self::CONTROL_GROUP,
             'type'    => 'info',
-            'content' => 'Submissions from this form are recorded by Convermetry as soon as this action is selected'
-                . ' and the page is saved. Configure the form — custom form ID, exclusion, per-form webhook headers'
-                . ' and query parameters — under Convermetry → Forms, where it is listed by its Bricks element ID.',
+            'content' => __('Submissions from this form are recorded by Convermetry as soon as this action is selected and the page is saved. Configure the form — custom form ID, exclusion, per-form webhook headers and query parameters — under Convermetry → Forms, where it is listed by its Bricks element ID.', 'convermetry'),
         ];
 
         return $controls;
@@ -530,7 +528,7 @@ final class BricksFormsBridge
         if (!$result->ok && $result->failedDeliveries !== []) {
             // Deliberately generic: an endpoint's own response body, and the
             // submitted data, are never shown to the visitor.
-            return ['ok' => false, 'message' => 'There was an issue submitting the form data through the webhook.'];
+            return ['ok' => false, 'message' => __('There was an issue submitting the form data through the webhook.', 'convermetry')];
         }
 
         return ['ok' => true, 'message' => ''];

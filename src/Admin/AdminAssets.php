@@ -89,6 +89,29 @@ final class AdminAssets
     }
 
     /**
+     * The twelve month names in the site's language, January first.
+     *
+     * Handed to the scripts that build month filters in the browser, so they
+     * use WordPress's own translations rather than carrying a second copy of
+     * the calendar in this plugin's text domain.
+     *
+     * @return list<string>
+     */
+    public static function monthNames(): array
+    {
+        global $wp_locale;
+
+        $names = [];
+        for ($month = 1; $month <= 12; $month++) {
+            $names[] = $wp_locale instanceof \WP_Locale
+                ? (string) $wp_locale->get_month($month)
+                : gmdate('F', (int) gmmktime(0, 0, 0, $month, 1, 2000));
+        }
+
+        return $names;
+    }
+
+    /**
      * Whether a hook suffix belongs to one of Convermetry's admin screens.
      *
      * Every Convermetry slug starts with the top-level 'convermetry', so the

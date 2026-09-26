@@ -298,12 +298,15 @@ final class GoalCompletions
             $placeholders[] = '(' . implode(', ', $cells) . ')';
         }
 
-        $sql = 'INSERT IGNORE INTO ' . self::tableName()
-             . ' (`' . implode('`, `', $columns) . '`) VALUES ' . implode(', ', $placeholders);
-
-        $inserted = $values === []
-            ? $wpdb->query($sql)
-            : $wpdb->query($wpdb->prepare($sql, $values));
+        // The column list comes from the fixed $columns above and the row
+        // tuples are built from %s/%d placeholders and literal NULLs only, so
+        // every VALUE is bound; only the statement's shape varies with the
+        // number of rows and which nullable cells are NULL.
+        $inserted = $wpdb->query($wpdb->prepare(
+            // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared, WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- see the comment above: generated from fixed columns and placeholder tuples, values bound.
+            'INSERT IGNORE INTO %i (`' . implode('`, `', $columns) . '`) VALUES ' . implode(', ', $placeholders),
+            array_merge([self::tableName()], $values)
+        ));
 
         return is_int($inserted) ? $inserted : 0;
     }
@@ -337,7 +340,8 @@ final class GoalCompletions
 
         do {
             $deleted = $wpdb->query($wpdb->prepare(
-                "DELETE FROM {$table} WHERE created_at < %s LIMIT %d",
+                'DELETE FROM %i WHERE created_at < %s LIMIT %d',
+                $table,
                 $cutoff,
                 self::CLEANUP_CHUNK
             ));
@@ -366,6 +370,6 @@ final class GoalCompletions
     {
         global $wpdb;
 
-        $wpdb->query('TRUNCATE TABLE ' . self::tableName());
+        $wpdb->query($wpdb->prepare('TRUNCATE TABLE %i', self::tableName()));
     }
 }

@@ -1284,10 +1284,13 @@
             }
         }
 
+        // form_key is what the Forms screen's Attempts column counts by, as
+        // form_view and form_start already carry it.
         track('form_submit', {
             element_tag: 'form',
             element_label: cleanLabel(form.getAttribute('name') || form.id || form.getAttribute('aria-label')) || 'form',
-            target_url: cleanTarget(form.getAttribute('action'))
+            target_url: cleanTarget(form.getAttribute('action')),
+            form_key: formIdentity(form)
         });
 
         // A submit is also the moment jQuery (if used at all) has almost
@@ -1358,12 +1361,70 @@
         );
     });
 
+    /* Ninja Forms never serializes its <form>: its submit controller posts one
+     * formData JSON document, built from its own Backbone models, to
+     * admin-ajax (action nf_ajax_submit). A hidden input is read by nothing —
+     * and its <form> has no method="post", so correlatableForm() leaves it
+     * alone anyway. So the three correlation values are appended to that
+     * request as TOP-LEVEL fields, exactly where
+     * Correlation::fromCurrentRequest() already looks, the same way the
+     * Elementor Atomic transport above works.
+     *
+     * Not the form model's `extra` object, which also reaches the server:
+     * Ninja Forms saves `extra` with its own submission records, and these
+     * values must never be stored there, nor be submitted data anywhere.
+     *
+     * One fresh token per request = one per attempt, as for every other
+     * provider. Ninja Forms has no client-side success event the tracker
+     * reports, so nothing is remembered: the server records the conversion
+     * under the token it received. */
+    function correlateNinjaFormsRequest(options, originalOptions) {
+        try {
+            const data = originalOptions && originalOptions.data;
+            if (!data || typeof data !== 'object' || data.action !== 'nf_ajax_submit') {
+                return;
+            }
+            if (String(options.type || '').toUpperCase() !== 'POST' || typeof options.data !== 'string') {
+                return;
+            }
+            if (new URL(options.url, location.href).origin !== location.origin) {
+                return;
+            }
+
+            // The same opt-out every other form is held to. The id comes from
+            // the request Ninja Forms built; it is only ever passed to
+            // getElementById, never interpolated into a selector.
+            let formId = '';
+            try {
+                formId = String(JSON.parse(data.formData).id || '');
+            } catch (e) {
+                formId = '';
+            }
+            const container = formId ? document.getElementById('nf-form-' + formId + '-cont') : null;
+            if (container && container.hasAttribute('data-cvm-ignore')) {
+                return;
+            }
+
+            const pairs = [
+                [FIELD_CONVERSION, 'c' + randomHex(16)],
+                [FIELD_SESSION, sessionId()],
+                [FIELD_CONTEXT, JSON.stringify(correlationContext())]
+            ];
+            options.data += (options.data === '' ? '' : '&') + pairs.map(function (pair) {
+                return encodeURIComponent(pair[0]) + '=' + encodeURIComponent(pair[1]);
+            }).join('&');
+        } catch (err) {
+            // Instrumentation must never break a visitor's submission.
+        }
+    }
+
     // Elementor Pro, WPForms, and Gravity Forms announce success through
     // jQuery events, which plain addEventListener cannot observe. jQuery is
     // present when those plugins run their frontends, but script optimizers
     // can load it AFTER this tracker — so binding is retried at DOM-ready,
     // window load, a couple of timed fallbacks, AND on every native form
     // submit (above), rather than being checked only within a fixed window.
+    // Ninja Forms' request hook (above) is a jQuery prefilter, bound here too.
     let jQueryBound = false;
 
     function bindJQueryFormEvents() {
@@ -1385,6 +1446,10 @@
         window.jQuery(document).on('gform_confirmation_loaded', function (e, formId) {
             trackConversion('gravity-form-' + formId, gfTokens[String(formId)] || null);
         });
+
+        if (typeof window.jQuery.ajaxPrefilter === 'function') {
+            window.jQuery.ajaxPrefilter(correlateNinjaFormsRequest);
+        }
     }
 
     bindJQueryFormEvents();
@@ -1679,16 +1744,24 @@
             return 'fluentforms:' + fluent;
         }
 
-        // Ninja Forms — <form id="nf-form-3-cont"> or a hidden formId input.
-        match = /^nf-form-(\d+)-cont$/.exec(form.id || '');
+        // Ninja Forms 3 — the id is on the wrapper, <div id="nf-form-3-cont">,
+        // not on the <form> inside it.
+        let ninjaWrapper = null;
+        try {
+            ninjaWrapper = form.closest ? form.closest('.nf-form-cont') : null;
+        } catch (e) {
+            ninjaWrapper = null;
+        }
+        match = /^nf-form-(\d+)-cont$/.exec(form.id || (ninjaWrapper && ninjaWrapper.id) || '');
         if (match) {
             return 'ninjaforms:' + match[1];
         }
 
-        // Formidable — <form id="form_contactform"> plus a hidden form_id.
+        // Formidable — <form id="form_contactform" class="frm-show-form"> plus a
+        // hidden form_id. The prefix is the server's provider key, 'formidable'.
         const frm = form.querySelector('input[name="form_id"]');
-        if (frm && frm.value && /formidable|frm_/.test(form.className || '')) {
-            return 'formidableforms:' + frm.value;
+        if (frm && frm.value && /formidable|frm[_-]/.test(form.className || '')) {
+            return 'formidable:' + frm.value;
         }
 
         return '';

@@ -47,10 +47,11 @@ final class GoalReports
                     COUNT(DISTINCT NULLIF(session_id, '')) AS sessions,
                     COALESCE(SUM(value), 0) AS total_value,
                     MAX(currency) AS currency
-             FROM {$table}
+             FROM %i
              WHERE created_at >= %s AND created_at < %s
              GROUP BY goal_id
              ORDER BY completions DESC",
+            $table,
             $start,
             $end
         ));
@@ -81,9 +82,10 @@ final class GoalReports
 
         return (int) ReportQuery::value($wpdb->prepare(
             "SELECT COUNT(DISTINCT session_id)
-             FROM {$table}
+             FROM %i
              WHERE event_type = 'pageview' AND session_id <> ''
                AND created_at >= %s AND created_at < %s",
+            $table,
             $start,
             $end
         ));

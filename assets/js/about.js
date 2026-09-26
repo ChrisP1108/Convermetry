@@ -18,6 +18,8 @@
 (function () {
     'use strict';
 
+    var __ = wp.i18n.__;
+
     document.addEventListener('click', function (e) {
         var button = e.target.closest && e.target.closest('.cvm-about-hook-toggle');
         if (!button) {
@@ -34,7 +36,7 @@
         var expanded = button.getAttribute('aria-expanded') === 'true';
 
         button.setAttribute('aria-expanded', expanded ? 'false' : 'true');
-        button.textContent = expanded ? 'Learn More' : 'Collapse';
+        button.textContent = expanded ? __('Learn More', 'convermetry') : __('Collapse', 'convermetry');
         panel.hidden = expanded;
     });
 })();

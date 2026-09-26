@@ -265,7 +265,7 @@ final class AtomicFormsBridge
         // Skipping beats recording a submission under an identity that will not
         // match the one on the Forms screen.
         if ($nativeId === '') {
-            return self::skipped('Convermetry could not identify this Atomic form — submission not recorded.');
+            return self::skipped(__('Convermetry could not identify this Atomic form — submission not recorded.', 'convermetry'));
         }
 
         $sync = Options::formFailureMode() === 'show_error';
@@ -307,7 +307,7 @@ final class AtomicFormsBridge
         if (!$result->ok && $result->failedDeliveries !== []) {
             // Deliberately generic: an endpoint's own response body, and the
             // submitted data, are never shown to the visitor.
-            return ['ok' => false, 'message' => 'There was an issue submitting the form data through the webhook.'];
+            return ['ok' => false, 'message' => __('There was an issue submitting the form data through the webhook.', 'convermetry')];
         }
 
         return ['ok' => true, 'message' => ''];

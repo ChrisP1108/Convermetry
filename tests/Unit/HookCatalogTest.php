@@ -238,11 +238,12 @@ final class HookCatalogTest extends TestCase
     }
 
     /**
-     * The hook names in AboutPage's HOOKS constant.
+     * The hook names in AboutPage's hooks() catalogue.
      *
-     * Reads the constant's entries rather than every convermetry_* literal in
+     * Reads the catalogue's entries rather than every convermetry_* literal in
      * the file: the page also carries example snippets, and an example is not
-     * a catalogue entry.
+     * a catalogue entry. (The catalogue is a method rather than a constant so
+     * its summaries can be translated.)
      *
      * @return list<string>
      */
@@ -250,10 +251,10 @@ final class HookCatalogTest extends TestCase
     {
         $source = (string) file_get_contents(self::PLUGIN_DIR . 'src/Admin/Pages/AboutPage.php');
 
-        $start = strpos($source, 'private const array HOOKS = [');
-        self::assertIsInt($start, 'The HOOKS catalogue is missing from AboutPage.php.');
+        $start = strpos($source, 'private static function hooks(): array');
+        self::assertIsInt($start, 'The hooks() catalogue is missing from AboutPage.php.');
 
-        $end     = strpos($source, "\n    ];", $start);
+        $end     = strpos($source, "\n        ];", $start);
         $section = substr($source, $start, $end === false ? PHP_INT_MAX : $end - $start);
 
         // Entry heads only: each entry opens with the hook name on its own line.

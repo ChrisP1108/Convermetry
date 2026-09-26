@@ -34,13 +34,13 @@
         "test:integration": "phpunit -c phpunit.integration.xml --display-skipped",
         "test:wordpress": "phpunit -c phpunit.wordpress.xml --display-skipped",
         "lint": "find src tests convermetry.php uninstall.php -name '*.php' -print0 | xargs -0 -n1 php -l",
-        "test:js": "node tests/js/bricks-tracker.test.mjs"
+        "test:js": "node tests/js/bricks-tracker.test.mjs && node tests/js/ninja-tracker.test.mjs && node tests/js/form-events.test.mjs"
     },
     "scripts-descriptions": {
         "analyse": "Static analysis of src/ and both entry points at PHPStan level 8.",
         "test": "The unit suite (Brain Monkey; no WordPress, no database).",
         "test:integration": "The integration suite against a real MySQL server; skips cleanly without one.",
         "lint": "php -l over every tracked PHP file.",
-        "test:js": "The tracker's Bricks handlers, executed in a shimmed browser under Node."
+        "test:js": "The tracker's Bricks and Ninja Forms handlers and form events, executed in a shimmed browser under Node."
     }
 }

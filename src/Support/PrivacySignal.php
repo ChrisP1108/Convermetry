@@ -30,7 +30,7 @@ final class PrivacySignal
      */
     public static function fromCurrentRequest(): bool
     {
-        return ($_SERVER['HTTP_DNT'] ?? '') === '1'
-            || ($_SERVER['HTTP_SEC_GPC'] ?? '') === '1';
+        return sanitize_text_field(wp_unslash($_SERVER['HTTP_DNT'] ?? '')) === '1'
+            || sanitize_text_field(wp_unslash($_SERVER['HTTP_SEC_GPC'] ?? '')) === '1';
     }
 }

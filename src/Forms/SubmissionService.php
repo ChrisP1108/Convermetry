@@ -106,7 +106,7 @@ final class SubmissionService
         );
 
         if (FormSettings::isExcluded($formKey)) {
-            return new SubmissionResult(ok: false, msg: 'This form is excluded from Convermetry by the current settings.');
+            return new SubmissionResult(ok: false, msg: __('This form is excluded from Convermetry by the current settings.', 'convermetry'));
         }
 
         $correlation ??= Correlation::fromCurrentRequest();
@@ -285,7 +285,7 @@ final class SubmissionService
                 );
             }
 
-            return new SubmissionResult(ok: false, msg: 'The submission could not be recorded.');
+            return new SubmissionResult(ok: false, msg: __('The submission could not be recorded.', 'convermetry'));
         }
 
         /**
@@ -388,7 +388,7 @@ final class SubmissionService
     ): SubmissionResult {
         $formName = (string) ($formIdentifier['form_name'] ?? '');
         if ($formName === '') {
-            return new SubmissionResult(ok: false, msg: 'A form_name is required.');
+            return new SubmissionResult(ok: false, msg: __('A form_name is required.', 'convermetry'));
         }
 
         return $this->record(
@@ -421,7 +421,7 @@ final class SubmissionService
     {
         $submission = FormSubmissions::get($rowId);
         if ($submission === null) {
-            return new SubmissionResult(ok: false, submissionId: $submissionId, conversionId: $conversionId, msg: 'The submission record could not be loaded.');
+            return new SubmissionResult(ok: false, submissionId: $submissionId, conversionId: $conversionId, msg: __('The submission record could not be loaded.', 'convermetry'));
         }
 
         $submission = SubmissionContext::enrich($submission);
@@ -526,7 +526,7 @@ final class SubmissionService
             submissionId: $submissionId,
             conversionId: $conversionId,
             status: $lastStatus,
-            msg: $overallOk ? '' : 'There was an issue submitting the form data through the webhook.',
+            msg: $overallOk ? '' : __('There was an issue submitting the form data through the webhook.', 'convermetry'),
             data: $lastData,
             queued: false,
             failedDeliveries: $failedDeliveries
@@ -708,7 +708,8 @@ final class SubmissionService
 
         $row = $wpdb->get_row(
             $wpdb->prepare(
-                'SELECT submission_id FROM ' . FormSubmissions::tableName() . ' WHERE conversion_id = %s',
+                'SELECT submission_id FROM %i WHERE conversion_id = %s',
+                FormSubmissions::tableName(),
                 $conversionId
             ),
             ARRAY_A

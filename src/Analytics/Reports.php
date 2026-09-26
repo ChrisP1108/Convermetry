@@ -67,9 +67,10 @@ final class Reports
 
         $rows = self::queryRows($wpdb->prepare(
             "SELECT event_type, COUNT(*) AS total
-             FROM {$table}
+             FROM %i
              WHERE created_at >= %s AND created_at < %s
              GROUP BY event_type",
+            $table,
             $start,
             $end
         ));
@@ -98,10 +99,11 @@ final class Reports
 
         $rows = self::queryRows($wpdb->prepare(
             "SELECT DATE(created_at) AS day, COUNT(*) AS total
-             FROM {$table}
+             FROM %i
              WHERE event_type = %s AND created_at >= %s AND created_at < %s
              GROUP BY day
              ORDER BY day ASC",
+            $table,
             $type,
             $start,
             $end
@@ -141,11 +143,12 @@ final class Reports
         $rows = self::queryRows($wpdb->prepare(
             "SELECT page_url, MAX(page_title) AS page_title,
                     COUNT(*) AS views, COUNT(DISTINCT session_id) AS sessions
-             FROM {$table}
+             FROM %i
              WHERE event_type = 'pageview' AND created_at >= %s AND created_at < %s
              GROUP BY page_url
              ORDER BY views DESC
              LIMIT %d",
+            $table,
             $start,
             $end,
             $limit
@@ -175,11 +178,12 @@ final class Reports
         $rows = self::queryRows($wpdb->prepare(
             "SELECT element_label, MAX(element_tag) AS element_tag,
                     target_url, COUNT(*) AS clicks
-             FROM {$table}
+             FROM %i
              WHERE event_type = 'click' AND created_at >= %s AND created_at < %s
              GROUP BY element_label, target_url
              ORDER BY clicks DESC
              LIMIT %d",
+            $table,
             $start,
             $end,
             $limit
@@ -208,11 +212,12 @@ final class Reports
 
         $rows = self::queryRows($wpdb->prepare(
             "SELECT element_label, page_url, COUNT(*) AS submissions
-             FROM {$table}
+             FROM %i
              WHERE event_type = 'form_submit' AND created_at >= %s AND created_at < %s
              GROUP BY element_label, page_url
              ORDER BY submissions DESC
              LIMIT %d",
+            $table,
             $start,
             $end,
             $limit
@@ -240,11 +245,12 @@ final class Reports
 
         $rows = self::queryRows($wpdb->prepare(
             "SELECT element_label, element_tag, COUNT(*) AS hovers
-             FROM {$table}
+             FROM %i
              WHERE event_type = 'hover' AND created_at >= %s AND created_at < %s
              GROUP BY element_label, element_tag
              ORDER BY hovers DESC
              LIMIT %d",
+            $table,
             $start,
             $end,
             $limit
@@ -277,19 +283,19 @@ final class Reports
         // Referrers are stored as scheme://host/path, so the expression below
         // extracts exactly the host. Exact comparison against the allowed-host
         // list can't be fooled by lookalike hosts the way a substring LIKE could.
-        $hosts        = Options::allowedHosts();
-        $placeholders = implode(', ', array_fill(0, count($hosts), '%s'));
+        $hosts = Options::allowedHosts();
 
         $rows = self::queryRows($wpdb->prepare(
             "SELECT referrer, COUNT(*) AS visits
-             FROM {$table}
+             FROM %i
              WHERE event_type = 'pageview' AND referrer <> ''
-               AND SUBSTRING_INDEX(SUBSTRING_INDEX(referrer, '://', -1), '/', 1) NOT IN ({$placeholders})
+               AND SUBSTRING_INDEX(SUBSTRING_INDEX(referrer, '://', -1), '/', 1) NOT IN ("
+                . implode(', ', array_fill(0, count($hosts), '%s')) . ")
                AND created_at >= %s AND created_at < %s
              GROUP BY referrer
              ORDER BY visits DESC
              LIMIT %d",
-            array_merge($hosts, [$start, $end, $limit])
+            array_merge([$table], $hosts, [$start, $end, $limit])
         ));
 
         return array_map(static fn(array $row): array => [
@@ -524,10 +530,8 @@ final class Reports
         // so aggregating the full universe of converting combinations just to
         // discard almost all of it would be wasted work.
         if ($rows !== []) {
-            $placeholders = [];
-            $params       = [];
+            $params = [$table];
             foreach ($rows as $row) {
-                $placeholders[] = '(%s,%s,%s,%s,%s,%s)';
                 $params[] = $row['utm_source'];
                 $params[] = $row['utm_medium'];
                 $params[] = $row['utm_campaign'];
@@ -541,10 +545,10 @@ final class Reports
             $conversionRows = self::queryRows($wpdb->prepare(
                 "SELECT utm_source, utm_medium, utm_campaign, utm_id, utm_term, utm_content,
                         COUNT(DISTINCT event_value) AS conversions
-                 FROM {$table}
+                 FROM %i
                  WHERE event_type = 'form_success'
                    AND (utm_source, utm_medium, utm_campaign, utm_id, utm_term, utm_content) IN ("
-                    . implode(', ', $placeholders) . ")
+                    . implode(', ', array_fill(0, count($rows), '(%s,%s,%s,%s,%s,%s)')) . ")
                    AND created_at >= %s AND created_at < %s
                  GROUP BY utm_source, utm_medium, utm_campaign, utm_id, utm_term, utm_content",
                 $params
@@ -628,11 +632,12 @@ final class Reports
 
         $rows = self::queryRows($wpdb->prepare(
             "SELECT channel, COUNT(*) AS views, COUNT(DISTINCT session_id) AS sessions
-             FROM {$table}
+             FROM %i
              WHERE event_type = 'pageview' AND channel <> ''
                AND created_at >= %s AND created_at < %s
              GROUP BY channel
              ORDER BY sessions DESC",
+            $table,
             $start,
             $end
         ));
@@ -640,10 +645,11 @@ final class Reports
         $conversionRows = self::queryRows($wpdb->prepare(
             "SELECT channel, COUNT(DISTINCT event_value) AS conversions,
                     COUNT(DISTINCT session_id) AS converting_sessions
-             FROM {$table}
+             FROM %i
              WHERE event_type = 'form_success'
                AND created_at >= %s AND created_at < %s
              GROUP BY channel",
+            $table,
             $start,
             $end
         ));
@@ -754,9 +760,10 @@ final class Reports
 
         return (int) self::queryValue($wpdb->prepare(
             "SELECT COUNT(DISTINCT event_value)
-             FROM {$table}
+             FROM %i
              WHERE event_type = 'form_success'
                AND created_at >= %s AND created_at < %s",
+            $table,
             $start,
             $end
         ));
@@ -782,8 +789,9 @@ final class Reports
 
         return (int) self::queryValue($wpdb->prepare(
             "SELECT COUNT(DISTINCT session_id)
-             FROM {$table}
+             FROM %i
              WHERE created_at >= %s AND created_at < %s AND session_id <> ''",
+            $table,
             $start,
             $end
         ));
@@ -826,7 +834,8 @@ final class Reports
         $table = FormSubmissions::tableName();
 
         return (int) self::queryValue($wpdb->prepare(
-            "SELECT COUNT(*) FROM {$table} WHERE created_at >= %s AND created_at < %s",
+            "SELECT COUNT(*) FROM %i WHERE created_at >= %s AND created_at < %s",
+            $table,
             $start,
             $end
         ));
@@ -850,11 +859,12 @@ final class Reports
 
         $boundary = self::queryValue($wpdb->prepare(
             "SELECT created_at
-             FROM {$table}
+             FROM %i
              WHERE event_type = 'form_success'
                AND created_at >= %s AND created_at < %s
              ORDER BY created_at ASC
              LIMIT 1 OFFSET %d",
+            $table,
             $start,
             $end,
             max(1, $max)
@@ -892,11 +902,12 @@ final class Reports
             "SELECT event_value, element_label, page_url, referrer, device, channel,
                     utm_source, utm_medium, utm_campaign, utm_id, utm_term, utm_content,
                     click_id_type, created_at, session_id, ip_address
-             FROM {$table}
+             FROM %i
              WHERE event_type = 'form_success'
                AND created_at >= %s AND created_at < %s
              ORDER BY id DESC
              LIMIT %d",
+            $table,
             $start,
             $end,
             $limit
@@ -937,15 +948,12 @@ final class Reports
         // submission_id) into conversions that have one — a single bounded
         // lookup keyed by the unique conversion_id index.
         if ($out !== []) {
-            $ids          = array_column($out, 'conversion_id');
-            $placeholders = implode(', ', array_fill(0, count($ids), '%s'));
-            $subTable     = FormSubmissions::tableName();
+            $ids = array_column($out, 'conversion_id');
 
             $subs = self::queryRows($wpdb->prepare(
-                "SELECT conversion_id, submission_id, provider, form_name, form_id, native_form_id, ip_address
-                 FROM {$subTable}
-                 WHERE conversion_id IN ({$placeholders})",
-                $ids
+                'SELECT conversion_id, submission_id, provider, form_name, form_id, native_form_id, ip_address'
+                . ' FROM %i WHERE conversion_id IN (' . implode(', ', array_fill(0, count($ids), '%s')) . ')',
+                array_merge([FormSubmissions::tableName()], $ids)
             ));
 
             $byConversion = [];
@@ -990,10 +998,11 @@ final class Reports
 
         $rows = self::queryRows($wpdb->prepare(
             "SELECT device, COUNT(*) AS views
-             FROM {$table}
+             FROM %i
              WHERE event_type = 'pageview' AND created_at >= %s AND created_at < %s
              GROUP BY device
              ORDER BY views DESC",
+            $table,
             $start,
             $end
         ));
@@ -1022,9 +1031,10 @@ final class Reports
         return self::queryRows($wpdb->prepare(
             "SELECT event_type, page_url, page_title, element_label, target_url,
                     event_value, device, created_at
-             FROM {$table}
+             FROM %i
              ORDER BY id DESC
              LIMIT %d",
+            $table,
             $limit
         ));
     }
@@ -1052,8 +1062,9 @@ final class Reports
 
         $row = self::queryRows($wpdb->prepare(
             "SELECT COUNT(*) AS views, MIN(created_at) AS started
-             FROM {$table}
+             FROM %i
              WHERE event_type = 'pageview' AND session_id = %s",
+            $table,
             $sessionId
         ))[0] ?? null;
 
@@ -1063,10 +1074,11 @@ final class Reports
 
         $pages = self::queryRows($wpdb->prepare(
             "SELECT page_url
-             FROM {$table}
+             FROM %i
              WHERE event_type = 'pageview' AND session_id = %s
              ORDER BY id DESC
              LIMIT 5",
+            $table,
             $sessionId
         ));
 

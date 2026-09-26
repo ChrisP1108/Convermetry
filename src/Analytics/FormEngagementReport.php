@@ -63,8 +63,6 @@ final class FormEngagementReport
         global $wpdb;
         $table = DatabaseManager::tableName();
 
-        $types = implode(', ', array_fill(0, count(self::LIFECYCLE), '%s'));
-
         $rows = ReportQuery::rows($wpdb->prepare(
             "SELECT form_key,
                     MAX(element_label) AS form_name,
@@ -72,13 +70,13 @@ final class FormEngagementReport
                     COUNT(DISTINCT CASE WHEN event_type = 'form_start' THEN session_id END) AS started,
                     SUM(CASE WHEN event_type = 'form_submit' THEN 1 ELSE 0 END) AS attempts,
                     COUNT(DISTINCT CASE WHEN event_type = 'form_success' THEN event_value END) AS successful
-             FROM {$table}
-             WHERE form_key <> '' AND event_type IN ({$types})
+             FROM %i
+             WHERE form_key <> '' AND event_type IN (" . implode(', ', array_fill(0, count(self::LIFECYCLE), '%s')) . ")
                AND created_at >= %s AND created_at < %s
              GROUP BY form_key
              ORDER BY views DESC, started DESC, form_key ASC
              LIMIT %d",
-            array_merge(self::LIFECYCLE, [$start, $end, $limit])
+            array_merge([$table], self::LIFECYCLE, [$start, $end, $limit])
         ));
 
         $abandoned = self::abandonment($start, $end);

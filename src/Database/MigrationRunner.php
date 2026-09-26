@@ -335,7 +335,8 @@ final class MigrationRunner
         }
 
         $held = (string) $wpdb->get_var($wpdb->prepare(
-            "SELECT option_value FROM {$wpdb->options} WHERE option_name = %s",
+            "SELECT option_value FROM %i WHERE option_name = %s",
+            $wpdb->options,
             self::LOCK_OPTION
         ));
 
@@ -351,7 +352,8 @@ final class MigrationRunner
         }
 
         $wpdb->query($wpdb->prepare(
-            "DELETE FROM {$wpdb->options} WHERE option_name = %s AND option_value = %s",
+            "DELETE FROM %i WHERE option_name = %s AND option_value = %s",
+            $wpdb->options,
             self::LOCK_OPTION,
             $held
         ));
@@ -376,7 +378,8 @@ final class MigrationRunner
         global $wpdb;
 
         $inserted = $wpdb->query($wpdb->prepare(
-            "INSERT IGNORE INTO {$wpdb->options} (option_name, option_value, autoload) VALUES (%s, %s, 'off')",
+            "INSERT IGNORE INTO %i (option_name, option_value, autoload) VALUES (%s, %s, 'off')",
+            $wpdb->options,
             self::LOCK_OPTION,
             $value
         ));
@@ -398,7 +401,8 @@ final class MigrationRunner
         global $wpdb;
 
         $wpdb->query($wpdb->prepare(
-            "DELETE FROM {$wpdb->options} WHERE option_name = %s AND option_value LIKE %s",
+            "DELETE FROM %i WHERE option_name = %s AND option_value LIKE %s",
+            $wpdb->options,
             self::LOCK_OPTION,
             $wpdb->esc_like($lock) . '|%'
         ));

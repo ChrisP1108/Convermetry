@@ -314,6 +314,28 @@ final class LeadReports
     }
 
     /**
+     * The display label for a bucket key.
+     *
+     * The keys of {@see buckets()} are identifiers — {@see bucketFor()}
+     * returns them and callers compare against them — so they stay English and
+     * are translated only here, at the point a person reads them.
+     *
+     * @param string $bucket A key of {@see buckets()}.
+     * @return string
+     */
+    public static function bucketLabel(string $bucket): string
+    {
+        return match ($bucket) {
+            'Under 5 minutes'     => __('Under 5 minutes', 'convermetry'),
+            '5–30 minutes'        => __('5–30 minutes', 'convermetry'),
+            '30 minutes–24 hours' => __('30 minutes–24 hours', 'convermetry'),
+            '1–7 days'            => __('1–7 days', 'convermetry'),
+            '7+ days'             => __('7+ days', 'convermetry'),
+            default               => $bucket,
+        };
+    }
+
+    /**
      * The bucket a lag falls into.
      *
      * @param int $seconds Lag in seconds.

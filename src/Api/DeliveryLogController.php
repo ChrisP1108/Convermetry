@@ -217,7 +217,7 @@ final class DeliveryLogController
             return $response;
         }
 
-        if (!str_contains((string) ($_SERVER['REQUEST_URI'] ?? ''), '/convermetry/v1/deliveries')) {
+        if (!str_contains(sanitize_text_field(wp_unslash($_SERVER['REQUEST_URI'] ?? '')), '/convermetry/v1/deliveries')) {
             return $response;
         }
 
@@ -242,7 +242,7 @@ final class DeliveryLogController
         if (!self::isActive()) {
             return new \WP_Error(
                 'api_disabled',
-                'The deliveries API is not enabled.',
+                __('The deliveries API is not enabled.', 'convermetry'),
                 ['status' => 403]
             );
         }
@@ -250,7 +250,7 @@ final class DeliveryLogController
         if (self::isThrottled()) {
             return new \WP_Error(
                 'too_many_failures',
-                'Too many failed authentication attempts. Try again later.',
+                __('Too many failed authentication attempts. Try again later.', 'convermetry'),
                 ['status' => 429]
             );
         }
@@ -260,7 +260,7 @@ final class DeliveryLogController
 
             return new \WP_Error(
                 'unauthorized',
-                'Invalid or missing API key.',
+                __('Invalid or missing API key.', 'convermetry'),
                 ['status' => 401]
             );
         }
@@ -335,7 +335,8 @@ final class DeliveryLogController
         return new \WP_Error(
             'invalid_date',
             sprintf(
-                "The '%s' parameter must be a real UTC calendar date in YYYY-MM-DD format; got '%s'.",
+                /* translators: 1: REST parameter name, 2: the rejected value. */
+                __('The \'%1$s\' parameter must be a real UTC calendar date in YYYY-MM-DD format; got \'%2$s\'.', 'convermetry'),
                 $param,
                 $value
             ),
@@ -394,7 +395,7 @@ final class DeliveryLogController
         if ($after !== null && $before !== null && $before < $after) {
             return new \WP_Error(
                 'invalid_date_range',
-                "The 'before' date must not be earlier than the 'after' date.",
+                __("The 'before' date must not be earlier than the 'after' date.", 'convermetry'),
                 ['status' => 400]
             );
         }

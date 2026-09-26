@@ -27,6 +27,8 @@
 (function () {
     'use strict';
 
+    const { __, _n, sprintf } = wp.i18n;
+
     const PANEL_STORE_KEY = 'cvm-dash-panels';
     const WEEK_JUMP = 7;
 
@@ -83,10 +85,17 @@
                 }
                 activeBtn = btn;
 
+                // data-count is already formatted for the locale ("1,234");
+                // the plural choice needs the number itself.
                 const count  = btn.getAttribute('data-count') || '0';
-                let suffix = count === '1' ? ' page view' : ' page views';
+                const number = parseInt(count.replace(/\D/g, ''), 10) || 0;
+                let label;
                 if (btn.classList.contains('is-today')) {
-                    suffix += ' — today, still collecting';
+                    /* translators: %s: number of page views, already formatted. */
+                    label = sprintf(_n('%s page view — today, still collecting', '%s page views — today, still collecting', number, 'convermetry'), count);
+                } else {
+                    /* translators: %s: number of page views, already formatted. */
+                    label = sprintf(_n('%s page view', '%s page views', number, 'convermetry'), count);
                 }
 
                 tip.textContent = '';
@@ -97,7 +106,7 @@
 
                 const countEl = document.createElement('span');
                 countEl.className = 'cvm-chart-tip-count';
-                countEl.textContent = count + suffix;
+                countEl.textContent = label;
 
                 tip.appendChild(dateEl);
                 tip.appendChild(countEl);
@@ -118,9 +127,7 @@
             const instructions = document.createElement('p');
             instructions.className = 'screen-reader-text';
             instructions.id = 'cvm-chart-keys-' + plotIndex;
-            instructions.textContent = 'Chart navigation: use the Left and Right Arrow keys to move between days, '
-                + 'Home and End for the first and latest day, and Page Up or Page Down to jump a week. '
-                + 'Press Escape to dismiss the tooltip.';
+            instructions.textContent = __('Chart navigation: use the Left and Right Arrow keys to move between days, Home and End for the first and latest day, and Page Up or Page Down to jump a week. Press Escape to dismiss the tooltip.', 'convermetry');
             plot.appendChild(instructions);
             group.setAttribute('aria-describedby', instructions.id);
 

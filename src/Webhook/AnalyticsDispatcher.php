@@ -821,6 +821,11 @@ final class AnalyticsDispatcher
 
         set_transient(self::REPORT_FAILURE_LOG_FLAG, time(), 15 * MINUTE_IN_SECONDS);
 
+        // Deliberate operational logging, not debug output: this runs in
+        // unattended cron work where nobody is watching a screen, it is rate
+        // limited above, and the same failure is also announced through the
+        // convermetry_analytics_report_failed action.
+        // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
         error_log('Convermetry: report query failed during webhook dispatch - ' . $e->getMessage());
     }
 
@@ -1135,7 +1140,8 @@ final class AnalyticsDispatcher
         }
 
         $held = (string) $wpdb->get_var($wpdb->prepare(
-            "SELECT option_value FROM {$wpdb->options} WHERE option_name = %s",
+            "SELECT option_value FROM %i WHERE option_name = %s",
+            $wpdb->options,
             self::LOCK_OPTION
         ));
 
@@ -1145,7 +1151,8 @@ final class AnalyticsDispatcher
         }
 
         $wpdb->query($wpdb->prepare(
-            "DELETE FROM {$wpdb->options} WHERE option_name = %s AND option_value = %s",
+            "DELETE FROM %i WHERE option_name = %s AND option_value = %s",
+            $wpdb->options,
             self::LOCK_OPTION,
             $held
         ));
@@ -1170,7 +1177,8 @@ final class AnalyticsDispatcher
         global $wpdb;
 
         $inserted = $wpdb->query($wpdb->prepare(
-            "INSERT IGNORE INTO {$wpdb->options} (option_name, option_value, autoload) VALUES (%s, %s, 'off')",
+            "INSERT IGNORE INTO %i (option_name, option_value, autoload) VALUES (%s, %s, 'off')",
+            $wpdb->options,
             self::LOCK_OPTION,
             $value
         ));
@@ -1203,7 +1211,8 @@ final class AnalyticsDispatcher
         $token = substr($lock, strlen('option:'));
 
         $wpdb->query($wpdb->prepare(
-            "UPDATE {$wpdb->options} SET option_value = %s WHERE option_name = %s AND option_value LIKE %s",
+            "UPDATE %i SET option_value = %s WHERE option_name = %s AND option_value LIKE %s",
+            $wpdb->options,
             $token . '|' . time(),
             self::LOCK_OPTION,
             $wpdb->esc_like($token) . '|%'
@@ -1229,7 +1238,8 @@ final class AnalyticsDispatcher
         $token = substr($lock, strlen('option:'));
 
         $wpdb->query($wpdb->prepare(
-            "DELETE FROM {$wpdb->options} WHERE option_name = %s AND option_value LIKE %s",
+            "DELETE FROM %i WHERE option_name = %s AND option_value LIKE %s",
+            $wpdb->options,
             self::LOCK_OPTION,
             $wpdb->esc_like($token) . '|%'
         ));

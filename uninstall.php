@@ -21,20 +21,26 @@ if (!defined('WP_UNINSTALL_PLUGIN')) {
  *
  * @return void
  */
-function cvm_uninstall_current_site(): void
+function convermetry_uninstall_current_site(): void
 {
     global $wpdb;
 
     // Custom tables: analytics events, activity log, form submissions,
     // the form-delivery queue, the notification queue, goal completions,
     // and lead status history.
-    $wpdb->query("DROP TABLE IF EXISTS {$wpdb->prefix}cvm_events");
-    $wpdb->query("DROP TABLE IF EXISTS {$wpdb->prefix}cvm_webhook_deliveries");
-    $wpdb->query("DROP TABLE IF EXISTS {$wpdb->prefix}cvm_form_submissions");
-    $wpdb->query("DROP TABLE IF EXISTS {$wpdb->prefix}cvm_delivery_queue");
-    $wpdb->query("DROP TABLE IF EXISTS {$wpdb->prefix}cvm_notification_queue");
-    $wpdb->query("DROP TABLE IF EXISTS {$wpdb->prefix}cvm_goal_completions");
-    $wpdb->query("DROP TABLE IF EXISTS {$wpdb->prefix}cvm_lead_events");
+    $tables = [
+        'cvm_events',
+        'cvm_webhook_deliveries',
+        'cvm_form_submissions',
+        'cvm_delivery_queue',
+        'cvm_notification_queue',
+        'cvm_goal_completions',
+        'cvm_lead_events',
+    ];
+
+    foreach ($tables as $table) {
+        $wpdb->query($wpdb->prepare('DROP TABLE IF EXISTS %i', $wpdb->prefix . $table));
+    }
 
     // Plugin options.
     delete_option('cvm_settings');
@@ -55,6 +61,7 @@ function cvm_uninstall_current_site(): void
     delete_option('cvm_delivery_api_key_hash');
     delete_option('cvm_webhook_last_sent');
     delete_option('cvm_webhook_retry_state');
+    delete_option('cvm_webhook_state_version');
     delete_option('cvm_webhook_dispatch_lock');
     delete_option('cvm_migration_lock');
 
@@ -65,19 +72,28 @@ function cvm_uninstall_current_site(): void
 
     // Rate-limit counter rows, written directly to the options table by the
     // tracking REST controller when no persistent object cache is available.
-    $wpdb->query("DELETE FROM {$wpdb->options} WHERE option_name LIKE 'cvm\\_rl\\_%'");
+    $wpdb->query($wpdb->prepare(
+        'DELETE FROM %i WHERE option_name LIKE %s',
+        $wpdb->options,
+        $wpdb->esc_like('cvm_rl_') . '%'
+    ));
 
     // Queue-repair records, one row per submission, written directly for the
     // same reason.
-    $wpdb->query("DELETE FROM {$wpdb->options} WHERE option_name LIKE 'cvm\\_queue\\_repair\\_%'");
+    $wpdb->query($wpdb->prepare(
+        'DELETE FROM %i WHERE option_name LIKE %s',
+        $wpdb->options,
+        $wpdb->esc_like('cvm_queue_repair_') . '%'
+    ));
 
     // Transients (form-discovery caches, rate-limit flag, failure-log
     // throttle, API auth-failure counters).
-    $wpdb->query(
-        "DELETE FROM {$wpdb->options}
-         WHERE option_name LIKE '\\_transient\\_cvm\\_%'
-            OR option_name LIKE '\\_transient\\_timeout\\_cvm\\_%'"
-    );
+    $wpdb->query($wpdb->prepare(
+        'DELETE FROM %i WHERE option_name LIKE %s OR option_name LIKE %s',
+        $wpdb->options,
+        $wpdb->esc_like('_transient_cvm_') . '%',
+        $wpdb->esc_like('_transient_timeout_cvm_') . '%'
+    ));
 
     // Scheduled cron events, including any pending single-event retries and
     // queue-worker runs.
@@ -93,13 +109,13 @@ function cvm_uninstall_current_site(): void
 }
 
 if (is_multisite()) {
-    $cvm_site_ids = get_sites(['fields' => 'ids', 'number' => 0]);
+    $convermetry_site_ids = get_sites(['fields' => 'ids', 'number' => 0]);
 
-    foreach ($cvm_site_ids as $cvm_site_id) {
-        switch_to_blog((int) $cvm_site_id);
-        cvm_uninstall_current_site();
+    foreach ($convermetry_site_ids as $convermetry_site_id) {
+        switch_to_blog((int) $convermetry_site_id);
+        convermetry_uninstall_current_site();
         restore_current_blog();
     }
 } else {
-    cvm_uninstall_current_site();
+    convermetry_uninstall_current_site();
 }

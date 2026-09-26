@@ -13,6 +13,8 @@
 (function () {
     'use strict';
 
+    const { __, sprintf } = wp.i18n;
+
     /**
      * Safely escapes a string for insertion into HTML.
      *
@@ -150,7 +152,7 @@
                 const logId = li ? li.dataset.logId : null;
                 if (!logId) return;
 
-                if (!confirm('Delete this log entry? This cannot be undone.')) return;
+                if (!confirm(__('Delete this log entry? This cannot be undone.', 'convermetry'))) return;
 
                 btn.disabled    = true;
                 btn.textContent = '…';
@@ -173,12 +175,12 @@
                             document.dispatchEvent(new CustomEvent('cvm:log-deleted'));
                         } else {
                             btn.disabled    = false;
-                            btn.textContent = 'Delete';
+                            btn.textContent = __('Delete', 'convermetry');
                         }
                     })
                     .catch(function () {
                         btn.disabled    = false;
-                        btn.textContent = 'Delete';
+                        btn.textContent = __('Delete', 'convermetry');
                     });
             });
 
@@ -196,7 +198,7 @@
             function fetchLogs() {
                 const seq = ++fetchSeq;
 
-                list.innerHTML         = '<li class="cvm-empty-msg">Loading…</li>';
+                list.innerHTML         = '<li class="cvm-empty-msg">' + escapeHtml(__('Loading…', 'convermetry')) + '</li>';
                 paginationEl.innerHTML = '';
 
                 const fd = new FormData();
@@ -220,7 +222,7 @@
                             return; // A newer request superseded this one.
                         }
                         if (!resp.success) {
-                            list.innerHTML = '<li class="cvm-empty-msg">Failed to load the delivery log.</li>';
+                            list.innerHTML = '<li class="cvm-empty-msg">' + escapeHtml(__('Failed to load the delivery log.', 'convermetry')) + '</li>';
                             return;
                         }
                         const data = resp.data;
@@ -236,20 +238,22 @@
 
                         if (!initialized) {
                             updateFilterOptions(controls, data.years || [], data.months || [], data.endpoints || []);
-                            updateListOptions(controls, '.cvm-filter-provider', data.providers || [], 'All Providers');
-                            updateListOptions(controls, '.cvm-filter-form', data.formNames || [], 'All Forms');
+                            updateListOptions(controls, '.cvm-filter-provider', data.providers || [], __('All Providers', 'convermetry'));
+                            updateListOptions(controls, '.cvm-filter-form', data.formNames || [], __('All Forms', 'convermetry'));
                             initialized = true;
                         } else {
                             updateEndpointOptions(controls, data.endpoints || []);
-                            updateListOptions(controls, '.cvm-filter-provider', data.providers || [], 'All Providers');
-                            updateListOptions(controls, '.cvm-filter-form', data.formNames || [], 'All Forms');
+                            updateListOptions(controls, '.cvm-filter-provider', data.providers || [], __('All Providers', 'convermetry'));
+                            updateListOptions(controls, '.cvm-filter-form', data.formNames || [], __('All Forms', 'convermetry'));
                         }
                         dirty = false;
 
                         list.innerHTML = data.html !== ''
                             ? data.html
                             : '<li class="cvm-empty-msg">' +
-                              (status === 'error' ? 'No failed deliveries recorded.' : 'No successful deliveries recorded yet.') +
+                              escapeHtml(status === 'error'
+                                  ? __('No failed deliveries recorded.', 'convermetry')
+                                  : __('No successful deliveries recorded yet.', 'convermetry')) +
                               '</li>';
 
                         renderPagination(paginationEl, data.currentPage, data.totalPages, data.total, state.perPage, function (p) {
@@ -259,7 +263,7 @@
                     })
                     .catch(function () {
                         if (seq === fetchSeq) {
-                            list.innerHTML = '<li class="cvm-empty-msg">Failed to load the delivery log.</li>';
+                            list.innerHTML = '<li class="cvm-empty-msg">' + escapeHtml(__('Failed to load the delivery log.', 'convermetry')) + '</li>';
                         }
                     });
             }
@@ -275,18 +279,18 @@
      * @param {string[]}    endpoints
      */
     function updateFilterOptions(controls, years, months, endpoints) {
-        const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June',
-                           'July', 'August', 'September', 'October', 'November', 'December'];
+        // Localized by WordPress (AdminAssets::monthNames()).
+        const MONTH_NAMES = (typeof CVM_LOG !== 'undefined' && Array.isArray(CVM_LOG.monthNames)) ? CVM_LOG.monthNames : [];
 
         const yearSelect  = controls.querySelector('.cvm-filter-year');
         const monthSelect = controls.querySelector('.cvm-filter-month');
 
-        yearSelect.innerHTML = '<option value="">All Years</option>';
+        yearSelect.innerHTML = '<option value="">' + escapeHtml(__('All Years', 'convermetry')) + '</option>';
         years.forEach(function (y) {
             yearSelect.innerHTML += '<option value="' + escapeAttr(y) + '">' + escapeHtml(y) + '</option>';
         });
 
-        monthSelect.innerHTML = '<option value="">All Months</option>';
+        monthSelect.innerHTML = '<option value="">' + escapeHtml(__('All Months', 'convermetry')) + '</option>';
         months.forEach(function (m) {
             const name = MONTH_NAMES[parseInt(m, 10) - 1] || m;
             monthSelect.innerHTML += '<option value="' + escapeAttr(m) + '">' + escapeHtml(name) + '</option>';
@@ -308,7 +312,7 @@
 
         const currentVal = endpointSelect.value;
 
-        endpointSelect.innerHTML = '<option value="">All Endpoints</option>';
+        endpointSelect.innerHTML = '<option value="">' + escapeHtml(__('All Endpoints', 'convermetry')) + '</option>';
         endpoints.forEach(function (url) {
             const opt = document.createElement('option');
             opt.value       = url;
@@ -355,23 +359,23 @@
      */
     function buildControlsHtml() {
         return '<div class="cvm-acc-filters">' +
-                   '<select class="cvm-filter-year"><option value="">All Years</option></select>' +
-                   '<select class="cvm-filter-month"><option value="">All Months</option></select>' +
+                   '<select class="cvm-filter-year"><option value="">' + escapeHtml(__('All Years', 'convermetry')) + '</option></select>' +
+                   '<select class="cvm-filter-month"><option value="">' + escapeHtml(__('All Months', 'convermetry')) + '</option></select>' +
                    '<select class="cvm-filter-type">' +
-                       '<option value="">All Types</option>' +
-                       '<option value="analytics_report">Analytics Reports</option>' +
-                       '<option value="form_submission">Form Submissions</option>' +
+                       '<option value="">' + escapeHtml(__('All Types', 'convermetry')) + '</option>' +
+                       '<option value="analytics_report">' + escapeHtml(__('Analytics Reports', 'convermetry')) + '</option>' +
+                       '<option value="form_submission">' + escapeHtml(__('Form Submissions', 'convermetry')) + '</option>' +
                    '</select>' +
-                   '<span style="display:none"><select class="cvm-filter-endpoint"><option value="">All Endpoints</option></select></span>' +
-                   '<span style="display:none"><select class="cvm-filter-provider"><option value="">All Providers</option></select></span>' +
-                   '<span style="display:none"><select class="cvm-filter-form"><option value="">All Forms</option></select></span>' +
+                   '<span style="display:none"><select class="cvm-filter-endpoint"><option value="">' + escapeHtml(__('All Endpoints', 'convermetry')) + '</option></select></span>' +
+                   '<span style="display:none"><select class="cvm-filter-provider"><option value="">' + escapeHtml(__('All Providers', 'convermetry')) + '</option></select></span>' +
+                   '<span style="display:none"><select class="cvm-filter-form"><option value="">' + escapeHtml(__('All Forms', 'convermetry')) + '</option></select></span>' +
                    '<div class="cvm-acc-search">' +
-                       '<input type="text" class="cvm-search-input" placeholder="Search payload…" />' +
-                       '<button type="button" class="cvm-search-clear" aria-label="Clear search">✕</button>' +
+                       '<input type="text" class="cvm-search-input" placeholder="' + escapeAttr(__('Search payload…', 'convermetry')) + '" />' +
+                       '<button type="button" class="cvm-search-clear" aria-label="' + escapeAttr(__('Clear search', 'convermetry')) + '">✕</button>' +
                    '</div>' +
                '</div>' +
                '<div class="cvm-acc-perpage">' +
-                   '<label>Per page: <select class="cvm-per-page">' +
+                   '<label>' + escapeHtml(__('Per page:', 'convermetry')) + ' <select class="cvm-per-page">' +
                        '<option value="5">5</option>' +
                        '<option value="10" selected>10</option>' +
                        '<option value="25">25</option>' +
@@ -393,20 +397,21 @@
      */
     function renderPagination(container, currentPage, totalPages, totalItems, perPage, onPageChange) {
         if (totalItems === 0) {
-            container.innerHTML = '<span class="cvm-page-info">No results match the selected filter.</span>';
+            container.innerHTML = '<span class="cvm-page-info">' + escapeHtml(__('No results match the selected filter.', 'convermetry')) + '</span>';
             return;
         }
 
         const start = (currentPage - 1) * perPage + 1;
         const end   = Math.min(currentPage * perPage, totalItems);
 
-        let html = '<span class="cvm-page-info">Showing ' + start + '–' + end + ' of ' + totalItems + '</span>';
+        /* translators: 1: first item shown, 2: last item shown, 3: total number of items. */
+        let html = '<span class="cvm-page-info">' + escapeHtml(sprintf(__('Showing %1$d–%2$d of %3$d', 'convermetry'), start, end, totalItems)) + '</span>';
 
         if (totalPages > 1) {
             html += '<div class="cvm-page-buttons">';
 
             if (currentPage > 1) {
-                html += '<button class="cvm-page-btn" data-page="' + (currentPage - 1) + '" aria-label="Previous page">&#8249;</button>';
+                html += '<button class="cvm-page-btn" data-page="' + (currentPage - 1) + '" aria-label="' + escapeAttr(__('Previous page', 'convermetry')) + '">&#8249;</button>';
             }
 
             getPageNumbers(currentPage, totalPages).forEach(function (p) {
@@ -414,12 +419,13 @@
                     html += '<span class="cvm-page-ellipsis">&#8230;</span>';
                 } else {
                     const activeClass = p === currentPage ? ' cvm-page-btn-active' : '';
-                    html += '<button class="cvm-page-btn' + activeClass + '" data-page="' + p + '" aria-label="Page ' + p + '">' + p + '</button>';
+                    /* translators: %d: page number. */
+                    html += '<button class="cvm-page-btn' + activeClass + '" data-page="' + p + '" aria-label="' + escapeAttr(sprintf(__('Page %d', 'convermetry'), p)) + '">' + p + '</button>';
                 }
             });
 
             if (currentPage < totalPages) {
-                html += '<button class="cvm-page-btn" data-page="' + (currentPage + 1) + '" aria-label="Next page">&#8250;</button>';
+                html += '<button class="cvm-page-btn" data-page="' + (currentPage + 1) + '" aria-label="' + escapeAttr(__('Next page', 'convermetry')) + '">&#8250;</button>';
             }
 
             html += '</div>';
@@ -508,7 +514,7 @@
                 .then(function (resp) {
                     toggle.disabled = false;
                     if (resp.success) {
-                        if (label)   label.textContent = resp.data.active ? 'Active' : 'Inactive';
+                        if (label)   label.textContent = resp.data.active ? __('Active', 'convermetry') : __('Inactive', 'convermetry');
                         if (section) section.hidden    = !resp.data.active;
                         revealKey(resp.data.key);
                     } else {
@@ -530,7 +536,7 @@
                 if (navigator.clipboard && navigator.clipboard.writeText) {
                     navigator.clipboard.writeText(key).then(function () {
                         const orig = copyBtn.textContent;
-                        copyBtn.textContent = 'Copied!';
+                        copyBtn.textContent = __('Copied!', 'convermetry');
                         setTimeout(function () { copyBtn.textContent = orig; }, 2000);
                     }).catch(function () { fallbackCopy(key, copyBtn); });
                 } else {
@@ -542,7 +548,7 @@
         const regenBtn = document.querySelector('.cvm-regen-key-btn');
         if (regenBtn) {
             regenBtn.addEventListener('click', function () {
-                if (!confirm('Regenerate the API key? Any existing integrations using the current key will stop working until updated. The new key is shown only once — copy it right away.')) return;
+                if (!confirm(__('Regenerate the API key? Any existing integrations using the current key will stop working until updated. The new key is shown only once — copy it right away.', 'convermetry'))) return;
 
                 regenBtn.disabled = true;
 
@@ -581,7 +587,7 @@
         try {
             document.execCommand('copy');
             const orig = btn.textContent;
-            btn.textContent = 'Copied!';
+            btn.textContent = __('Copied!', 'convermetry');
             setTimeout(function () { btn.textContent = orig; }, 2000);
         } catch (_) {}
         document.body.removeChild(ta);
