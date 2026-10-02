@@ -38,7 +38,7 @@ final class ReportQuery
     {
         global $wpdb;
 
-        // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- $sql is the output of $wpdb->prepare() at every call site; this is only the shared executor.
+        // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared, WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, PluginCheck.Security.DirectDB.UnescapedDBParameter -- shared executor for the report classes' custom-table reads; reports show current data (FunnelReport caches its own result). $sql is the output of $wpdb->prepare() at every call site.
         $rows = $wpdb->get_results($sql, ARRAY_A);
         if ($wpdb->last_error !== '') {
             // phpcs:ignore WordPress.Security.EscapeOutput.ExceptionNotEscaped -- never rendered: callers catch it and show a generic notice, and the raw text reaches only logs and the report-failed hook.
@@ -59,7 +59,7 @@ final class ReportQuery
     {
         global $wpdb;
 
-        // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- $sql is the output of $wpdb->prepare() at every call site; this is only the shared executor.
+        // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared, WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, PluginCheck.Security.DirectDB.UnescapedDBParameter -- shared executor for the report classes' custom-table reads; reports show current data. $sql is the output of $wpdb->prepare() at every call site.
         $value = $wpdb->get_var($sql);
         if ($wpdb->last_error !== '') {
             // phpcs:ignore WordPress.Security.EscapeOutput.ExceptionNotEscaped -- never rendered: callers catch it and show a generic notice, and the raw text reaches only logs and the report-failed hook.

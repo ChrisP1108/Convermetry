@@ -14,7 +14,7 @@ use Convermetry\Support\Http;
  * Sends aggregated analytics reports to every endpoint whose delivery types
  * include Analytics Reports, as JSON, on the configured schedule.
  *
- * A single cron event (cvm_dispatch_webhooks) fires at the interval chosen
+ * A single cron event (cvmtry_dispatch_webhooks) fires at the interval chosen
  * on the Webhooks page. On each run, every analytics endpoint receives a
  * POST whose payload covers the window since that endpoint's last successful
  * delivery — last-sent timestamps are tracked per endpoint, so adding a new
@@ -28,7 +28,7 @@ use Convermetry\Support\Http;
  *  JSON body that failed is FROZEN — serialized and stored with the retry
  *  state, together with the final request URL and headers — and retried up
  *  to 5 more times over about 24 hours (5m, 30m, 2h, 6h, 16h) via
- *  single-event crons on the cvm_retry_webhook hook. Every attempt re-sends
+ *  single-event crons on the cvmtry_retry_webhook hook. Every attempt re-sends
  *  the stored bytes under the same delivery_id; retention cleanup, settings
  *  changes, or plugin updates between attempts can never alter the payload.
  *  Scheduled runs skip an endpoint while its chain is actively pending.
@@ -75,10 +75,10 @@ use Convermetry\Support\Http;
 final class AnalyticsDispatcher
 {
     /** Cron hook name for scheduled dispatch. */
-    public const string CRON_HOOK = 'cvm_dispatch_webhooks';
+    public const string CRON_HOOK = 'cvmtry_dispatch_webhooks';
 
     /** Cron hook name for single-event delivery retries. */
-    public const string RETRY_HOOK = 'cvm_retry_webhook';
+    public const string RETRY_HOOK = 'cvmtry_retry_webhook';
 
     /**
      * Default delay before each retry attempt, in seconds:
@@ -96,7 +96,7 @@ final class AnalyticsDispatcher
      * the endpoint's delivery window and re-sent already-delivered data.
      * {@see migrateEndpointState()} re-keys existing installations.
      */
-    private const string LAST_SENT_OPTION = 'cvm_webhook_last_sent';
+    private const string LAST_SENT_OPTION = 'cvmtry_webhook_last_sent';
 
     /**
      * Option key mapping DURABLE ENDPOINT ID → pending retry state.
@@ -106,13 +106,13 @@ final class AnalyticsDispatcher
      * deleted endpoint. {@see migrateEndpointState()} re-keys existing
      * installations.
      */
-    private const string RETRY_STATE_OPTION = 'cvm_webhook_retry_state';
+    private const string RETRY_STATE_OPTION = 'cvmtry_webhook_retry_state';
 
     /** Option key for the fallback dispatch mutex (when GET_LOCK is unavailable). */
-    private const string LOCK_OPTION = 'cvm_webhook_dispatch_lock';
+    private const string LOCK_OPTION = 'cvmtry_webhook_dispatch_lock';
 
     /** Option key recording which per-endpoint state migrations have run. */
-    private const string STATE_VERSION_OPTION = 'cvm_webhook_state_version';
+    private const string STATE_VERSION_OPTION = 'cvmtry_webhook_state_version';
 
     /** Bumped when per-endpoint state needs re-keying. 1: md5(url) -> durable id. */
     private const int STATE_VERSION = 1;
@@ -122,7 +122,7 @@ final class AnalyticsDispatcher
      * calls, so a sustained database outage doesn't write the same
      * diagnostic on every cron tick.
      */
-    private const string REPORT_FAILURE_LOG_FLAG = 'cvm_report_query_failure_logged';
+    private const string REPORT_FAILURE_LOG_FLAG = 'cvmtry_report_query_failure_logged';
 
     /**
      * Sanitized message used for the Activity Log when a report query fails.
@@ -1126,6 +1126,7 @@ final class AnalyticsDispatcher
     {
         global $wpdb;
 
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- dispatch lock: MySQL GET_LOCK() with an options-table lease row as fallback, both of which must bypass every cache.
         $acquired = $wpdb->get_var($wpdb->prepare('SELECT GET_LOCK(%s, 0)', self::lockName()));
         if ($acquired !== null) {
             return ((int) $acquired === 1) ? 'mysql' : null;
@@ -1139,6 +1140,7 @@ final class AnalyticsDispatcher
             return 'option:' . $token;
         }
 
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- dispatch lock: MySQL GET_LOCK() with an options-table lease row as fallback, both of which must bypass every cache.
         $held = (string) $wpdb->get_var($wpdb->prepare(
             "SELECT option_value FROM %i WHERE option_name = %s",
             $wpdb->options,
@@ -1150,6 +1152,7 @@ final class AnalyticsDispatcher
             return null;
         }
 
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery -- dispatch lock: MySQL GET_LOCK() with an options-table lease row as fallback, both of which must bypass every cache.
         $wpdb->query($wpdb->prepare(
             "DELETE FROM %i WHERE option_name = %s AND option_value = %s",
             $wpdb->options,
@@ -1176,6 +1179,7 @@ final class AnalyticsDispatcher
     {
         global $wpdb;
 
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery -- lease row in the options table, read and written through $wpdb so the claim stays atomic and never enters the option cache.
         $inserted = $wpdb->query($wpdb->prepare(
             "INSERT IGNORE INTO %i (option_name, option_value, autoload) VALUES (%s, %s, 'off')",
             $wpdb->options,
@@ -1210,6 +1214,7 @@ final class AnalyticsDispatcher
 
         $token = substr($lock, strlen('option:'));
 
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery -- lease row in the options table, read and written through $wpdb so the claim stays atomic and never enters the option cache.
         $wpdb->query($wpdb->prepare(
             "UPDATE %i SET option_value = %s WHERE option_name = %s AND option_value LIKE %s",
             $wpdb->options,
@@ -1231,12 +1236,14 @@ final class AnalyticsDispatcher
         global $wpdb;
 
         if ($lock === 'mysql') {
+            // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery -- releases the dispatch lock (GET_LOCK() and its lease-row fallback), which must bypass every cache.
             $wpdb->query($wpdb->prepare('SELECT RELEASE_LOCK(%s)', self::lockName()));
             return;
         }
 
         $token = substr($lock, strlen('option:'));
 
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery -- releases the dispatch lock (GET_LOCK() and its lease-row fallback), which must bypass every cache.
         $wpdb->query($wpdb->prepare(
             "DELETE FROM %i WHERE option_name = %s AND option_value LIKE %s",
             $wpdb->options,
@@ -1259,7 +1266,7 @@ final class AnalyticsDispatcher
 
         $db = defined('DB_NAME') ? DB_NAME : '';
 
-        return 'cvm_dispatch_' . md5($db . '|' . $wpdb->prefix . '|' . home_url());
+        return 'cvmtry_dispatch_' . md5($db . '|' . $wpdb->prefix . '|' . home_url());
     }
 
     /**

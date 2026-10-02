@@ -332,16 +332,18 @@ final class Reports
         $table  = DatabaseManager::tableName();
         $tagged = self::TAGGED_SQL;
 
+        // phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- {$tagged} is the TAGGED_SQL class constant, a fixed predicate with no input in it; every value is bound.
         $rows = self::queryRows($wpdb->prepare(
             "SELECT utm_source, utm_medium, utm_campaign, utm_id,
                     MAX(channel) AS channel,
                     COUNT(*) AS views, COUNT(DISTINCT session_id) AS sessions
-             FROM {$table}
+             FROM %i
              WHERE event_type = 'pageview' AND {$tagged}
                AND created_at >= %s AND created_at < %s
              GROUP BY utm_source, utm_medium, utm_campaign, utm_id
              ORDER BY views DESC, utm_source, utm_medium, utm_campaign, utm_id
              LIMIT %d",
+            $table,
             $start,
             $end,
             $limit
@@ -352,13 +354,15 @@ final class Reports
                     MAX(channel) AS channel,
                     COUNT(DISTINCT event_value) AS conversions,
                     COUNT(DISTINCT session_id) AS converting_sessions
-             FROM {$table}
+             FROM %i
              WHERE event_type = 'form_success' AND {$tagged}
                AND created_at >= %s AND created_at < %s
              GROUP BY utm_source, utm_medium, utm_campaign, utm_id",
+            $table,
             $start,
             $end
         ));
+        // phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared
 
         $conversions = [];
         foreach ($conversionRows as $row) {
@@ -401,6 +405,7 @@ final class Reports
         $orphanLimit     = min(3, max(0, $limit - $preserveTraffic));
 
         if ($orphanLimit > 0 && $conversions !== []) {
+            // phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- {$tagged} is the TAGGED_SQL class constant, a fixed predicate with no input in it; every value is bound.
             $orphanRows = self::queryRows($wpdb->prepare(
                 "SELECT c.utm_source, c.utm_medium, c.utm_campaign, c.utm_id, c.channel,
                         c.conversions, c.converting_sessions
@@ -408,13 +413,13 @@ final class Reports
                      SELECT utm_source, utm_medium, utm_campaign, utm_id, MAX(channel) AS channel,
                             COUNT(DISTINCT event_value) AS conversions,
                             COUNT(DISTINCT session_id) AS converting_sessions
-                     FROM {$table}
+                     FROM %i
                      WHERE event_type = 'form_success' AND {$tagged}
                        AND created_at >= %s AND created_at < %s
                      GROUP BY utm_source, utm_medium, utm_campaign, utm_id
                  ) AS c
                  WHERE NOT EXISTS (
-                     SELECT 1 FROM {$table} AS p
+                     SELECT 1 FROM %i AS p
                      WHERE p.event_type = 'pageview' AND {$tagged}
                        AND p.created_at >= %s AND p.created_at < %s
                        AND p.utm_source = c.utm_source AND p.utm_medium = c.utm_medium
@@ -422,12 +427,15 @@ final class Reports
                  )
                  ORDER BY c.conversions DESC, c.utm_source, c.utm_medium, c.utm_campaign, c.utm_id
                  LIMIT %d",
+                $table,
                 $start,
                 $end,
+                $table,
                 $start,
                 $end,
                 $orphanLimit
             ));
+            // phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared
 
             $orphanCount = min($orphanLimit, count($orphanRows));
             if ($orphanCount > 0) {
@@ -506,18 +514,18 @@ final class Reports
     public static function topCampaignContent(string $start, string $end, int $limit = 10): array
     {
         global $wpdb;
-        $table    = DatabaseManager::tableName();
-        $detailed = "(utm_term <> '' OR utm_content <> '')";
+        $table = DatabaseManager::tableName();
 
         $rows = self::queryRows($wpdb->prepare(
             "SELECT utm_source, utm_medium, utm_campaign, utm_id, utm_term, utm_content,
                     COUNT(*) AS views, COUNT(DISTINCT session_id) AS sessions
-             FROM {$table}
-             WHERE event_type = 'pageview' AND {$detailed}
+             FROM %i
+             WHERE event_type = 'pageview' AND (utm_term <> '' OR utm_content <> '')
                AND created_at >= %s AND created_at < %s
              GROUP BY utm_source, utm_medium, utm_campaign, utm_id, utm_term, utm_content
              ORDER BY views DESC
              LIMIT %d",
+            $table,
             $start,
             $end,
             $limit
@@ -542,6 +550,7 @@ final class Reports
             $params[] = $start;
             $params[] = $end;
 
+            // phpcs:ignore WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber -- $params is the table, six values per (%s,...) tuple generated below, then start and end: one per placeholder, in order.
             $conversionRows = self::queryRows($wpdb->prepare(
                 "SELECT utm_source, utm_medium, utm_campaign, utm_id, utm_term, utm_content,
                         COUNT(DISTINCT event_value) AS conversions
@@ -720,18 +729,20 @@ final class Reports
             "SELECT e.page_url, MAX(e.page_title) AS page_title, COUNT(*) AS sessions
              FROM (
                  SELECT MIN(id) AS first_id
-                 FROM {$table}
+                 FROM %i
                  WHERE event_type = 'pageview' AND session_id <> ''
                    AND created_at < %s
                  GROUP BY session_id
                  HAVING MIN(created_at) >= %s
              ) AS f
-             INNER JOIN {$table} AS e ON e.id = f.first_id
+             INNER JOIN %i AS e ON e.id = f.first_id
              GROUP BY e.page_url
              ORDER BY sessions DESC
              LIMIT %d",
+            $table,
             $end,
             $start,
+            $table,
             $limit
         ));
 
@@ -811,9 +822,9 @@ final class Reports
      */
     public static function hasEvents(): bool
     {
-        $table = DatabaseManager::tableName();
+        global $wpdb;
 
-        return self::queryValue("SELECT id FROM {$table} LIMIT 1") !== null;
+        return self::queryValue($wpdb->prepare('SELECT id FROM %i LIMIT 1', DatabaseManager::tableName())) !== null;
     }
 
     /**

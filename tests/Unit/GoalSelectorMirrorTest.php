@@ -15,7 +15,7 @@ use PHPUnit\Framework\TestCase;
  * The autoloaded mirror of the browser selector map.
  *
  * The script loader asks for these selectors on every tracked frontend request,
- * but cvm_goals is deliberately non-autoloaded — so without a persistent object
+ * but cvmtry_goals is deliberately non-autoloaded — so without a persistent object
  * cache that was an extra uncached SELECT plus a normalize-every-goal pass on
  * every visitor page, even on the overwhelming majority of sites that define no
  * selector goals at all. The mirror answers that question from a row WordPress
@@ -119,7 +119,7 @@ final class GoalSelectorMirrorTest extends TestCase
         $this->storedMirror = ['gaaaaaaaaaaaaaaaa' => '.book-now'];
 
         self::assertSame(['gaaaaaaaaaaaaaaaa' => '.book-now'], GoalRepository::browserSelectors());
-        self::assertSame(0, $this->goalReads, 'The mirror exists precisely so cvm_goals is not read here.');
+        self::assertSame(0, $this->goalReads, 'The mirror exists precisely so cvmtry_goals is not read here.');
     }
 
     /**

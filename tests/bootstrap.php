@@ -65,31 +65,31 @@ if (!defined('WEEK_IN_SECONDS')) {
     define('WEEK_IN_SECONDS', 604800);
 }
 
-if (!defined('CVM_VERSION')) {
+if (!defined('CVMTRY_VERSION')) {
     // Read from the plugin file rather than hardcoding it. This stub had already
     // drifted once — it said 0.1.0 while the plugin was 0.2.0 — and a test that
     // asserts on the version is worthless if the stub is the thing that is wrong.
     preg_match(
-        "/define\('CVM_VERSION',\s*'([^']+)'\)/",
+        "/define\('CVMTRY_VERSION',\s*'([^']+)'\)/",
         (string) file_get_contents(__DIR__ . '/../convermetry.php'),
-        $cvmVersionMatch
+        $cvmtryVersionMatch
     );
 
-    if (!isset($cvmVersionMatch[1])) {
-        fwrite(STDERR, "bootstrap: could not read CVM_VERSION from convermetry.php\n");
+    if (!isset($cvmtryVersionMatch[1])) {
+        fwrite(STDERR, "bootstrap: could not read CVMTRY_VERSION from convermetry.php\n");
         exit(1);
     }
 
-    define('CVM_VERSION', $cvmVersionMatch[1]);
-    unset($cvmVersionMatch);
+    define('CVMTRY_VERSION', $cvmtryVersionMatch[1]);
+    unset($cvmtryVersionMatch);
 }
 
-if (!defined('CVM_PLUGIN_DIR')) {
-    define('CVM_PLUGIN_DIR', dirname(__DIR__) . '/');
+if (!defined('CVMTRY_PLUGIN_DIR')) {
+    define('CVMTRY_PLUGIN_DIR', dirname(__DIR__) . '/');
 }
 
-if (!defined('CVM_PLUGIN_URL')) {
+if (!defined('CVMTRY_PLUGIN_URL')) {
     // Only ever concatenated with an asset path and handed to wp_enqueue_*,
     // which is stubbed in this suite — the value just has to be a URL.
-    define('CVM_PLUGIN_URL', 'https://example.test/wp-content/plugins/convermetry/');
+    define('CVMTRY_PLUGIN_URL', 'https://example.test/wp-content/plugins/convermetry/');
 }

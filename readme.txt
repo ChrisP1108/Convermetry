@@ -4,7 +4,7 @@ Tags: analytics, lead tracking, utm, webhooks, forms
 Requires at least: 6.3
 Tested up to: 7.1
 Requires PHP: 8.3
-Stable tag: 1.0.0
+Stable tag: 1.0.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -62,9 +62,9 @@ This section describes what Convermetry does. It is not legal advice, and Conver
 * Logged-in users are excluded from tracking by default.
 * **Do Not Track / Global Privacy Control are not honored by default.** When you enable that setting, visitors who send either signal are not tracked, and no IP address is stored with a form they submit.
 
-**Browser storage — no cookies.** The tracker sets no cookies. It stores a random visit identifier (`cvm_session`) and the visit's attribution (`cvm_campaign`) in the browser's localStorage, and briefly holds unsent events (`cvm_pending`) in sessionStorage. The visit identifier is replaced after 30 minutes of inactivity. In the EU and UK, the rules that govern cookies also apply to this kind of storage.
+**Browser storage — no cookies.** The tracker sets no cookies. It stores a random visit identifier (`cvmtry_session`) and the visit's attribution (`cvmtry_campaign`) in the browser's localStorage, and briefly holds unsent events (`cvmtry_pending`) in sessionStorage. The visit identifier is replaced after 30 minutes of inactivity. In the EU and UK, the rules that govern cookies also apply to this kind of storage.
 
-**Consent.** Convermetry has no consent banner of its own and is not integrated with a consent-management plugin. Analytics starts collecting as soon as the plugin is activated. If your site needs consent before analytics runs, have your consent tool block the script handle `cvm-tracker` until consent is given, or return `false` from the `convermetry_should_enqueue_tracker` filter. Form submissions are still recorded server-side when the tracker does not run.
+**Consent.** Convermetry has no consent banner of its own and is not integrated with a consent-management plugin. Analytics starts collecting as soon as the plugin is activated. If your site needs consent before analytics runs, have your consent tool block the script handle `cvmtry-tracker` until consent is given, or return `false` from the `convermetry_should_enqueue_tracker` filter. Form submissions are still recorded server-side when the tracker does not run.
 
 **Where it is stored and for how long.** In seven custom tables in your WordPress database. Analytics events, submissions, goal completions, lead history and Activity Log entries are deleted automatically after the retention period (default 90 days, adjustable from 7 to 365). Deleting the plugin from the Plugins screen removes every table, option and scheduled task it created.
 
@@ -109,7 +109,7 @@ Yes. Page views and the other interaction types are enabled by default, logged-i
 
 = How do I wait for consent before tracking? =
 
-Configure your consent tool to block the `cvm-tracker` script until consent is given, or add a filter to `convermetry_should_enqueue_tracker` that returns `false` until your consent check passes. Server-confirmed form submissions are still recorded, without analytics context, when the tracker does not run.
+Configure your consent tool to block the `cvmtry-tracker` script until consent is given, or add a filter to `convermetry_should_enqueue_tracker` that returns `false` until your consent check passes. Server-confirmed form submissions are still recorded, without analytics context, when the tracker does not run.
 
 = Which form plugins are supported? =
 
@@ -153,6 +153,12 @@ Deactivating stops tracking and scheduled tasks but keeps your data. Deleting th
 
 == Changelog ==
 
+= 1.0.1 =
+* Changed: every plugin-owned name now uses the `cvmtry` prefix — stored options, database tables, scheduled events, script and style handles, CSS classes, `data-cvmtry-*` attributes, browser storage keys and the `cvmtry_track_event()` helper. Public `convermetry_*` hooks and functions are unchanged.
+* Changed: the About screen's hook reference and the confirmation prompts for Remove and Clear All now run entirely from enqueued scripts and stylesheets; no inline script or style blocks are printed.
+* Changed: the PHP version notice is shown only to administrators, on the Dashboard and Plugins screens.
+* Hardening: report queries bind every table and column name as an identifier and every value through prepared statements, and display-only request parameters are sanitized where they are read.
+
 = 1.0.0 =
 * New: WordPress privacy tools integration — suggested privacy policy text generated from your settings, and a personal-data exporter and eraser for form submissions and their linked data.
 * New: the plugin interface, notification emails and scripts are translatable (text domain `convermetry`), with a translation template in `languages/`.
@@ -164,6 +170,9 @@ Deactivating stops tracking and scheduled tasks but keeps your data. Deleting th
 * Changed: first public release on WordPress.org. Earlier 0.x versions were distributed privately; their full history is in CHANGELOG.md, included with the plugin.
 
 == Upgrade Notice ==
+
+= 1.0.1 =
+Renames the plugin's stored settings, tables and scheduled events to the `cvmtry` prefix. Settings and data saved by 1.0.0 are not carried over.
 
 = 1.0.0 =
 First WordPress.org release. Adds privacy-policy text and personal-data export/erasure for form submissions, and makes the interface translatable. No settings or data change on upgrade.

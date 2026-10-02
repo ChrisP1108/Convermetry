@@ -13,10 +13,10 @@ use Convermetry\Support\KeyValuePairs;
  *
  * Settings live in two option arrays:
  *
- *  - 'cvm_settings'         — tracking toggles, privacy, retention, and the
+ *  - 'cvmtry_settings'         — tracking toggles, privacy, retention, and the
  *                             website/client identity sent in every payload
  *                             (managed by Admin\Pages\SettingsPage).
- *  - 'cvm_webhook_settings' — webhook endpoints, delivery types, signing,
+ *  - 'cvmtry_webhook_settings' — webhook endpoints, delivery types, signing,
  *                             schedule, global headers/query parameters, and
  *                             form failure mode (managed by Admin\Pages\WebhooksPage).
  *
@@ -28,10 +28,10 @@ use Convermetry\Support\KeyValuePairs;
 final class Options
 {
     /** The wp_options key holding tracking/data/identity settings. */
-    public const string OPTION_KEY = 'cvm_settings';
+    public const string OPTION_KEY = 'cvmtry_settings';
 
     /** The wp_options key holding webhook configuration. */
-    public const string WEBHOOK_OPTION_KEY = 'cvm_webhook_settings';
+    public const string WEBHOOK_OPTION_KEY = 'cvmtry_webhook_settings';
 
     /**
      * The wp_options key holding conversion goal definitions.
@@ -40,21 +40,21 @@ final class Options
      * Goals screen), never on an ordinary page load, and it grows with the
      * number of goals a site defines.
      */
-    public const string GOALS_OPTION_KEY = 'cvm_goals';
+    public const string GOALS_OPTION_KEY = 'cvmtry_goals';
 
     /**
      * The wp_options key holding the browser selector map derived from the goals.
      *
      * The one piece of goal configuration the tracker needs on an ordinary page
-     * load, mirrored out of cvm_goals so that read does not have to pull the
+     * load, mirrored out of cvmtry_goals so that read does not have to pull the
      * whole non-autoloaded goal list on every visitor request. Deliberately
      * AUTOLOADED — it is capped at GoalRepository::MAX_BROWSER_SELECTORS
      * entries, and is empty on the vast majority of sites.
      *
      * Derived state, never edited directly: GoalRepository rebuilds it from
-     * cvm_goals on every write to that option.
+     * cvmtry_goals on every write to that option.
      */
-    public const string GOAL_SELECTORS_OPTION_KEY = 'cvm_goal_selectors';
+    public const string GOAL_SELECTORS_OPTION_KEY = 'cvmtry_goal_selectors';
 
     /**
      * The wp_options key holding funnel definitions.
@@ -62,16 +62,16 @@ final class Options
      * Also NON-AUTOLOADED, and read even less often than goals: funnels are pure
      * reporting configuration, touched only when a funnel report is rendered.
      */
-    public const string FUNNELS_OPTION_KEY = 'cvm_funnels';
+    public const string FUNNELS_OPTION_KEY = 'cvmtry_funnels';
 
     /**
      * The wp_options key holding internal email notification configuration.
      *
-     * Stored NON-AUTOLOADED, like cvm_form_settings: it carries a per-form
+     * Stored NON-AUTOLOADED, like cvmtry_form_settings: it carries a per-form
      * rule map that grows with the site, and on the default (disabled) install
      * it is read at most once per submission rather than on every request.
      */
-    public const string NOTIFICATION_OPTION_KEY = 'cvm_notification_settings';
+    public const string NOTIFICATION_OPTION_KEY = 'cvmtry_notification_settings';
 
     /**
      * @var string[] Event types the frontend tracker can record.
@@ -341,7 +341,7 @@ final class Options
     /**
      * Whether a given event type should be recorded.
      *
-     * Unknown types (custom events recorded via cvm_track_event()) are always
+     * Unknown types (custom events recorded via cvmtry_track_event()) are always
      * allowed; only the built-in tracker types can be toggled off.
      *
      * @param string $type Event type key (e.g. "pageview").

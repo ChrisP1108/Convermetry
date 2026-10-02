@@ -40,7 +40,7 @@ use Convermetry\Forms\Providers\WPFormsProvider;
 final class FormProviderRegistry
 {
     /** Transient key prefix for per-provider discovery caches. */
-    private const string DISCOVERY_CACHE_PREFIX = 'cvm_forms_';
+    private const string DISCOVERY_CACHE_PREFIX = 'cvmtry_forms_';
 
     /** Seconds a provider's discovered-forms list is cached. */
     private const int DISCOVERY_CACHE_TTL = 5 * MINUTE_IN_SECONDS;

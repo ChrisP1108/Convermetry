@@ -123,7 +123,7 @@ final class EventTypeRegistrationTest extends TestCase
 
     /**
      * Unknown types are always allowed through isTypeEnabled() — that is what
-     * makes cvm_track_event() usable for site-specific server-side events. Only
+     * makes cvmtry_track_event() usable for site-specific server-side events. Only
      * the built-in list is toggleable.
      */
     public function testUnknownTypesAreNotToggleable(): void

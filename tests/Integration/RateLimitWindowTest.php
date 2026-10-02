@@ -28,7 +28,7 @@ use ReflectionMethod;
  */
 final class RateLimitWindowTest extends IntegrationTestCase
 {
-    private const string KEY = 'cvm_rl_integration_probe';
+    private const string KEY = 'cvmtry_rl_integration_probe';
 
     protected function setUp(): void
     {

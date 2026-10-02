@@ -506,7 +506,7 @@ final class AtomicFormsTest extends TestCase
     public function testInternalCorrelationFieldsNeverSurviveNormalization(): void
     {
         $descriptors = AtomicFormsBridge::buildFields(
-            ['cvm_conversion_id' => 'c123', 'cvm_session_id' => 'abc', 'email' => 'ada@example.test'],
+            ['cvmtry_conversion_id' => 'c123', 'cvmtry_session_id' => 'abc', 'email' => 'ada@example.test'],
             []
         );
 

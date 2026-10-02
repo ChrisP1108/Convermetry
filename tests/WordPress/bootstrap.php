@@ -26,16 +26,16 @@
  * recorded through the plugin's own public API, which is the same entry point
  * every provider adapter calls.
  *
- * CONFIGURATION. The suite SKIPS cleanly when CVM_WP_DIR is unset, so
+ * CONFIGURATION. The suite SKIPS cleanly when CVMTRY_WP_DIR is unset, so
  * `composer test` on a laptop is unaffected:
  *
- *     CVM_WP_DIR       path to a WordPress core whose wp-content/plugins holds
+ *     CVMTRY_WP_DIR       path to a WordPress core whose wp-content/plugins holds
  *                      this plugin in a directory named 'convermetry'
- *     CVM_WP_DB_NAME   default cvm_wp_test
- *     CVM_WP_DB_HOST   default 127.0.0.1
- *     CVM_WP_DB_USER   default root
- *     CVM_WP_DB_PASS   default ''
- *     CVM_WP_PORT      default 8731, the receiver's port
+ *     CVMTRY_WP_DB_NAME   default cvmtry_wp_test
+ *     CVMTRY_WP_DB_HOST   default 127.0.0.1
+ *     CVMTRY_WP_DB_USER   default root
+ *     CVMTRY_WP_DB_PASS   default ''
+ *     CVMTRY_WP_PORT      default 8731, the receiver's port
  *
  * THE DATABASE IS DROPPED AND REINSTALLED ON EVERY RUN. Point it at a scratch
  * database, never at a real site's.
@@ -45,9 +45,9 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../../vendor/autoload.php';
 
-if ((string) getenv('CVM_WP_DIR') === '') {
+if ((string) getenv('CVMTRY_WP_DIR') === '') {
     // Nothing is booted; WordPressTestCase skips every test with an explanation.
-    define('CVM_WP_E2E_READY', false);
+    define('CVMTRY_WP_E2E_READY', false);
 
     return;
 }
@@ -68,6 +68,6 @@ if ($status !== 0) {
 
 require __DIR__ . '/wp-boot.php';
 
-cvm_wp_boot();
+cvmtry_wp_boot();
 
-define('CVM_WP_E2E_READY', true);
+define('CVMTRY_WP_E2E_READY', true);

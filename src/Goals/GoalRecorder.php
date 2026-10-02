@@ -55,7 +55,7 @@ use Convermetry\Settings\Options;
 final class GoalRecorder
 {
     /** Transient recording goal matches dropped by the per-event cap. */
-    public const string OVERFLOW_TRANSIENT = 'cvm_goal_overflow';
+    public const string OVERFLOW_TRANSIENT = 'cvmtry_goal_overflow';
 
     /**
      * Matches an event batch against the configured goals.

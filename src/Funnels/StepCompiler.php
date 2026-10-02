@@ -18,7 +18,7 @@ if (!defined('ABSPATH')) exit;
  * TWO SOURCES, ONE ORDERING SCALE.
  *
  * Most steps read the events table and order by its `id`. A goal step reads
- * cvm_goal_completions and orders by `source_event_id` — the id of the event
+ * cvmtry_goal_completions and orders by `source_event_id` — the id of the event
  * that triggered the completion — which is a value on the SAME scale. That is
  * the entire reason completions carry it: without it a funnel could not ask
  * "did this goal happen after that pageview?" without inventing a marker row,

@@ -15,7 +15,7 @@ declare(strict_types=1);
 
 require __DIR__ . '/wp-boot.php';
 
-cvm_wp_boot(installing: true);
+cvmtry_wp_boot(installing: true);
 
 global $wpdb;
 
@@ -50,7 +50,7 @@ wp_installing(false);
 $plugin = 'convermetry/convermetry.php';
 
 if (!file_exists(WP_PLUGIN_DIR . '/' . $plugin)) {
-    fwrite(STDERR, 'The plugin is not in ' . WP_PLUGIN_DIR . " — CVM_WP_DIR must point at a WordPress whose\n"
+    fwrite(STDERR, 'The plugin is not in ' . WP_PLUGIN_DIR . " — CVMTRY_WP_DIR must point at a WordPress whose\n"
         . "wp-content/plugins contains a 'convermetry' directory (a symlink is fine).\n");
     exit(1);
 }

@@ -15,14 +15,14 @@
 
 declare(strict_types=1);
 
-$log = (string) getenv('CVM_RECEIVER_LOG');
+$log = (string) getenv('CVMTRY_RECEIVER_LOG');
 $uri = (string) parse_url((string) ($_SERVER['REQUEST_URI'] ?? '/'), PHP_URL_PATH);
 
 // Answered before anything is captured: an identity probe is the caller's, not
 // a delivery, and recording it would show up as a phantom webhook.
 if ($uri === '/whoami') {
     header('Content-Type: text/plain');
-    echo (string) getenv('CVM_RECEIVER_TOKEN');
+    echo (string) getenv('CVMTRY_RECEIVER_TOKEN');
 
     return true;
 }

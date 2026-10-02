@@ -182,6 +182,7 @@ final class SubmissionContext
 
         global $wpdb;
 
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- write to the plugin's custom submissions table.
         $wpdb->update(
             FormSubmissions::tableName(),
             ['context' => $contextJson],

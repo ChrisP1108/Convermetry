@@ -120,7 +120,7 @@ final class BricksCorrelationTransportTest extends TestCase
             [Correlation::FIELD_CONVERSION, Correlation::FIELD_SESSION, Correlation::FIELD_CONTEXT] as $field
         ) {
             self::assertStringContainsString(
-                'FIELD_' . strtoupper(str_replace('cvm_', '', str_replace('_id', '', $field))),
+                'FIELD_' . strtoupper(str_replace('cvmtry_', '', str_replace('_id', '', $field))),
                 $block,
                 $field . ' must travel with a Bricks submission'
             );
@@ -149,14 +149,14 @@ final class BricksCorrelationTransportTest extends TestCase
     }
 
     /**
-     * The same rules every other form on the page is held to: data-cvm-ignore
+     * The same rules every other form on the page is held to: data-cvmtry-ignore
      * means ignore, and nothing inside the admin bar is instrumented.
      */
     public function testThePrivacyAndOptOutGatesApplyToBricksToo(): void
     {
         $block = self::bricksBlock();
 
-        self::assertStringContainsString('data-cvm-ignore', $block);
+        self::assertStringContainsString('data-cvmtry-ignore', $block);
         self::assertStringContainsString('inAdminBar(form)', $block);
     }
 
@@ -182,7 +182,7 @@ final class BricksCorrelationTransportTest extends TestCase
 
     /**
      * ONE TOKEN PER ATTEMPT. A Bricks form carries the server-rendered
-     * data-cvm-form-key, which makes correlatableForm() recognise it — so the
+     * data-cvmtry-form-key, which makes correlatableForm() recognise it — so the
      * native submit listener may already have minted this attempt's token before
      * Bricks prepared its request. Minting a second one here would split one
      * submission between two conversion ids, the server recording one and the
@@ -282,7 +282,7 @@ final class BricksCorrelationTransportTest extends TestCase
     // ------------------------------------------------- the authoritative key
 
     /**
-     * The tracker prefers the server-rendered data-cvm-form-key over every DOM
+     * The tracker prefers the server-rendered data-cvmtry-form-key over every DOM
      * heuristic, and the server renders the SAME provider-scoped key it records
      * the submission under. If these ever diverge, a form's browser-observed
      * engagement is attributed to a key that joins to nothing.
@@ -291,7 +291,7 @@ final class BricksCorrelationTransportTest extends TestCase
     {
         $code = self::trackerCode();
 
-        self::assertStringContainsString("const FORM_ATTR = 'data-cvm-form-key'", $code);
+        self::assertStringContainsString("const FORM_ATTR = 'data-cvmtry-form-key'", $code);
         self::assertStringContainsString("const BRICKS_KEY_PREFIX = 'bricks:'", $code);
 
         self::assertSame(

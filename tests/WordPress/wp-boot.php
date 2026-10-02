@@ -6,8 +6,8 @@
  * exactly on which core, which database and which server variables are in play.
  *
  * The database named here is dropped and recreated by the installer. Point it at
- * a scratch database, never at a real site's — CVM_WP_DB_NAME is deliberately
- * separate from the integration suite's CVM_TEST_DB_NAME so neither can be
+ * a scratch database, never at a real site's — CVMTRY_WP_DB_NAME is deliberately
+ * separate from the integration suite's CVMTRY_TEST_DB_NAME so neither can be
  * mistaken for the other.
  *
  * @param bool $installing True to set WP_INSTALLING, which is what lets
@@ -18,12 +18,12 @@
 
 declare(strict_types=1);
 
-function cvm_wp_boot(bool $installing = false): void
+function cvmtry_wp_boot(bool $installing = false): void
 {
-    $dir = (string) getenv('CVM_WP_DIR');
+    $dir = (string) getenv('CVMTRY_WP_DIR');
 
     if ($dir === '' || !is_file($dir . '/wp-settings.php')) {
-        fwrite(STDERR, "CVM_WP_DIR does not point at a WordPress core (no wp-settings.php).\n");
+        fwrite(STDERR, "CVMTRY_WP_DIR does not point at a WordPress core (no wp-settings.php).\n");
         exit(1);
     }
 
@@ -36,10 +36,10 @@ function cvm_wp_boot(bool $installing = false): void
     $_SERVER['SERVER_PROTOCOL'] = $_SERVER['SERVER_PROTOCOL'] ?? 'HTTP/1.1';
 
     define('ABSPATH', $dir . '/');
-    define('DB_NAME', (string) (getenv('CVM_WP_DB_NAME') ?: 'cvm_wp_test'));
-    define('DB_USER', (string) (getenv('CVM_WP_DB_USER') ?: 'root'));
-    define('DB_PASSWORD', (string) getenv('CVM_WP_DB_PASS'));
-    define('DB_HOST', (string) (getenv('CVM_WP_DB_HOST') ?: '127.0.0.1'));
+    define('DB_NAME', (string) (getenv('CVMTRY_WP_DB_NAME') ?: 'cvmtry_wp_test'));
+    define('DB_USER', (string) (getenv('CVMTRY_WP_DB_USER') ?: 'root'));
+    define('DB_PASSWORD', (string) getenv('CVMTRY_WP_DB_PASS'));
+    define('DB_HOST', (string) (getenv('CVMTRY_WP_DB_HOST') ?: '127.0.0.1'));
     define('DB_CHARSET', 'utf8mb4');
     define('DB_COLLATE', '');
 

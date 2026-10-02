@@ -48,11 +48,11 @@ final class EndToEndDeliveryTest extends WordPressTestCase
         parent::setUp();
 
         if (self::$receiver === null) {
-            $receiver = new WebhookReceiver((int) (getenv('CVM_WP_PORT') ?: 8731));
+            $receiver = new WebhookReceiver((int) (getenv('CVMTRY_WP_PORT') ?: 8731));
 
             if (!$receiver->start()) {
                 $held = $receiver->portHeldByStranger()
-                    ? ' Something else is already listening on that port — set CVM_WP_PORT to a free one.'
+                    ? ' Something else is already listening on that port — set CVMTRY_WP_PORT to a free one.'
                     : '';
 
                 self::fail('The webhook receiver did not start.' . $held);
@@ -151,13 +151,13 @@ final class EndToEndDeliveryTest extends WordPressTestCase
         global $wpdb;
 
         foreach ([
-            'cvm_events',
-            'cvm_form_submissions',
-            'cvm_delivery_queue',
-            'cvm_webhook_deliveries',
-            'cvm_notification_queue',
-            'cvm_goal_completions',
-            'cvm_lead_events',
+            'cvmtry_events',
+            'cvmtry_form_submissions',
+            'cvmtry_delivery_queue',
+            'cvmtry_webhook_deliveries',
+            'cvmtry_notification_queue',
+            'cvmtry_goal_completions',
+            'cvmtry_lead_events',
         ] as $table) {
             $name = $wpdb->prefix . $table;
 
@@ -171,8 +171,8 @@ final class EndToEndDeliveryTest extends WordPressTestCase
 
     public function testActivationScheduledTheCronEvents(): void
     {
-        self::assertIsInt(wp_next_scheduled('cvm_cleanup_old_events'), 'The daily cleanup must be scheduled');
-        self::assertIsInt(wp_next_scheduled('cvm_dispatch_webhooks'), 'The analytics dispatcher must be scheduled');
+        self::assertIsInt(wp_next_scheduled('cvmtry_cleanup_old_events'), 'The daily cleanup must be scheduled');
+        self::assertIsInt(wp_next_scheduled('cvmtry_dispatch_webhooks'), 'The analytics dispatcher must be scheduled');
     }
 
     // ── REST ─────────────────────────────────────────────────────────────────
@@ -206,7 +206,7 @@ final class EndToEndDeliveryTest extends WordPressTestCase
         self::assertSame(['stored' => 1], $response->get_data());
         self::assertSame(
             '1',
-            $wpdb->get_var('SELECT COUNT(*) FROM ' . $wpdb->prefix . 'cvm_events'),
+            $wpdb->get_var('SELECT COUNT(*) FROM ' . $wpdb->prefix . 'cvmtry_events'),
             'The event must reach the table'
         );
     }
@@ -238,7 +238,7 @@ final class EndToEndDeliveryTest extends WordPressTestCase
         self::assertSame(['stored' => 0], $response->get_data());
         self::assertSame(
             '0',
-            $wpdb->get_var('SELECT COUNT(*) FROM ' . $wpdb->prefix . 'cvm_events'),
+            $wpdb->get_var('SELECT COUNT(*) FROM ' . $wpdb->prefix . 'cvmtry_events'),
             'and nothing it sent is stored'
         );
     }
@@ -264,7 +264,7 @@ final class EndToEndDeliveryTest extends WordPressTestCase
         $this->submit();
 
         $submissionId = (string) $wpdb->get_var(
-            'SELECT submission_id FROM ' . $wpdb->prefix . 'cvm_form_submissions LIMIT 1'
+            'SELECT submission_id FROM ' . $wpdb->prefix . 'cvmtry_form_submissions LIMIT 1'
         );
         self::assertNotSame('', $submissionId, 'The submission must be recorded');
 
@@ -297,7 +297,7 @@ final class EndToEndDeliveryTest extends WordPressTestCase
         $this->submit('grace@example.com');
 
         $submissionId = (string) $wpdb->get_var(
-            'SELECT submission_id FROM ' . $wpdb->prefix . 'cvm_form_submissions LIMIT 1'
+            'SELECT submission_id FROM ' . $wpdb->prefix . 'cvmtry_form_submissions LIMIT 1'
         );
 
         do_action(FormDeliveryQueue::WORKER_HOOK);
@@ -344,7 +344,7 @@ final class EndToEndDeliveryTest extends WordPressTestCase
         $this->submit();
 
         $submissionId = (string) $wpdb->get_var(
-            'SELECT submission_id FROM ' . $wpdb->prefix . 'cvm_form_submissions LIMIT 1'
+            'SELECT submission_id FROM ' . $wpdb->prefix . 'cvmtry_form_submissions LIMIT 1'
         );
 
         do_action(FormDeliveryQueue::WORKER_HOOK);
@@ -360,7 +360,7 @@ final class EndToEndDeliveryTest extends WordPressTestCase
         self::assertSame(
             '500',
             $wpdb->get_var(
-                'SELECT response_code FROM ' . $wpdb->prefix . 'cvm_webhook_deliveries'
+                'SELECT response_code FROM ' . $wpdb->prefix . 'cvmtry_webhook_deliveries'
                 . " WHERE submission_id = '" . esc_sql($submissionId) . "' ORDER BY id DESC LIMIT 1"
             )
         );
@@ -378,7 +378,7 @@ final class EndToEndDeliveryTest extends WordPressTestCase
         $this->submit();
 
         $submissionId = (string) $wpdb->get_var(
-            'SELECT submission_id FROM ' . $wpdb->prefix . 'cvm_form_submissions LIMIT 1'
+            'SELECT submission_id FROM ' . $wpdb->prefix . 'cvmtry_form_submissions LIMIT 1'
         );
 
         self::assertNotSame('', $submissionId);

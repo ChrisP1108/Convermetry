@@ -41,7 +41,7 @@ final class FormsPage
     public const string MENU_SLUG = 'convermetry-forms';
 
     /** admin-post action name for saving the page. */
-    private const string SAVE_ACTION = 'cvm_save_forms';
+    private const string SAVE_ACTION = 'cvmtry_save_forms';
 
     private static ?FormProviderRegistry $registry = null;
 
@@ -91,27 +91,27 @@ final class FormsPage
         }
 
         wp_enqueue_style(
-            'cvm-forms',
-            CVM_PLUGIN_URL . 'assets/css/admin-forms.css',
+            'cvmtry-forms',
+            CVMTRY_PLUGIN_URL . 'assets/css/admin-forms.css',
             [AdminAssets::COMMON_HANDLE],
-            CVM_VERSION
+            CVMTRY_VERSION
         );
 
         wp_enqueue_script(
-            'cvm-admin',
-            CVM_PLUGIN_URL . 'assets/js/admin.js',
+            'cvmtry-admin',
+            CVMTRY_PLUGIN_URL . 'assets/js/admin.js',
             ['wp-i18n'],
-            CVM_VERSION,
+            CVMTRY_VERSION,
             true
         );
-        wp_set_script_translations('cvm-admin', 'convermetry');
+        wp_set_script_translations('cvmtry-admin', 'convermetry');
     }
 
     /**
      * Validates and persists the per-form configuration POST.
      *
      * Only forms actually rendered on the saving page (listed in
-     * cvm_rendered_forms) are written; configuration for every other form —
+     * cvmtry_rendered_forms) are written; configuration for every other form —
      * e.g. forms of a temporarily deactivated provider — is preserved
      * untouched.
      *
@@ -121,15 +121,15 @@ final class FormsPage
     {
         if (
             !Capability::currentUserCan(Capability::FORMS_MANAGE)
-            || !isset($_POST['cvm_forms_nonce'])
-            || !wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['cvm_forms_nonce'])), self::SAVE_ACTION)
+            || !isset($_POST['cvmtry_forms_nonce'])
+            || !wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['cvmtry_forms_nonce'])), self::SAVE_ACTION)
         ) {
             wp_die(esc_html__('Invalid request.', 'convermetry'), '', ['response' => 403]);
         }
 
         // phpcs:disable WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- sanitized field by field in the loop below and by FormSettings.
-        $rawForms = isset($_POST['cvm_forms']) && is_array($_POST['cvm_forms'])
-            ? wp_unslash($_POST['cvm_forms'])
+        $rawForms = isset($_POST['cvmtry_forms']) && is_array($_POST['cvmtry_forms'])
+            ? wp_unslash($_POST['cvmtry_forms'])
             : [];
         // phpcs:enable WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
 
@@ -162,7 +162,7 @@ final class FormsPage
         FormSettings::saveRendered($configs, $rendered);
 
         wp_safe_redirect(add_query_arg(
-            ['page' => self::MENU_SLUG, 'cvm_saved' => '1'],
+            ['page' => self::MENU_SLUG, 'cvmtry_saved' => '1'],
             self_admin_url('admin.php')
         ));
         exit;
@@ -207,7 +207,12 @@ final class FormsPage
      */
     public static function maybeShowNotices(): void
     {
-        if (isset($_GET['page']) && $_GET['page'] === self::MENU_SLUG && !empty($_GET['cvm_saved'])) {
+        // phpcs:disable WordPress.Security.NonceVerification.Recommended -- display-only: identifies this screen and reads the flag from the redirect after handleSave(), which verifies its nonce and capability.
+        $page  = isset($_GET['page']) ? sanitize_key(wp_unslash($_GET['page'])) : '';
+        $saved = isset($_GET['cvmtry_saved']) && sanitize_key(wp_unslash($_GET['cvmtry_saved'])) === '1';
+        // phpcs:enable WordPress.Security.NonceVerification.Recommended
+
+        if ($page === self::MENU_SLUG && $saved) {
             ?>
             <div class="notice notice-success is-dismissible"><p><?php esc_html_e('Form settings saved.', 'convermetry'); ?></p></div>
             <?php
@@ -262,7 +267,7 @@ final class FormsPage
             <?php
         } else {
             ?>
-            <table class="widefat striped cvm-goals-table"><thead><tr>
+            <table class="widefat striped cvmtry-goals-table"><thead><tr>
             <th scope="col"><?php esc_html_e('Form', 'convermetry'); ?></th>
             <?php
             $columns = [
@@ -276,7 +281,7 @@ final class FormsPage
             ];
             foreach ($columns as $label) {
                 ?>
-                <th scope="col" class="cvm-num"><?php echo esc_html($label); ?></th>
+                <th scope="col" class="cvmtry-num"><?php echo esc_html($label); ?></th>
                 <?php
             }
             ?>
@@ -286,7 +291,7 @@ final class FormsPage
             foreach ($forms as $form) {
                 ?>
                 <tr>
-                <td><strong><?php echo esc_html($form['form_name'] !== '' ? $form['form_name'] : $form['form_key']); ?></strong><div class="cvm-goal-meta"><code><?php echo esc_html($form['form_key']); ?></code>
+                <td><strong><?php echo esc_html($form['form_name'] !== '' ? $form['form_name'] : $form['form_key']); ?></strong><div class="cvmtry-goal-meta"><code><?php echo esc_html($form['form_key']); ?></code>
                 <?php
                 if ($form['in_progress'] > 0) {
                     echo ' &middot; ' . esc_html(sprintf(
@@ -309,7 +314,7 @@ final class FormsPage
                     $form['started'] > 0 ? $form['completion_rate'] . '%' : '—',
                 ] as $cell) {
                     ?>
-                    <td class="cvm-num"><?php echo esc_html((string) $cell); ?></td>
+                    <td class="cvmtry-num"><?php echo esc_html((string) $cell); ?></td>
                     <?php
                 }
 
@@ -338,9 +343,9 @@ final class FormsPage
             ?>
             <h3><?php esc_html_e('Most common friction points', 'convermetry'); ?></h3>
             <p class="description" style="max-width:760px;"><?php echo wp_kses_post(__('Which fields fail validation most often. Convermetry records the field\'s name, its type, and which check failed — <strong>never what the visitor typed</strong>.', 'convermetry')); ?></p>
-            <table class="widefat striped cvm-goals-table"><thead><tr>
+            <table class="widefat striped cvmtry-goals-table"><thead><tr>
             <th scope="col"><?php esc_html_e('Field', 'convermetry'); ?></th><th scope="col"><?php esc_html_e('Type', 'convermetry'); ?></th><th scope="col"><?php esc_html_e('Problem', 'convermetry'); ?></th>
-            <th scope="col" class="cvm-num"><?php esc_html_e('Errors', 'convermetry'); ?></th><th scope="col" class="cvm-num"><?php esc_html_e('Sessions', 'convermetry'); ?></th></tr></thead><tbody>
+            <th scope="col" class="cvmtry-num"><?php esc_html_e('Errors', 'convermetry'); ?></th><th scope="col" class="cvmtry-num"><?php esc_html_e('Sessions', 'convermetry'); ?></th></tr></thead><tbody>
             <?php
 
             foreach ($friction as $row) {
@@ -349,8 +354,8 @@ final class FormsPage
                 <td><code><?php echo esc_html($row['field_id']); ?></code></td>
                 <td><?php echo esc_html($row['field_type']); ?></td>
                 <td><?php echo esc_html(self::errorLabel($row['error_type'])); ?></td>
-                <td class="cvm-num"><?php echo esc_html(number_format_i18n($row['errors'])); ?></td>
-                <td class="cvm-num"><?php echo esc_html(number_format_i18n($row['sessions'])); ?></td></tr>
+                <td class="cvmtry-num"><?php echo esc_html(number_format_i18n($row['errors'])); ?></td>
+                <td class="cvmtry-num"><?php echo esc_html(number_format_i18n($row['sessions'])); ?></td></tr>
                 <?php
             }
 
@@ -393,7 +398,7 @@ final class FormsPage
         $registry = self::$registry ?? new FormProviderRegistry();
 
         ?>
-        <div class="wrap cvm-wrap">
+        <div class="wrap cvmtry-wrap">
         <h1><?php esc_html_e('Convermetry Forms', 'convermetry'); ?></h1>
         <p class="description" style="max-width:760px;"><?php echo wp_kses_post(__('Convermetry automatically detects supported form plugins and discovers their forms. Detected forms are <strong>included by default</strong> — a new form starts recording conversions and delivering webhooks without any setup. Exclude a form to stop processing it; its configuration is preserved and restored when re-enabled. <strong>Builder forms that run an explicit action list are the exception</strong> — Elementor Atomic forms and Bricks Builder forms only run the actions you choose in their own editor, so each one needs the Convermetry action added before anything is captured. Both are listed here as soon as they are found, whether or not that action has been added; the notices below say what to do.', 'convermetry')); ?></p>
         <?php
@@ -402,7 +407,7 @@ final class FormsPage
 
         // ── Provider status cards ──────────────────────────────────────
         ?>
-        <div class="cvm-cards cvm-provider-cards">
+        <div class="cvmtry-cards cvmtry-provider-cards">
         <?php
         $availableProviders = [];
         foreach ($registry->all() as $provider) {
@@ -412,9 +417,9 @@ final class FormsPage
             }
 
             ?>
-            <div class="cvm-card cvm-provider-card">
-            <span class="cvm-card-label"><?php echo esc_html($provider->getLabel()); ?></span>
-            <span class="cvm-provider-status <?php echo ($available ? 'is-active' : 'is-unavailable'); ?>"><?php echo esc_html($available ? __('Active', 'convermetry') : __('Unavailable', 'convermetry')); ?></span></div>
+            <div class="cvmtry-card cvmtry-provider-card">
+            <span class="cvmtry-card-label"><?php echo esc_html($provider->getLabel()); ?></span>
+            <span class="cvmtry-provider-status <?php echo ($available ? 'is-active' : 'is-unavailable'); ?>"><?php echo esc_html($available ? __('Active', 'convermetry') : __('Unavailable', 'convermetry')); ?></span></div>
             <?php
         }
         ?>
@@ -447,14 +452,14 @@ final class FormsPage
         ?>
         <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
         <?php
-        wp_nonce_field(self::SAVE_ACTION, 'cvm_forms_nonce');
+        wp_nonce_field(self::SAVE_ACTION, 'cvmtry_forms_nonce');
         ?>
         <input type="hidden" name="action" value="<?php echo esc_attr(self::SAVE_ACTION); ?>">
-        <div class="cvm-form-filters">
-        <label class="screen-reader-text" for="cvm-form-search"><?php esc_html_e('Search forms', 'convermetry'); ?></label>
-        <input type="search" id="cvm-form-search" placeholder="<?php esc_attr_e('Search by form name or ID…', 'convermetry'); ?>">
-        <label class="screen-reader-text" for="cvm-form-provider-filter"><?php esc_html_e('Filter by provider', 'convermetry'); ?></label>
-        <select id="cvm-form-provider-filter"><option value=""><?php esc_html_e('All Providers', 'convermetry'); ?></option>
+        <div class="cvmtry-form-filters">
+        <label class="screen-reader-text" for="cvmtry-form-search"><?php esc_html_e('Search forms', 'convermetry'); ?></label>
+        <input type="search" id="cvmtry-form-search" placeholder="<?php esc_attr_e('Search by form name or ID…', 'convermetry'); ?>">
+        <label class="screen-reader-text" for="cvmtry-form-provider-filter"><?php esc_html_e('Filter by provider', 'convermetry'); ?></label>
+        <select id="cvmtry-form-provider-filter"><option value=""><?php esc_html_e('All Providers', 'convermetry'); ?></option>
         <?php
         foreach ($availableProviders as $provider) {
             ?>
@@ -463,18 +468,18 @@ final class FormsPage
         }
         ?>
         </select>
-        <label class="screen-reader-text" for="cvm-form-state-filter"><?php esc_html_e('Filter by state', 'convermetry'); ?></label>
-        <select id="cvm-form-state-filter"><option value=""><?php esc_html_e('All States', 'convermetry'); ?></option><option value="included"><?php esc_html_e('Included', 'convermetry'); ?></option><option value="excluded"><?php esc_html_e('Excluded', 'convermetry'); ?></option></select>
-        <span class="cvm-form-filter-summary"><?php
+        <label class="screen-reader-text" for="cvmtry-form-state-filter"><?php esc_html_e('Filter by state', 'convermetry'); ?></label>
+        <select id="cvmtry-form-state-filter"><option value=""><?php esc_html_e('All States', 'convermetry'); ?></option><option value="included"><?php esc_html_e('Included', 'convermetry'); ?></option><option value="excluded"><?php esc_html_e('Excluded', 'convermetry'); ?></option></select>
+        <span class="cvmtry-form-filter-summary"><?php
         // The count span is what forms admin.js rewrites as the filters change.
         echo wp_kses_post(sprintf(
             /* translators: 1: number of forms currently shown, 2: total number of forms. */
             _n('%1$s of %2$d form shown', '%1$s of %2$d forms shown', count($discovered), 'convermetry'),
-            '<span id="cvm-form-filter-count">' . count($discovered) . '</span>',
+            '<span id="cvmtry-form-filter-count">' . count($discovered) . '</span>',
             count($discovered)
         ));
         ?></span></div>
-        <div id="cvm-forms-list">
+        <div id="cvmtry-forms-list">
         <?php
 
         if ($discovered === []) {
@@ -622,23 +627,23 @@ final class FormsPage
         );
         $config    = FormSettings::forForm($readKey);
         $hash      = md5($formKey);
-        $name    = 'cvm_forms[' . $hash . ']';
+        $name    = 'cvmtry_forms[' . $hash . ']';
 
         ?>
-        <details class="cvm-form-block" data-provider="<?php echo esc_attr($form['provider']); ?>" data-name="<?php echo esc_attr($form['name']); ?>" data-native-id="<?php echo esc_attr($form['native_id']); ?>" data-form-id="<?php echo esc_attr($config['form_id']); ?>" data-excluded="<?php echo ($config['excluded'] ? '1' : '0'); ?>">
-        <summary class="cvm-form-block-summary">
-        <span class="cvm-form-block-name"><?php echo esc_html($form['name']); ?></span>
-        <span class="cvm-form-block-provider"><?php echo esc_html($form['provider_label']); ?></span>
-        <span class="cvm-form-state-badge <?php echo ($config['excluded'] ? 'is-excluded' : 'is-included'); ?>"><?php echo esc_html($config['excluded'] ? __('Excluded', 'convermetry') : __('Included', 'convermetry')); ?></span></summary>
-        <div class="cvm-form-block-body">
+        <details class="cvmtry-form-block" data-provider="<?php echo esc_attr($form['provider']); ?>" data-name="<?php echo esc_attr($form['name']); ?>" data-native-id="<?php echo esc_attr($form['native_id']); ?>" data-form-id="<?php echo esc_attr($config['form_id']); ?>" data-excluded="<?php echo ($config['excluded'] ? '1' : '0'); ?>">
+        <summary class="cvmtry-form-block-summary">
+        <span class="cvmtry-form-block-name"><?php echo esc_html($form['name']); ?></span>
+        <span class="cvmtry-form-block-provider"><?php echo esc_html($form['provider_label']); ?></span>
+        <span class="cvmtry-form-state-badge <?php echo ($config['excluded'] ? 'is-excluded' : 'is-included'); ?>"><?php echo esc_html($config['excluded'] ? __('Excluded', 'convermetry') : __('Included', 'convermetry')); ?></span></summary>
+        <div class="cvmtry-form-block-body">
         <input type="hidden" name="<?php echo esc_attr($name . '[key]'); ?>" value="<?php echo esc_attr($formKey); ?>">
         <table class="form-table" role="presentation">
         <tr><th scope="row"><?php esc_html_e('Native Form ID', 'convermetry'); ?></th><td><code><?php echo esc_html($form['native_id']); ?></code></td></tr>
-        <tr><th scope="row"><label for="cvm-form-id-<?php echo esc_attr($hash); ?>"><?php esc_html_e('Custom/External Form ID', 'convermetry'); ?></label></th><td>
-        <input type="text" id="cvm-form-id-<?php echo esc_attr($hash); ?>" class="regular-text cvm-form-id-input" name="<?php echo esc_attr($name . '[form_id]'); ?>" value="<?php echo esc_attr($config['form_id']); ?>">
+        <tr><th scope="row"><label for="cvmtry-form-id-<?php echo esc_attr($hash); ?>"><?php esc_html_e('Custom/External Form ID', 'convermetry'); ?></label></th><td>
+        <input type="text" id="cvmtry-form-id-<?php echo esc_attr($hash); ?>" class="regular-text cvmtry-form-id-input" name="<?php echo esc_attr($name . '[form_id]'); ?>" value="<?php echo esc_attr($config['form_id']); ?>">
         <p class="description"><?php echo wp_kses_post(__('Sent as <code>form_id</code> in webhook payloads for this form. Leave blank to use the native form ID.', 'convermetry')); ?></p></td></tr>
         <tr><th scope="row"><?php esc_html_e('Status', 'convermetry'); ?></th><td>
-        <label><input type="checkbox" class="cvm-form-excluded-toggle" name="<?php echo esc_attr($name . '[excluded]'); ?>" value="1" <?php echo checked($config['excluded'], true, false); ?>>
+        <label><input type="checkbox" class="cvmtry-form-excluded-toggle" name="<?php echo esc_attr($name . '[excluded]'); ?>" value="1" <?php echo checked($config['excluded'], true, false); ?>>
         <?php esc_html_e('Exclude this form', 'convermetry'); ?></label>
         <p class="description"><?php esc_html_e('Excluded forms are not recorded or delivered. Their configuration is preserved.', 'convermetry'); ?>
         <?php
@@ -682,22 +687,22 @@ final class FormsPage
     private static function renderKvBuilder(string $name, array $pairs): void
     {
         ?>
-        <div class="cvm-kv-builder" data-kv-name="<?php echo esc_attr($name); ?>" data-kv-next="<?php echo esc_attr((string) count($pairs)); ?>">
-        <div class="cvm-kv-rows">
+        <div class="cvmtry-kv-builder" data-kv-name="<?php echo esc_attr($name); ?>" data-kv-next="<?php echo esc_attr((string) count($pairs)); ?>">
+        <div class="cvmtry-kv-rows">
         <?php
 
         foreach ($pairs as $index => $pair) {
             ?>
-            <div class="cvm-kv-row">
-            <input type="text" class="regular-text code cvm-kv-key" name="<?php echo esc_attr($name . '[' . $index . '][key]'); ?>" placeholder="<?php esc_attr_e('Key', 'convermetry'); ?>" value="<?php echo esc_attr((string) ($pair['key'] ?? '')); ?>">
-            <input type="text" class="regular-text code cvm-kv-value" name="<?php echo esc_attr($name . '[' . $index . '][value]'); ?>" placeholder="<?php esc_attr_e('Value', 'convermetry'); ?>" value="<?php echo esc_attr((string) ($pair['value'] ?? '')); ?>">
-            <button type="button" class="button cvm-kv-remove" aria-label="<?php esc_attr_e('Remove this row', 'convermetry'); ?>"><?php esc_html_e('Remove', 'convermetry'); ?></button></div>
+            <div class="cvmtry-kv-row">
+            <input type="text" class="regular-text code cvmtry-kv-key" name="<?php echo esc_attr($name . '[' . $index . '][key]'); ?>" placeholder="<?php esc_attr_e('Key', 'convermetry'); ?>" value="<?php echo esc_attr((string) ($pair['key'] ?? '')); ?>">
+            <input type="text" class="regular-text code cvmtry-kv-value" name="<?php echo esc_attr($name . '[' . $index . '][value]'); ?>" placeholder="<?php esc_attr_e('Value', 'convermetry'); ?>" value="<?php echo esc_attr((string) ($pair['value'] ?? '')); ?>">
+            <button type="button" class="button cvmtry-kv-remove" aria-label="<?php esc_attr_e('Remove this row', 'convermetry'); ?>"><?php esc_html_e('Remove', 'convermetry'); ?></button></div>
             <?php
         }
 
         ?>
         </div>
-        <button type="button" class="button cvm-kv-add"><?php esc_html_e('+ Add', 'convermetry'); ?></button></div>
+        <button type="button" class="button cvmtry-kv-add"><?php esc_html_e('+ Add', 'convermetry'); ?></button></div>
         <?php
     }
 }

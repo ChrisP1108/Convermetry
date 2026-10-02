@@ -42,10 +42,10 @@ final class WebhooksPage
     public const string MENU_SLUG = 'convermetry-webhooks';
 
     /** admin-post action name for saving the page. */
-    private const string SAVE_ACTION = 'cvm_save_webhooks';
+    private const string SAVE_ACTION = 'cvmtry_save_webhooks';
 
     /** Admin action name for discarding one pending analytics retry. */
-    private const string DISCARD_ACTION = 'cvm_discard_retry';
+    private const string DISCARD_ACTION = 'cvmtry_discard_retry';
 
     /**
      * Registers menu, save, discard, notice, asset, and AJAX hooks.
@@ -59,7 +59,7 @@ final class WebhooksPage
         add_action('admin_init', [self::class, 'handleDiscardRetry']);
         add_action('admin_notices', [self::class, 'maybeShowNotices']);
         add_action('admin_enqueue_scripts', [self::class, 'enqueueAssets']);
-        add_action('wp_ajax_cvm_test_webhook', [self::class, 'handleTestAjax']);
+        add_action('wp_ajax_cvmtry_test_webhook', [self::class, 'handleTestAjax']);
     }
 
     /**
@@ -93,24 +93,24 @@ final class WebhooksPage
         }
 
         wp_enqueue_style(
-            'cvm-webhooks',
-            CVM_PLUGIN_URL . 'assets/css/admin-webhooks.css',
+            'cvmtry-webhooks',
+            CVMTRY_PLUGIN_URL . 'assets/css/admin-webhooks.css',
             [AdminAssets::COMMON_HANDLE],
-            CVM_VERSION
+            CVMTRY_VERSION
         );
 
         wp_enqueue_script(
-            'cvm-admin',
-            CVM_PLUGIN_URL . 'assets/js/admin.js',
+            'cvmtry-admin',
+            CVMTRY_PLUGIN_URL . 'assets/js/admin.js',
             ['wp-i18n'],
-            CVM_VERSION,
+            CVMTRY_VERSION,
             true
         );
-        wp_set_script_translations('cvm-admin', 'convermetry');
+        wp_set_script_translations('cvmtry-admin', 'convermetry');
 
-        wp_localize_script('cvm-admin', 'CVM_ADMIN', [
+        wp_localize_script('cvmtry-admin', 'CVMTRY_ADMIN', [
             'ajaxUrl'   => admin_url('admin-ajax.php'),
-            'testNonce' => wp_create_nonce('cvm_test_webhook'),
+            'testNonce' => wp_create_nonce('cvmtry_test_webhook'),
         ]);
     }
 
@@ -123,8 +123,8 @@ final class WebhooksPage
     {
         if (
             !Capability::currentUserCan(Capability::WEBHOOKS_MANAGE)
-            || !isset($_POST['cvm_webhooks_nonce'])
-            || !wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['cvm_webhooks_nonce'])), self::SAVE_ACTION)
+            || !isset($_POST['cvmtry_webhooks_nonce'])
+            || !wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['cvmtry_webhooks_nonce'])), self::SAVE_ACTION)
         ) {
             wp_die(esc_html__('Invalid request.', 'convermetry'), '', ['response' => 403]);
         }
@@ -159,8 +159,8 @@ final class WebhooksPage
         $claimedIds = [];
 
         // phpcs:disable WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- every field is validated or sanitized in the loop below.
-        $rawEndpoints = isset($_POST['cvm_webhooks']) && is_array($_POST['cvm_webhooks'])
-            ? wp_unslash($_POST['cvm_webhooks'])
+        $rawEndpoints = isset($_POST['cvmtry_webhooks']) && is_array($_POST['cvmtry_webhooks'])
+            ? wp_unslash($_POST['cvmtry_webhooks'])
             : [];
         // phpcs:enable WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
 
@@ -207,20 +207,20 @@ final class WebhooksPage
             ];
         }
 
-        $interval = sanitize_key((string) ($_POST['cvm_interval'] ?? 'daily'));
+        $interval = sanitize_key((string) ($_POST['cvmtry_interval'] ?? 'daily'));
 
         $settings = [
-            'active'              => !empty($_POST['cvm_webhook_active']) && $endpoints !== [],
+            'active'              => !empty($_POST['cvmtry_webhook_active']) && $endpoints !== [],
             'endpoints'           => $endpoints,
             'interval'            => in_array($interval, Options::INTERVALS, true) ? $interval : 'daily',
-            'shared_secret'       => mb_substr(sanitize_text_field(wp_unslash($_POST['cvm_shared_secret'] ?? '')), 0, 190),
-            'backfill'            => !empty($_POST['cvm_backfill']),
+            'shared_secret'       => mb_substr(sanitize_text_field(wp_unslash($_POST['cvmtry_shared_secret'] ?? '')), 0, 190),
+            'backfill'            => !empty($_POST['cvmtry_backfill']),
             // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized, WordPress.Security.ValidatedSanitizedInput.MissingUnslash -- sanitizePairs() unslashes and sanitizes every key and value.
-            'global_headers'      => self::sanitizePairs($_POST['cvm_global_headers'] ?? null),
+            'global_headers'      => self::sanitizePairs($_POST['cvmtry_global_headers'] ?? null),
             // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized, WordPress.Security.ValidatedSanitizedInput.MissingUnslash -- sanitizePairs() unslashes and sanitizes every key and value.
-            'global_query'        => self::sanitizePairs($_POST['cvm_global_query'] ?? null),
-            'include_page_params' => !empty($_POST['cvm_include_page_params']),
-            'failure_mode'        => sanitize_key(wp_unslash($_POST['cvm_failure_mode'] ?? '')) === 'show_error' ? 'show_error' : 'background',
+            'global_query'        => self::sanitizePairs($_POST['cvmtry_global_query'] ?? null),
+            'include_page_params' => !empty($_POST['cvmtry_include_page_params']),
+            'failure_mode'        => sanitize_key(wp_unslash($_POST['cvmtry_failure_mode'] ?? '')) === 'show_error' ? 'show_error' : 'background',
         ];
 
         update_option(Options::WEBHOOK_OPTION_KEY, $settings);
@@ -231,11 +231,11 @@ final class WebhooksPage
         Options::ensureEndpointIds();
 
         if ($rejected !== []) {
-            set_transient('cvm_webhook_rejected_' . get_current_user_id(), $rejected, MINUTE_IN_SECONDS);
+            set_transient('cvmtry_webhook_rejected_' . get_current_user_id(), $rejected, MINUTE_IN_SECONDS);
         }
 
         wp_safe_redirect(add_query_arg(
-            ['page' => self::MENU_SLUG, 'cvm_saved' => '1'],
+            ['page' => self::MENU_SLUG, 'cvmtry_saved' => '1'],
             self_admin_url('admin.php')
         ));
         exit;
@@ -283,19 +283,19 @@ final class WebhooksPage
         if (
             empty($_GET['action']) ||
             $_GET['action'] !== self::DISCARD_ACTION ||
-            empty($_GET['cvm_retry']) ||
-            empty($_GET['cvm_nonce']) ||
-            !wp_verify_nonce(sanitize_text_field(wp_unslash($_GET['cvm_nonce'])), self::DISCARD_ACTION) ||
+            empty($_GET['cvmtry_retry']) ||
+            empty($_GET['cvmtry_nonce']) ||
+            !wp_verify_nonce(sanitize_text_field(wp_unslash($_GET['cvmtry_nonce'])), self::DISCARD_ACTION) ||
             !Capability::currentUserCan(Capability::WEBHOOKS_MANAGE)
         ) {
             return;
         }
 
-        $key  = sanitize_key(wp_unslash($_GET['cvm_retry']));
+        $key  = sanitize_key(wp_unslash($_GET['cvmtry_retry']));
         $done = AnalyticsDispatcher::discardRetry($key);
 
         wp_safe_redirect(self_admin_url(
-            'admin.php?page=' . self::MENU_SLUG . '&cvm_retry_discarded=' . ($done ? '1' : 'busy')
+            'admin.php?page=' . self::MENU_SLUG . '&cvmtry_retry_discarded=' . ($done ? '1' : 'busy')
         ));
         exit;
     }
@@ -315,7 +315,7 @@ final class WebhooksPage
     {
         if (
             !isset($_POST['nonce']) ||
-            !wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['nonce'])), 'cvm_test_webhook') ||
+            !wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['nonce'])), 'cvmtry_test_webhook') ||
             !Capability::currentUserCan(Capability::WEBHOOKS_MANAGE)
         ) {
             wp_send_json_error(['message' => __('Unauthorized.', 'convermetry')]);
@@ -350,18 +350,24 @@ final class WebhooksPage
      */
     public static function maybeShowNotices(): void
     {
-        if (!isset($_GET['page']) || $_GET['page'] !== self::MENU_SLUG) {
+        // phpcs:disable WordPress.Security.NonceVerification.Recommended -- display-only: identifies this screen and reads the flags from the redirects after handleSave() and handleDiscardRetry(), which verify their nonce and capability.
+        $page      = isset($_GET['page']) ? sanitize_key(wp_unslash($_GET['page'])) : '';
+        $saved     = isset($_GET['cvmtry_saved']) && sanitize_key(wp_unslash($_GET['cvmtry_saved'])) === '1';
+        $discarded = isset($_GET['cvmtry_retry_discarded']) ? sanitize_key(wp_unslash($_GET['cvmtry_retry_discarded'])) : '';
+        // phpcs:enable WordPress.Security.NonceVerification.Recommended
+
+        if ($page !== self::MENU_SLUG) {
             return;
         }
 
-        if (!empty($_GET['cvm_saved'])) {
+        if ($saved) {
             ?>
             <div class="notice notice-success is-dismissible"><p><?php esc_html_e('Webhook settings saved.', 'convermetry'); ?></p></div>
             <?php
 
-            $rejected = get_transient('cvm_webhook_rejected_' . get_current_user_id());
+            $rejected = get_transient('cvmtry_webhook_rejected_' . get_current_user_id());
             if (is_array($rejected) && $rejected !== []) {
-                delete_transient('cvm_webhook_rejected_' . get_current_user_id());
+                delete_transient('cvmtry_webhook_rejected_' . get_current_user_id());
                 foreach ($rejected as $url) {
                     ?>
                     <div class="notice notice-warning"><p><?php
@@ -377,8 +383,8 @@ final class WebhooksPage
             }
         }
 
-        if (!empty($_GET['cvm_retry_discarded'])) {
-            if ($_GET['cvm_retry_discarded'] === 'busy') {
+        if ($discarded !== '') {
+            if ($discarded === 'busy') {
                 ?>
                 <div class="notice notice-warning is-dismissible"><p><?php esc_html_e('A webhook dispatch run is in progress; the retry was not discarded. Try again in a moment.', 'convermetry'); ?></p></div>
                 <?php
@@ -419,33 +425,33 @@ final class WebhooksPage
         }
 
         ?>
-        <div class="wrap cvm-wrap">
+        <div class="wrap cvmtry-wrap">
         <h1><?php esc_html_e('Convermetry Webhooks', 'convermetry'); ?></h1>
         <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
         <?php
-        wp_nonce_field(self::SAVE_ACTION, 'cvm_webhooks_nonce');
+        wp_nonce_field(self::SAVE_ACTION, 'cvmtry_webhooks_nonce');
         ?>
         <input type="hidden" name="action" value="<?php echo esc_attr(self::SAVE_ACTION); ?>">
         <?php
 
         // ── Webhook Status toggle card ─────────────────────────────────
         ?>
-        <div class="cvm-card cvm-toggle-card" id="cvm-webhook-toggle-card"<?php echo ($hasAnyUrl ? '' : ' style="display:none"'); ?>>
-        <h2 class="cvm-card-title"><?php esc_html_e('Webhook Status', 'convermetry'); ?></h2>
-        <div class="cvm-toggle-row">
-        <label class="cvm-toggle" for="cvm_webhook_active" aria-label="<?php esc_attr_e('Toggle webhook active state', 'convermetry'); ?>">
-        <input type="checkbox" id="cvm_webhook_active" name="cvm_webhook_active" value="1" <?php echo checked(!empty($settings['active']), true, false); ?>>
-        <span class="cvm-toggle-slider" aria-hidden="true"></span></label>
-        <span class="cvm-toggle-label" id="cvm-webhook-toggle-label"><?php echo esc_html(!empty($settings['active']) ? __('Active', 'convermetry') : __('Inactive', 'convermetry')); ?></span></div>
+        <div class="cvmtry-card cvmtry-toggle-card" id="cvmtry-webhook-toggle-card"<?php echo ($hasAnyUrl ? '' : ' style="display:none"'); ?>>
+        <h2 class="cvmtry-card-title"><?php esc_html_e('Webhook Status', 'convermetry'); ?></h2>
+        <div class="cvmtry-toggle-row">
+        <label class="cvmtry-toggle" for="cvmtry_webhook_active" aria-label="<?php esc_attr_e('Toggle webhook active state', 'convermetry'); ?>">
+        <input type="checkbox" id="cvmtry_webhook_active" name="cvmtry_webhook_active" value="1" <?php echo checked(!empty($settings['active']), true, false); ?>>
+        <span class="cvmtry-toggle-slider" aria-hidden="true"></span></label>
+        <span class="cvmtry-toggle-label" id="cvmtry-webhook-toggle-label"><?php echo esc_html(!empty($settings['active']) ? __('Active', 'convermetry') : __('Inactive', 'convermetry')); ?></span></div>
         <p class="description"><?php esc_html_e('When inactive, no new deliveries are sent — scheduled analytics reports pause and newly confirmed form submissions wait in the queue. Saved endpoints and settings are preserved.', 'convermetry'); ?></p></div>
         <?php
 
         // ── Endpoints card ─────────────────────────────────────────────
         ?>
-        <div class="cvm-card">
-        <h2 class="cvm-card-title"><?php esc_html_e('Webhook Endpoints', 'convermetry'); ?></h2>
+        <div class="cvmtry-card">
+        <h2 class="cvmtry-card-title"><?php esc_html_e('Webhook Endpoints', 'convermetry'); ?></h2>
         <p class="description" style="margin-bottom:14px;"><?php echo wp_kses_post(__('Each endpoint chooses which message types it receives: <strong>Analytics Reports</strong> (aggregated analytics on the schedule below) and/or <strong>Form Submissions</strong> (each confirmed lead, delivered immediately in the background). Endpoints must use HTTPS. Add a label so each endpoint is easy to identify in the Activity Log. Failed deliveries retry automatically — 5m, 30m, 2h, 6h, then 16h after the initial attempt.', 'convermetry')); ?></p>
-        <div id="cvm-webhooks-container">
+        <div id="cvmtry-webhooks-container">
         <?php
         foreach ($endpoints as $idx => $endpoint) {
             self::renderEndpointBlock(
@@ -460,19 +466,19 @@ final class WebhooksPage
         }
         ?>
         </div>
-        <button type="button" id="cvm-add-webhook" class="button" style="margin-top:12px;"><?php esc_html_e('+ Add Endpoint', 'convermetry'); ?></button></div>
+        <button type="button" id="cvmtry-add-webhook" class="button" style="margin-top:12px;"><?php esc_html_e('+ Add Endpoint', 'convermetry'); ?></button></div>
         <?php
 
         // ── Delivery settings card ─────────────────────────────────────
         ?>
-        <div class="cvm-card">
-        <h2 class="cvm-card-title"><?php esc_html_e('Delivery Settings', 'convermetry'); ?></h2>
+        <div class="cvmtry-card">
+        <h2 class="cvmtry-card-title"><?php esc_html_e('Delivery Settings', 'convermetry'); ?></h2>
         <table class="form-table" role="presentation">
-        <tr><th scope="row"><label for="cvm-shared-secret"><?php esc_html_e('Shared signing secret', 'convermetry'); ?> <span class="description"><?php esc_html_e('(optional)', 'convermetry'); ?></span></label></th><td>
-        <input type="text" id="cvm-shared-secret" class="regular-text code" autocomplete="off" name="cvm_shared_secret" value="<?php echo esc_attr((string) $settings['shared_secret']); ?>">
+        <tr><th scope="row"><label for="cvmtry-shared-secret"><?php esc_html_e('Shared signing secret', 'convermetry'); ?> <span class="description"><?php esc_html_e('(optional)', 'convermetry'); ?></span></label></th><td>
+        <input type="text" id="cvmtry-shared-secret" class="regular-text code" autocomplete="off" name="cvmtry_shared_secret" value="<?php echo esc_attr((string) $settings['shared_secret']); ?>">
         <p class="description"><?php echo wp_kses_post(__('When set, every webhook request includes an <code>X-Convermetry-Signature</code> header — <code>sha256=&lt;hex&gt;</code>, the HMAC-SHA256 of the raw JSON body keyed with this secret — so receivers can verify payloads genuinely came from this site. An endpoint block\'s own signing secret overrides this shared one for that endpoint, so one receiver never learns the key that signs payloads for the others.', 'convermetry')); ?></p></td></tr>
-        <tr><th scope="row"><label for="cvm-interval"><?php esc_html_e('Analytics send interval', 'convermetry'); ?></label></th><td>
-        <select id="cvm-interval" name="cvm_interval">
+        <tr><th scope="row"><label for="cvmtry-interval"><?php esc_html_e('Analytics send interval', 'convermetry'); ?></label></th><td>
+        <select id="cvmtry-interval" name="cvmtry_interval">
         <?php
         $intervalLabels = [
             'hourly'     => __('Hourly', 'convermetry'),
@@ -507,32 +513,32 @@ final class WebhooksPage
            between the sentence above and the closing tag. */
         ?></p></td></tr>
         <tr><th scope="row"><?php esc_html_e('History backfill', 'convermetry'); ?></th><td>
-        <label><input type="checkbox" name="cvm_backfill" value="1" <?php echo checked(!empty($settings['backfill']), true, false); ?>>
+        <label><input type="checkbox" name="cvmtry_backfill" value="1" <?php echo checked(!empty($settings['backfill']), true, false); ?>>
         <?php esc_html_e('Send retained history to new analytics endpoints', 'convermetry'); ?></label>
         <p class="description"><?php esc_html_e('When enabled, an endpoint that has never received an analytics delivery starts from the beginning of the retention window instead of one send interval ago. History is delivered in interval-sized windows (up to 10 per scheduled run), so a long backlog is worked off over a few runs.', 'convermetry'); ?></p></td></tr>
         <tr><th scope="row"><?php esc_html_e('Form delivery failure mode', 'convermetry'); ?></th><td>
-        <label style="display:block;margin-bottom:6px;"><input type="radio" name="cvm_failure_mode" value="background" <?php echo checked($settings['failure_mode'] !== 'show_error', true, false); ?>>
+        <label style="display:block;margin-bottom:6px;"><input type="radio" name="cvmtry_failure_mode" value="background" <?php echo checked($settings['failure_mode'] !== 'show_error', true, false); ?>>
         <?php echo wp_kses_post(__('<strong>Retry in background</strong> (recommended) — the visitor always sees the form\'s normal success state; failed deliveries retry automatically.', 'convermetry')); ?></label>
-        <label style="display:block;"><input type="radio" name="cvm_failure_mode" value="show_error" <?php echo checked($settings['failure_mode'] === 'show_error', true, false); ?>>
+        <label style="display:block;"><input type="radio" name="cvmtry_failure_mode" value="show_error" <?php echo checked($settings['failure_mode'] === 'show_error', true, false); ?>>
         <?php echo wp_kses_post(__('<strong>Show error to visitor</strong> — delivery runs during the submission and a failure is reported back to the form (supported for Elementor Pro and Bricks Builder forms; every other provider always uses background delivery). Only a genuinely failed delivery is reported: an excluded form, a submission a filter declined, and a site with no endpoints configured all stay silent. Whether the form then <em>displays</em> an error is the builder\'s own decision — see the README for what each one does with a failed action.', 'convermetry')); ?></label></td></tr></table></div>
         <?php
 
         // ── Request customization card ─────────────────────────────────
         ?>
-        <div class="cvm-card">
-        <h2 class="cvm-card-title"><?php esc_html_e('Request Customization', 'convermetry'); ?></h2>
+        <div class="cvmtry-card">
+        <h2 class="cvmtry-card-title"><?php esc_html_e('Request Customization', 'convermetry'); ?></h2>
         <p class="description" style="margin-bottom:14px;"><?php esc_html_e('Headers and URL query parameters added to every webhook request. Per-form headers and parameters (configured on the Forms page) are merged after these; when page URL parameters are included, the precedence is: global parameters → page parameters → per-form parameters. Header values that look like credentials are redacted in the Activity Log but sent intact.', 'convermetry'); ?></p>
         <h3><?php esc_html_e('Global Request Headers', 'convermetry'); ?></h3>
         <?php
-        self::renderKvBuilder('cvm_global_headers', Options::globalHeaders(), __('e.g. Authorization', 'convermetry'));
+        self::renderKvBuilder('cvmtry_global_headers', Options::globalHeaders(), __('e.g. Authorization', 'convermetry'));
 
         ?>
         <h3><?php esc_html_e('Global URL Query Parameters', 'convermetry'); ?></h3>
         <?php
-        self::renderKvBuilder('cvm_global_query', Options::globalQueryParams(), __('e.g. source', 'convermetry'));
+        self::renderKvBuilder('cvmtry_global_query', Options::globalQueryParams(), __('e.g. source', 'convermetry'));
 
         ?>
-        <p style="margin-top:12px;"><label><input type="checkbox" name="cvm_include_page_params" value="1" <?php echo checked(!empty($settings['include_page_params']), true, false); ?>>
+        <p style="margin-top:12px;"><label><input type="checkbox" name="cvmtry_include_page_params" value="1" <?php echo checked(!empty($settings['include_page_params']), true, false); ?>>
         <?php echo wp_kses_post(__('Include page URL parameters — query parameters present on the page a form was submitted from (e.g. <code>?utm_source=google&amp;gclid=…</code>) are appended to the webhook URL for that submission.', 'convermetry')); ?></label></p></div>
         <?php
 
@@ -572,7 +578,7 @@ final class WebhooksPage
     private static function renderEndpointBlock(int $index, string $url, string $label, string $secret, bool $analytics, bool $forms, string $id = ''): void
     {
         ?>
-        <div class="cvm-webhook-block" data-webhook-index="<?php echo esc_attr((string) $index); ?>">
+        <div class="cvmtry-webhook-block" data-webhook-index="<?php echo esc_attr((string) $index); ?>">
         <?php
         // The durable endpoint id rides along with the row. Without it a save
         // rebuilds the endpoint list from POST alone and every id is lost,
@@ -580,9 +586,9 @@ final class WebhooksPage
         // that are keyed by it. Rows added in the browser post no id and are
         // assigned one by Options::ensureEndpointIds() after the save.
         ?>
-        <input type="hidden" name="cvm_webhooks[<?php echo esc_attr((string) $index); ?>][id]" value="<?php echo esc_attr($id); ?>">
-        <div class="cvm-webhook-block-header">
-        <strong class="cvm-webhook-block-title"><?php
+        <input type="hidden" name="cvmtry_webhooks[<?php echo esc_attr((string) $index); ?>][id]" value="<?php echo esc_attr($id); ?>">
+        <div class="cvmtry-webhook-block-header">
+        <strong class="cvmtry-webhook-block-title"><?php
         echo esc_html(sprintf(
             /* translators: %d: the endpoint's position in the list. */
             __('Endpoint %d', 'convermetry'),
@@ -592,7 +598,7 @@ final class WebhooksPage
         <?php
         if ($index > 0) {
             ?>
-            <button type="button" class="button cvm-remove-webhook-btn" aria-label="<?php
+            <button type="button" class="button cvmtry-remove-webhook-btn" aria-label="<?php
             echo esc_attr(sprintf(
                 /* translators: %d: the endpoint's position in the list. */
                 __('Remove endpoint %d', 'convermetry'),
@@ -603,34 +609,34 @@ final class WebhooksPage
         }
         ?>
         </div>
-        <div class="cvm-webhook-url-row">
-        <input type="url" class="cvm-webhook-url-input regular-text code" name="cvm_webhooks[<?php echo esc_attr((string) $index); ?>][url]" value="<?php echo esc_attr($url); ?>" placeholder="https://example.com/convermetry-hook" aria-label="<?php
+        <div class="cvmtry-webhook-url-row">
+        <input type="url" class="cvmtry-webhook-url-input regular-text code" name="cvmtry_webhooks[<?php echo esc_attr((string) $index); ?>][url]" value="<?php echo esc_attr($url); ?>" placeholder="https://example.com/convermetry-hook" aria-label="<?php
         /* translators: %d: the endpoint's position in the list. */
         echo esc_attr(sprintf(__('Endpoint %d URL', 'convermetry'), $index + 1));
         ?>"></div>
-        <div class="cvm-webhook-field">
-        <input type="text" class="regular-text cvm-webhook-label-input" name="cvm_webhooks[<?php echo esc_attr((string) $index); ?>][label]" value="<?php echo esc_attr($label); ?>" placeholder="<?php esc_attr_e('Label (optional — shown in the Activity Log)', 'convermetry'); ?>" aria-label="<?php
+        <div class="cvmtry-webhook-field">
+        <input type="text" class="regular-text cvmtry-webhook-label-input" name="cvmtry_webhooks[<?php echo esc_attr((string) $index); ?>][label]" value="<?php echo esc_attr($label); ?>" placeholder="<?php esc_attr_e('Label (optional — shown in the Activity Log)', 'convermetry'); ?>" aria-label="<?php
         /* translators: %d: the endpoint's position in the list. */
         echo esc_attr(sprintf(__('Endpoint %d label', 'convermetry'), $index + 1));
         ?>"></div>
-        <div class="cvm-webhook-field">
-        <input type="text" class="regular-text code cvm-webhook-secret-input" autocomplete="off" name="cvm_webhooks[<?php echo esc_attr((string) $index); ?>][secret]" value="<?php echo esc_attr($secret); ?>" placeholder="<?php esc_attr_e('Signing secret (optional — overrides the shared secret)', 'convermetry'); ?>" aria-label="<?php
+        <div class="cvmtry-webhook-field">
+        <input type="text" class="regular-text code cvmtry-webhook-secret-input" autocomplete="off" name="cvmtry_webhooks[<?php echo esc_attr((string) $index); ?>][secret]" value="<?php echo esc_attr($secret); ?>" placeholder="<?php esc_attr_e('Signing secret (optional — overrides the shared secret)', 'convermetry'); ?>" aria-label="<?php
         /* translators: %d: the endpoint's position in the list. */
         echo esc_attr(sprintf(__('Endpoint %d signing secret', 'convermetry'), $index + 1));
         ?>"></div>
-        <fieldset class="cvm-webhook-types">
+        <fieldset class="cvmtry-webhook-types">
         <legend class="screen-reader-text"><?php
         /* translators: %d: the endpoint's position in the list. */
         echo esc_html(sprintf(__('Delivery types for endpoint %d', 'convermetry'), $index + 1));
         ?></legend>
-        <label><input type="checkbox" name="cvm_webhooks[<?php echo esc_attr((string) $index); ?>][analytics]" value="1" <?php echo checked($analytics, true, false); ?>>
+        <label><input type="checkbox" name="cvmtry_webhooks[<?php echo esc_attr((string) $index); ?>][analytics]" value="1" <?php echo checked($analytics, true, false); ?>>
         <?php esc_html_e('Analytics Reports', 'convermetry'); ?></label> 
-        <label><input type="checkbox" name="cvm_webhooks[<?php echo esc_attr((string) $index); ?>][forms]" value="1" <?php echo checked($forms, true, false); ?>>
+        <label><input type="checkbox" name="cvmtry_webhooks[<?php echo esc_attr((string) $index); ?>][forms]" value="1" <?php echo checked($forms, true, false); ?>>
         <?php esc_html_e('Form Submissions', 'convermetry'); ?></label></fieldset>
-        <div class="cvm-endpoint-tests">
-        <button type="button" class="button cvm-test-endpoint" data-type="analytics"><?php esc_html_e('Send analytics test', 'convermetry'); ?></button> 
-        <button type="button" class="button cvm-test-endpoint" data-type="form"><?php esc_html_e('Send form test', 'convermetry'); ?></button>
-        <span class="cvm-test-result" role="status" aria-live="polite"></span></div></div>
+        <div class="cvmtry-endpoint-tests">
+        <button type="button" class="button cvmtry-test-endpoint" data-type="analytics"><?php esc_html_e('Send analytics test', 'convermetry'); ?></button> 
+        <button type="button" class="button cvmtry-test-endpoint" data-type="form"><?php esc_html_e('Send form test', 'convermetry'); ?></button>
+        <span class="cvmtry-test-result" role="status" aria-live="polite"></span></div></div>
         <?php
     }
 
@@ -645,22 +651,22 @@ final class WebhooksPage
     private static function renderKvBuilder(string $name, array $pairs, string $placeholder): void
     {
         ?>
-        <div class="cvm-kv-builder" data-kv-name="<?php echo esc_attr($name); ?>" data-kv-next="<?php echo esc_attr((string) count($pairs)); ?>">
-        <div class="cvm-kv-rows">
+        <div class="cvmtry-kv-builder" data-kv-name="<?php echo esc_attr($name); ?>" data-kv-next="<?php echo esc_attr((string) count($pairs)); ?>">
+        <div class="cvmtry-kv-rows">
         <?php
 
         foreach ($pairs as $index => $pair) {
             ?>
-            <div class="cvm-kv-row">
-            <input type="text" class="regular-text code cvm-kv-key" name="<?php echo esc_attr($name . '[' . $index . '][key]'); ?>" placeholder="<?php echo esc_attr($placeholder); ?>" value="<?php echo esc_attr((string) ($pair['key'] ?? '')); ?>">
-            <input type="text" class="regular-text code cvm-kv-value" name="<?php echo esc_attr($name . '[' . $index . '][value]'); ?>" placeholder="<?php esc_attr_e('Value', 'convermetry'); ?>" value="<?php echo esc_attr((string) ($pair['value'] ?? '')); ?>">
-            <button type="button" class="button cvm-kv-remove" aria-label="<?php esc_attr_e('Remove this row', 'convermetry'); ?>"><?php esc_html_e('Remove', 'convermetry'); ?></button></div>
+            <div class="cvmtry-kv-row">
+            <input type="text" class="regular-text code cvmtry-kv-key" name="<?php echo esc_attr($name . '[' . $index . '][key]'); ?>" placeholder="<?php echo esc_attr($placeholder); ?>" value="<?php echo esc_attr((string) ($pair['key'] ?? '')); ?>">
+            <input type="text" class="regular-text code cvmtry-kv-value" name="<?php echo esc_attr($name . '[' . $index . '][value]'); ?>" placeholder="<?php esc_attr_e('Value', 'convermetry'); ?>" value="<?php echo esc_attr((string) ($pair['value'] ?? '')); ?>">
+            <button type="button" class="button cvmtry-kv-remove" aria-label="<?php esc_attr_e('Remove this row', 'convermetry'); ?>"><?php esc_html_e('Remove', 'convermetry'); ?></button></div>
             <?php
         }
 
         ?>
         </div>
-        <button type="button" class="button cvm-kv-add"><?php esc_html_e('+ Add', 'convermetry'); ?></button></div>
+        <button type="button" class="button cvmtry-kv-add"><?php esc_html_e('+ Add', 'convermetry'); ?></button></div>
         <?php
     }
 
@@ -700,11 +706,11 @@ final class WebhooksPage
 
             $discardUrl = wp_nonce_url(
                 add_query_arg(
-                    ['page' => self::MENU_SLUG, 'action' => self::DISCARD_ACTION, 'cvm_retry' => md5($url)],
+                    ['page' => self::MENU_SLUG, 'action' => self::DISCARD_ACTION, 'cvmtry_retry' => md5($url)],
                     self_admin_url('admin.php')
                 ),
                 self::DISCARD_ACTION,
-                'cvm_nonce'
+                'cvmtry_nonce'
             );
 
             echo '<li>' . wp_kses_post(sprintf(

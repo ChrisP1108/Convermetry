@@ -44,7 +44,7 @@ final class PrivacyToolsTest extends WordPressTestCase
         parent::setUp();
 
         if (self::$receiver === null) {
-            $receiver = new WebhookReceiver((int) (getenv('CVM_WP_PORT') ?: 8731) + 1);
+            $receiver = new WebhookReceiver((int) (getenv('CVMTRY_WP_PORT') ?: 8731) + 1);
 
             if (!$receiver->start()) {
                 self::fail('The webhook receiver did not start.');
@@ -99,7 +99,7 @@ final class PrivacyToolsTest extends WordPressTestCase
         delete_option(Options::WEBHOOK_OPTION_KEY);
         delete_option(Options::NOTIFICATION_OPTION_KEY);
         delete_option(Options::OPTION_KEY);
-        delete_option('cvm_webhook_retry_state');
+        delete_option('cvmtry_webhook_retry_state');
 
         parent::tearDown();
     }
@@ -174,7 +174,7 @@ final class PrivacyToolsTest extends WordPressTestCase
         self::assertSame(1, $groups['convermetry-deliveries'] ?? 0);
         // The whole visit, and only Ann's visit: the three browser events plus
         // the form_success the server records when it confirms the submission.
-        self::assertSame(4, $this->rowCount('cvm_events', 'session_id', self::SESSION));
+        self::assertSame(4, $this->rowCount('cvmtry_events', 'session_id', self::SESSION));
         self::assertSame(4, $groups['convermetry-activity'] ?? 0, 'The whole visit, and only Ann\'s visit');
 
         $submission = $this->itemsIn($export, 'convermetry-submissions')[0];
@@ -238,8 +238,8 @@ final class PrivacyToolsTest extends WordPressTestCase
             ['conversion_id' => (string) $bob['conversion_id'], 'ip_address' => '198.51.100.8', 'session_id' => ''],
         ]);
 
-        self::assertGreaterThan(0, $this->rowCount('cvm_notification_queue', 'submission_id', (string) $ann['submission_id']));
-        self::assertGreaterThan(0, $this->rowCount('cvm_lead_events', 'submission_id', (string) $ann['submission_id']));
+        self::assertGreaterThan(0, $this->rowCount('cvmtry_notification_queue', 'submission_id', (string) $ann['submission_id']));
+        self::assertGreaterThan(0, $this->rowCount('cvmtry_lead_events', 'submission_id', (string) $ann['submission_id']));
 
         $result = $this->eraseUntilDone(self::ANN);
 
@@ -248,13 +248,13 @@ final class PrivacyToolsTest extends WordPressTestCase
 
         // The lead and everything cascading from it.
         self::assertNull(FormSubmissions::getBySubmissionId((string) $ann['submission_id']));
-        self::assertSame(0, $this->rowCount('cvm_notification_queue', 'submission_id', (string) $ann['submission_id']));
-        self::assertSame(0, $this->rowCount('cvm_lead_events', 'submission_id', (string) $ann['submission_id']));
-        self::assertSame(0, $this->rowCount('cvm_delivery_queue', 'submission_id', (string) $ann['submission_id']));
+        self::assertSame(0, $this->rowCount('cvmtry_notification_queue', 'submission_id', (string) $ann['submission_id']));
+        self::assertSame(0, $this->rowCount('cvmtry_lead_events', 'submission_id', (string) $ann['submission_id']));
+        self::assertSame(0, $this->rowCount('cvmtry_delivery_queue', 'submission_id', (string) $ann['submission_id']));
 
         // The audit trail survives; what it carried does not.
         $log = $wpdb->get_row($wpdb->prepare(
-            'SELECT * FROM ' . $wpdb->prefix . 'cvm_webhook_deliveries WHERE submission_id = %s',
+            'SELECT * FROM ' . $wpdb->prefix . 'cvmtry_webhook_deliveries WHERE submission_id = %s',
             (string) $ann['submission_id']
         ), ARRAY_A);
         self::assertIsArray($log, 'The delivery record itself is kept');
@@ -267,7 +267,7 @@ final class PrivacyToolsTest extends WordPressTestCase
 
         // The analytics report keeps Bob's IP and loses Ann's.
         $report = (string) $wpdb->get_var(
-            'SELECT request_data FROM ' . $wpdb->prefix . "cvm_webhook_deliveries WHERE message_type = 'analytics_report'"
+            'SELECT request_data FROM ' . $wpdb->prefix . "cvmtry_webhook_deliveries WHERE message_type = 'analytics_report'"
         );
         self::assertStringNotContainsString('198.51.100.7', $report);
         self::assertStringNotContainsString(self::SESSION, $report);
@@ -276,9 +276,9 @@ final class PrivacyToolsTest extends WordPressTestCase
 
         // The visit stays as anonymous traffic (three browser events plus the
         // server-recorded conversion).
-        self::assertSame(4, $this->rowCount('cvm_events', 'session_id', self::SESSION));
+        self::assertSame(4, $this->rowCount('cvmtry_events', 'session_id', self::SESSION));
         self::assertSame('0', $wpdb->get_var($wpdb->prepare(
-            'SELECT COUNT(*) FROM ' . $wpdb->prefix . "cvm_events WHERE session_id = %s AND ip_address <> ''",
+            'SELECT COUNT(*) FROM ' . $wpdb->prefix . "cvmtry_events WHERE session_id = %s AND ip_address <> ''",
             self::SESSION
         )));
 
@@ -288,7 +288,7 @@ final class PrivacyToolsTest extends WordPressTestCase
         self::assertStringContainsString(
             'bob@example.com',
             (string) $wpdb->get_var($wpdb->prepare(
-                'SELECT request_data FROM ' . $wpdb->prefix . 'cvm_webhook_deliveries WHERE submission_id = %s',
+                'SELECT request_data FROM ' . $wpdb->prefix . 'cvmtry_webhook_deliveries WHERE submission_id = %s',
                 (string) $bob['submission_id']
             ))
         );
@@ -303,7 +303,7 @@ final class PrivacyToolsTest extends WordPressTestCase
         $this->recordAnnsVisitAndSubmission();
         $ann = $this->submissionFor(self::ANN);
 
-        update_option('cvm_webhook_retry_state', [
+        update_option('cvmtry_webhook_retry_state', [
             md5('https://reports.example.test/') => [
                 'url'  => 'https://reports.example.test/',
                 'body' => (string) wp_json_encode(['analytics' => ['conversions' => ['recent' => [
@@ -336,7 +336,7 @@ final class PrivacyToolsTest extends WordPressTestCase
         self::assertNull($this->submissionFor(self::ANN));
         self::assertSame(
             PersonalDataEraser::SUBMISSIONS_PER_PAGE + 5,
-            (int) $GLOBALS['wpdb']->get_var('SELECT COUNT(*) FROM ' . $GLOBALS['wpdb']->prefix . 'cvm_form_submissions'),
+            (int) $GLOBALS['wpdb']->get_var('SELECT COUNT(*) FROM ' . $GLOBALS['wpdb']->prefix . 'cvmtry_form_submissions'),
             'Every look-alike survives'
         );
     }
@@ -378,7 +378,7 @@ final class PrivacyToolsTest extends WordPressTestCase
 
         $now = time();
         foreach ([['pageview', '/'], ['pageview', '/pricing/'], ['form_success', '/contact/']] as $i => [$type, $path]) {
-            $wpdb->insert($wpdb->prefix . 'cvm_events', [
+            $wpdb->insert($wpdb->prefix . 'cvmtry_events', [
                 'event_type'  => $type,
                 'page_url'    => home_url($path),
                 'event_value' => $type === 'form_success' ? 'conv_ann_000001' : '',
@@ -391,9 +391,9 @@ final class PrivacyToolsTest extends WordPressTestCase
         }
 
         $_POST = [
-            'cvm_conversion_id' => 'conv_ann_000001',
-            'cvm_session_id'    => self::SESSION,
-            'cvm_context'       => (string) wp_json_encode(['utm_source' => 'google', 'utm_medium' => 'cpc']),
+            'cvmtry_conversion_id' => 'conv_ann_000001',
+            'cvmtry_session_id'    => self::SESSION,
+            'cvmtry_context'       => (string) wp_json_encode(['utm_source' => 'google', 'utm_medium' => 'cpc']),
         ];
 
         do_action(
@@ -431,7 +431,7 @@ final class PrivacyToolsTest extends WordPressTestCase
     {
         global $wpdb;
 
-        $rows = $wpdb->get_results('SELECT * FROM ' . $wpdb->prefix . 'cvm_form_submissions ORDER BY id ASC', ARRAY_A);
+        $rows = $wpdb->get_results('SELECT * FROM ' . $wpdb->prefix . 'cvmtry_form_submissions ORDER BY id ASC', ARRAY_A);
 
         foreach (is_array($rows) ? $rows : [] as $row) {
             foreach ((array) json_decode((string) $row['submission_data'], true) as $field) {
@@ -498,7 +498,7 @@ final class PrivacyToolsTest extends WordPressTestCase
     {
         global $wpdb;
 
-        $wpdb->insert($wpdb->prefix . 'cvm_webhook_deliveries', [
+        $wpdb->insert($wpdb->prefix . 'cvmtry_webhook_deliveries', [
             'success'         => 1,
             'endpoint_url'    => 'https://reports.example.test/',
             'delivery_id'     => md5('report'),
@@ -528,8 +528,8 @@ final class PrivacyToolsTest extends WordPressTestCase
         global $wpdb;
 
         foreach ([
-            'cvm_events', 'cvm_form_submissions', 'cvm_delivery_queue', 'cvm_webhook_deliveries',
-            'cvm_notification_queue', 'cvm_goal_completions', 'cvm_lead_events',
+            'cvmtry_events', 'cvmtry_form_submissions', 'cvmtry_delivery_queue', 'cvmtry_webhook_deliveries',
+            'cvmtry_notification_queue', 'cvmtry_goal_completions', 'cvmtry_lead_events',
         ] as $table) {
             $wpdb->query('TRUNCATE TABLE ' . $wpdb->prefix . $table);
         }

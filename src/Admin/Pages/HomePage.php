@@ -56,13 +56,13 @@ final class HomePage
     public const string MENU_SLUG = 'convermetry';
 
     /** Anchor id for the Getting Started section. */
-    private const string ANCHOR_GETTING_STARTED = 'cvm-getting-started';
+    private const string ANCHOR_GETTING_STARTED = 'cvmtry-getting-started';
 
     /** Anchor id for the Quick Access section. */
-    private const string ANCHOR_QUICK_ACCESS = 'cvm-quick-access';
+    private const string ANCHOR_QUICK_ACCESS = 'cvmtry-quick-access';
 
     /** Anchor id for the Learn More section. */
-    private const string ANCHOR_LEARN_MORE = 'cvm-learn-more';
+    private const string ANCHOR_LEARN_MORE = 'cvmtry-learn-more';
 
     /**
      * The visit-to-lead journey: [label, node modifier].
@@ -78,9 +78,9 @@ final class HomePage
             [__('Traffic Source', 'convermetry'), ''],
             [__('Website Visit', 'convermetry'), ''],
             [__('Landing Page', 'convermetry'), ''],
-            [__('Form Submission', 'convermetry'), ' cvm-ui-flow__node--accent'],
-            [__('Lead', 'convermetry'), ' cvm-ui-flow__node--lead'],
-            [__('Webhook / External System', 'convermetry'), ' cvm-ui-flow__node--teal'],
+            [__('Form Submission', 'convermetry'), ' cvmtry-ui-flow__node--accent'],
+            [__('Lead', 'convermetry'), ' cvmtry-ui-flow__node--lead'],
+            [__('Webhook / External System', 'convermetry'), ' cvmtry-ui-flow__node--teal'],
         ];
     }
 
@@ -154,10 +154,10 @@ final class HomePage
         }
 
         wp_enqueue_style(
-            'cvm-home',
-            CVM_PLUGIN_URL . 'assets/css/admin-home.css',
+            'cvmtry-home',
+            CVMTRY_PLUGIN_URL . 'assets/css/admin-home.css',
             [AdminAssets::COMMON_HANDLE],
-            CVM_VERSION
+            CVMTRY_VERSION
         );
     }
 
@@ -175,7 +175,7 @@ final class HomePage
         $status = HomeStatus::create(self::$registry);
 
         ?>
-        <div class="wrap cvm-ui">
+        <div class="wrap cvmtry-ui">
         <?php
         // WordPress relocates admin notices to just after this marker. Without
         // it they would be injected after the first heading it finds, which is
@@ -221,63 +221,63 @@ final class HomePage
         $trackLabel = $trackLevel === HomeStatusLevel::Success ? __('Tracking active', 'convermetry') : $tracking->label;
 
         ?>
-        <section class="cvm-ui-hero" aria-labelledby="cvm-home-title">
-            <div class="cvm-ui-hero__inner">
-                <div class="cvm-ui-hero__main">
-                    <div class="cvm-ui-hero__brand">
-                        <span class="cvm-ui-icon cvm-ui-icon--brand"><?php Icons::render('logo', 28); ?></span>
-                        <span class="cvm-ui-wordmark">Convermetry<sup class="cvm-sup">TM</sup></span>
-                        <span class="cvm-ui-tag">
+        <section class="cvmtry-ui-hero" aria-labelledby="cvmtry-home-title">
+            <div class="cvmtry-ui-hero__inner">
+                <div class="cvmtry-ui-hero__main">
+                    <div class="cvmtry-ui-hero__brand">
+                        <span class="cvmtry-ui-icon cvmtry-ui-icon--brand"><?php Icons::render('logo', 28); ?></span>
+                        <span class="cvmtry-ui-wordmark">Convermetry<sup class="cvmtry-sup">TM</sup></span>
+                        <span class="cvmtry-ui-tag">
                             <?php
                             echo esc_html(sprintf(
                                 /* translators: %s: plugin version number. */
                                 __('for WordPress · v%s', 'convermetry'),
-                                CVM_VERSION
+                                CVMTRY_VERSION
                             ));
                             ?>
                         </span>
                     </div>
 
-                    <h1 class="cvm-ui-title" id="cvm-home-title"><?php esc_html_e('Welcome to Convermetry', 'convermetry'); ?></h1>
-                    <p class="cvm-ui-lede"><?php esc_html_e('Marketing analytics and lead tracking for WordPress.', 'convermetry'); ?></p>
-                    <p class="cvm-ui-text cvm-ui-text--lg cvm-ui-measure">
+                    <h1 class="cvmtry-ui-title" id="cvmtry-home-title"><?php esc_html_e('Welcome to Convermetry', 'convermetry'); ?></h1>
+                    <p class="cvmtry-ui-lede"><?php esc_html_e('Marketing analytics and lead tracking for WordPress.', 'convermetry'); ?></p>
+                    <p class="cvmtry-ui-text cvmtry-ui-text--lg cvmtry-ui-measure">
                         <?php esc_html_e('Convermetry brings website analytics, form submissions, marketing attribution, lead tracking, and delivery monitoring together inside WordPress—helping you understand not only what visitors are doing, but which marketing activity is generating real leads and conversions.', 'convermetry'); ?>
                     </p>
 
-                    <div class="cvm-ui-hero__actions">
-                        <a class="cvm-ui-button cvm-ui-button--primary"
+                    <div class="cvmtry-ui-hero__actions">
+                        <a class="cvmtry-ui-button cvmtry-ui-button--primary"
                            href="#<?php echo esc_attr(self::ANCHOR_GETTING_STARTED); ?>">
                             <?php esc_html_e('Get Started', 'convermetry'); ?> <?php Icons::render('arrow-down', 14); ?>
                         </a>
                         <?php if ($aboutUrl !== '') : ?>
-                            <a class="cvm-ui-button cvm-ui-button--secondary" href="<?php echo esc_url($aboutUrl); ?>">
+                            <a class="cvmtry-ui-button cvmtry-ui-button--secondary" href="<?php echo esc_url($aboutUrl); ?>">
                                 <?php esc_html_e('About Convermetry', 'convermetry'); ?>
                             </a>
                         <?php endif; ?>
                     </div>
                 </div>
 
-                <div class="cvm-ui-hero__panel">
-                    <div class="cvm-ui-status-row">
-                        <span class="cvm-ui-eyebrow"><?php esc_html_e('At a glance', 'convermetry'); ?></span>
+                <div class="cvmtry-ui-hero__panel">
+                    <div class="cvmtry-ui-status-row">
+                        <span class="cvmtry-ui-eyebrow"><?php esc_html_e('At a glance', 'convermetry'); ?></span>
                         <span class="<?php echo esc_attr($trackLevel->pillClass()); ?>">
                             <?php Icons::render($trackLevel->icon(), 11); ?>
                             <?php echo esc_html($trackLabel); ?>
                         </span>
                     </div>
 
-                    <dl class="cvm-ui-stats">
+                    <dl class="cvmtry-ui-stats">
                         <?php foreach ($status->glance() as $stat) : ?>
                             <div>
-                                <dt class="cvm-ui-stat__label"><?php echo esc_html($stat['label']); ?></dt>
-                                <dd class="cvm-ui-stat__value<?php echo $stat['isFigure'] ? '' : ' cvm-ui-stat__value--text'; ?>">
+                                <dt class="cvmtry-ui-stat__label"><?php echo esc_html($stat['label']); ?></dt>
+                                <dd class="cvmtry-ui-stat__value<?php echo $stat['isFigure'] ? '' : ' cvmtry-ui-stat__value--text'; ?>">
                                     <?php echo esc_html($stat['value']); ?>
                                 </dd>
                             </div>
                         <?php endforeach; ?>
                     </dl>
 
-                    <p class="cvm-ui-hero__panel-note">
+                    <p class="cvmtry-ui-hero__panel-note">
                         <?php esc_html_e('Values are read from this site\'s own collected data each time the page loads.', 'convermetry'); ?>
                     </p>
                 </div>
@@ -329,26 +329,26 @@ final class HomePage
         ];
 
         ?>
-        <section class="cvm-ui-section cvm-ui-section--loose" aria-labelledby="cvm-home-value">
-            <div class="cvm-ui-section-header cvm-ui-section-header--split">
-                <h2 class="cvm-ui-heading cvm-ui-heading--lg" id="cvm-home-value">
+        <section class="cvmtry-ui-section cvmtry-ui-section--loose" aria-labelledby="cvmtry-home-value">
+            <div class="cvmtry-ui-section-header cvmtry-ui-section-header--split">
+                <h2 class="cvmtry-ui-heading cvmtry-ui-heading--lg" id="cvmtry-home-value">
                     <?php esc_html_e('Understand what turns website visitors into leads', 'convermetry'); ?>
                 </h2>
-                <p class="cvm-ui-text cvm-ui-text--md cvm-ui-text--relaxed">
+                <p class="cvmtry-ui-text cvmtry-ui-text--md cvmtry-ui-text--relaxed">
                     <?php esc_html_e('Website traffic is only part of the story. Convermetry connects visitor activity, traffic sources, campaign attribution, form submissions, and lead delivery so you can better understand how your marketing efforts contribute to conversions.', 'convermetry'); ?>
                 </p>
             </div>
 
-            <div class="cvm-ui-grid">
+            <div class="cvmtry-ui-grid">
                 <?php foreach ($features as $feature) : ?>
-                    <article class="cvm-ui-card cvm-ui-card--interactive">
-                        <span class="cvm-ui-icon<?php echo $feature['teal'] ? ' cvm-ui-icon--teal' : ''; ?>">
+                    <article class="cvmtry-ui-card cvmtry-ui-card--interactive">
+                        <span class="cvmtry-ui-icon<?php echo $feature['teal'] ? ' cvmtry-ui-icon--teal' : ''; ?>">
                             <?php Icons::render($feature['icon'], 20); ?>
                         </span>
-                        <h3 class="cvm-ui-card-title"><?php echo esc_html($feature['title']); ?></h3>
-                        <p class="cvm-ui-text cvm-ui-card__fill"><?php echo esc_html($feature['body']); ?></p>
+                        <h3 class="cvmtry-ui-card-title"><?php echo esc_html($feature['title']); ?></h3>
+                        <p class="cvmtry-ui-text cvmtry-ui-card__fill"><?php echo esc_html($feature['body']); ?></p>
                         <?php if ($feature['url'] !== '') : ?>
-                            <a class="cvm-ui-link" href="<?php echo esc_url($feature['url']); ?>">
+                            <a class="cvmtry-ui-link" href="<?php echo esc_url($feature['url']); ?>">
                                 <?php echo esc_html($feature['label']); ?>
                                 <span aria-hidden="true">&rarr;</span>
                             </a>
@@ -394,21 +394,21 @@ final class HomePage
         ], static fn(array $expansion): bool => $expansion['url'] !== ''));
 
         ?>
-        <section class="cvm-ui-card cvm-ui-card--panel cvm-ui-section"
+        <section class="cvmtry-ui-card cvmtry-ui-card--panel cvmtry-ui-section"
                  id="<?php echo esc_attr(self::ANCHOR_GETTING_STARTED); ?>"
-                 aria-labelledby="cvm-home-start">
-            <div class="cvm-ui-split cvm-ui-split--baseline">
-                <div class="cvm-ui-split__main cvm-ui-section-header">
-                    <h2 class="cvm-ui-heading" id="cvm-home-start"><?php esc_html_e('Getting Started', 'convermetry'); ?></h2>
-                    <p class="cvm-ui-text cvm-ui-text--md">
+                 aria-labelledby="cvmtry-home-start">
+            <div class="cvmtry-ui-split cvmtry-ui-split--baseline">
+                <div class="cvmtry-ui-split__main cvmtry-ui-section-header">
+                    <h2 class="cvmtry-ui-heading" id="cvmtry-home-start"><?php esc_html_e('Getting Started', 'convermetry'); ?></h2>
+                    <p class="cvmtry-ui-text cvmtry-ui-text--md">
                         <?php esc_html_e('New to Convermetry? Follow these steps to begin collecting useful marketing and lead data.', 'convermetry'); ?>
                     </p>
                 </div>
 
-                <div class="cvm-ui-progress">
-                    <div class="cvm-ui-progress__label">
+                <div class="cvmtry-ui-progress">
+                    <div class="cvmtry-ui-progress__label">
                         <span><?php esc_html_e('Setup progress', 'convermetry'); ?></span>
-                        <span class="cvm-ui-mono">
+                        <span class="cvmtry-ui-mono">
                             <?php
                             echo esc_html(sprintf(
                                 /* translators: 1: number of completed setup steps, 2: total number of setup steps. */
@@ -419,7 +419,7 @@ final class HomePage
                             ?>
                         </span>
                     </div>
-                    <div class="cvm-ui-progress__track"
+                    <div class="cvmtry-ui-progress__track"
                          role="progressbar"
                          aria-label="<?php echo esc_attr(sprintf(
                              /* translators: 1: number of completed setup steps, 2: total number of setup steps. */
@@ -435,26 +435,26 @@ final class HomePage
                         // value rather than a rule: the width is data. The
                         // declaration that consumes it lives in the stylesheet.
                         ?>
-                        <div class="cvm-ui-progress__fill"
-                             style="--cvm-ui-progress-value: <?php echo esc_attr((string) $percent); ?>%"></div>
+                        <div class="cvmtry-ui-progress__fill"
+                             style="--cvmtry-ui-progress-value: <?php echo esc_attr((string) $percent); ?>%"></div>
                     </div>
                 </div>
             </div>
 
-            <ol class="cvm-ui-grid cvm-ui-grid--steps">
+            <ol class="cvmtry-ui-grid cvmtry-ui-grid--steps">
                 <?php foreach ($steps as $index => $step) : ?>
                     <?php self::stepCard($step, $index + 1); ?>
                 <?php endforeach; ?>
             </ol>
 
             <?php if ($expansions !== []) : ?>
-                <div class="cvm-ui-section-header">
-                    <h3 class="cvm-ui-heading cvm-ui-heading--xs" id="cvm-home-expand">
+                <div class="cvmtry-ui-section-header">
+                    <h3 class="cvmtry-ui-heading cvmtry-ui-heading--xs" id="cvmtry-home-expand">
                         <?php esc_html_e('Go Further with Goals and Funnels', 'convermetry'); ?>
                     </h3>
                 </div>
 
-                <div class="cvm-ui-grid cvm-ui-grid--steps">
+                <div class="cvmtry-ui-grid cvmtry-ui-grid--steps">
                     <?php foreach ($expansions as $expansion) : ?>
                         <?php self::expansionCard($expansion); ?>
                     <?php endforeach; ?>
@@ -473,15 +473,15 @@ final class HomePage
     private static function status(HomeStatus $status): void
     {
         ?>
-        <section class="cvm-ui-section cvm-ui-section--tight" aria-labelledby="cvm-home-status">
-            <div class="cvm-ui-section-header">
-                <h2 class="cvm-ui-heading" id="cvm-home-status"><?php esc_html_e('Convermetry Status', 'convermetry'); ?></h2>
-                <p class="cvm-ui-text cvm-ui-text--md cvm-ui-measure--wide">
+        <section class="cvmtry-ui-section cvmtry-ui-section--tight" aria-labelledby="cvmtry-home-status">
+            <div class="cvmtry-ui-section-header">
+                <h2 class="cvmtry-ui-heading" id="cvmtry-home-status"><?php esc_html_e('Convermetry Status', 'convermetry'); ?></h2>
+                <p class="cvmtry-ui-text cvmtry-ui-text--md cvmtry-ui-measure--wide">
                     <?php esc_html_e('Quickly verify that the major parts of Convermetry are operating as expected.', 'convermetry'); ?>
                 </p>
             </div>
 
-            <div class="cvm-ui-grid cvm-ui-grid--status">
+            <div class="cvmtry-ui-grid cvmtry-ui-grid--status">
                 <?php foreach ($status->items() as $item) : ?>
                     <?php self::statusCard($item); ?>
                 <?php endforeach; ?>
@@ -556,24 +556,24 @@ final class HomePage
         }
 
         ?>
-        <section class="cvm-ui-section cvm-ui-section--tight"
+        <section class="cvmtry-ui-section cvmtry-ui-section--tight"
                  id="<?php echo esc_attr(self::ANCHOR_QUICK_ACCESS); ?>"
-                 aria-labelledby="cvm-home-quick">
-            <h2 class="cvm-ui-heading" id="cvm-home-quick"><?php esc_html_e('Quick Access', 'convermetry'); ?></h2>
+                 aria-labelledby="cvmtry-home-quick">
+            <h2 class="cvmtry-ui-heading" id="cvmtry-home-quick"><?php esc_html_e('Quick Access', 'convermetry'); ?></h2>
 
-            <div class="cvm-ui-grid cvm-ui-grid--links">
+            <div class="cvmtry-ui-grid cvmtry-ui-grid--links">
                 <?php foreach ($links as $link) : ?>
-                    <a class="cvm-ui-quick-link" href="<?php echo esc_url($link['url']); ?>">
-                        <span class="cvm-ui-icon cvm-ui-icon--sm<?php echo $link['teal'] ? ' cvm-ui-icon--teal' : ''; ?>">
+                    <a class="cvmtry-ui-quick-link" href="<?php echo esc_url($link['url']); ?>">
+                        <span class="cvmtry-ui-icon cvmtry-ui-icon--sm<?php echo $link['teal'] ? ' cvmtry-ui-icon--teal' : ''; ?>">
                             <?php Icons::render($link['icon'], 16); ?>
                         </span>
-                        <span class="cvm-ui-quick-link__body">
-                            <span class="cvm-ui-quick-link__title">
+                        <span class="cvmtry-ui-quick-link__body">
+                            <span class="cvmtry-ui-quick-link__title">
                                 <?php echo esc_html($link['title']); ?>
-                                <span class="cvm-ui-quick-link__arrow<?php echo $link['teal'] ? ' cvm-ui-quick-link__arrow--teal' : ''; ?>"
+                                <span class="cvmtry-ui-quick-link__arrow<?php echo $link['teal'] ? ' cvmtry-ui-quick-link__arrow--teal' : ''; ?>"
                                       aria-hidden="true">&rarr;</span>
                             </span>
-                            <span class="cvm-ui-text cvm-ui-text--xs"><?php echo esc_html($link['body']); ?></span>
+                            <span class="cvmtry-ui-text cvmtry-ui-text--xs"><?php echo esc_html($link['body']); ?></span>
                         </span>
                     </a>
                 <?php endforeach; ?>
@@ -597,23 +597,23 @@ final class HomePage
         $last    = count($journey) - 1;
 
         ?>
-        <section class="cvm-ui-card cvm-ui-card--panel" aria-labelledby="cvm-home-journey">
-            <h2 class="cvm-ui-heading" id="cvm-home-journey"><?php esc_html_e('Connect the Journey From Visit to Lead', 'convermetry'); ?></h2>
+        <section class="cvmtry-ui-card cvmtry-ui-card--panel" aria-labelledby="cvmtry-home-journey">
+            <h2 class="cvmtry-ui-heading" id="cvmtry-home-journey"><?php esc_html_e('Connect the Journey From Visit to Lead', 'convermetry'); ?></h2>
 
-            <ol class="cvm-ui-flow">
+            <ol class="cvmtry-ui-flow">
                 <?php foreach ($journey as $index => [$label, $modifier]) : ?>
-                    <li class="cvm-ui-flow__item">
-                        <span class="cvm-ui-flow__node<?php echo esc_attr($modifier); ?>">
+                    <li class="cvmtry-ui-flow__item">
+                        <span class="cvmtry-ui-flow__node<?php echo esc_attr($modifier); ?>">
                             <?php echo esc_html($label); ?>
                         </span>
                         <?php if ($index < $last) : ?>
-                            <span class="cvm-ui-flow__arrow" aria-hidden="true">&rarr;</span>
+                            <span class="cvmtry-ui-flow__arrow" aria-hidden="true">&rarr;</span>
                         <?php endif; ?>
                     </li>
                 <?php endforeach; ?>
             </ol>
 
-            <p class="cvm-ui-text cvm-ui-text--relaxed cvm-ui-measure--wide">
+            <p class="cvmtry-ui-text cvmtry-ui-text--relaxed cvmtry-ui-measure--wide">
                 <?php esc_html_e('Convermetry connects marketing attribution with real form submissions so you can see more of the journey between a visitor arriving on your website and becoming a lead.', 'convermetry'); ?>
             </p>
         </section>
@@ -631,13 +631,13 @@ final class HomePage
     private static function dataControl(): void
     {
         ?>
-        <section class="cvm-ui-card cvm-ui-card--tinted cvm-ui-notice" aria-labelledby="cvm-home-data">
-            <span class="cvm-ui-icon cvm-ui-icon--md"><?php Icons::render('shield', 18); ?></span>
-            <div class="cvm-ui-notice__body">
-                <h2 class="cvm-ui-heading cvm-ui-heading--xs" id="cvm-home-data">
+        <section class="cvmtry-ui-card cvmtry-ui-card--tinted cvmtry-ui-notice" aria-labelledby="cvmtry-home-data">
+            <span class="cvmtry-ui-icon cvmtry-ui-icon--md"><?php Icons::render('shield', 18); ?></span>
+            <div class="cvmtry-ui-notice__body">
+                <h2 class="cvmtry-ui-heading cvmtry-ui-heading--xs" id="cvmtry-home-data">
                     <?php esc_html_e('Your WordPress Data, Under Your Control', 'convermetry'); ?>
                 </h2>
-                <p class="cvm-ui-text cvm-ui-text--relaxed cvm-ui-measure--wide">
+                <p class="cvmtry-ui-text cvmtry-ui-text--relaxed cvmtry-ui-measure--wide">
                     <?php esc_html_e('Convermetry is designed to provide useful marketing and conversion insights while keeping the WordPress website at the center of the data collection process. Configure the plugin according to your organization\'s privacy, retention, and compliance requirements.', 'convermetry'); ?>
                 </p>
             </div>
@@ -655,19 +655,19 @@ final class HomePage
         $aboutUrl = HomeStatus::urlFor(AboutPage::MENU_SLUG, Capability::ANALYTICS_VIEW);
 
         ?>
-        <section class="cvm-ui-card cvm-ui-card--panel cvm-ui-split"
+        <section class="cvmtry-ui-card cvmtry-ui-card--panel cvmtry-ui-split"
                  id="<?php echo esc_attr(self::ANCHOR_LEARN_MORE); ?>"
-                 aria-labelledby="cvm-home-learn">
-            <div class="cvm-ui-split__main cvm-ui-section-header">
-                <h2 class="cvm-ui-heading cvm-ui-heading--sm" id="cvm-home-learn">
+                 aria-labelledby="cvmtry-home-learn">
+            <div class="cvmtry-ui-split__main cvmtry-ui-section-header">
+                <h2 class="cvmtry-ui-heading cvmtry-ui-heading--sm" id="cvmtry-home-learn">
                     <?php esc_html_e('Want to Learn More About Convermetry?', 'convermetry'); ?>
                 </h2>
-                <p class="cvm-ui-text cvm-ui-text--relaxed cvm-ui-measure--wide">
+                <p class="cvmtry-ui-text cvmtry-ui-text--relaxed cvmtry-ui-measure--wide">
                     <?php esc_html_e('The About Convermetry page provides a more detailed explanation of analytics, attribution, form tracking, submissions, webhook delivery, integrations, developer hooks, and other Convermetry capabilities.', 'convermetry'); ?>
                 </p>
             </div>
             <?php if ($aboutUrl !== '') : ?>
-                <a class="cvm-ui-button cvm-ui-button--primary cvm-ui-split__aside"
+                <a class="cvmtry-ui-button cvmtry-ui-button--primary cvmtry-ui-split__aside"
                    href="<?php echo esc_url($aboutUrl); ?>">
                     <?php esc_html_e('Explore Convermetry', 'convermetry'); ?> <span aria-hidden="true">&rarr;</span>
                 </a>
@@ -688,19 +688,19 @@ final class HomePage
     private static function cloud(): void
     {
         ?>
-        <section class="cvm-ui-card cvm-ui-card--quiet cvm-ui-split" aria-labelledby="cvm-home-cloud">
-            <div class="cvm-ui-split__main cvm-ui-section-header">
-                <h2 class="cvm-ui-heading cvm-ui-heading--xs" id="cvm-home-cloud">
+        <section class="cvmtry-ui-card cvmtry-ui-card--quiet cvmtry-ui-split" aria-labelledby="cvmtry-home-cloud">
+            <div class="cvmtry-ui-split__main cvmtry-ui-section-header">
+                <h2 class="cvmtry-ui-heading cvmtry-ui-heading--xs" id="cvmtry-home-cloud">
                     <?php esc_html_e('Managing Multiple WordPress Websites?', 'convermetry'); ?>
                 </h2>
-                <p class="cvm-ui-text cvm-ui-text--sm cvm-ui-measure--wide">
+                <p class="cvmtry-ui-text cvmtry-ui-text--sm cvmtry-ui-measure--wide">
                     <?php esc_html_e('Convermetry Cloud is being developed to bring analytics, leads, attribution, and reporting from multiple Convermetry-powered WordPress websites into one centralized platform.', 'convermetry'); ?>
                 </p>
-                <p class="cvm-ui-text cvm-ui-text--xs cvm-ui-text--subtle">
+                <p class="cvmtry-ui-text cvmtry-ui-text--xs cvmtry-ui-text--subtle">
                     <?php esc_html_e('Convermetry Cloud will be especially useful for agencies and organizations that manage marketing across multiple websites.', 'convermetry'); ?>
                 </p>
             </div>
-            <span class="cvm-ui-badge cvm-ui-badge--neutral cvm-ui-split__aside"><?php esc_html_e('Coming Soon', 'convermetry'); ?></span>
+            <span class="cvmtry-ui-badge cvmtry-ui-badge--neutral cvmtry-ui-split__aside"><?php esc_html_e('Coming Soon', 'convermetry'); ?></span>
         </section>
         <?php
     }
@@ -720,23 +720,23 @@ final class HomePage
         $aboutUrl = HomeStatus::urlFor(AboutPage::MENU_SLUG, Capability::ANALYTICS_VIEW);
 
         ?>
-        <footer class="cvm-ui-footer">
+        <footer class="cvmtry-ui-footer">
             <div>
-                <p class="cvm-ui-text cvm-ui-text--sm cvm-ui-text--strong">Convermetry</p>
-                <p class="cvm-ui-text cvm-ui-text--xs cvm-ui-text--subtle">
+                <p class="cvmtry-ui-text cvmtry-ui-text--sm cvmtry-ui-text--strong">Convermetry</p>
+                <p class="cvmtry-ui-text cvmtry-ui-text--xs cvmtry-ui-text--subtle">
                     <?php esc_html_e('Marketing analytics and lead tracking for WordPress.', 'convermetry'); ?>
                 </p>
             </div>
-            <div class="cvm-ui-footer__links">
+            <div class="cvmtry-ui-footer__links">
                 <?php if ($aboutUrl !== '') : ?>
-                    <a class="cvm-ui-link cvm-ui-link--meta" href="<?php echo esc_url($aboutUrl); ?>"><?php esc_html_e('Documentation', 'convermetry'); ?></a>
+                    <a class="cvmtry-ui-link cvmtry-ui-link--meta" href="<?php echo esc_url($aboutUrl); ?>"><?php esc_html_e('Documentation', 'convermetry'); ?></a>
                 <?php endif; ?>
-                <span class="cvm-ui-mono cvm-ui-text cvm-ui-text--xs cvm-ui-text--subtle">
+                <span class="cvmtry-ui-mono cvmtry-ui-text cvmtry-ui-text--xs cvmtry-ui-text--subtle">
                     <?php
                     echo esc_html(sprintf(
                         /* translators: %s: plugin version number. */
                         __('Version %s', 'convermetry'),
-                        CVM_VERSION
+                        CVMTRY_VERSION
                     ));
                     ?>
                 </span>
@@ -760,20 +760,20 @@ final class HomePage
      */
     private static function stepCard(HomeSetupStep $step, int $number): void
     {
-        $numberClass = 'cvm-ui-step__number';
+        $numberClass = 'cvmtry-ui-step__number';
         if ($step->current) {
-            $numberClass .= ' cvm-ui-step__number--current';
+            $numberClass .= ' cvmtry-ui-step__number--current';
         } elseif (!$step->complete) {
-            $numberClass .= ' cvm-ui-step__number--todo';
+            $numberClass .= ' cvmtry-ui-step__number--todo';
         }
 
         ?>
-        <li class="cvm-ui-card cvm-ui-card--nested<?php echo $step->current ? ' cvm-ui-card--current' : ''; ?>">
-            <div class="cvm-ui-step__header">
+        <li class="cvmtry-ui-card cvmtry-ui-card--nested<?php echo $step->current ? ' cvmtry-ui-card--current' : ''; ?>">
+            <div class="cvmtry-ui-step__header">
                 <span class="<?php echo esc_attr($numberClass); ?>" aria-hidden="true">
                     <?php echo esc_html((string) $number); ?>
                 </span>
-                <h3 class="cvm-ui-card-title cvm-ui-card-title--sm">
+                <h3 class="cvmtry-ui-card-title cvmtry-ui-card-title--sm">
                     <span class="screen-reader-text"><?php
                     echo esc_html(sprintf(
                         /* translators: %d: the step's position in the setup checklist. */
@@ -784,16 +784,16 @@ final class HomePage
                     <?php echo esc_html($step->title); ?>
                 </h3>
                 <?php if ($step->complete) : ?>
-                    <span class="cvm-ui-badge cvm-ui-badge--success cvm-ui-step__badge"><?php esc_html_e('Done', 'convermetry'); ?></span>
+                    <span class="cvmtry-ui-badge cvmtry-ui-badge--success cvmtry-ui-step__badge"><?php esc_html_e('Done', 'convermetry'); ?></span>
                 <?php elseif ($step->current) : ?>
-                    <span class="cvm-ui-badge cvm-ui-step__badge"><?php esc_html_e('Next', 'convermetry'); ?></span>
+                    <span class="cvmtry-ui-badge cvmtry-ui-step__badge"><?php esc_html_e('Next', 'convermetry'); ?></span>
                 <?php endif; ?>
             </div>
 
-            <p class="cvm-ui-text cvm-ui-text--sm cvm-ui-card__fill"><?php echo esc_html($step->description); ?></p>
+            <p class="cvmtry-ui-text cvmtry-ui-text--sm cvmtry-ui-card__fill"><?php echo esc_html($step->description); ?></p>
 
             <?php if ($step->actionUrl !== '') : ?>
-                <a class="cvm-ui-link" href="<?php echo esc_url($step->actionUrl); ?>">
+                <a class="cvmtry-ui-link" href="<?php echo esc_url($step->actionUrl); ?>">
                     <?php echo esc_html($step->actionLabel); ?> <span aria-hidden="true">&rarr;</span>
                 </a>
             <?php endif; ?>
@@ -816,15 +816,15 @@ final class HomePage
     private static function expansionCard(array $expansion): void
     {
         ?>
-        <article class="cvm-ui-card cvm-ui-card--nested">
-            <div class="cvm-ui-step__header">
-                <h4 class="cvm-ui-card-title cvm-ui-card-title--sm"><?php echo esc_html($expansion['title']); ?></h4>
-                <span class="cvm-ui-badge cvm-ui-badge--neutral cvm-ui-step__badge"><?php esc_html_e('Optional', 'convermetry'); ?></span>
+        <article class="cvmtry-ui-card cvmtry-ui-card--nested">
+            <div class="cvmtry-ui-step__header">
+                <h4 class="cvmtry-ui-card-title cvmtry-ui-card-title--sm"><?php echo esc_html($expansion['title']); ?></h4>
+                <span class="cvmtry-ui-badge cvmtry-ui-badge--neutral cvmtry-ui-step__badge"><?php esc_html_e('Optional', 'convermetry'); ?></span>
             </div>
 
-            <p class="cvm-ui-text cvm-ui-text--sm cvm-ui-card__fill"><?php echo esc_html($expansion['body']); ?></p>
+            <p class="cvmtry-ui-text cvmtry-ui-text--sm cvmtry-ui-card__fill"><?php echo esc_html($expansion['body']); ?></p>
 
-            <a class="cvm-ui-link" href="<?php echo esc_url($expansion['url']); ?>">
+            <a class="cvmtry-ui-link" href="<?php echo esc_url($expansion['url']); ?>">
                 <?php echo esc_html($expansion['label']); ?> <span aria-hidden="true">&rarr;</span>
             </a>
         </article>
@@ -842,19 +842,19 @@ final class HomePage
         $level = $item->level;
 
         ?>
-        <div class="cvm-ui-card cvm-ui-card--compact<?php echo esc_attr($level?->cardClass() ?? ''); ?>">
-            <div class="cvm-ui-status-row">
-                <h3 class="cvm-ui-card-title cvm-ui-card-title--xs"><?php echo esc_html($item->title); ?></h3>
+        <div class="cvmtry-ui-card cvmtry-ui-card--compact<?php echo esc_attr($level?->cardClass() ?? ''); ?>">
+            <div class="cvmtry-ui-status-row">
+                <h3 class="cvmtry-ui-card-title cvmtry-ui-card-title--xs"><?php echo esc_html($item->title); ?></h3>
                 <?php if ($level !== null) : ?>
                     <span class="<?php echo esc_attr($level->pillClass()); ?>">
                         <?php Icons::render($level->icon(), 12); ?>
                         <?php echo esc_html($item->label); ?>
                     </span>
                 <?php else : ?>
-                    <span class="cvm-ui-status-value"><?php echo esc_html($item->label); ?></span>
+                    <span class="cvmtry-ui-status-value"><?php echo esc_html($item->label); ?></span>
                 <?php endif; ?>
             </div>
-            <p class="cvm-ui-text cvm-ui-text--sm"><?php echo esc_html($item->description); ?></p>
+            <p class="cvmtry-ui-text cvmtry-ui-text--sm"><?php echo esc_html($item->description); ?></p>
         </div>
         <?php
     }

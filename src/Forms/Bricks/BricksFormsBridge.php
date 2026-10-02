@@ -35,7 +35,7 @@ use Convermetry\Support\Url;
  *     this appends a choice, never replaces a list.
  *
  *  2. IDENTITY. One contract, shared by discovery, submission, the rendered
- *     data-cvm-form-key attribute and per-form settings: the Bricks form
+ *     data-cvmtry-form-key attribute and per-form settings: the Bricks form
  *     ELEMENT ID, on its own. See {@see identityFor()} for why it is not scoped
  *     by document — the short version is that Bricks reports the post the
  *     submission came FROM, which for a header, footer, popup or reused
@@ -380,7 +380,7 @@ final class BricksFormsBridge
     /**
      * Renders Convermetry's tracking attributes on a native Bricks form tag.
      *
-     * data-cvm-form-key is AUTHORITATIVE: the tracker prefers it over every DOM
+     * data-cvmtry-form-key is AUTHORITATIVE: the tracker prefers it over every DOM
      * heuristic, and it carries the same provider-scoped key the server records
      * the submission under — so a form's browser-side view / start / error
      * observations join to its confirmed submissions instead of being reported
@@ -415,7 +415,7 @@ final class BricksFormsBridge
             return $attributes;
         }
 
-        $group['data-cvm-form-key'] = FormProviderRegistry::formKey(self::PROVIDER_KEY, $elementId);
+        $group['data-cvmtry-form-key'] = FormProviderRegistry::formKey(self::PROVIDER_KEY, $elementId);
 
         $settings = $element->settings ?? null;
         $formName = self::formName(is_array($settings) ? $settings : [], '');
@@ -424,7 +424,7 @@ final class BricksFormsBridge
         // A fabricated name here would put a different label on the browser's
         // report rows than the one the submission was recorded under.
         if ($formName !== '') {
-            $group['data-cvm-form-name'] = $formName;
+            $group['data-cvmtry-form-name'] = $formName;
         }
 
         $attributes[$key] = $group;
@@ -617,7 +617,7 @@ final class BricksFormsBridge
      *    reCAPTCHA / hCaptcha / Turnstile response tokens all arrive as
      *    top-level keys, not as `form-field-*`, so none of them is even looked
      *    at.
-     *  - CONVERMETRY'S OWN FIELDS. cvm_conversion_id and friends travel the same
+     *  - CONVERMETRY'S OWN FIELDS. cvmtry_conversion_id and friends travel the same
      *    top-level route; {@see \Convermetry\Forms\SubmissionFields} strips the
      *    prefix a second time regardless.
      *  - HONEYPOTS and display-only HTML fields, which Bricks does not treat as

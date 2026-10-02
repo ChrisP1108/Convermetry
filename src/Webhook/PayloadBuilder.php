@@ -18,7 +18,7 @@ use Convermetry\Support\Extensions;
  *     {
  *         "schema_version": "1.0" | "1.1" | "2.0",
  *         "source": "convermetry",
- *         "plugin_version": "1.0.0",
+ *         "plugin_version": "1.0.1",
  *         "message_type": "analytics_report" | "form_submission",
  *         "website_info": { ... },
  *         "generated_at": "...",
@@ -88,7 +88,7 @@ final class PayloadBuilder
      * Goal completions have neither problem: a completion happened inside the
      * window or it did not, and nothing later changes that.
      *
-     * All three are available in the admin screens, and the cvm_lead_events
+     * All three are available in the admin screens, and the cvmtry_lead_events
      * table exists so a lead_status_changed message can be added once there is a
      * delivery path whose semantics can actually carry a correction.
      */
@@ -150,7 +150,7 @@ final class PayloadBuilder
         $payload = [
             'schema_version' => self::SCHEMA_VERSION,
             'source'         => 'convermetry',
-            'plugin_version' => CVM_VERSION,
+            'plugin_version' => CVMTRY_VERSION,
             'message_type'   => 'analytics_report',
             'website_info'   => WebsiteInfo::current()->toArray(),
             'generated_at'   => gmdate('c', $endTs),
@@ -178,7 +178,7 @@ final class PayloadBuilder
      * that map untouched. {@see self::LEGACY_FORM_SCHEMA_VERSION} explains why
      * historical rows are not converted on the way out.
      *
-     * @param array<string, mixed> $submission A cvm_form_submissions row (JSON columns decoded by caller or here).
+     * @param array<string, mixed> $submission A cvmtry_form_submissions row (JSON columns decoded by caller or here).
      * @return array<string, mixed>
      */
     public static function formSubmission(array $submission): array
@@ -200,7 +200,7 @@ final class PayloadBuilder
         $payload = [
             'schema_version' => $legacy ? self::LEGACY_FORM_SCHEMA_VERSION : self::FORM_SCHEMA_VERSION,
             'source'         => 'convermetry',
-            'plugin_version' => CVM_VERSION,
+            'plugin_version' => CVMTRY_VERSION,
             'message_type'   => 'form_submission',
             'website_info'   => WebsiteInfo::current(new PageInfo(
                 url: (string) ($submission['page_url'] ?? ''),

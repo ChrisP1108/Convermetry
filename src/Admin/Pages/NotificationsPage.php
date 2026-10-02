@@ -35,10 +35,10 @@ final class NotificationsPage
     public const string MENU_SLUG = 'convermetry-notifications';
 
     /** admin-post action name for saving the page. */
-    private const string SAVE_ACTION = 'cvm_save_notifications';
+    private const string SAVE_ACTION = 'cvmtry_save_notifications';
 
     /** admin-post action name for discarding queued notifications. */
-    private const string CANCEL_ACTION = 'cvm_cancel_notifications';
+    private const string CANCEL_ACTION = 'cvmtry_cancel_notifications';
 
     private static ?FormProviderRegistry $registry = null;
 
@@ -57,7 +57,7 @@ final class NotificationsPage
         add_action('admin_post_' . self::CANCEL_ACTION, [self::class, 'handleCancelQueued']);
         add_action('admin_notices', [self::class, 'maybeShowNotices']);
         add_action('admin_enqueue_scripts', [self::class, 'enqueueAssets']);
-        add_action('wp_ajax_cvm_test_notification', [self::class, 'handleTestAjax']);
+        add_action('wp_ajax_cvmtry_test_notification', [self::class, 'handleTestAjax']);
     }
 
     /**
@@ -90,18 +90,18 @@ final class NotificationsPage
         }
 
         wp_enqueue_style(
-            'cvm-notifications',
-            CVM_PLUGIN_URL . 'assets/css/admin-notifications.css',
+            'cvmtry-notifications',
+            CVMTRY_PLUGIN_URL . 'assets/css/admin-notifications.css',
             [AdminAssets::COMMON_HANDLE],
-            CVM_VERSION
+            CVMTRY_VERSION
         );
 
-        wp_enqueue_script('cvm-admin', CVM_PLUGIN_URL . 'assets/js/admin.js', ['wp-i18n'], CVM_VERSION, true);
-        wp_set_script_translations('cvm-admin', 'convermetry');
+        wp_enqueue_script('cvmtry-admin', CVMTRY_PLUGIN_URL . 'assets/js/admin.js', ['wp-i18n'], CVMTRY_VERSION, true);
+        wp_set_script_translations('cvmtry-admin', 'convermetry');
 
-        wp_localize_script('cvm-admin', 'CVM_NOTIFY', [
+        wp_localize_script('cvmtry-admin', 'CVMTRY_NOTIFY', [
             'ajaxUrl'   => admin_url('admin-ajax.php'),
-            'testNonce' => wp_create_nonce('cvm_test_notification'),
+            'testNonce' => wp_create_nonce('cvmtry_test_notification'),
         ]);
     }
 
@@ -119,26 +119,26 @@ final class NotificationsPage
     {
         if (
             !Capability::currentUserCan(Capability::NOTIFICATIONS_MANAGE)
-            || !isset($_POST['cvm_notifications_nonce'])
-            || !wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['cvm_notifications_nonce'])), self::SAVE_ACTION)
+            || !isset($_POST['cvmtry_notifications_nonce'])
+            || !wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['cvmtry_notifications_nonce'])), self::SAVE_ACTION)
         ) {
             wp_die(esc_html__('Invalid request.', 'convermetry'), '', ['response' => 403]);
         }
 
         // phpcs:disable WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- sanitized field by field by NotificationSettings::sanitize() below.
-        $raw = isset($_POST['cvm_notifications']) && is_array($_POST['cvm_notifications'])
-            ? wp_unslash($_POST['cvm_notifications'])
+        $raw = isset($_POST['cvmtry_notifications']) && is_array($_POST['cvmtry_notifications'])
+            ? wp_unslash($_POST['cvmtry_notifications'])
             : [];
         // phpcs:enable WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
 
         // array_values(): the POST indices carry no meaning — mergeFormRules()
         // only walks the values — and keeping them made this an array<string>
         // where a list<string> was declared.
-        $rendered = isset($_POST['cvm_rendered_forms']) && is_array($_POST['cvm_rendered_forms'])
+        $rendered = isset($_POST['cvmtry_rendered_forms']) && is_array($_POST['cvmtry_rendered_forms'])
             ? array_values(array_map(
                 static fn(mixed $key): string => sanitize_text_field((string) $key),
                 // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- each element is sanitized by the callback above.
-                wp_unslash($_POST['cvm_rendered_forms'])
+                wp_unslash($_POST['cvmtry_rendered_forms'])
             ))
             : [];
 
@@ -154,7 +154,7 @@ final class NotificationsPage
         update_option(Options::NOTIFICATION_OPTION_KEY, $clean, false);
 
         wp_safe_redirect(add_query_arg(
-            ['page' => self::MENU_SLUG, 'cvm_saved' => '1'],
+            ['page' => self::MENU_SLUG, 'cvmtry_saved' => '1'],
             self_admin_url('admin.php')
         ));
         exit;
@@ -202,8 +202,8 @@ final class NotificationsPage
     {
         if (
             !Capability::currentUserCan(Capability::NOTIFICATIONS_MANAGE)
-            || !isset($_POST['cvm_notifications_nonce'])
-            || !wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['cvm_notifications_nonce'])), self::CANCEL_ACTION)
+            || !isset($_POST['cvmtry_notifications_nonce'])
+            || !wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['cvmtry_notifications_nonce'])), self::CANCEL_ACTION)
         ) {
             wp_die(esc_html__('Invalid request.', 'convermetry'), '', ['response' => 403]);
         }
@@ -211,7 +211,7 @@ final class NotificationsPage
         NotificationQueue::cancelAll();
 
         wp_safe_redirect(add_query_arg(
-            ['page' => self::MENU_SLUG, 'cvm_cancelled' => '1'],
+            ['page' => self::MENU_SLUG, 'cvmtry_cancelled' => '1'],
             self_admin_url('admin.php')
         ));
         exit;
@@ -231,7 +231,7 @@ final class NotificationsPage
     {
         if (
             !isset($_POST['nonce'])
-            || !wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['nonce'])), 'cvm_test_notification')
+            || !wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['nonce'])), 'cvmtry_test_notification')
             || !Capability::currentUserCan(Capability::NOTIFICATIONS_MANAGE)
         ) {
             wp_send_json_error(['message' => __('Unauthorized.', 'convermetry')]);
@@ -268,17 +268,23 @@ final class NotificationsPage
      */
     public static function maybeShowNotices(): void
     {
-        if (!isset($_GET['page']) || $_GET['page'] !== self::MENU_SLUG) {
+        // phpcs:disable WordPress.Security.NonceVerification.Recommended -- display-only: identifies this screen and reads the flags from the redirects after handleSave() and handleCancelQueued(), which verify their nonce and capability.
+        $page      = isset($_GET['page']) ? sanitize_key(wp_unslash($_GET['page'])) : '';
+        $saved     = isset($_GET['cvmtry_saved']) && sanitize_key(wp_unslash($_GET['cvmtry_saved'])) === '1';
+        $cancelled = isset($_GET['cvmtry_cancelled']) && sanitize_key(wp_unslash($_GET['cvmtry_cancelled'])) === '1';
+        // phpcs:enable WordPress.Security.NonceVerification.Recommended
+
+        if ($page !== self::MENU_SLUG) {
             return;
         }
 
-        if (!empty($_GET['cvm_saved'])) {
+        if ($saved) {
             ?>
             <div class="notice notice-success is-dismissible"><p><?php esc_html_e('Notification settings saved.', 'convermetry'); ?></p></div>
             <?php
         }
 
-        if (!empty($_GET['cvm_cancelled'])) {
+        if ($cancelled) {
             ?>
             <div class="notice notice-success is-dismissible"><p><?php esc_html_e('Queued notifications discarded.', 'convermetry'); ?></p></div>
             <?php
@@ -316,7 +322,7 @@ final class NotificationsPage
         $scope    = Options::notificationScope();
 
         ?>
-        <div class="wrap cvm-wrap">
+        <div class="wrap cvmtry-wrap">
         <h1><?php esc_html_e('Convermetry Notifications', 'convermetry'); ?></h1>
         <p class="description"><?php esc_html_e('Send an internal email whenever a form submission is recorded, enriched with the analytics context Convermetry already captured for that visitor.', 'convermetry'); ?></p>
         <?php
@@ -326,7 +332,7 @@ final class NotificationsPage
         ?>
         <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
         <?php
-        wp_nonce_field(self::SAVE_ACTION, 'cvm_notifications_nonce');
+        wp_nonce_field(self::SAVE_ACTION, 'cvmtry_notifications_nonce');
         ?>
         <input type="hidden" name="action" value="<?php echo esc_attr(self::SAVE_ACTION); ?>">
         <?php
@@ -355,7 +361,7 @@ final class NotificationsPage
     private static function renderPrivacyCard(): void
     {
         ?>
-        <div class="cvm-card"><span class="cvm-card-label"><?php esc_html_e('Before you switch this on', 'convermetry'); ?></span><ul>
+        <div class="cvmtry-card"><span class="cvmtry-card-label"><?php esc_html_e('Before you switch this on', 'convermetry'); ?></span><ul>
         <li><?php echo wp_kses_post(__('<strong>Email creates a copy of lead data outside Convermetry\'s control.</strong> Deleting a submission, or letting retention expire it, cancels any notification still queued — but it cannot recall a message that has already been sent. Those copies live in the recipients\' mailboxes under whatever retention policy applies there, not yours.', 'convermetry')); ?></li>
         <li><?php echo wp_kses_post(__('<strong>Your form plugin may already email you.</strong> Most form plugins send their own notification. These are in addition to those, not a replacement — check before you end up with two.', 'convermetry')); ?></li>
         <li><?php echo wp_kses_post(__('<strong>"Sent" means handed to your mail system.</strong> Convermetry can tell you that WordPress accepted a message, which is not the same as it reaching an inbox. Nothing here can confirm delivery or detect spam foldering.', 'convermetry')); ?></li>
@@ -378,11 +384,11 @@ final class NotificationsPage
         ?>
         <h2><?php esc_html_e('Delivery', 'convermetry'); ?></h2><table class="form-table" role="presentation"><tbody>
         <tr><th scope="row"><?php esc_html_e('Notifications', 'convermetry'); ?></th><td>
-        <label><input type="checkbox" name="cvm_notifications[enabled]" value="1" <?php echo checked($enabled, true, false); ?>>
+        <label><input type="checkbox" name="cvmtry_notifications[enabled]" value="1" <?php echo checked($enabled, true, false); ?>>
         <?php esc_html_e('Email me when a form submission is recorded', 'convermetry'); ?></label>
         <p class="description"><?php echo wp_kses_post(__('Off by default. Turning this off stops new notifications; any already queued (at most about two hours\' worth) still send with the settings that were active when the lead arrived. Use <em>Discard queued notifications</em> below to drop them instead.', 'convermetry')); ?></p></td></tr>
-        <tr><th scope="row"><label for="cvm-notify-recipients"><?php esc_html_e('Send to', 'convermetry'); ?></label></th><td>
-        <textarea id="cvm-notify-recipients" name="cvm_notifications[recipients]" rows="4" class="large-text" placeholder="sales@example.com&#10;owner@example.com"><?php echo esc_textarea(implode("\n", array_map('strval', $recipients))); ?></textarea>
+        <tr><th scope="row"><label for="cvmtry-notify-recipients"><?php esc_html_e('Send to', 'convermetry'); ?></label></th><td>
+        <textarea id="cvmtry-notify-recipients" name="cvmtry_notifications[recipients]" rows="4" class="large-text" placeholder="sales@example.com&#10;owner@example.com"><?php echo esc_textarea(implode("\n", array_map('strval', $recipients))); ?></textarea>
         <p class="description"><?php
         echo esc_html(sprintf(
             /* translators: %d: maximum number of notification recipients. */
@@ -390,13 +396,13 @@ final class NotificationsPage
             NotificationSettings::MAX_RECIPIENTS
         ));
         ?></p></td></tr>
-        <tr><th scope="row"><label for="cvm-notify-subject"><?php esc_html_e('Subject', 'convermetry'); ?></label></th><td>
-        <input type="text" id="cvm-notify-subject" name="cvm_notifications[subject]" class="large-text" value="<?php echo esc_attr(Options::notificationSubjectTemplate()); ?>">
+        <tr><th scope="row"><label for="cvmtry-notify-subject"><?php esc_html_e('Subject', 'convermetry'); ?></label></th><td>
+        <input type="text" id="cvmtry-notify-subject" name="cvmtry_notifications[subject]" class="large-text" value="<?php echo esc_attr(Options::notificationSubjectTemplate()); ?>">
         <p class="description"><?php echo wp_kses_post(__('Available placeholders: <code>{site_name}</code>, <code>{form_name}</code>, <code>{provider}</code>, <code>{channel}</code>, <code>{submission_id}</code>, <code>{form_id}</code>, <code>{campaign}</code>, <code>{date}</code>. Anything else is left as literal text.', 'convermetry')); ?></p></td></tr>
         <tr><th scope="row"><?php esc_html_e('Test', 'convermetry'); ?></th><td>
-        <input type="email" id="cvm-notify-test-address" class="regular-text" placeholder="you@example.com"> 
-        <button type="button" class="button cvm-test-notification"><?php esc_html_e('Send test email', 'convermetry'); ?></button> 
-        <span class="cvm-test-result" role="status" aria-live="polite"></span>
+        <input type="email" id="cvmtry-notify-test-address" class="regular-text" placeholder="you@example.com"> 
+        <button type="button" class="button cvmtry-test-notification"><?php esc_html_e('Send test email', 'convermetry'); ?></button> 
+        <span class="cvmtry-test-result" role="status" aria-live="polite"></span>
         <p class="description"><?php esc_html_e('Sends a sample built entirely from made-up data. It never reads a real submission, so testing cannot expose a lead.', 'convermetry'); ?></p></td></tr></tbody></table>
         <?php
     }
@@ -412,19 +418,19 @@ final class NotificationsPage
         ?>
         <h2><?php esc_html_e('What to include', 'convermetry'); ?></h2><table class="form-table" role="presentation"><tbody>
         <tr><th scope="row"><?php esc_html_e('Submitted fields', 'convermetry'); ?></th><td>
-        <label><input type="checkbox" name="cvm_notifications[include_fields]" value="1" <?php echo checked($includes['fields'], true, false); ?>>
+        <label><input type="checkbox" name="cvmtry_notifications[include_fields]" value="1" <?php echo checked($includes['fields'], true, false); ?>>
         <?php esc_html_e('Include the visitor\'s answers', 'convermetry'); ?></label>
         <p class="description"><?php esc_html_e('Fields that look like credentials — passwords, tokens, API keys, secrets, authorization values — are always left out, even with this on.', 'convermetry'); ?></p></td></tr>
         <tr><th scope="row"><?php esc_html_e('Analytics summary', 'convermetry'); ?></th><td>
-        <label><input type="checkbox" name="cvm_notifications[include_analytics]" value="1" <?php echo checked($includes['analytics'], true, false); ?>>
+        <label><input type="checkbox" name="cvmtry_notifications[include_analytics]" value="1" <?php echo checked($includes['analytics'], true, false); ?>>
         <?php esc_html_e('Include channel, campaign, and session details', 'convermetry'); ?></label>
         <p class="description"><?php esc_html_e('Channel, UTM source/medium/campaign, landing page, device, pages viewed, and session start. When a visitor could not be correlated, the email says so explicitly.', 'convermetry'); ?></p></td></tr>
         <tr><th scope="row"><?php esc_html_e('Visitor journey', 'convermetry'); ?></th><td>
-        <label><input type="checkbox" name="cvm_notifications[include_journey]" value="1" <?php echo checked($includes['journey'], true, false); ?>>
+        <label><input type="checkbox" name="cvmtry_notifications[include_journey]" value="1" <?php echo checked($includes['journey'], true, false); ?>>
         <?php esc_html_e('Include the pages this visitor viewed', 'convermetry'); ?></label>
         <p class="description"><?php echo wp_kses_post(__('<strong>Off by default.</strong> This is browsing history for an identifiable person; mailing it to a shared inbox is a policy decision worth making deliberately.', 'convermetry')); ?></p></td></tr>
         <tr><th scope="row"><?php esc_html_e('IP address', 'convermetry'); ?></th><td>
-        <label><input type="checkbox" name="cvm_notifications[include_ip]" value="1" <?php echo checked($includes['ip'], true, false); ?>>
+        <label><input type="checkbox" name="cvmtry_notifications[include_ip]" value="1" <?php echo checked($includes['ip'], true, false); ?>>
         <?php esc_html_e('Include the submitter\'s IP address', 'convermetry'); ?></label>
         <p class="description"><?php echo wp_kses_post(__('<strong>Off by default.</strong> An IP address is personal data in the EU and UK. It is only available at all when IP storage is enabled on the Settings page.', 'convermetry')); ?></p></td></tr></tbody></table>
         <?php
@@ -441,9 +447,9 @@ final class NotificationsPage
         ?>
         <h2><?php esc_html_e('Which forms', 'convermetry'); ?></h2><table class="form-table" role="presentation"><tbody>
         <tr><th scope="row"><?php esc_html_e('Scope', 'convermetry'); ?></th><td>
-        <label><input type="radio" name="cvm_notifications[scope]" value="all" <?php echo checked($scope, 'all', false); ?>>
+        <label><input type="radio" name="cvmtry_notifications[scope]" value="all" <?php echo checked($scope, 'all', false); ?>>
         <?php esc_html_e('Every form, except those switched off below', 'convermetry'); ?></label><br>
-        <label><input type="radio" name="cvm_notifications[scope]" value="selected" <?php echo checked($scope, 'selected', false); ?>>
+        <label><input type="radio" name="cvmtry_notifications[scope]" value="selected" <?php echo checked($scope, 'selected', false); ?>>
         <?php esc_html_e('Only the forms switched on below', 'convermetry'); ?></label></td></tr></tbody></table>
         <?php
 
@@ -469,8 +475,8 @@ final class NotificationsPage
             <td><?php echo esc_html((string) $form['name']); ?><br><code><?php echo esc_html($formKey); ?></code></td>
             <td><?php echo esc_html((string) $form['provider_label']); ?></td>
             <td>
-            <input type="hidden" name="cvm_rendered_forms[]" value="<?php echo esc_attr($formKey); ?>">
-            <select name="cvm_notifications[forms][<?php echo esc_attr($formKey); ?>]">
+            <input type="hidden" name="cvmtry_rendered_forms[]" value="<?php echo esc_attr($formKey); ?>">
+            <select name="cvmtry_notifications[forms][<?php echo esc_attr($formKey); ?>]">
             <?php
             $rules = [
                 'inherit'  => __('Use the scope above', 'convermetry'),
@@ -515,7 +521,7 @@ final class NotificationsPage
             ?>
             <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
             <?php
-            wp_nonce_field(self::CANCEL_ACTION, 'cvm_notifications_nonce');
+            wp_nonce_field(self::CANCEL_ACTION, 'cvmtry_notifications_nonce');
             ?>
             <input type="hidden" name="action" value="<?php echo esc_attr(self::CANCEL_ACTION); ?>">
             <?php

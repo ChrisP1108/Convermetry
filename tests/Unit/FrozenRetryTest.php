@@ -37,7 +37,7 @@ final class FrozenRetryTest extends TestCase
             'forms'     => true,
         ]];
 
-        Functions\when('get_option')->alias(fn(string $key, $default = false) => $key === 'cvm_webhook_settings'
+        Functions\when('get_option')->alias(fn(string $key, $default = false) => $key === 'cvmtry_webhook_settings'
             ? ['endpoints' => $this->endpoints, 'shared_secret' => 'shared-secret']
             : $default);
     }

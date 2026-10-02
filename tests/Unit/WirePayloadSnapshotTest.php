@@ -40,7 +40,7 @@ final class WirePayloadSnapshotTest extends TestCase
             static fn($data, $options = 0, $depth = 512) => json_encode($data, $options, $depth)
         );
         Functions\when('get_option')->alias(static fn(string $key, mixed $default = false): mixed => match ($key) {
-            'cvm_settings' => [
+            'cvmtry_settings' => [
                 'website_id'        => 'site-42',
                 'client_first_name' => 'Ada',
                 'client_last_name'  => 'Lovelace',

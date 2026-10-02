@@ -40,7 +40,7 @@ final class UninstallTest extends WordPressTestCase
         global $wpdb;
 
         $found = $wpdb->get_col(
-            $wpdb->prepare('SHOW TABLES LIKE %s', $wpdb->esc_like($wpdb->prefix . 'cvm_') . '%')
+            $wpdb->prepare('SHOW TABLES LIKE %s', $wpdb->esc_like($wpdb->prefix . 'cvmtry_') . '%')
         );
 
         return is_array($found) ? array_values(array_map('strval', $found)) : [];
@@ -53,17 +53,17 @@ final class UninstallTest extends WordPressTestCase
         // State the uninstaller has to find and remove, including the
         // per-submission repair records, which are direct option rows rather
         // than anything the options API would enumerate.
-        update_option('cvm_settings', ['probe' => true]);
-        update_option('cvm_webhook_settings', ['probe' => true]);
-        update_option('cvm_webhook_state_version', 2);
-        set_transient('cvm_privacy_erase_' . md5('probe'), ['cursor' => 1], HOUR_IN_SECONDS);
+        update_option('cvmtry_settings', ['probe' => true]);
+        update_option('cvmtry_webhook_settings', ['probe' => true]);
+        update_option('cvmtry_webhook_state_version', 2);
+        set_transient('cvmtry_privacy_erase_' . md5('probe'), ['cursor' => 1], HOUR_IN_SECONDS);
         $wpdb->query(
             "INSERT INTO {$wpdb->options} (option_name, option_value, autoload)"
-            . " VALUES ('cvm_queue_repair_probe1', '{\"at\":1,\"refs\":[\"e\"]}', 'off')"
+            . " VALUES ('cvmtry_queue_repair_probe1', '{\"at\":1,\"refs\":[\"e\"]}', 'off')"
         );
         $wpdb->query(
             "INSERT INTO {$wpdb->options} (option_name, option_value, autoload)"
-            . " VALUES ('cvm_rl_probe1', '1|1', 'off')"
+            . " VALUES ('cvmtry_rl_probe1', '1|1', 'off')"
         );
 
         self::assertNotSame([], $this->pluginTables(), 'The tables must exist before uninstall');
@@ -77,7 +77,7 @@ final class UninstallTest extends WordPressTestCase
 
         self::assertSame([], $this->pluginTables(), 'Every plugin table must be dropped');
 
-        foreach (['cvm_settings', 'cvm_webhook_settings'] as $option) {
+        foreach (['cvmtry_settings', 'cvmtry_webhook_settings'] as $option) {
             self::assertSame(
                 null,
                 $wpdb->get_var($wpdb->prepare(
@@ -91,25 +91,25 @@ final class UninstallTest extends WordPressTestCase
         self::assertSame(
             '0',
             $wpdb->get_var(
-                "SELECT COUNT(*) FROM {$wpdb->options} WHERE option_name LIKE 'cvm\\_queue\\_repair\\_%'"
+                "SELECT COUNT(*) FROM {$wpdb->options} WHERE option_name LIKE 'cvmtry\\_queue\\_repair\\_%'"
             ),
             'Queue-repair records survived uninstall'
         );
 
         self::assertSame(
             '0',
-            $wpdb->get_var("SELECT COUNT(*) FROM {$wpdb->options} WHERE option_name LIKE 'cvm\\_rl\\_%'"),
+            $wpdb->get_var("SELECT COUNT(*) FROM {$wpdb->options} WHERE option_name LIKE 'cvmtry\\_rl\\_%'"),
             'Rate-limit counters survived uninstall'
         );
 
         // The promise is "no trace remains", so the check is every option the
-        // plugin can write — not a sample. cvm_webhook_state_version, written
+        // plugin can write — not a sample. cvmtry_webhook_state_version, written
         // by the analytics dispatcher's state migration, used to survive
         // because uninstall.php's list was written by hand and missed it.
         $leftover = $wpdb->get_col(
             "SELECT option_name FROM {$wpdb->options}"
-            . " WHERE option_name LIKE 'cvm\\_%' OR option_name LIKE '\\_transient\\_cvm\\_%'"
-            . " OR option_name LIKE '\\_transient\\_timeout\\_cvm\\_%'"
+            . " WHERE option_name LIKE 'cvmtry\\_%' OR option_name LIKE '\\_transient\\_cvmtry\\_%'"
+            . " OR option_name LIKE '\\_transient\\_timeout\\_cvmtry\\_%'"
         );
         self::assertSame([], $leftover, 'Options survived uninstall: ' . implode(', ', (array) $leftover));
 
@@ -126,7 +126,7 @@ final class UninstallTest extends WordPressTestCase
             }
         }
 
-        foreach (['cvm_cleanup_old_events', 'cvm_dispatch_webhooks', 'cvm_process_form_queue'] as $hook) {
+        foreach (['cvmtry_cleanup_old_events', 'cvmtry_dispatch_webhooks', 'cvmtry_process_form_queue'] as $hook) {
             self::assertNotContains($hook, $hooks, $hook . ' is still scheduled after uninstall');
         }
     }

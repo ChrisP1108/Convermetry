@@ -21,7 +21,7 @@ use Convermetry\Support\Extensions;
 final class ScriptLoader
 {
     /** Script handle for the frontend tracker. */
-    private const string HANDLE = 'cvm-tracker';
+    private const string HANDLE = 'cvmtry-tracker';
 
     /**
      * Registers the wp_enqueue_scripts hook.
@@ -92,9 +92,9 @@ final class ScriptLoader
 
         wp_enqueue_script(
             self::HANDLE,
-            CVM_PLUGIN_URL . 'assets/js/tracker.js',
+            CVMTRY_PLUGIN_URL . 'assets/js/tracker.js',
             [],
-            CVM_VERSION,
+            CVMTRY_VERSION,
             ['in_footer' => true, 'strategy' => 'defer']
         );
 

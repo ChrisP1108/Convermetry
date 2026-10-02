@@ -43,7 +43,7 @@
  *                   session's campaign attribution at conversion time.
  *  - hover        : pointer resting on an interactive element for the
  *                   configured dwell time (once per element per page view);
- *                   add data-cvm-hover to opt any element — images included —
+ *                   add data-cvmtry-hover to opt any element — images included —
  *                   in explicitly
  *  - scroll_depth : 50 / 100% scroll milestones (once each per page view;
  *                   checked once on load so short pages record 100%)
@@ -74,9 +74,9 @@
  *
  * Session ↔ submission correlation: at submit time (capture phase, before
  * any AJAX handler serializes the form) three hidden, internal fields are
- * injected/refreshed on the submitting form — cvm_conversion_id (a fresh
- * token per submission attempt), cvm_session_id (the current analytics
- * session), and cvm_context (a compact JSON snapshot of the session's
+ * injected/refreshed on the submitting form — cvmtry_conversion_id (a fresh
+ * token per submission attempt), cvmtry_session_id (the current analytics
+ * session), and cvmtry_context (a compact JSON snapshot of the session's
  * attribution, entrance referrer, landing page, and page URL). The
  * server-side form-provider integrations read those fields, strip them from
  * the submitted data, and record the confirmed conversion under the SAME
@@ -119,7 +119,7 @@
     const HOVER_DWELL = config.hoverDwellMs || 800;
     const SESSION_IDLE_MS = 30 * 60 * 1000;
     const INTERACTIVE = 'a, button, input[type="button"], input[type="submit"], [role="button"]';
-    const PENDING_KEY = 'cvm_pending';
+    const PENDING_KEY = 'cvmtry_pending';
 
     /* Declared up here rather than beside formIdentity() because the tracker is
      * enqueued deferred: document.readyState is already 'interactive' when this
@@ -127,7 +127,7 @@
      * reaches formIdentity() long before the form-engagement section is
      * evaluated. A const declared down there would still be in its temporal
      * dead zone at that point. */
-    const FORM_ATTR = 'data-cvm-form-key';
+    const FORM_ATTR = 'data-cvmtry-form-key';
 
     // Retry/backoff timing — internal reliability constants, not exposed as
     // site-owner settings. RETRY_BASE_MS matches the normal flush cadence (a
@@ -191,8 +191,8 @@
         for (let i = 0; i < candidates.length; i++) {
             try {
                 const store = window[candidates[i]];
-                store.setItem('cvm_probe', '1');
-                store.removeItem('cvm_probe');
+                store.setItem('cvmtry_probe', '1');
+                store.removeItem('cvmtry_probe');
                 return store;
             } catch (e) {
                 // Blocked or full — try the next one.
@@ -212,7 +212,7 @@
 
         if (sessionStore) {
             try {
-                const raw = sessionStore.getItem('cvm_session');
+                const raw = sessionStore.getItem('cvmtry_session');
                 if (raw) {
                     const parts = raw.split('.');
                     if (parts.length === 2 && now - parseInt(parts[1], 10) < SESSION_IDLE_MS) {
@@ -232,7 +232,7 @@
 
         if (sessionStore) {
             try {
-                sessionStore.setItem('cvm_session', id + '.' + now);
+                sessionStore.setItem('cvmtry_session', id + '.' + now);
             } catch (e) {
                 // Storage full or blocked mid-session; keep going in memory.
             }
@@ -266,7 +266,7 @@
         let stored = null;
         if (sessionStore) {
             try {
-                stored = JSON.parse(sessionStore.getItem('cvm_campaign'));
+                stored = JSON.parse(sessionStore.getItem('cvmtry_campaign'));
             } catch (e) {
                 stored = null;
             }
@@ -293,7 +293,7 @@
 
         if (sessionStore) {
             try {
-                sessionStore.setItem('cvm_campaign', JSON.stringify(record));
+                sessionStore.setItem('cvmtry_campaign', JSON.stringify(record));
             } catch (e) {
                 // Storage full or blocked — attribution lasts this page only.
             }
@@ -376,7 +376,7 @@
         let stored = null;
         if (sessionStore) {
             try {
-                stored = JSON.parse(sessionStore.getItem('cvm_campaign'));
+                stored = JSON.parse(sessionStore.getItem('cvmtry_campaign'));
             } catch (e) {
                 stored = null;
             }
@@ -525,8 +525,8 @@
     /** sessionStorage when usable, else null (in-memory root instead). */
     let pendingStore = (function () {
         try {
-            window.sessionStorage.setItem('cvm_probe', '1');
-            window.sessionStorage.removeItem('cvm_probe');
+            window.sessionStorage.setItem('cvmtry_probe', '1');
+            window.sessionStorage.removeItem('cvmtry_probe');
             return window.sessionStorage;
         } catch (e) {
             return null;
@@ -908,9 +908,9 @@
      *  delivering it.
      * ------------------------------------------------------------------ */
 
-    const FIELD_CONVERSION = 'cvm_conversion_id';
-    const FIELD_SESSION = 'cvm_session_id';
-    const FIELD_CONTEXT = 'cvm_context';
+    const FIELD_CONVERSION = 'cvmtry_conversion_id';
+    const FIELD_SESSION = 'cvmtry_session_id';
+    const FIELD_CONTEXT = 'cvmtry_context';
 
     /** Conversion token per form ELEMENT for the current submission attempt,
      *  so the provider's success event reuses the exact token the server
@@ -950,7 +950,7 @@
         input.value = value;
     }
 
-    /** The compact attribution snapshot serialized into cvm_context. */
+    /** The compact attribution snapshot serialized into cvmtry_context. */
     function correlationContext() {
         const record = currentAcquisition(sessionId());
         const campaign = record.c || {};
@@ -1051,12 +1051,12 @@
         if (!form || form.tagName !== 'FORM') {
             return false;
         }
-        if (inAdminBar(form) || form.hasAttribute('data-cvm-ignore')) {
+        if (inAdminBar(form) || form.hasAttribute('data-cvmtry-ignore')) {
             return false;
         }
 
         // A form the server correlates: a supported provider, or one the site
-        // declared for the custom-form API with data-cvm-form-key.
+        // declared for the custom-form API with data-cvmtry-form-key.
         let recognized = formIdentity(form) !== '';
         if (!recognized) {
             try {
@@ -1159,13 +1159,13 @@
      * conversion token that travelled, or null when the request was left alone.
      *
      * Returns null — changing nothing — for a form the site owner opted out of
-     * with data-cvm-ignore, and for one inside the admin bar, matching the rule
+     * with data-cvmtry-ignore, and for one inside the admin bar, matching the rule
      * every other form on the page is held to.
      */
     function correlateAtomicRequest(body, formId) {
         const form = atomicFormElement(formId);
 
-        if (form && (inAdminBar(form) || form.hasAttribute('data-cvm-ignore'))) {
+        if (form && (inAdminBar(form) || form.hasAttribute('data-cvmtry-ignore'))) {
             return null;
         }
 
@@ -1266,7 +1266,7 @@
 
     document.addEventListener('submit', function (e) {
         const form = e.target;
-        // data-cvm-ignore means ignore: it already suppresses view/start/error
+        // data-cvmtry-ignore means ignore: it already suppresses view/start/error
         // via trackableForm(), and honoring it only there left an opted-out
         // form still emitting form_submit and still carrying injected fields.
         if (!trackableForm(form)) {
@@ -1401,7 +1401,7 @@
                 formId = '';
             }
             const container = formId ? document.getElementById('nf-form-' + formId + '-cont') : null;
-            if (container && container.hasAttribute('data-cvm-ignore')) {
+            if (container && container.hasAttribute('data-cvmtry-ignore')) {
                 return;
             }
 
@@ -1483,7 +1483,7 @@
      *  notification, or a payload.
      *
      *  ONE TOKEN PER ATTEMPT. A Bricks form carries the server-rendered
-     *  data-cvm-form-key, which makes correlatableForm() recognise it, so the
+     *  data-cvmtry-form-key, which makes correlatableForm() recognise it, so the
      *  native submit listener may already have minted this attempt's token
      *  before Bricks prepared its request. That token is reused here. Minting a
      *  second one would split one submission between two conversion ids — the
@@ -1516,7 +1516,7 @@
     }
 
     /** The <form> element a Bricks event fired for, or null.
-     *  data-cvm-form-key is preferred because the server rendered it from the
+     *  data-cvmtry-form-key is preferred because the server rendered it from the
      *  same element id Bricks is reporting; #brxe-<id> is Bricks' own default
      *  markup, and covers a form rendered before this attribute existed. */
     function bricksFormElement(elementId) {
@@ -1570,7 +1570,7 @@
             const form = bricksFormElement(elementId);
 
             // The same rules every other form on the page is held to.
-            if (form && (inAdminBar(form) || form.hasAttribute('data-cvm-ignore'))) {
+            if (form && (inAdminBar(form) || form.hasAttribute('data-cvmtry-ignore'))) {
                 return;
             }
 
@@ -1674,7 +1674,7 @@
      *
      *  FORM IDENTITY: form_key ties these browser observations to the
      *  server-confirmed submission for the same form. It is read from a
-     *  data-cvm-form-key attribute the server renders where the form plugin
+     *  data-cvmtry-form-key attribute the server renders where the form plugin
      *  offers a filter, and otherwise derived from the form's own markup. It is
      *  deliberately '' when neither is available: a wrong key is worse than an
      *  absent one, because it would silently attribute one form's abandonment
@@ -1770,7 +1770,7 @@
     /** A readable name for a form, for report rows. */
     function formLabel(form) {
         return cleanLabel(
-            form.getAttribute('data-cvm-form-name') ||
+            form.getAttribute('data-cvmtry-form-name') ||
             form.getAttribute('name') ||
             form.id ||
             form.getAttribute('aria-label')
@@ -1789,7 +1789,7 @@
     /** Whether a form is one this tracker should observe at all. */
     function trackableForm(form) {
         return form && form.tagName === 'FORM' && !inAdminBar(form) &&
-            !form.hasAttribute('data-cvm-ignore');
+            !form.hasAttribute('data-cvmtry-ignore');
     }
 
     /* form_view — an IntersectionObserver, so a form below the fold only
@@ -2082,7 +2082,7 @@
 
     document.addEventListener('mouseover', function (e) {
         const el = e.target && e.target.closest
-            ? e.target.closest(INTERACTIVE + ', [data-cvm-hover]')
+            ? e.target.closest(INTERACTIVE + ', [data-cvmtry-hover]')
             : null;
 
         if (!el || el === hoverEl || inAdminBar(el)) {

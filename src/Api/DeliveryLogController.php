@@ -43,10 +43,10 @@ use Convermetry\Webhook\DeliveryLog;
 final class DeliveryLogController
 {
     /** Option key storing whether the API is enabled. */
-    private const string ACTIVE_OPTION = 'cvm_delivery_api_active';
+    private const string ACTIVE_OPTION = 'cvmtry_delivery_api_active';
 
     /** Option key storing the SHA-256 hash of the API key. */
-    private const string KEY_HASH_OPTION = 'cvm_delivery_api_key_hash';
+    private const string KEY_HASH_OPTION = 'cvmtry_delivery_api_key_hash';
 
     /** Failed authentications per IP allowed within the throttle window. */
     private const int AUTH_FAILURE_MAX = 10;
@@ -224,7 +224,7 @@ final class DeliveryLogController
         $response->header('Access-Control-Allow-Origin', '*');
         $response->header('Access-Control-Allow-Methods', 'GET, OPTIONS');
         $response->header('Access-Control-Allow-Headers', 'Authorization, Content-Type');
-        $response->header('Access-Control-Expose-Headers', 'X-WP-Total, X-WP-TotalPages, X-CVM-Page');
+        $response->header('Access-Control-Expose-Headers', 'X-WP-Total, X-WP-TotalPages, X-CVMTRY-Page');
         $response->header('Access-Control-Max-Age', '86400');
 
         return $response;
@@ -294,7 +294,7 @@ final class DeliveryLogController
 
         $response->header('X-WP-Total', (string) $total);
         $response->header('X-WP-TotalPages', (string) $totalPages);
-        $response->header('X-CVM-Page', (string) $page);
+        $response->header('X-CVMTRY-Page', (string) $page);
 
         return $response;
     }
@@ -469,7 +469,7 @@ final class DeliveryLogController
             ? sanitize_text_field(wp_unslash($_SERVER['REMOTE_ADDR']))
             : '';
 
-        return 'cvm_api_fail_' . md5($ip);
+        return 'cvmtry_api_fail_' . md5($ip);
     }
 
     /**

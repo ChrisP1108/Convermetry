@@ -94,8 +94,8 @@ final class GoalReports
     /**
      * One goal's completions broken down by a marketing dimension.
      *
-     * The column name is never interpolated from caller input — only the five
-     * names below are accepted, and anything else returns nothing.
+     * The column is bound as an identifier, and only the six names below are
+     * accepted — anything else returns nothing.
      *
      * @param string $start     UTC datetime (inclusive).
      * @param string $end       UTC datetime (exclusive).
@@ -118,28 +118,30 @@ final class GoalReports
             return [];
         }
 
-        $table  = GoalCompletions::tableName();
-        $where  = 'created_at >= %s AND created_at < %s';
-        $params = [$start, $end];
+        $table = GoalCompletions::tableName();
 
-        if ($goalId !== '') {
-            $where   .= ' AND goal_id = %s';
-            $params[] = $goalId;
-        }
-
-        $params[] = $limit;
-
+        // An empty $goalId means every goal. MySQL folds the constant
+        // comparison away before planning, so a single-goal breakdown still
+        // uses the goal_id index.
         $rows = ReportQuery::rows($wpdb->prepare(
-            "SELECT {$dimension} AS label,
+            "SELECT %i AS label,
                     COUNT(*) AS completions,
                     COUNT(DISTINCT NULLIF(session_id, '')) AS sessions,
                     COALESCE(SUM(value), 0) AS total_value
-             FROM {$table}
-             WHERE {$where}
-             GROUP BY {$dimension}
+             FROM %i
+             WHERE created_at >= %s AND created_at < %s
+               AND (%s = '' OR goal_id = %s)
+             GROUP BY %i
              ORDER BY completions DESC
              LIMIT %d",
-            $params
+            $dimension,
+            $table,
+            $start,
+            $end,
+            $goalId,
+            $goalId,
+            $dimension,
+            $limit
         ));
 
         return array_map(static fn(array $row): array => [
@@ -164,21 +166,19 @@ final class GoalReports
         global $wpdb;
         $table = GoalCompletions::tableName();
 
-        $where  = 'created_at >= %s AND created_at < %s';
-        $params = [$start, $end];
-
-        if ($goalId !== '') {
-            $where   .= ' AND goal_id = %s';
-            $params[] = $goalId;
-        }
-
+        // An empty $goalId means every goal; see breakdown().
         $rows = ReportQuery::rows($wpdb->prepare(
             "SELECT DATE(created_at) AS day, COUNT(*) AS total
-             FROM {$table}
-             WHERE {$where}
+             FROM %i
+             WHERE created_at >= %s AND created_at < %s
+               AND (%s = '' OR goal_id = %s)
              GROUP BY day
              ORDER BY day ASC",
-            $params
+            $table,
+            $start,
+            $end,
+            $goalId,
+            $goalId
         ));
 
         $byDay = [];
@@ -214,9 +214,10 @@ final class GoalReports
         global $wpdb;
         $table = GoalCompletions::tableName();
 
-        $rows = ReportQuery::rows(
-            "SELECT goal_id, MAX(created_at) AS last_at FROM {$table} GROUP BY goal_id"
-        );
+        $rows = ReportQuery::rows($wpdb->prepare(
+            'SELECT goal_id, MAX(created_at) AS last_at FROM %i GROUP BY goal_id',
+            $table
+        ));
 
         $out = [];
         foreach ($rows as $row) {

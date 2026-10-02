@@ -51,11 +51,13 @@ final class FluentFormsProvider implements FormProviderInterface
         // and title is the stable, version-independent way to discover them.
         $table = $wpdb->prefix . 'fluentform_forms';
 
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- form discovery on admin screens; the result is cached by FormProviderRegistry::discoveredForms(); Fluent Forms keeps its forms in its own table.
         $exists = $wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s', $table));
         if ($exists !== $table) {
             return [];
         }
 
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- form discovery on admin screens; the result is cached by FormProviderRegistry::discoveredForms(); Fluent Forms keeps its forms in its own table.
         $rows = $wpdb->get_results(
             $wpdb->prepare('SELECT id, title FROM %i ORDER BY title ASC LIMIT 200', $table),
             ARRAY_A

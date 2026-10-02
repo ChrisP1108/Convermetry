@@ -31,7 +31,7 @@ cleanup_all() {
   for ws in ${WORKSPACES+"${WORKSPACES[@]}"}; do
     # Guard the guard: only ever remove our own mktemp workspaces.
     case "$ws" in
-      "${TMPDIR:-/tmp}"/cvm-buildtest.*|/tmp/cvm-buildtest.*|/private/tmp/cvm-buildtest.*|/var/folders/*/cvm-buildtest.*)
+      "${TMPDIR:-/tmp}"/cvmtry-buildtest.*|/tmp/cvmtry-buildtest.*|/private/tmp/cvmtry-buildtest.*|/var/folders/*/cvmtry-buildtest.*)
         [[ -d "$ws" ]] && rm -rf "$ws"
         ;;
     esac
@@ -47,7 +47,7 @@ bad()  { FAIL=$((FAIL + 1)); printf '  FAIL %s\n     %s\n' "$1" "${2:-}"; }
 # a .distignore, and a git index to enumerate.
 make_fixture() {
   local ws repo
-  ws="$(mktemp -d "${TMPDIR:-/tmp}/cvm-buildtest.XXXXXXXX")"
+  ws="$(mktemp -d "${TMPDIR:-/tmp}/cvmtry-buildtest.XXXXXXXX")"
   WORKSPACES+=("$ws")
   repo="$ws/convermetry"
 
@@ -61,7 +61,7 @@ make_fixture() {
  * Plugin Name: Convermetry
  * Version: 9.9.9
  */
-define('CVM_VERSION', '9.9.9');
+define('CVMTRY_VERSION', '9.9.9');
 PHP
 
   cat > "$repo/README.md" <<'MD'
@@ -146,7 +146,7 @@ assert_accepted() {
   fi
 }
 
-OUT_FILE="$(mktemp "${TMPDIR:-/tmp}/cvm-buildtest-out.XXXXXX")"
+OUT_FILE="$(mktemp "${TMPDIR:-/tmp}/cvmtry-buildtest-out.XXXXXX")"
 trap 'rm -f "$OUT_FILE"; cleanup_all' EXIT
 
 echo "build-zip.sh path-safety regression suite"

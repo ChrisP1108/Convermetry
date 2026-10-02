@@ -58,19 +58,19 @@ final class TestWpdb
      */
     public static function fromEnvironment(): ?self
     {
-        $socket = getenv('CVM_TEST_DB_SOCKET') ?: null;
+        $socket = getenv('CVMTRY_TEST_DB_SOCKET') ?: null;
 
         // mysqli only uses a socket when the host is 'localhost' — '127.0.0.1'
         // forces a TCP connection and the socket is silently ignored, which
         // presents as an unreachable server rather than a configuration error.
         $host = $socket !== null
             ? 'localhost'
-            : (getenv('CVM_TEST_DB_HOST') ?: '127.0.0.1');
+            : (getenv('CVMTRY_TEST_DB_HOST') ?: '127.0.0.1');
 
-        $port = (int) (getenv('CVM_TEST_DB_PORT') ?: 3306);
-        $name   = getenv('CVM_TEST_DB_NAME') ?: 'cvm_test';
-        $user   = getenv('CVM_TEST_DB_USER') ?: 'root';
-        $pass   = getenv('CVM_TEST_DB_PASS');
+        $port = (int) (getenv('CVMTRY_TEST_DB_PORT') ?: 3306);
+        $name   = getenv('CVMTRY_TEST_DB_NAME') ?: 'cvmtry_test';
+        $user   = getenv('CVMTRY_TEST_DB_USER') ?: 'root';
+        $pass   = getenv('CVMTRY_TEST_DB_PASS');
         $pass   = $pass === false ? '' : $pass;
 
         mysqli_report(MYSQLI_REPORT_OFF);

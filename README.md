@@ -22,7 +22,7 @@ Was the lead successfully delivered to external systems?
 
 Convermetry works standalone — full analytics dashboard, form integrations, and webhook delivery inside one WordPress install — and is architected so a future Convermetry SaaS can receive `analytics_report` and `form_submission` messages from many installations, keyed by a shared, versioned payload schema.
 
-- **Version:** 1.0.0
+- **Version:** 1.0.1
 - **Requires WordPress:** 6.3+
 - **Requires PHP:** 8.3+
 - **License:** GPL-2.0-or-later
@@ -176,11 +176,11 @@ See [Activity Log](#activity-log); Settings holds the website/client identity (`
 
 ## Submissions
 
-**Convermetry → Submissions** lists every form submission the plugin confirmed server-side, joined to the analytics session that produced it. It reads the `cvm_form_submissions` table directly, so it is a complete record of the site's leads **whether or not any webhook endpoint is configured** — webhook delivery is something that happens *to* a submission, not the reason one exists.
+**Convermetry → Submissions** lists every form submission the plugin confirmed server-side, joined to the analytics session that produced it. It reads the `cvmtry_form_submissions` table directly, so it is a complete record of the site's leads **whether or not any webhook endpoint is configured** — webhook delivery is something that happens *to* a submission, not the reason one exists.
 
 ### The list
 
-Rows are newest-first and paginated (5/10/25/50/100 per page), loaded over the `cvm_get_submissions` AJAX action:
+Rows are newest-first and paginated (5/10/25/50/100 per page), loaded over the `cvmtry_get_submissions` AJAX action:
 
 | Column | Source |
 |---|---|
@@ -223,7 +223,7 @@ Search is debounced (300 ms) and matches the submitted field values, the form na
 
 ### The detail panel
 
-Expanding a row loads its detail over `cvm_get_submission_detail` (once per row, then cached client-side):
+Expanding a row loads its detail over `cvmtry_get_submission_detail` (once per row, then cached client-side):
 
 - **Form** — provider, form name, form id, native form id, conversion page, timestamp, `submission_id`, `conversion_id`.
 - **Analytics & attribution** — channel, the full UTM set, ad-click type, entrance referrer, landing page, device, session id, session start, pageviews, and the visitor's IP when IP storage is on. When the tracker's correlation fields never reached the server (JavaScript blocked, tracking off, a privacy signal honored, a server-to-server submission) the panel says so rather than showing blanks.
@@ -274,7 +274,7 @@ Goals are matched **server-side**, at ingestion, against data the tracker alread
 
 The single exception is a **CSS selector**, which genuinely cannot be evaluated without the DOM. Only those selectors are sent to the tracker, and the goal ids it reports back are re-validated against your enabled selector goals before anything is recorded — so that channel can at most claim a goal that really is an enabled selector goal, and cannot reach a URL or custom-event goal at all.
 
-Because that map is the one piece of goal configuration a visitor page load needs, it is mirrored into a small autoloaded option (`cvm_goal_selectors`, capped at 25 entries) rather than read from the non-autoloaded goal list on every request. It is derived state — rebuilt automatically on any write to `cvm_goals`, whoever makes it, and never edited directly.
+Because that map is the one piece of goal configuration a visitor page load needs, it is mirrored into a small autoloaded option (`cvmtry_goal_selectors`, capped at 25 entries) rather than read from the non-autoloaded goal list on every request. It is derived state — rebuilt automatically on any write to `cvmtry_goals`, whoever makes it, and never edited directly.
 
 ### Goal types
 
@@ -307,7 +307,7 @@ Convermetry.track('appointment_booked', { value: 250 });
 
 The **name** is the only thing that can match a goal. An event whose name matches no configured goal is **discarded and never stored**, so a typo in your theme's JavaScript costs nothing and cannot fill the events table. Nothing else in the payload is ever stored — only a numeric `value`, and only for a goal set to accept one. This is deliberate: an API that accepted arbitrary properties would become an unaudited route for putting customer data into an analytics table.
 
-The pre-existing `convermetry:conversion` DOM event and the server-side `cvm_track_event()` helper are unchanged.
+The pre-existing `convermetry:conversion` DOM event and the server-side `cvmtry_track_event()` helper are unchanged.
 
 ### Goals depend on the tracking they are built on
 
@@ -462,7 +462,7 @@ Every status or value change is recorded with who made it and when, shown in the
 
 This is a deliberate decision, not an omission. Form submission payloads are **frozen on their first delivery attempt**, and scheduled analytics windows **advance without ever revisiting**. A `lead` block on either could therefore only ever report a lead as `new`/`null` — wrong for every lead anybody ever qualifies, and a field that lies is worse than an absent one.
 
-The `cvm_lead_events` history table exists so that a `lead_status_changed` message can be added once there is a delivery path whose semantics can carry a correction. That is the top item for the next release.
+The `cvmtry_lead_events` history table exists so that a `lead_status_changed` message can be added once there is a delivery path whose semantics can carry a correction. That is the top item for the next release.
 
 ### Reporting
 
@@ -517,17 +517,17 @@ A single dependency-free script (`assets/js/tracker.js`) is enqueued deferred on
 
 **Endpoint defenses** — whitelisted, currently-enabled event types only; tracked page URLs must be `http(s)` on this site's host and are canonicalized to scheme+host+path; foreign `Origin`/`Referer` rejected; bots and empty user agents ignored; DNT/GPC enforced server-side when enabled; request bodies and batch sizes capped; scalar-only field values, sanitized and truncated; rate limits charged **per event** — 300/IP/minute plus 3,000/minute site-wide (`convermetry_rate_limits` filter) — via atomic object-cache counters, falling back (and failing **closed**) to an atomic single-statement database counter. The per-IP check runs first so a flooding IP never consumes the site-wide budget. A dashboard warning appears for 24 hours after the site-wide cap is hit. The rate-limit key itself is a hashed, short-lived derivative of the IP; the address is separately stored on each event row when IP storage is enabled (see [Privacy](#privacy)).
 
-**Tracked events** (each individually toggleable): `pageview`, `click`, `form_submit` (attempts), `form_success` (confirmed conversions), `hover` (configurable dwell, opt-in via `data-cvm-hover`), `scroll_depth` (50/100%). Custom server-side events via `cvm_track_event()`.
+**Tracked events** (each individually toggleable): `pageview`, `click`, `form_submit` (attempts), `form_success` (confirmed conversions), `hover` (configurable dwell, opt-in via `data-cvmtry-hover`), `scroll_depth` (50/100%). Custom server-side events via `cvmtry_track_event()`.
 
 **Form attributes** — three opt-in/opt-out hooks on any `<form>`:
 
 | Attribute | Effect |
 |---|---|
-| `data-cvm-ignore` | Excludes the form from tracking entirely: no `form_view`, `form_start`, `form_error`, `form_submit` or `form_success`, and no correlation fields injected. |
-| `data-cvm-form-key` | Declares the form's reporting identity (e.g. `mysite:contact`), and marks a hand-built form as one the correlation fields belong on. Authoritative — it overrides provider auto-detection. |
-| `data-cvm-form-name` | A readable label for report rows. |
+| `data-cvmtry-ignore` | Excludes the form from tracking entirely: no `form_view`, `form_start`, `form_error`, `form_submit` or `form_success`, and no correlation fields injected. |
+| `data-cvmtry-form-key` | Declares the form's reporting identity (e.g. `mysite:contact`), and marks a hand-built form as one the correlation fields belong on. Authoritative — it overrides provider auto-detection. |
+| `data-cvmtry-form-name` | A readable label for report rows. |
 
-**Correlation fields** — `cvm_conversion_id`, `cvm_session_id` and `cvm_context` are injected as hidden inputs so a submission can be joined to its analytics session. Only into forms that actually read them: a supported provider or a `data-cvm-form-key` form, posting via `POST` to this site's own origin, not marked `data-cvm-ignore`. Your search, login, comment and third-party forms are left untouched — see [Upgrading to 0.6.0](#upgrading-to-060).
+**Correlation fields** — `cvmtry_conversion_id`, `cvmtry_session_id` and `cvmtry_context` are injected as hidden inputs so a submission can be joined to its analytics session. Only into forms that actually read them: a supported provider or a `data-cvmtry-form-key` form, posting via `POST` to this site's own origin, not marked `data-cvmtry-ignore`. Your search, login, comment and third-party forms are left untouched — see [Upgrading to 0.6.0](#upgrading-to-060).
 
 **Sessions** are cookie-free: the id lives in `localStorage` and rotates after 30 minutes of inactivity.
 
@@ -544,10 +544,10 @@ Attribution is **last-touch within the session**: the most recent tagged landing
 The critical link between analytics and leads is **token-based — never timestamps**:
 
 1. On page load (and refreshed at submit time, in the capture phase, *before* any AJAX handler serializes the form) the tracker injects three hidden internal fields into every form:
-   - `cvm_conversion_id` — a fresh conversion token per submission attempt,
-   - `cvm_session_id` — the current analytics session id,
-   - `cvm_context` — a compact JSON snapshot of the session's attribution, entrance referrer/direct marker, landing page, and page URL.
-2. The form plugin processes the submission normally. When its **server-side success hook** fires, Convermetry's provider adapter extracts and strictly validates those fields from the request (all transport shapes are handled, including Fluent Forms' serialized `data` blob), and **strips every `cvm_*` field** from the submission data.
+   - `cvmtry_conversion_id` — a fresh conversion token per submission attempt,
+   - `cvmtry_session_id` — the current analytics session id,
+   - `cvmtry_context` — a compact JSON snapshot of the session's attribution, entrance referrer/direct marker, landing page, and page URL.
+2. The form plugin processes the submission normally. When its **server-side success hook** fires, Convermetry's provider adapter extracts and strictly validates those fields from the request (all transport shapes are handled, including Fluent Forms' serialized `data` blob), and **strips every `cvmtry_*` field** from the submission data.
 3. The confirmed conversion is recorded as a `form_success` analytics event under **that same conversion token**, together with a durable row in the form-submissions table (session id, attribution context, sanitized lead data).
 4. The tracker's own frontend success listeners (Elementor `submit_success`, Bricks `bricks/form/success`, CF7 `wpcf7mailsent`, WPForms `wpformsAjaxSubmitSuccess`, Gravity Forms `gform_confirmation_loaded`) reuse the **same token** for their `form_success` event — so whichever paths fire, every report deduplicates them into **one** conversion by `conversion_id`.
 
@@ -617,10 +617,10 @@ The action stays registered for as long as Convermetry is active, including when
 
 ### Attribution on Atomic forms
 
-Atomic forms do not serialize the `<form>`. Elementor's own frontend builds the request field by field and posts it to `admin-ajax.php`, so a hidden input — the transport every other provider uses — is silently dropped. Convermetry appends its three correlation values (`cvm_conversion_id`, `cvm_session_id`, `cvm_context`) to that request instead, as top-level fields:
+Atomic forms do not serialize the `<form>`. Elementor's own frontend builds the request field by field and posts it to `admin-ajax.php`, so a hidden input — the transport every other provider uses — is silently dropped. Convermetry appends its three correlation values (`cvmtry_conversion_id`, `cvmtry_session_id`, `cvmtry_context`) to that request instead, as top-level fields:
 
 - They are **never** added to Elementor's `form_fields`, so they are never submitted data and never appear on a lead, in an export, in a notification, or in a payload.
-- The request is only touched when it is a **same-origin** POST carrying Elementor's own Atomic action, and never for a form marked `data-cvm-ignore`.
+- The request is only touched when it is a **same-origin** POST carrying Elementor's own Atomic action, and never for a form marked `data-cvmtry-ignore`.
 - Any error leaves the original request untouched: instrumentation never breaks a submission.
 - Without the tracker (JavaScript blocked, tracking disabled), the submission is still captured server-side with a server-generated conversion id and **no fabricated session attribution**.
 
@@ -675,7 +675,7 @@ Field mapping is driven by the form's **field definitions**, not by the submitte
 
 - **Password fields are never recorded**, exported, emailed or delivered. Name-based redaction cannot help here: it matches `password` in a field *name*, and a Bricks field is named `4f2a9c`. The field **type** is the only thing that can tell a credential from a comment.
 - **A submitted `form-field-*` key with no definition is not recorded** — its type is unknown, and an unknown type could be a password.
-- **Transport metadata is excluded by construction.** `postId`, `formId`, `referrer`, the nonce and the reCAPTCHA / hCaptcha / Turnstile response tokens all arrive as top-level keys, never as `form-field-<id>`, so none of them is even looked at. Convermetry's own `cvm_*` values travel the same top-level route and are stripped again by the normalizer regardless.
+- **Transport metadata is excluded by construction.** `postId`, `formId`, `referrer`, the nonce and the reCAPTCHA / hCaptcha / Turnstile response tokens all arrive as top-level keys, never as `form-field-<id>`, so none of them is even looked at. Convermetry's own `cvmtry_*` values travel the same top-level route and are stripped again by the normalizer regardless.
 - **Honeypot and HTML fields are skipped**, as they are in Bricks' own saved submissions.
 - **Uploads carry URLs only.** Bricks exposes both a physical `file` path and a `url` for each upload; only the URL travels. A media-library Image or Gallery pick falls back to the submitted value, narrowed to absolute `http(s)` URLs and numeric attachment ids.
 
@@ -685,13 +685,13 @@ Everything else is preserved as submitted: native field ids, duplicate labels, m
 
 Bricks submits over AJAX and publishes three documented events. The tracker uses them rather than wrapping `fetch`:
 
-- **`bricks/form/submit`** fires after Bricks has prepared the form data and *before* the request is sent. The three correlation values (`cvm_conversion_id`, `cvm_session_id`, `cvm_context`) are set on `event.detail.formData` as **top-level** entries — so they arrive in `$_POST` exactly where Convermetry already looks, and are never `form-field-<id>` values. They therefore never become submitted data, never reach Bricks' own Form Submissions, and never appear on a lead, in an export, in a notification, or in a payload.
+- **`bricks/form/submit`** fires after Bricks has prepared the form data and *before* the request is sent. The three correlation values (`cvmtry_conversion_id`, `cvmtry_session_id`, `cvmtry_context`) are set on `event.detail.formData` as **top-level** entries — so they arrive in `$_POST` exactly where Convermetry already looks, and are never `form-field-<id>` values. They therefore never become submitted data, never reach Bricks' own Form Submissions, and never appear on a lead, in an export, in a notification, or in a payload.
 - **`bricks/form/success`** records the confirmed conversion, reusing **the same token the server received**, so the browser and server paths deduplicate into one conversion. A success with no attempt of ours in flight — a repeat, or one whose submit event was never seen — reports *nothing*: the server-side action already recorded that conversion, and minting a token here would make one submission count as two.
 - **`bricks/form/error`** records a `form_error` and drops the attempt's token. Bricks' response body is deliberately never read: it can echo submitted values and endpoint messages, so the only thing reported is *that* the server rejected the form.
 
-The rules every other form is held to apply unchanged: `data-cvm-ignore` opts a form out, nothing inside the admin bar is instrumented, and any error in the instrumentation leaves Bricks' request on its way. Listeners are on `document`, so a form inserted later — an AJAX popup, a tabbed step, a query-filter re-render — is covered without rescanning.
+The rules every other form is held to apply unchanged: `data-cvmtry-ignore` opts a form out, nothing inside the admin bar is instrumented, and any error in the instrumentation leaves Bricks' request on its way. Listeners are on `document`, so a form inserted later — an AJAX popup, a tabbed step, a query-filter re-render — is covered without rescanning.
 
-Bricks form tags also carry a server-rendered `data-cvm-form-key` (and `data-cvm-form-name` when the form is named), added through `bricks/element/render_attributes`. The tracker prefers that attribute over every DOM heuristic, and it is the same provider-scoped key the server records the submission under.
+Bricks form tags also carry a server-rendered `data-cvmtry-form-key` (and `data-cvmtry-form-name` when the form is named), added through `bricks/element/render_attributes`. The tracker prefers that attribute over every DOM heuristic, and it is the same provider-scoped key the server records the submission under.
 
 Without the tracker (JavaScript blocked, tracking disabled, privacy signals honoured), the submission is still captured server-side with a server-generated conversion id and **no fabricated session attribution**.
 
@@ -782,7 +782,7 @@ convermetry_submit_form(
 
 | Key | Type | Required | Rules |
 |---|---|---|---|
-| `id` | string | **yes** | The field's stable, machine-readable identifier — what a receiver should match on. Passed through `sanitize_text_field()`. An entry whose `id` is empty after sanitizing is **dropped**, as is any `id` beginning with `cvm_` (Convermetry's own correlation fields, in any letter case). |
+| `id` | string | **yes** | The field's stable, machine-readable identifier — what a receiver should match on. Passed through `sanitize_text_field()`. An entry whose `id` is empty after sanitizing is **dropped**, as is any `id` beginning with `cvmtry_` (Convermetry's own correlation fields, in any letter case). |
 | `label` | string | no | The human-readable label — what a person reads in the Submissions panel, a CSV export, or a notification email. Passed through `sanitize_text_field()`. **Falls back to `id`** when it is missing, blank, or not a scalar. |
 | `value` | string \| string[] | no | A scalar (cast to string) or a list of scalars, each `sanitize_text_field()`-ed. Arrays are reindexed with `array_values()`, so a multi-select's own keys are not part of the contract. Anything non-scalar — an object, a nested array — becomes an empty string rather than nested data. Missing `value` is an empty string. |
 
@@ -818,7 +818,7 @@ arrays with an `id` key and silently discard the caller's data.
 
 **Rules that apply to both shapes:**
 
-- **`cvm_*` keys are always stripped** — from either shape, in any letter case.
+- **`cvmtry_*` keys are always stripped** — from either shape, in any letter case.
   Convermetry's correlation fields never reach storage, payloads, exports,
   emails, or the Activity Log.
 - **Duplicate labels are preserved as separate fields.** Nothing keys or
@@ -896,8 +896,8 @@ to deliver.
    whole write, and [`convermetry_submission_fields`](#forms--submissions) sees
    the normalized descriptors — so a spam rule or a field rewrite applies to
    custom submissions exactly as it does to a bundled provider's.
-3. **Correlation fields are read from the current request** — `cvm_conversion_id`,
-   `cvm_session_id`, `cvm_context` — so a submission posted from a page the
+3. **Correlation fields are read from the current request** — `cvmtry_conversion_id`,
+   `cvmtry_session_id`, `cvmtry_context` — so a submission posted from a page the
    tracker ran on carries the visitor's real session, channel, campaign,
    entrance referrer, and landing page. When they are absent (server-to-server,
    JS blocked, tracker disabled, DNT/GPC honored), a conversion id is generated
@@ -916,7 +916,7 @@ to deliver.
    synchronously to every form endpoint (function).
 
 Duplicate protection is the same as for bundled providers: a repeated
-`cvm_conversion_id` hits the `UNIQUE conversion_id` index, and the second call
+`cvmtry_conversion_id` hits the `UNIQUE conversion_id` index, and the second call
 reports success **without recording or delivering anything twice**, firing
 `convermetry_submission_duplicate` rather than `convermetry_submission_recorded`.
 
@@ -954,7 +954,7 @@ Convermetry.track('appointment_booked', { value: 250 }); // value read only when
 ```
 
 Custom **server-side** analytics events:
-`cvm_track_event('purchase', ['page_url' => …, 'event_value' => '99.00']);`
+`cvmtry_track_event('purchase', ['page_url' => …, 'event_value' => '99.00']);`
 
 ## Notifications
 
@@ -1017,7 +1017,7 @@ keys, secrets, authorization values — are **omitted entirely**, even with
 *Submitted fields* on. They are not shown as `[REDACTED]`: a placeholder would
 tell every recipient that a secret exists. This uses the same policy as Activity
 Log redaction, so `convermetry_sensitive_keys` extends both at once.
-Convermetry's `cvm_*` correlation fields never appear either.
+Convermetry's `cvmtry_*` correlation fields never appear either.
 
 ### Delivery
 
@@ -1120,7 +1120,7 @@ Every outbound message shares one versioned envelope:
 {
     "schema_version": "1.0 | 2.0",
     "source": "convermetry",
-    "plugin_version": "1.0.0",
+    "plugin_version": "1.0.1",
     "message_type": "analytics_report | form_submission",
     "website_info": { },
     "generated_at": "2026-08-22T14:00:00+00:00",
@@ -1148,7 +1148,7 @@ Every outbound message shares one versioned envelope:
 {
     "schema_version": "1.1",
     "source": "convermetry",
-    "plugin_version": "1.0.0",
+    "plugin_version": "1.0.1",
     "message_type": "analytics_report",
     "website_info": {
         "name": "Example Financial", "url": "https://example.com", "domain": "example.com",
@@ -1268,7 +1268,7 @@ Every outbound message shares one versioned envelope:
 {
     "schema_version": "2.0",
     "source": "convermetry",
-    "plugin_version": "1.0.0",
+    "plugin_version": "1.0.1",
     "message_type": "form_submission",
     "website_info": {
         "name": "Example Financial", "url": "https://example.com", "domain": "example.com",
@@ -1347,8 +1347,8 @@ Label availability differs by provider, and Convermetry does not guess:
 | Contact Form 7 | posted field name | **same as `id`** — CF7 exposes no reliable label without parsing form markup |
 | Fluent Forms | submitted key | **same as `id`** — labels live in an internal JSON blob, not a public API |
 
-Convermetry's own correlation fields (`cvm_conversion_id`, `cvm_session_id`,
-`cvm_context`) are stripped before storage and never appear here.
+Convermetry's own correlation fields (`cvmtry_conversion_id`, `cvmtry_session_id`,
+`cvmtry_context`) are stripped before storage and never appear here.
 
 #### Migrating from schema 1.0 — branch on `schema_version`
 
@@ -1422,7 +1422,7 @@ Three headers are *not* frozen; they are regenerated on each attempt from the fr
 
 **Analytics reports** — per-endpoint retry chains via single-event crons. An exhausted chain (or one whose cron could not be scheduled — detected as *orphaned*) keeps its frozen delivery; the next scheduled dispatch re-sends it under the original `delivery_id` first, and only after acknowledgment does the endpoint's marker advance — exactly to the frozen window's end — so consecutive deliveries never overlap. Every retry-state mutation happens under the dispatch mutex. Deactivating the plugin *suspends* chains (frozen deliveries resume after reactivation under their original ids); frozen deliveries older than the retention window expire, and each pending retry has a **Discard** action on the Webhooks page.
 
-**Form submissions** — one queue row per submission × endpoint in `cvm_delivery_queue`. Endpoints that acknowledged are deleted from the queue and **never re-sent** when a sibling endpoint fails. Rows are claimed atomically (a token-stamped conditional `UPDATE`), so overlapping workers can't double-send; rows stranded in `sending` by a dead worker are reclaimed after 10 minutes. The worker cron is re-armed by activation, the daily cleanup, and every analytics dispatch run, so queued leads survive lost cron events and deactivate/reactivate cycles. After the final failed attempt the delivery is abandoned — every attempt remains in the Activity Log.
+**Form submissions** — one queue row per submission × endpoint in `cvmtry_delivery_queue`. Endpoints that acknowledged are deleted from the queue and **never re-sent** when a sibling endpoint fails. Rows are claimed atomically (a token-stamped conditional `UPDATE`), so overlapping workers can't double-send; rows stranded in `sending` by a dead worker are reclaimed after 10 minutes. The worker cron is re-armed by activation, the daily cleanup, and every analytics dispatch run, so queued leads survive lost cron events and deactivate/reactivate cycles. After the final failed attempt the delivery is abandoned — every attempt remains in the Activity Log.
 
 **Delivery is at-least-once.** Any duplicate a receiver can ever see carries a `delivery_id` it has already processed — deduplicating by `delivery_id` is sufficient to never double-count.
 
@@ -1461,7 +1461,7 @@ Authorization: <api-key>
 | `form_id` | Exact form name |
 | `after` | `YYYY-MM` or `YYYY-MM-DD` (calendar-month filter) |
 
-Pagination metadata returns in `X-WP-Total`, `X-WP-TotalPages`, and `X-CVM-Page` headers. Only a SHA-256 hash of the key is stored — the raw key is shown **once** at generation; regenerating invalidates the old key immediately. Wrong keys get `401` (throttled per IP after repeated failures → `429`); a disabled API answers `403`. In responses, `endpoint_url` is **redacted to scheme + host** — webhook URLs frequently embed bearer tokens, and this read-only key must never hand out downstream write credentials; identify endpoints by `endpoint_label`/`endpoint_key` (full URLs stay visible to admins in wp-admin). Intended for **server-to-server** use — CORS permits browser calls for flexibility, but never embed the key in public frontend JavaScript.
+Pagination metadata returns in `X-WP-Total`, `X-WP-TotalPages`, and `X-CVMTRY-Page` headers. Only a SHA-256 hash of the key is stored — the raw key is shown **once** at generation; regenerating invalidates the old key immediately. Wrong keys get `401` (throttled per IP after repeated failures → `429`); a disabled API answers `403`. In responses, `endpoint_url` is **redacted to scheme + host** — webhook URLs frequently embed bearer tokens, and this read-only key must never hand out downstream write credentials; identify endpoints by `endpoint_label`/`endpoint_key` (full URLs stay visible to admins in wp-admin). Intended for **server-to-server** use — CORS permits browser calls for flexibility, but never embed the key in public frontend JavaScript.
 
 ## Developer hooks
 
@@ -1658,7 +1658,7 @@ The lifecycle actions all receive the same credential-free `$context`: `message_
 | Hook | Type | Purpose |
 |---|---|---|
 | `convermetry_should_record_submission` | filter | Whether to record a submission at all. `(bool $should, string $formKey, string $provider, array $fields)` — runs after normalization (so spam rules can read the fields) and before **any** write. `false` skips the conversion event, the row, the queue, and the notifications. The visitor sees success: returning a failure would make Elementor's synchronous mode reject a valid form. **`$fields` contains PII** |
-| `convermetry_submission_fields` | filter | The normalized field descriptors. `(array $fields, string $formKey, string $provider)` — a **changed** result is re-normalized, so `cvm_*` stays stripped and the descriptor shape holds. **Contains PII** |
+| `convermetry_submission_fields` | filter | The normalized field descriptors. `(array $fields, string $formKey, string $provider)` — a **changed** result is re-normalized, so `cvmtry_*` stays stripped and the descriptor shape holds. **Contains PII** |
 | `convermetry_submission_context_extensions` | filter | Namespaced data added to the stored analytics context. `(array $extensions, string $formKey, string $provider)` — attached once before persistence, so every endpoint and every retry sees the same context. Cannot replace conversion id, session id, attribution, timestamps, or form identity |
 | `convermetry_submission_recorded` | action | Fires after a submission is recorded, before webhook delivery is considered — so listeners run even with no endpoints configured (this is where notifications are queued). `($submissionId, $conversionId, $context)` |
 | `convermetry_submission_recorded_details` | action | Fires immediately after the above with what its fixed signature cannot carry. `(int $rowId, string $submissionId, array $form, array $fields)` — `$form` is `{provider, form_key, form_name, native_id}`. **`$fields` contains PII**; use `convermetry_submission_recorded` if you only need to know a submission happened |
@@ -1810,13 +1810,13 @@ add_action('convermetry_lead_updated', function (string $submissionId, array $to
 }, 10, 5);
 ```
 
-Helper functions: `convermetry_submit_form()` (result-aware submission) and `cvm_track_event()` (custom server-side analytics event). In the browser, `Convermetry.track(name, { value })` reports a [custom event](#custom-events) and the pre-existing `convermetry:conversion` DOM event is unchanged.
+Helper functions: `convermetry_submit_form()` (result-aware submission) and `cvmtry_track_event()` (custom server-side analytics event). In the browser, `Convermetry.track(name, { value })` reports a [custom event](#custom-events) and the pre-existing `convermetry:conversion` DOM event is unchanged.
 
 ## Privacy
 
 - **Email notifications are opt-in and leave your retention window.** Convermetry → Notifications is off by default. When enabled, each notification is a copy of lead data in a mailbox Convermetry does not control: deleting a submission cancels anything still queued and guarantees no queued message can be rendered afterwards, but it **cannot recall a message already sent**. Retention, deletion, and export controls in this plugin do not reach those copies. The visitor-journey and IP-address toggles are off by default for the same reason, and credential-looking fields are never emailed at all. See [Notifications](#notifications).
-- **No cookies — but browser storage.** The tracker keeps a random visit id (`cvm_session`) and the visit's attribution (`cvm_campaign`) in `localStorage`, and events not yet sent (`cvm_pending`) in `sessionStorage`. The visit id rotates after 30 minutes of inactivity. In the EU/UK the rules that govern cookies also apply to this storage.
-- **Tracking starts on activation, with no consent integration.** There is no consent banner and no consent-plugin integration. Where consent is required, have your consent tool block the `cvm-tracker` script handle, or return `false` from `convermetry_should_enqueue_tracker` until consent is given. Server-confirmed form submissions are still recorded — without analytics context — when the tracker does not run.
+- **No cookies — but browser storage.** The tracker keeps a random visit id (`cvmtry_session`) and the visit's attribution (`cvmtry_campaign`) in `localStorage`, and events not yet sent (`cvmtry_pending`) in `sessionStorage`. The visit id rotates after 30 minutes of inactivity. In the EU/UK the rules that govern cookies also apply to this storage.
+- **Tracking starts on activation, with no consent integration.** There is no consent banner and no consent-plugin integration. Where consent is required, have your consent tool block the `cvmtry-tracker` script handle, or return `false` from `convermetry_should_enqueue_tracker` until consent is given. Server-confirmed form submissions are still recorded — without analytics context — when the tracker does not run.
 - Tracked URLs are canonicalized to scheme + host + path — **no query strings are ever stored**. Referrers and click/form destinations are likewise stripped (whole `mailto:`/`tel:` destinations are kept — the address *is* the destination; strip via `convermetry_tracked_event` if unacceptable).
 - Campaign values are stored after sanitization, except values containing `@` (dropped as likely emails) — never put personal data in UTM parameters. Ad-click identifiers store only the parameter **name**; the value never leaves the browser.
 - **Visitor IP addresses are stored by default**, on both write paths: every analytics event (page views, clicks, hovers, scroll milestones, conversions) and every server-confirmed form submission. Turn it off with **Settings → Tracking → IP addresses**; new rows then record an empty value while existing rows are untouched and age out with retention. User agents are never stored on either path.
@@ -1850,13 +1850,13 @@ Helper functions: `convermetry_submit_form()` (result-aware submission) and `cvm
 
 | Table | Purpose |
 |---|---|
-| `{$prefix}cvm_events` | One row per visitor interaction (analytics engine). Unique `(batch_id, batch_seq)` makes tracker replays idempotent; indexed by type/date, type/session/date, date, page URL, `form_key`/type/date, and session/type/id (the funnel step chain). `form_success` rows carry the `conversion_id` in `event_value`. `form_key` is the form lifecycle's shared dimension across `form_view` → `form_start` → `form_error` → `form_submit` → `form_success`, and is empty on every other type. Stores the visitor `ip_address` unless disabled in Settings. |
-| `{$prefix}cvm_form_submissions` | One row per server-confirmed submission: `submission_id` (unique), `conversion_id` (unique — the dedup point), session id, provider/form identity, page URL + query, submitter `ip_address` (empty when disabled in Settings), sanitized `submission_data`, frozen `analytics_context`, runtime overrides, plus the indexed `channel`, `utm_campaign`, `utm_source`, `utm_medium`, `utm_id` and `landing_page` columns the Submissions page filters on and the lead reports group by, the `lead_status` / `lead_value` / `lead_currency` / `lead_status_at` outcome columns, and the recorded `delivery_state` / `delivery_json` webhook outcome. |
-| `{$prefix}cvm_delivery_queue` | The background form-delivery queue: one row per submission × endpoint with status, attempt, next-attempt time, claim token, and the frozen URL/headers/body. Rows are deleted on acknowledgment or abandonment. |
-| `{$prefix}cvm_notification_queue` | The background email-notification queue: one row per submission × recipient with the frozen settings snapshot, status, attempt, next-attempt time, claim token, and last failure reason. Carries **no lead data** — the submission is read at send time. Rows are deleted on send, on abandonment, when the submission is deleted, or when their two-hour TTL expires. |
-| `{$prefix}cvm_webhook_deliveries` | The Activity Log: one row per delivery attempt with normalized `message_type`/`kind`/`attempt` columns, identifiers, redacted headers, redacted request/response bodies (64 KB cap each). |
-| `{$prefix}cvm_goal_completions` | One row per [goal](#goals) completion. `dedupe_key` carries a UNIQUE index and is the entire deduplication mechanism for both counting behaviours. `source_event_id` is the id of the event that triggered the completion, which is what gives a goal step its position in [funnel](#funnels) ordering. `completion_id` is a stable public identifier. Marketing dimensions (channel, source/medium/campaign/id, landing page, device) are denormalized onto the row so every breakdown needs no join. `value` is `DECIMAL(13,2)`, nullable — `NULL` means "no value configured", which is not the same fact as `0.00`. |
-| `{$prefix}cvm_lead_events` | [Lead](#lead-status--value) status-change history: one row per transition with the previous and new status, the value as at that change, the user who made it, and a stable `lead_event_id`. Rows are cascaded away when the submission is deleted, when all submissions are cleared, and by retention. |
+| `{$prefix}cvmtry_events` | One row per visitor interaction (analytics engine). Unique `(batch_id, batch_seq)` makes tracker replays idempotent; indexed by type/date, type/session/date, date, page URL, `form_key`/type/date, and session/type/id (the funnel step chain). `form_success` rows carry the `conversion_id` in `event_value`. `form_key` is the form lifecycle's shared dimension across `form_view` → `form_start` → `form_error` → `form_submit` → `form_success`, and is empty on every other type. Stores the visitor `ip_address` unless disabled in Settings. |
+| `{$prefix}cvmtry_form_submissions` | One row per server-confirmed submission: `submission_id` (unique), `conversion_id` (unique — the dedup point), session id, provider/form identity, page URL + query, submitter `ip_address` (empty when disabled in Settings), sanitized `submission_data`, frozen `analytics_context`, runtime overrides, plus the indexed `channel`, `utm_campaign`, `utm_source`, `utm_medium`, `utm_id` and `landing_page` columns the Submissions page filters on and the lead reports group by, the `lead_status` / `lead_value` / `lead_currency` / `lead_status_at` outcome columns, and the recorded `delivery_state` / `delivery_json` webhook outcome. |
+| `{$prefix}cvmtry_delivery_queue` | The background form-delivery queue: one row per submission × endpoint with status, attempt, next-attempt time, claim token, and the frozen URL/headers/body. Rows are deleted on acknowledgment or abandonment. |
+| `{$prefix}cvmtry_notification_queue` | The background email-notification queue: one row per submission × recipient with the frozen settings snapshot, status, attempt, next-attempt time, claim token, and last failure reason. Carries **no lead data** — the submission is read at send time. Rows are deleted on send, on abandonment, when the submission is deleted, or when their two-hour TTL expires. |
+| `{$prefix}cvmtry_webhook_deliveries` | The Activity Log: one row per delivery attempt with normalized `message_type`/`kind`/`attempt` columns, identifiers, redacted headers, redacted request/response bodies (64 KB cap each). |
+| `{$prefix}cvmtry_goal_completions` | One row per [goal](#goals) completion. `dedupe_key` carries a UNIQUE index and is the entire deduplication mechanism for both counting behaviours. `source_event_id` is the id of the event that triggered the completion, which is what gives a goal step its position in [funnel](#funnels) ordering. `completion_id` is a stable public identifier. Marketing dimensions (channel, source/medium/campaign/id, landing page, device) are denormalized onto the row so every breakdown needs no join. `value` is `DECIMAL(13,2)`, nullable — `NULL` means "no value configured", which is not the same fact as `0.00`. |
+| `{$prefix}cvmtry_lead_events` | [Lead](#lead-status--value) status-change history: one row per transition with the previous and new status, the value as at that change, the user who made it, and a stable `lead_event_id`. Rows are cascaded away when the submission is deleted, when all submissions are cleared, and by retention. |
 
 All tables are created via `dbDelta()` with versioned schema options; migrations are **verified** (columns and critical indexes checked) before their version is recorded, so a failed/partial migration retries on the next load. `channel` and `utm_campaign` are denormalized copies of two values that also live inside the frozen `analytics_context` — promoted to indexed columns so the Submissions page can filter and build dropdowns without decoding every row's JSON. `delivery_state` / `delivery_json` are likewise recorded rather than derived — see [Submissions](#submissions). Rows predating schema 1.2.0/1.3.0/1.4.0 are backfilled in chunks under a wall-clock budget by the daily cleanup cron, by a catch-up event scheduled right after the upgrade, and by the Submissions page itself (so sites whose WP-Cron never fires still finish). An un-backfilled row is exactly one whose `channel`, `delivery_state`, or `landing_page` `IS NULL`, so the backfill needs no progress option and terminates on its own. New submissions write every derived column at insert, so only history ever reaches the backfill worker.
 
@@ -1882,7 +1882,7 @@ wp i18n make-pot . languages/convermetry.pot --slug=convermetry --domain=converm
 ```
 
 **Release ZIP.** `bin/build-zip.sh [output-dir]` stages tracked files minus
-`.distignore`, checks every version surface (plugin header, `CVM_VERSION`,
+`.distignore`, checks every version surface (plugin header, `CVMTRY_VERSION`,
 README, payload examples, readme.txt `Stable tag`), and refuses to build when a
 runtime file would be silently left out — an untracked file (add it, or
 `git add -N` it), or one hidden by `.gitignore` — or when `readme.txt`,
@@ -1895,7 +1895,7 @@ directory. The icon and banners are drawn from the plugin's own logo mark,
 colors and bundled Play font; the screenshots come from a test site filled with
 fictional data (`www.example.com`, documentation-range IP addresses).
 
-**Plugin Check.** `docs/plugin-check-1.0.0.md` records what the official Plugin
+**Plugin Check.** `docs/plugin-check-1.0.1.md` records what the official Plugin
 Check tool still reports against the release ZIP and why each finding stands.
 
 ---
@@ -1922,7 +1922,7 @@ is read.
 
 Two supporting files:
 
-* `phpstan/constants.php` declares the `CVM_*` constants. `convermetry.php` defines
+* `phpstan/constants.php` declares the `CVMTRY_*` constants. `convermetry.php` defines
   them inside a PHP-version-guarded `else` branch, which static analysis cannot see
   as an unconditional definition.
 * `phpstan/stubs/form-plugins.php` declares the third-party form-plugin symbols the
@@ -1955,12 +1955,12 @@ The **integration** suite exists because that boundary has a cost, and 0.5.0 pai
 It skips itself cleanly when no database is reachable, so `composer test` needs no setup. To run it:
 
 ```bash
-CVM_TEST_DB_HOST=127.0.0.1 CVM_TEST_DB_NAME=cvm_test \
-CVM_TEST_DB_USER=root CVM_TEST_DB_PASS=root \
+CVMTRY_TEST_DB_HOST=127.0.0.1 CVMTRY_TEST_DB_NAME=cvmtry_test \
+CVMTRY_TEST_DB_USER=root CVMTRY_TEST_DB_PASS=root \
 composer test:integration
 ```
 
-`CVM_TEST_DB_SOCKET` is also accepted. **The database is truncated between tests — point it at a throwaway, never at a real site's.**
+`CVMTRY_TEST_DB_SOCKET` is also accepted. **The database is truncated between tests — point it at a throwaway, never at a real site's.**
 
 What it covers: the DDL producing exactly the columns and indexes each migration verifies; the UNIQUE constraints genuinely deduplicating under `INSERT IGNORE`; the generated funnel SQL including ordering, cross-table goal steps, and the eight-step cap; the abandonment query's correlated `NOT EXISTS`; per-currency lead grouping; the corrected backfill sentinel; and the lead-history cascade.
 
@@ -2036,26 +2036,26 @@ from* the enum, so the two can no longer drift.
 
 ### Correlation fields are now only added to forms that read them
 
-The tracker injects three hidden fields — `cvm_conversion_id`, `cvm_session_id`, `cvm_context` — so a submission can be joined to its analytics session. Through 0.5.0 those went into **every** `<form>` on the page except the admin bar's.
+The tracker injects three hidden fields — `cvmtry_conversion_id`, `cvmtry_session_id`, `cvmtry_context` — so a submission can be joined to its analytics session. Through 0.5.0 those went into **every** `<form>` on the page except the admin bar's.
 
 They now go only into a form that is all of:
 
-- recognized as one of the supported providers (Contact Form 7, Elementor, Fluent Forms, Formidable, Gravity Forms, Ninja Forms, WPForms) by its own markup **or its wrapper's**, or carrying an explicit `data-cvm-form-key` attribute;
+- recognized as one of the supported providers (Contact Form 7, Elementor, Fluent Forms, Formidable, Gravity Forms, Ninja Forms, WPForms) by its own markup **or its wrapper's**, or carrying an explicit `data-cvmtry-form-key` attribute;
 - submitted with `method="post"`;
 - posting to this site's own origin;
-- not marked `data-cvm-ignore`.
+- not marked `data-cvmtry-ignore`.
 
 Everything else — your search form, the login and comment forms, WooCommerce's cart forms, any third-party widget — is left alone. Previously a `GET` form put the session id and attribution snapshot into the URL (and so into browser history and server logs), a form with an external `action` disclosed them to that third party, and a strict handler could reject the submission over fields it did not expect.
 
-**If you use `Correlation::fromFields()` or `convermetry_submit_form()` with your own markup**, add `data-cvm-form-key` to the form so it keeps receiving the fields:
+**If you use `Correlation::fromFields()` or `convermetry_submit_form()` with your own markup**, add `data-cvmtry-form-key` to the form so it keeps receiving the fields:
 
 ```html
-<form method="post" data-cvm-form-key="mysite:contact">
+<form method="post" data-cvmtry-form-key="mysite:contact">
 ```
 
 Without it the submission still records and delivers — it simply has no session attribution, exactly as when JavaScript is unavailable.
 
-### `data-cvm-ignore` now means ignore
+### `data-cvmtry-ignore` now means ignore
 
 It suppressed `form_view`, `form_start` and `form_error` but was not consulted for `form_submit`, `form_success`, or field injection. A form marked with it is now excluded from all of them.
 
@@ -2066,7 +2066,7 @@ It suppressed `form_view`, `form_start` and `form_error` but was not consulted f
 | Page-exit beacons | An accepted exit beacon is no longer kept in `sessionStorage` and replayed on the next page, and `visibilitychange`/`pagehide` no longer send the same batch twice. Counts were always correct (the server deduplicates), but the wasted requests were charged against the rate limits. |
 | Form tracking when disabled | The observers and listeners are no longer installed at all when the relevant event types are off, and DOM mutations are scanned per added node instead of re-scanning the whole document. |
 | Funnel editor | Renders its first two step rows server-side, so it works with JavaScript blocked. |
-| Goal selectors | Mirrored into a small autoloaded option, removing an uncached `cvm_goals` query from every visitor page load. Derived state — it is rebuilt automatically whenever goals change, and removed on uninstall. |
+| Goal selectors | Mirrored into a small autoloaded option, removing an uncached `cvmtry_goals` query from every visitor page load. Derived state — it is rebuilt automatically whenever goals change, and removed on uninstall. |
 | Admin screens | Attribute-context escaping hardened in the funnel, submissions and activity-log editors. The Activity Log no longer strands you on an empty page after deleting the last row on it. |
 
 Payload schemas are unchanged: form submissions stay `2.0`, analytics reports stay `1.1`.
@@ -2079,7 +2079,7 @@ Payload schemas are unchanged: form submissions stay `2.0`, analytics reports st
 
 ### What happens on upgrade
 
-Four schema migrations run: two new tables (`cvm_goal_completions`, `cvm_lead_events`), a `form_key` column plus two indexes on the events table, and the lead and attribution columns on the submissions table.
+Four schema migrations run: two new tables (`cvmtry_goal_completions`, `cvmtry_lead_events`), a `form_key` column plus two indexes on the events table, and the lead and attribution columns on the submissions table.
 
 **They do not run inside a visitor's page load.** Adding an index rebuilds the table on every database engine, and the events table is usually the largest one on the site. Migrations therefore run only in WP-Cron, WP-CLI, or a genuine admin page view, one at a time under a lease. Until they finish, the Goals and Funnels screens say *"Preparing"* rather than querying columns that do not exist yet; everything else works normally throughout.
 
@@ -2096,7 +2096,7 @@ Existing submissions are backfilled with their landing page and full campaign id
 | **Form submission payloads** | **Unchanged — still schema `2.0`** (and `1.0` for pre-2.0 rows). No new fields. |
 | **Analytics report payloads** | **`1.0` → `1.1`.** Purely additive: one new `analytics.goals` section. Every `1.0` field is present, in place, with the same shape — a receiver written against `1.0` keeps working untouched. |
 | Frozen retries in flight | Replay their original bytes under their original `delivery_id`, as always |
-| `cvm_track_event()`, `convermetry_submit_form()`, `convermetry:conversion` | Unchanged |
+| `cvmtry_track_event()`, `convermetry_submit_form()`, `convermetry:conversion` | Unchanged |
 
 If your receiver rejects unknown JSON keys, allow additive fields within a major version before upgrading — that is the contract `schema_version` expresses.
 
@@ -2114,7 +2114,7 @@ Goal matching adds a small per-event cost on the server and has its own switch u
 
 **Deactivation preserves everything:** tables and data are kept, analytics retry chains are suspended (frozen deliveries resume under their original `delivery_id`s after reactivation), and queued form deliveries wait in the database for the re-armed worker.
 
-**Deleting the plugin** (Plugins screen) runs `uninstall.php`: drops all **seven** tables — including `cvm_goal_completions` and `cvm_lead_events` — and deletes every option (goal and funnel definitions included), transient, rate-limit counter row, and scheduled cron event. On **multisite**, the cleanup runs per site across the whole network. No trace remains.
+**Deleting the plugin** (Plugins screen) runs `uninstall.php`: drops all **seven** tables — including `cvmtry_goal_completions` and `cvmtry_lead_events` — and deletes every option (goal and funnel definitions included), transient, rate-limit counter row, and scheduled cron event. On **multisite**, the cleanup runs per site across the whole network. No trace remains.
 
 ## Folder structure
 
@@ -2131,8 +2131,8 @@ convermetry/
 │   ├── Unit/                    # Pure logic; no WordPress, no database
 │   └── Integration/             # The real queries against a real MySQL server
 ├── assets/
-│   ├── css/admin-ui.css         # Design-system tokens + the Home page's cvm-ui-* components
-│   ├── css/admin-common.css     # Older cvm-* components shared by 2+ admin screens
+│   ├── css/admin-ui.css         # Design-system tokens + the Home page's cvmtry-ui-* components
+│   ├── css/admin-common.css     # Older cvmtry-* components shared by 2+ admin screens
 │   ├── css/admin-home.css       # Home-only styling (none yet — reserved)
 │   ├── css/admin-about.css      # About-only styling
 │   ├── css/admin-activity-log.css   # Activity Log-only styling

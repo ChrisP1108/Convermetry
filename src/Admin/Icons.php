@@ -42,15 +42,15 @@ final class Icons
         'logo' => [20,
             '<path d="M3 15.5 L8 10.5 L12 13 L17 5.5" stroke="currentColor" stroke-width="1.8" '
             . 'stroke-linecap="round" stroke-linejoin="round"/>'
-            . '<circle cx="8" cy="10.5" r="2" class="cvm-ui-icon__mark"/>'
-            . '<circle cx="17" cy="5.5" r="2" class="cvm-ui-icon__mark"/>',
+            . '<circle cx="8" cy="10.5" r="2" class="cvmtry-ui-icon__mark"/>'
+            . '<circle cx="17" cy="5.5" r="2" class="cvmtry-ui-icon__mark"/>',
         ],
 
         // Analytics.
         'chart' => [20,
             '<path d="M3 14.5 L7.5 9 L11 11.5 L17 4" stroke="currentColor" stroke-width="1.7" '
             . 'stroke-linecap="round" stroke-linejoin="round"/>'
-            . '<path d="M3 17.5h14" class="cvm-ui-icon__muted" stroke-width="1.4" stroke-linecap="round"/>',
+            . '<path d="M3 17.5h14" class="cvmtry-ui-icon__muted" stroke-width="1.4" stroke-linecap="round"/>',
         ],
         'chart-sm' => [16,
             '<path d="M2.5 11.5 6 7.5 8.8 9.8 13.5 4.5" stroke="currentColor" stroke-width="1.6" '
@@ -60,7 +60,7 @@ final class Icons
         // Submissions / leads.
         'document' => [20,
             '<rect x="3.5" y="2.5" width="13" height="15" rx="2.5" stroke="currentColor" stroke-width="1.6"/>'
-            . '<path d="M7 7.5h6M7 10.5h6M7 13.5h3" class="cvm-ui-icon__muted" stroke-width="1.5" '
+            . '<path d="M7 7.5h6M7 10.5h6M7 13.5h3" class="cvmtry-ui-icon__muted" stroke-width="1.5" '
             . 'stroke-linecap="round"/>',
         ],
         'document-sm' => [16,
@@ -73,7 +73,7 @@ final class Icons
             '<circle cx="5" cy="5" r="2.2" stroke="currentColor" stroke-width="1.6"/>'
             . '<circle cx="15" cy="15" r="2.2" stroke="currentColor" stroke-width="1.6"/>'
             . '<circle cx="15" cy="5" r="2.2" stroke="currentColor" stroke-width="1.6"/>'
-            . '<path d="M7.2 5h5.6M5 7.2V13a2 2 0 0 0 2 2h5.8" class="cvm-ui-icon__muted" stroke-width="1.5" '
+            . '<path d="M7.2 5h5.6M5 7.2V13a2 2 0 0 0 2 2h5.8" class="cvmtry-ui-icon__muted" stroke-width="1.5" '
             . 'stroke-linecap="round"/>',
         ],
 
@@ -81,7 +81,7 @@ final class Icons
         'code' => [20,
             '<path d="M7.5 5 4 10l3.5 5M12.5 5 16 10l-3.5 5" stroke="currentColor" stroke-width="1.7" '
             . 'stroke-linecap="round" stroke-linejoin="round"/>'
-            . '<circle cx="10" cy="10" r="1.4" class="cvm-ui-icon__muted-fill"/>',
+            . '<circle cx="10" cy="10" r="1.4" class="cvmtry-ui-icon__muted-fill"/>',
         ],
 
         // Activity log.
@@ -199,7 +199,7 @@ final class Icons
      * It cannot simply reuse the catalogue entry. `add_menu_page()` renders a
      * base64 SVG as a plain CSS `background-image` on the menu row — outside
      * this plugin's own CSS cascade entirely — so `stroke="currentColor"` and
-     * the `cvm-ui-icon__mark` class the catalogue entry relies on would
+     * the `cvmtry-ui-icon__mark` class the catalogue entry relies on would
      * resolve to nothing (black) rather than to this plugin's tokens. Every
      * colour here is hard-coded instead, and all of it is one flat grey,
      * `#a7aaad` — wp-admin's own resting menu-icon colour (see

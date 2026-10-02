@@ -185,7 +185,7 @@ final class AnalyticsExtensionsTest extends TestCase
      */
     public function testTheFailureActionCarriesNoExceptionMessage(): void
     {
-        $this->register([$this->section('acme/broken', new \RuntimeException('SELECT email FROM wp_cvm_events'))]);
+        $this->register([$this->section('acme/broken', new \RuntimeException('SELECT email FROM wp_cvmtry_events'))]);
 
         Reports::extensionSummaries('2026-08-01 00:00:00', '2026-08-08 00:00:00', 10);
 

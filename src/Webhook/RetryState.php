@@ -7,7 +7,7 @@ if (!defined('ABSPATH')) exit;
 
 /**
  * One analytics endpoint's pending retry chain, as stored in the
- * 'cvm_webhook_retry_state' option.
+ * 'cvmtry_webhook_retry_state' option.
  *
  * The option holds a map of md5(endpoint URL) => state. That map is READ BACK
  * FROM DISK, which is the whole reason this class has a

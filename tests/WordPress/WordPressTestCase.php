@@ -14,9 +14,9 @@ abstract class WordPressTestCase extends TestCase
     {
         parent::setUp();
 
-        if (!defined('CVM_WP_E2E_READY') || CVM_WP_E2E_READY !== true) {
+        if (!defined('CVMTRY_WP_E2E_READY') || CVMTRY_WP_E2E_READY !== true) {
             self::markTestSkipped(
-                'No WordPress available. Set CVM_WP_DIR (and the CVM_WP_DB_* variables) to run the '
+                'No WordPress available. Set CVMTRY_WP_DIR (and the CVMTRY_WP_DB_* variables) to run the '
                 . 'end-to-end suite; see tests/WordPress/bootstrap.php.'
             );
         }
@@ -32,7 +32,7 @@ abstract class WordPressTestCase extends TestCase
     {
         global $wpdb;
 
-        foreach (['cvm_events', 'cvm_form_submissions', 'cvm_delivery_queue', 'cvm_webhook_deliveries'] as $table) {
+        foreach (['cvmtry_events', 'cvmtry_form_submissions', 'cvmtry_delivery_queue', 'cvmtry_webhook_deliveries'] as $table) {
             $wpdb->query('TRUNCATE TABLE ' . $wpdb->prefix . $table);
         }
     }

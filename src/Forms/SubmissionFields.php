@@ -59,7 +59,7 @@ final class SubmissionFields
      * Prefix marking Convermetry's own correlation fields, which must never
      * reach storage, payloads, logs, CSV exports, or notification emails.
      */
-    private const string INTERNAL_PREFIX = 'cvm_';
+    private const string INTERNAL_PREFIX = 'cvmtry_';
 
     /**
      * Normalizes any accepted input shape into typed fields.

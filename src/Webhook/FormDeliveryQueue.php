@@ -58,19 +58,19 @@ use Convermetry\Support\QueueOutcome;
 final class FormDeliveryQueue
 {
     /** Table name without the wpdb prefix. */
-    private const string TABLE = 'cvm_delivery_queue';
+    private const string TABLE = 'cvmtry_delivery_queue';
 
     /** Option key storing the installed schema version. */
-    private const string DB_VERSION_OPTION = 'cvm_queue_db_version';
+    private const string DB_VERSION_OPTION = 'cvmtry_queue_db_version';
 
     /** Current schema version; bump when the CREATE TABLE below changes. */
     private const string DB_VERSION = '1.0.0';
 
     /** Cron hook name for the queue worker. */
-    public const string WORKER_HOOK = 'cvm_process_form_queue';
+    public const string WORKER_HOOK = 'cvmtry_process_form_queue';
 
     /** Cron hook that repairs queue rows which failed to persist. */
-    public const string RECONCILE_HOOK = 'cvm_reconcile_form_queue';
+    public const string RECONCILE_HOOK = 'cvmtry_reconcile_form_queue';
 
     /**
      * Backoff between repair attempts, in seconds. Bounded on purpose: a
@@ -90,7 +90,7 @@ final class FormDeliveryQueue
      * One row per submission; see {@see repairOptionName()} for why that is
      * load-bearing rather than tidy.
      */
-    private const string REPAIR_PREFIX = 'cvm_queue_repair_';
+    private const string REPAIR_PREFIX = 'cvmtry_queue_repair_';
 
     /**
      * How long a destination stays eligible for repair after its queue write
@@ -272,6 +272,7 @@ final class FormDeliveryQueue
         foreach ($endpoints as $endpoint) {
             $endpointKey = md5($endpoint->url);
 
+            // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- write to the plugin's custom delivery queue table.
             $inserted = $wpdb->query($wpdb->prepare(
                 'INSERT IGNORE INTO %i'
                 . ' (submission_row, submission_id, endpoint_key, endpoint_url, delivery_id,'
@@ -390,6 +391,7 @@ final class FormDeliveryQueue
             return 0;
         }
 
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- live queue state for one submission from the custom delivery queue table.
         return (int) $wpdb->get_var($wpdb->prepare(
             'SELECT COUNT(*) FROM %i WHERE submission_id = %s',
             self::tableName(),
@@ -480,6 +482,7 @@ final class FormDeliveryQueue
         $after    = 0;
 
         for ($chunk = 0; $chunk < self::REPAIR_MAX_CHUNKS; $chunk++) {
+            // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- bounded scan of the plugin's own repair-record rows in the options table, read straight through $wpdb so they never enter the option cache.
             $rows = $wpdb->get_results($wpdb->prepare(
                 'SELECT option_id, option_name, option_value FROM %i'
                 . ' WHERE option_name LIKE %s AND option_id > %d ORDER BY option_id ASC LIMIT %d',
@@ -662,6 +665,7 @@ final class FormDeliveryQueue
             return;
         }
 
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- repair-record row in the options table, written straight through $wpdb so it never enters the option cache.
         $wpdb->query($wpdb->prepare(
             'DELETE FROM %i WHERE option_name = %s',
             $wpdb->options,
@@ -725,6 +729,7 @@ final class FormDeliveryQueue
             return null;
         }
 
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- repair-record row in the options table, read straight through $wpdb so it never enters the option cache.
         $value = $wpdb->get_var($wpdb->prepare(
             'SELECT option_value FROM %i WHERE option_name = %s',
             $wpdb->options,
@@ -744,6 +749,7 @@ final class FormDeliveryQueue
     {
         global $wpdb;
 
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- repair-record row in the options table, read straight through $wpdb so it never enters the option cache.
         return $wpdb->get_var($wpdb->prepare(
             'SELECT option_name FROM %i WHERE option_name = %s',
             $wpdb->options,
@@ -806,6 +812,7 @@ final class FormDeliveryQueue
             JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
         );
 
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- repair-record row in the options table, written straight through $wpdb so it never enters the option cache.
         $wpdb->query($wpdb->prepare(
             "INSERT INTO %i (option_name, option_value, autoload) VALUES (%s, %s, 'off')"
             . ' ON DUPLICATE KEY UPDATE option_value = %s',
@@ -858,6 +865,7 @@ final class FormDeliveryQueue
     {
         global $wpdb;
 
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- live delivery state from the custom delivery log table.
         return (int) $wpdb->get_var($wpdb->prepare(
             "SELECT COUNT(*) FROM %i WHERE submission_id = %s AND message_type = 'form_submission' AND endpoint_url = %s",
             DeliveryLog::tableName(),
@@ -883,6 +891,7 @@ final class FormDeliveryQueue
     {
         global $wpdb;
 
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- deduplication check on the custom delivery queue table; it must see the live row.
         return (int) $wpdb->get_var($wpdb->prepare(
             'SELECT COUNT(*) FROM %i WHERE submission_id = %s AND endpoint_key = %s',
             self::tableName(),
@@ -1049,6 +1058,7 @@ final class FormDeliveryQueue
                 continue;
             }
 
+            // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- write to the plugin's custom delivery queue table.
             $inserted = $wpdb->query($wpdb->prepare(
                 'INSERT IGNORE INTO %i'
                 . ' (submission_row, submission_id, endpoint_key, endpoint_url, delivery_id,'
@@ -1123,6 +1133,7 @@ final class FormDeliveryQueue
         $now   = gmdate('Y-m-d H:i:s');
 
         // Reclaim rows stranded in 'sending' by a worker that died mid-pass.
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- queue worker on the custom delivery queue table; claims and state must read the live rows, so they are never cached.
         $wpdb->query($wpdb->prepare(
             "UPDATE %i SET status = 'pending', claim = '' WHERE status = 'sending' AND claimed_at < %s",
             $table,
@@ -1140,6 +1151,7 @@ final class FormDeliveryQueue
 
         $token = md5(wp_generate_uuid4() . wp_rand());
 
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- queue worker on the custom delivery queue table; claims and state must read the live rows, so they are never cached.
         $wpdb->query($wpdb->prepare(
             "UPDATE %i SET status = 'sending', claim = %s, claimed_at = %s
              WHERE status = 'pending' AND next_attempt_at <= %s
@@ -1152,6 +1164,7 @@ final class FormDeliveryQueue
             self::BATCH_SIZE
         ));
 
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- queue worker on the custom delivery queue table; claims and state must read the live rows, so they are never cached.
         $rows = $wpdb->get_results($wpdb->prepare(
             "SELECT * FROM %i WHERE claim = %s AND status = 'sending' ORDER BY next_attempt_at ASC",
             $table,
@@ -1169,6 +1182,7 @@ final class FormDeliveryQueue
         foreach ($rows as $row) {
             if (microtime(true) >= $deadline) {
                 // Out of budget — release the remainder untouched.
+                // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- queue worker on the custom delivery queue table; claims and state must read the live rows, so they are never cached.
                 $wpdb->query($wpdb->prepare(
                     "UPDATE %i SET status = 'pending', claim = '' WHERE id = %d AND claim = %s",
                     $table,
@@ -1221,6 +1235,7 @@ final class FormDeliveryQueue
         // and up) dwarf the retry chain (under a day), so in practice this only
         // ever fires for a deliberate deletion.
         if ($submission === null) {
+            // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- queue worker on the custom delivery queue table; claims and state must read the live rows, so they are never cached.
             $wpdb->delete($table, ['id' => $rowId], ['%d']);
 
             // Cancelled, not abandoned: no attempt was ever made and no
@@ -1277,6 +1292,7 @@ final class FormDeliveryQueue
             $frozenHeaders = RequestFactory::buildHeaders($formKey, $runtimeHeaders, $composition);
             $frozenBody    = $encoded;
 
+            // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- queue worker on the custom delivery queue table; claims and state must read the live rows, so they are never cached.
             $frozen = $wpdb->update(
                 $table,
                 [
@@ -1326,6 +1342,7 @@ final class FormDeliveryQueue
         );
 
         if ($result->ok) {
+            // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- queue worker on the custom delivery queue table; claims and state must read the live rows, so they are never cached.
             $wpdb->delete($table, ['id' => $rowId], ['%d']);
 
             // Recorded only after the queue row is gone: while it still exists
@@ -1461,6 +1478,7 @@ final class FormDeliveryQueue
 
         // Attempt 1 is the initial send; delays[0] gates attempt 2, etc.
         if ($attempt > count($delays)) {
+            // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- queue worker on the custom delivery queue table; claims and state must read the live rows, so they are never cached.
             $wpdb->delete($table, ['id' => $rowId], ['%d']);
 
             // The retry chain is spent and the queue row is gone, so the
@@ -1478,6 +1496,7 @@ final class FormDeliveryQueue
         $nextAt = time() + $delays[$attempt - 1];
         $next   = gmdate('Y-m-d H:i:s', $nextAt);
 
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- queue worker on the custom delivery queue table; claims and state must read the live rows, so they are never cached.
         $wpdb->update(
             $table,
             ['status' => 'pending', 'claim' => '', 'attempt' => $attempt, 'next_attempt_at' => $next],
@@ -1503,6 +1522,7 @@ final class FormDeliveryQueue
     {
         global $wpdb;
 
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- live queue depth from the custom delivery queue table.
         return (int) $wpdb->get_var($wpdb->prepare(
             "SELECT COUNT(*) FROM %i WHERE status IN ('pending', 'sending')",
             self::tableName()
@@ -1520,6 +1540,7 @@ final class FormDeliveryQueue
     {
         global $wpdb;
 
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- live queue rows for the Webhooks screen from the custom delivery queue table.
         $rows = $wpdb->get_results($wpdb->prepare(
             'SELECT id, submission_id, endpoint_url, delivery_id, status, attempt, next_attempt_at, created_at'
             . " FROM %i WHERE status IN ('pending', 'sending') ORDER BY next_attempt_at ASC LIMIT %d",
@@ -1546,6 +1567,7 @@ final class FormDeliveryQueue
             return [];
         }
 
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- live queue rows for one submission from the custom delivery queue table.
         $rows = $wpdb->get_results($wpdb->prepare(
             'SELECT endpoint_url, status, attempt, next_attempt_at, created_at'
             . ' FROM %i WHERE submission_id = %s ORDER BY id ASC',
@@ -1574,6 +1596,7 @@ final class FormDeliveryQueue
 
         global $wpdb;
 
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- next due time from the live custom delivery queue table, to schedule the worker.
         $next = $wpdb->get_var($wpdb->prepare(
             "SELECT MIN(next_attempt_at) FROM %i WHERE status IN ('pending', 'sending')",
             self::tableName()

@@ -188,7 +188,7 @@ final class LeadStatusTest extends TestCase
         foreach (LeadStatus::ALL as $status) {
             self::assertArrayHasKey($status, $labels, "'{$status}' has no label.");
             self::assertNotSame('', $labels[$status]);
-            self::assertStringStartsWith('cvm-status-', LeadStatus::chipClass($status));
+            self::assertStringStartsWith('cvmtry-status-', LeadStatus::chipClass($status));
         }
     }
 

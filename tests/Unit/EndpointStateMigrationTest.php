@@ -64,8 +64,8 @@ final class EndpointStateMigrationTest extends TestCase
                 ]],
                 'shared_secret' => 'shared-secret',
             ],
-            'cvm_webhook_last_sent'   => [md5(self::OLD_URL) => 1750000000],
-            'cvm_webhook_retry_state' => [md5(self::OLD_URL) => [
+            'cvmtry_webhook_last_sent'   => [md5(self::OLD_URL) => 1750000000],
+            'cvmtry_webhook_retry_state' => [md5(self::OLD_URL) => [
                 'url'           => self::OLD_URL,
                 'attempt'       => 2,
                 'scheduled_for' => 1760000000,
@@ -127,8 +127,8 @@ final class EndpointStateMigrationTest extends TestCase
         $id = $this->endpointId();
 
         self::assertNotSame('', $id);
-        self::assertSame([$id => 1750000000], $this->options['cvm_webhook_last_sent']);
-        self::assertSame([$id], array_keys($this->options['cvm_webhook_retry_state']));
+        self::assertSame([$id => 1750000000], $this->options['cvmtry_webhook_last_sent']);
+        self::assertSame([$id], array_keys($this->options['cvmtry_webhook_retry_state']));
     }
 
     public function testPendingCronIsRescheduledFromUrlToId(): void
@@ -151,8 +151,8 @@ final class EndpointStateMigrationTest extends TestCase
         $this->options[Options::WEBHOOK_OPTION_KEY] = $settings;
 
         self::assertSame($id, $this->endpointId(), 'The id must survive a URL edit');
-        self::assertArrayHasKey($id, $this->options['cvm_webhook_last_sent'], 'Delivery window must not reset');
-        self::assertArrayHasKey($id, $this->options['cvm_webhook_retry_state'], 'Retry chain must survive');
+        self::assertArrayHasKey($id, $this->options['cvmtry_webhook_last_sent'], 'Delivery window must not reset');
+        self::assertArrayHasKey($id, $this->options['cvmtry_webhook_retry_state'], 'Retry chain must survive');
         self::assertSame([[$id]], $this->cronArgs(), 'Cron event must remain addressable');
         self::assertSame('own-secret', Options::secretForId($id), 'Must not fall through to the shared secret');
     }
@@ -160,25 +160,25 @@ final class EndpointStateMigrationTest extends TestCase
     public function testMigrationIsIdempotent(): void
     {
         AnalyticsDispatcher::migrateEndpointState();
-        $snapshot = [$this->options['cvm_webhook_last_sent'], $this->options['cvm_webhook_retry_state'], $this->cronArgs()];
+        $snapshot = [$this->options['cvmtry_webhook_last_sent'], $this->options['cvmtry_webhook_retry_state'], $this->cronArgs()];
 
         AnalyticsDispatcher::migrateEndpointState();
 
         self::assertSame(
             $snapshot,
-            [$this->options['cvm_webhook_last_sent'], $this->options['cvm_webhook_retry_state'], $this->cronArgs()]
+            [$this->options['cvmtry_webhook_last_sent'], $this->options['cvmtry_webhook_retry_state'], $this->cronArgs()]
         );
     }
 
     public function testStateForAnUnconfiguredEndpointIsDropped(): void
     {
-        $this->options['cvm_webhook_last_sent'][md5('https://gone.test/hook')]   = 123;
-        $this->options['cvm_webhook_retry_state'][md5('https://gone.test/hook')] = ['url' => 'https://gone.test/hook'];
+        $this->options['cvmtry_webhook_last_sent'][md5('https://gone.test/hook')]   = 123;
+        $this->options['cvmtry_webhook_retry_state'][md5('https://gone.test/hook')] = ['url' => 'https://gone.test/hook'];
 
         AnalyticsDispatcher::migrateEndpointState();
 
-        self::assertSame([$this->endpointId()], array_keys($this->options['cvm_webhook_last_sent']));
-        self::assertSame([$this->endpointId()], array_keys($this->options['cvm_webhook_retry_state']));
+        self::assertSame([$this->endpointId()], array_keys($this->options['cvmtry_webhook_last_sent']));
+        self::assertSame([$this->endpointId()], array_keys($this->options['cvmtry_webhook_retry_state']));
     }
 
     public function testExistingIdsAreNeverRegenerated(): void

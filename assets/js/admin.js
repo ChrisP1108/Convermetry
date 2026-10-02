@@ -28,7 +28,7 @@
     }
 
     function cfg(key) {
-        return (typeof CVM_ADMIN !== 'undefined' && CVM_ADMIN[key]) ? CVM_ADMIN[key] : '';
+        return (typeof CVMTRY_ADMIN !== 'undefined' && CVMTRY_ADMIN[key]) ? CVMTRY_ADMIN[key] : '';
     }
 
     /* ------------------------------------------------------------------ *
@@ -38,7 +38,7 @@
     /**
      * Builds one key/value row for a builder container.
      *
-     * @param {string} name  The field name prefix, e.g. "cvm_global_headers".
+     * @param {string} name  The field name prefix, e.g. "cvmtry_global_headers".
      * @param {number} index Row index.
      * @param {string} key   Existing key.
      * @param {string} value Existing value.
@@ -46,25 +46,25 @@
      */
     function buildKvRow(name, index, key, value) {
         const row = document.createElement('div');
-        row.className = 'cvm-kv-row';
+        row.className = 'cvmtry-kv-row';
 
         const keyInput = document.createElement('input');
         keyInput.type = 'text';
-        keyInput.className = 'regular-text code cvm-kv-key';
+        keyInput.className = 'regular-text code cvmtry-kv-key';
         keyInput.name = name + '[' + index + '][key]';
         keyInput.placeholder = __('Key', 'convermetry');
         keyInput.value = key || '';
 
         const valueInput = document.createElement('input');
         valueInput.type = 'text';
-        valueInput.className = 'regular-text code cvm-kv-value';
+        valueInput.className = 'regular-text code cvmtry-kv-value';
         valueInput.name = name + '[' + index + '][value]';
         valueInput.placeholder = __('Value', 'convermetry');
         valueInput.value = value || '';
 
         const removeBtn = document.createElement('button');
         removeBtn.type = 'button';
-        removeBtn.className = 'button cvm-kv-remove';
+        removeBtn.className = 'button cvmtry-kv-remove';
         removeBtn.textContent = __('Remove', 'convermetry');
         removeBtn.setAttribute('aria-label', __('Remove this row', 'convermetry'));
         removeBtn.addEventListener('click', function () {
@@ -80,22 +80,22 @@
 
     /** Wires every key/value builder container on the page. */
     function initKvBuilders(root) {
-        (root || document).querySelectorAll('.cvm-kv-builder').forEach(function (builder) {
+        (root || document).querySelectorAll('.cvmtry-kv-builder').forEach(function (builder) {
             if (builder.dataset.kvWired === '1') {
                 return;
             }
             builder.dataset.kvWired = '1';
 
             const name = builder.dataset.kvName;
-            const rows = builder.querySelector('.cvm-kv-rows');
-            const addBtn = builder.querySelector('.cvm-kv-add');
+            const rows = builder.querySelector('.cvmtry-kv-rows');
+            const addBtn = builder.querySelector('.cvmtry-kv-add');
             if (!name || !rows || !addBtn) {
                 return;
             }
 
-            rows.querySelectorAll('.cvm-kv-remove').forEach(function (btn) {
+            rows.querySelectorAll('.cvmtry-kv-remove').forEach(function (btn) {
                 btn.addEventListener('click', function () {
-                    const row = btn.closest('.cvm-kv-row');
+                    const row = btn.closest('.cvmtry-kv-row');
                     if (row) row.remove();
                 });
             });
@@ -105,7 +105,7 @@
                 builder.dataset.kvNext = String(index + 1);
                 const row = buildKvRow(name, index, '', '');
                 rows.appendChild(row);
-                row.querySelector('.cvm-kv-key').focus();
+                row.querySelector('.cvmtry-kv-key').focus();
             });
         });
     }
@@ -115,17 +115,17 @@
      * ------------------------------------------------------------------ */
 
     function endpointCount(container) {
-        return container.querySelectorAll('.cvm-webhook-block').length;
+        return container.querySelectorAll('.cvmtry-webhook-block').length;
     }
 
     function updateToggleCard(container) {
-        const toggleCard = document.getElementById('cvm-webhook-toggle-card');
+        const toggleCard = document.getElementById('cvmtry-webhook-toggle-card');
         if (!toggleCard || !container) {
             return;
         }
 
         let hasAny = false;
-        container.querySelectorAll('.cvm-webhook-url-input').forEach(function (inp) {
+        container.querySelectorAll('.cvmtry-webhook-url-input').forEach(function (inp) {
             if (inp.value.trim() !== '') {
                 hasAny = true;
             }
@@ -146,7 +146,7 @@
      */
     function buildEndpointBlock(index) {
         const block = document.createElement('div');
-        block.className = 'cvm-webhook-block';
+        block.className = 'cvmtry-webhook-block';
         block.dataset.webhookIndex = index;
 
         const n = index + 1;
@@ -154,57 +154,57 @@
         // Every translated string is escaped on the way into innerHTML: a
         // translation is text, and may contain a quote or an angle bracket.
         block.innerHTML =
-            '<div class="cvm-webhook-block-header">' +
+            '<div class="cvmtry-webhook-block-header">' +
                 /* translators: %d: the endpoint's position in the list. */
-                '<strong class="cvm-webhook-block-title">' + esc(sprintf(__('Endpoint %d', 'convermetry'), n)) + '</strong>' +
+                '<strong class="cvmtry-webhook-block-title">' + esc(sprintf(__('Endpoint %d', 'convermetry'), n)) + '</strong>' +
                 /* translators: %d: the endpoint's position in the list. */
-                '<button type="button" class="button cvm-remove-webhook-btn" aria-label="' + esc(sprintf(__('Remove endpoint %d', 'convermetry'), n)) + '">' +
+                '<button type="button" class="button cvmtry-remove-webhook-btn" aria-label="' + esc(sprintf(__('Remove endpoint %d', 'convermetry'), n)) + '">' +
                     esc(__('Remove', 'convermetry')) + '</button>' +
             '</div>' +
-            '<div class="cvm-webhook-url-row">' +
-                '<input type="url" class="cvm-webhook-url-input regular-text code"' +
-                    ' name="cvm_webhooks[' + index + '][url]"' +
+            '<div class="cvmtry-webhook-url-row">' +
+                '<input type="url" class="cvmtry-webhook-url-input regular-text code"' +
+                    ' name="cvmtry_webhooks[' + index + '][url]"' +
                     ' placeholder="https://example.com/convermetry-hook"' +
                     /* translators: %d: the endpoint's position in the list. */
                     ' aria-label="' + esc(sprintf(__('Endpoint %d URL', 'convermetry'), n)) + '">' +
             '</div>' +
-            '<div class="cvm-webhook-field">' +
-                '<input type="text" class="regular-text cvm-webhook-label-input"' +
-                    ' name="cvm_webhooks[' + index + '][label]"' +
+            '<div class="cvmtry-webhook-field">' +
+                '<input type="text" class="regular-text cvmtry-webhook-label-input"' +
+                    ' name="cvmtry_webhooks[' + index + '][label]"' +
                     ' placeholder="' + esc(__('Label (optional — shown in the Activity Log)', 'convermetry')) + '"' +
                     /* translators: %d: the endpoint's position in the list. */
                     ' aria-label="' + esc(sprintf(__('Endpoint %d label', 'convermetry'), n)) + '">' +
             '</div>' +
-            '<div class="cvm-webhook-field">' +
-                '<input type="text" class="regular-text code cvm-webhook-secret-input" autocomplete="off"' +
-                    ' name="cvm_webhooks[' + index + '][secret]"' +
+            '<div class="cvmtry-webhook-field">' +
+                '<input type="text" class="regular-text code cvmtry-webhook-secret-input" autocomplete="off"' +
+                    ' name="cvmtry_webhooks[' + index + '][secret]"' +
                     ' placeholder="' + esc(__('Signing secret (optional — overrides the shared secret)', 'convermetry')) + '"' +
                     /* translators: %d: the endpoint's position in the list. */
                     ' aria-label="' + esc(sprintf(__('Endpoint %d signing secret', 'convermetry'), n)) + '">' +
             '</div>' +
-            '<fieldset class="cvm-webhook-types">' +
+            '<fieldset class="cvmtry-webhook-types">' +
                 /* translators: %d: the endpoint's position in the list. */
                 '<legend class="screen-reader-text">' + esc(sprintf(__('Delivery types for endpoint %d', 'convermetry'), n)) + '</legend>' +
-                '<label><input type="checkbox" name="cvm_webhooks[' + index + '][analytics]" value="1" checked> ' +
+                '<label><input type="checkbox" name="cvmtry_webhooks[' + index + '][analytics]" value="1" checked> ' +
                     esc(__('Analytics Reports', 'convermetry')) + '</label> ' +
-                '<label><input type="checkbox" name="cvm_webhooks[' + index + '][forms]" value="1" checked> ' +
+                '<label><input type="checkbox" name="cvmtry_webhooks[' + index + '][forms]" value="1" checked> ' +
                     esc(__('Form Submissions', 'convermetry')) + '</label>' +
             '</fieldset>' +
-            '<div class="cvm-endpoint-tests">' +
-                '<button type="button" class="button cvm-test-endpoint" data-type="analytics">' + esc(__('Send analytics test', 'convermetry')) + '</button> ' +
-                '<button type="button" class="button cvm-test-endpoint" data-type="form">' + esc(__('Send form test', 'convermetry')) + '</button>' +
-                '<span class="cvm-test-result" role="status" aria-live="polite"></span>' +
+            '<div class="cvmtry-endpoint-tests">' +
+                '<button type="button" class="button cvmtry-test-endpoint" data-type="analytics">' + esc(__('Send analytics test', 'convermetry')) + '</button> ' +
+                '<button type="button" class="button cvmtry-test-endpoint" data-type="form">' + esc(__('Send form test', 'convermetry')) + '</button>' +
+                '<span class="cvmtry-test-result" role="status" aria-live="polite"></span>' +
             '</div>';
 
-        block.querySelector('.cvm-remove-webhook-btn').addEventListener('click', function () {
-            const container = document.getElementById('cvm-webhooks-container');
+        block.querySelector('.cvmtry-remove-webhook-btn').addEventListener('click', function () {
+            const container = document.getElementById('cvmtry-webhooks-container');
             block.remove();
             reindexEndpointBlocks(container);
             updateToggleCard(container);
         });
 
-        block.querySelector('.cvm-webhook-url-input').addEventListener('input', function () {
-            updateToggleCard(document.getElementById('cvm-webhooks-container'));
+        block.querySelector('.cvmtry-webhook-url-input').addEventListener('input', function () {
+            updateToggleCard(document.getElementById('cvmtry-webhooks-container'));
         });
 
         wireTestButtons(block);
@@ -214,29 +214,29 @@
 
     /** Re-indexes name attributes and titles after a block is added or removed. */
     function reindexEndpointBlocks(container) {
-        container.querySelectorAll('.cvm-webhook-block').forEach(function (block, idx) {
+        container.querySelectorAll('.cvmtry-webhook-block').forEach(function (block, idx) {
             block.dataset.webhookIndex = idx;
 
-            const title = block.querySelector('.cvm-webhook-block-title');
+            const title = block.querySelector('.cvmtry-webhook-block-title');
             if (title) {
                 /* translators: %d: the endpoint's position in the list. */
                 title.textContent = sprintf(__('Endpoint %d', 'convermetry'), idx + 1);
             }
 
-            [['url', '.cvm-webhook-url-input'], ['label', '.cvm-webhook-label-input'], ['secret', '.cvm-webhook-secret-input']]
+            [['url', '.cvmtry-webhook-url-input'], ['label', '.cvmtry-webhook-label-input'], ['secret', '.cvmtry-webhook-secret-input']]
                 .forEach(function (pair) {
                     const input = block.querySelector(pair[1]);
                     if (input) {
-                        input.name = 'cvm_webhooks[' + idx + '][' + pair[0] + ']';
+                        input.name = 'cvmtry_webhooks[' + idx + '][' + pair[0] + ']';
                     }
                 });
 
-            block.querySelectorAll('.cvm-webhook-types input[type="checkbox"]').forEach(function (checkbox) {
+            block.querySelectorAll('.cvmtry-webhook-types input[type="checkbox"]').forEach(function (checkbox) {
                 const type = checkbox.name.indexOf('[analytics]') !== -1 ? 'analytics' : 'forms';
-                checkbox.name = 'cvm_webhooks[' + idx + '][' + type + ']';
+                checkbox.name = 'cvmtry_webhooks[' + idx + '][' + type + ']';
             });
 
-            const removeBtn = block.querySelector('.cvm-remove-webhook-btn');
+            const removeBtn = block.querySelector('.cvmtry-remove-webhook-btn');
             if (removeBtn) {
                 removeBtn.style.display = idx === 0 ? 'none' : '';
             }
@@ -245,11 +245,11 @@
 
     /** Wires an endpoint block's test buttons. */
     function wireTestButtons(block) {
-        const result = block.querySelector('.cvm-test-result');
+        const result = block.querySelector('.cvmtry-test-result');
 
-        block.querySelectorAll('.cvm-test-endpoint').forEach(function (btn) {
+        block.querySelectorAll('.cvmtry-test-endpoint').forEach(function (btn) {
             btn.addEventListener('click', function () {
-                const urlInput = block.querySelector('.cvm-webhook-url-input');
+                const urlInput = block.querySelector('.cvmtry-webhook-url-input');
                 const url = urlInput ? urlInput.value.trim() : '';
 
                 if (!url) {
@@ -261,7 +261,7 @@
                 if (result) result.textContent = __('Sending…', 'convermetry');
 
                 const fd = new FormData();
-                fd.append('action', 'cvm_test_webhook');
+                fd.append('action', 'cvmtry_test_webhook');
                 fd.append('nonce', cfg('testNonce'));
                 fd.append('url', url);
                 fd.append('type', btn.dataset.type || 'analytics');
@@ -276,17 +276,17 @@
                             result.textContent = (d.ok ? '✓ ' : '✗ ') + (d.message || '') +
                                 /* translators: %d: HTTP response status code. */
                                 (d.code ? ' ' + sprintf(__('(HTTP %d)', 'convermetry'), d.code) : '');
-                            result.className = 'cvm-test-result ' + (d.ok ? 'cvm-test-ok' : 'cvm-test-fail');
+                            result.className = 'cvmtry-test-result ' + (d.ok ? 'cvmtry-test-ok' : 'cvmtry-test-fail');
                         } else {
                             result.textContent = '✗ ' + ((resp.data && resp.data.message) || __('Test failed.', 'convermetry'));
-                            result.className = 'cvm-test-result cvm-test-fail';
+                            result.className = 'cvmtry-test-result cvmtry-test-fail';
                         }
                     })
                     .catch(function () {
                         btn.disabled = false;
                         if (result) {
                             result.textContent = '✗ ' + __('The test request could not be sent.', 'convermetry');
-                            result.className = 'cvm-test-result cvm-test-fail';
+                            result.className = 'cvmtry-test-result cvmtry-test-fail';
                         }
                     });
             });
@@ -294,20 +294,20 @@
     }
 
     function initWebhooksPage() {
-        const container = document.getElementById('cvm-webhooks-container');
+        const container = document.getElementById('cvmtry-webhooks-container');
         if (!container) {
             return;
         }
 
-        container.querySelectorAll('.cvm-webhook-url-input').forEach(function (inp) {
+        container.querySelectorAll('.cvmtry-webhook-url-input').forEach(function (inp) {
             inp.addEventListener('input', function () {
                 updateToggleCard(container);
             });
         });
 
-        container.querySelectorAll('.cvm-remove-webhook-btn').forEach(function (btn) {
+        container.querySelectorAll('.cvmtry-remove-webhook-btn').forEach(function (btn) {
             btn.addEventListener('click', function () {
-                const block = btn.closest('.cvm-webhook-block');
+                const block = btn.closest('.cvmtry-webhook-block');
                 if (block) {
                     block.remove();
                 }
@@ -316,20 +316,20 @@
             });
         });
 
-        container.querySelectorAll('.cvm-webhook-block').forEach(wireTestButtons);
+        container.querySelectorAll('.cvmtry-webhook-block').forEach(wireTestButtons);
 
-        const addButton = document.getElementById('cvm-add-webhook');
+        const addButton = document.getElementById('cvmtry-add-webhook');
         if (addButton) {
             addButton.addEventListener('click', function () {
                 const block = buildEndpointBlock(endpointCount(container));
                 container.appendChild(block);
-                block.querySelector('.cvm-webhook-url-input').focus();
+                block.querySelector('.cvmtry-webhook-url-input').focus();
                 updateToggleCard(container);
             });
         }
 
-        const toggle = document.getElementById('cvm_webhook_active');
-        const label  = document.getElementById('cvm-webhook-toggle-label');
+        const toggle = document.getElementById('cvmtry_webhook_active');
+        const label  = document.getElementById('cvmtry-webhook-toggle-label');
         if (toggle && label) {
             toggle.addEventListener('change', function () {
                 label.textContent = this.checked ? __('Active', 'convermetry') : __('Inactive', 'convermetry');
@@ -344,15 +344,15 @@
      * ------------------------------------------------------------------ */
 
     function initFormsPage() {
-        const list = document.getElementById('cvm-forms-list');
+        const list = document.getElementById('cvmtry-forms-list');
         if (!list) {
             return;
         }
 
-        const search   = document.getElementById('cvm-form-search');
-        const provider = document.getElementById('cvm-form-provider-filter');
-        const state    = document.getElementById('cvm-form-state-filter');
-        const countEl  = document.getElementById('cvm-form-filter-count');
+        const search   = document.getElementById('cvmtry-form-search');
+        const provider = document.getElementById('cvmtry-form-provider-filter');
+        const state    = document.getElementById('cvmtry-form-state-filter');
+        const countEl  = document.getElementById('cvmtry-form-filter-count');
 
         function applyFilters() {
             const term = search ? search.value.trim().toLowerCase() : '';
@@ -360,7 +360,7 @@
             const st   = state ? state.value : '';
             let visible = 0;
 
-            list.querySelectorAll('.cvm-form-block').forEach(function (block) {
+            list.querySelectorAll('.cvmtry-form-block').forEach(function (block) {
                 let matches = true;
 
                 if (prov && block.dataset.provider !== prov) {
@@ -396,24 +396,24 @@
 
         // Live state: flipping the Excluded checkbox updates the block's
         // badge and its filterable state immediately.
-        list.querySelectorAll('.cvm-form-excluded-toggle').forEach(function (checkbox) {
+        list.querySelectorAll('.cvmtry-form-excluded-toggle').forEach(function (checkbox) {
             checkbox.addEventListener('change', function () {
-                const block = checkbox.closest('.cvm-form-block');
+                const block = checkbox.closest('.cvmtry-form-block');
                 if (!block) return;
                 block.dataset.excluded = checkbox.checked ? '1' : '0';
-                const badge = block.querySelector('.cvm-form-state-badge');
+                const badge = block.querySelector('.cvmtry-form-state-badge');
                 if (badge) {
                     badge.textContent = checkbox.checked ? __('Excluded', 'convermetry') : __('Included', 'convermetry');
-                    badge.className = 'cvm-form-state-badge ' + (checkbox.checked ? 'is-excluded' : 'is-included');
+                    badge.className = 'cvmtry-form-state-badge ' + (checkbox.checked ? 'is-excluded' : 'is-included');
                 }
                 applyFilters();
             });
         });
 
         // Custom form id edits update the filter haystack.
-        list.querySelectorAll('.cvm-form-id-input').forEach(function (input) {
+        list.querySelectorAll('.cvmtry-form-id-input').forEach(function (input) {
             input.addEventListener('input', function () {
-                const block = input.closest('.cvm-form-block');
+                const block = input.closest('.cvmtry-form-block');
                 if (block) {
                     block.dataset.formId = input.value;
                 }
@@ -435,12 +435,12 @@
      * wp_mail() accepting a message is not proof it reached an inbox.
      */
     function initNotificationsPage() {
-        const btn = document.querySelector('.cvm-test-notification');
-        if (!btn || typeof CVM_NOTIFY === 'undefined') return;
+        const btn = document.querySelector('.cvmtry-test-notification');
+        if (!btn || typeof CVMTRY_NOTIFY === 'undefined') return;
 
-        const input = document.getElementById('cvm-notify-test-address');
+        const input = document.getElementById('cvmtry-notify-test-address');
         const result = btn.parentElement
-            ? btn.parentElement.querySelector('.cvm-test-result')
+            ? btn.parentElement.querySelector('.cvmtry-test-result')
             : null;
 
         btn.addEventListener('click', function () {
@@ -449,7 +449,7 @@
             if (!recipient) {
                 if (result) {
                     result.textContent = __('Enter a recipient address first.', 'convermetry');
-                    result.className = 'cvm-test-result cvm-test-fail';
+                    result.className = 'cvmtry-test-result cvmtry-test-fail';
                 }
                 return;
             }
@@ -457,15 +457,15 @@
             btn.disabled = true;
             if (result) {
                 result.textContent = __('Sending…', 'convermetry');
-                result.className = 'cvm-test-result';
+                result.className = 'cvmtry-test-result';
             }
 
             const fd = new FormData();
-            fd.append('action', 'cvm_test_notification');
-            fd.append('nonce', CVM_NOTIFY.testNonce || '');
+            fd.append('action', 'cvmtry_test_notification');
+            fd.append('nonce', CVMTRY_NOTIFY.testNonce || '');
             fd.append('recipient', recipient);
 
-            fetch(CVM_NOTIFY.ajaxUrl, { method: 'POST', body: fd })
+            fetch(CVMTRY_NOTIFY.ajaxUrl, { method: 'POST', body: fd })
                 .then(function (res) { return res.json(); })
                 .then(function (resp) {
                     btn.disabled = false;
@@ -473,13 +473,13 @@
                     const d = (resp && resp.data) || {};
                     const ok = resp && resp.success && d.ok;
                     result.textContent = (ok ? '✓ ' : '✗ ') + (d.message || __('Test failed.', 'convermetry'));
-                    result.className = 'cvm-test-result ' + (ok ? 'cvm-test-ok' : 'cvm-test-fail');
+                    result.className = 'cvmtry-test-result ' + (ok ? 'cvmtry-test-ok' : 'cvmtry-test-fail');
                 })
                 .catch(function () {
                     btn.disabled = false;
                     if (result) {
                         result.textContent = '✗ ' + __('The test request could not be sent.', 'convermetry');
-                        result.className = 'cvm-test-result cvm-test-fail';
+                        result.className = 'cvmtry-test-result cvmtry-test-fail';
                     }
                 });
         });

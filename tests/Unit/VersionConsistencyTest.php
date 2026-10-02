@@ -63,16 +63,16 @@ final class VersionConsistencyTest extends TestCase
         );
     }
 
-    public function testCvmVersionConstantMatchesTheHeader(): void
+    public function testCvmtryVersionConstantMatchesTheHeader(): void
     {
         $matched = preg_match(
-            "~define\(\s*'CVM_VERSION'\s*,\s*'([^']+)'~",
+            "~define\(\s*'CVMTRY_VERSION'\s*,\s*'([^']+)'~",
             self::read('convermetry.php'),
             $m
         );
 
-        self::assertSame(1, $matched, 'CVM_VERSION is not defined as a literal');
-        self::assertSame(self::headerVersion(), $m[1], 'CVM_VERSION disagrees with the plugin header');
+        self::assertSame(1, $matched, 'CVMTRY_VERSION is not defined as a literal');
+        self::assertSame(self::headerVersion(), $m[1], 'CVMTRY_VERSION disagrees with the plugin header');
     }
 
     public function testReadmeVersionLineMatchesTheHeader(): void
@@ -88,7 +88,7 @@ final class VersionConsistencyTest extends TestCase
     }
 
     /**
-     * The live payload builds plugin_version from CVM_VERSION, so only the
+     * The live payload builds plugin_version from CVMTRY_VERSION, so only the
      * prose copies in the README and the PayloadBuilder docblock can rot.
      */
     public function testEveryPayloadExampleMatchesTheHeader(): void

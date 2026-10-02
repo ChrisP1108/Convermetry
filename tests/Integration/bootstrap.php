@@ -38,12 +38,12 @@
  * CONNECTION. Configure with environment variables; the whole suite skips
  * cleanly when none is reachable, so `composer test` on a laptop is unaffected:
  *
- *     CVM_TEST_DB_HOST    default 127.0.0.1
- *     CVM_TEST_DB_PORT    default 3306
- *     CVM_TEST_DB_SOCKET  optional, overrides host/port
- *     CVM_TEST_DB_NAME    default cvm_test
- *     CVM_TEST_DB_USER    default root
- *     CVM_TEST_DB_PASS    default ''
+ *     CVMTRY_TEST_DB_HOST    default 127.0.0.1
+ *     CVMTRY_TEST_DB_PORT    default 3306
+ *     CVMTRY_TEST_DB_SOCKET  optional, overrides host/port
+ *     CVMTRY_TEST_DB_NAME    default cvmtry_test
+ *     CVMTRY_TEST_DB_USER    default root
+ *     CVMTRY_TEST_DB_PASS    default ''
  *
  * THE DATABASE IS TRUNCATED BETWEEN TESTS. Point these at a throwaway database,
  * never at a real site's.
@@ -72,14 +72,14 @@ foreach ([
     }
 }
 
-if (!defined('CVM_VERSION')) {
+if (!defined('CVMTRY_VERSION')) {
     preg_match(
-        "/define\('CVM_VERSION',\s*'([^']+)'\)/",
+        "/define\('CVMTRY_VERSION',\s*'([^']+)'\)/",
         (string) file_get_contents(__DIR__ . '/../../convermetry.php'),
         $match
     );
 
-    define('CVM_VERSION', $match[1] ?? '0.0.0');
+    define('CVMTRY_VERSION', $match[1] ?? '0.0.0');
 }
 
 require_once __DIR__ . '/../../src/Autoloader.php';
@@ -138,14 +138,14 @@ if (!function_exists('do_action')) {
 if (!function_exists('get_option')) {
     function get_option(string $key, $default = false)
     {
-        return $GLOBALS['cvm_test_options'][$key] ?? $default;
+        return $GLOBALS['cvmtry_test_options'][$key] ?? $default;
     }
 }
 
 if (!function_exists('update_option')) {
     function update_option(string $key, $value, $autoload = null): bool
     {
-        $GLOBALS['cvm_test_options'][$key] = $value;
+        $GLOBALS['cvmtry_test_options'][$key] = $value;
 
         return true;
     }
@@ -154,14 +154,14 @@ if (!function_exists('update_option')) {
 if (!function_exists('get_transient')) {
     function get_transient(string $key)
     {
-        return $GLOBALS['cvm_test_transients'][$key] ?? false;
+        return $GLOBALS['cvmtry_test_transients'][$key] ?? false;
     }
 }
 
 if (!function_exists('set_transient')) {
     function set_transient(string $key, $value, int $ttl = 0): bool
     {
-        $GLOBALS['cvm_test_transients'][$key] = $value;
+        $GLOBALS['cvmtry_test_transients'][$key] = $value;
 
         return true;
     }
@@ -219,5 +219,5 @@ if (!function_exists('wp_parse_url')) {
     }
 }
 
-$GLOBALS['cvm_test_options']    = [];
-$GLOBALS['cvm_test_transients'] = [];
+$GLOBALS['cvmtry_test_options']    = [];
+$GLOBALS['cvmtry_test_transients'] = [];

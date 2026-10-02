@@ -22,15 +22,15 @@ use Convermetry\Admin\Pages\HomePage;
  * Two sheets, loaded in this order because the second reads custom properties
  * the first declares:
  *
- *  - cvm-admin-ui      assets/css/admin-ui.css — the design system: colour,
- *                      type, radius and spacing TOKENS, plus the `cvm-ui-*`
+ *  - cvmtry-admin-ui      assets/css/admin-ui.css — the design system: colour,
+ *                      type, radius and spacing TOKENS, plus the `cvmtry-ui-*`
  *                      component classes the Home page is built from. Every
- *                      selector is scoped under `.cvm-ui`, so it does nothing
+ *                      selector is scoped under `.cvmtry-ui`, so it does nothing
  *                      on a screen that has not opted in — which is what lets
  *                      the other screens adopt a component at a time, with no
  *                      further asset wiring and no risk to the ones that have
  *                      not.
- *  - cvm-admin-common  assets/css/admin-common.css — the older `cvm-*`
+ *  - cvmtry-admin-common  assets/css/admin-common.css — the older `cvmtry-*`
  *                      component classes shared by two or more admin screens
  *                      (cards, the toggle switch, the accordion/pagination
  *                      list pattern, and so on), plus the rules that point
@@ -41,15 +41,23 @@ use Convermetry\Admin\Pages\HomePage;
  *                      dependency on this handle — see admin-common.css's
  *                      header for the full per-page map.
  *
- * Neither is enqueued anywhere outside Convermetry's own screens.
+ * One script is registered alongside them: cvmtry-admin-confirm
+ * (assets/js/admin-confirm.js), which asks before any element carrying
+ * data-cvmtry-confirm runs its action. Page scripts that need it list it as a
+ * dependency.
+ *
+ * None of them is registered or enqueued outside Convermetry's own screens.
  */
 final class AdminAssets
 {
     /** Style handle for the design-system tokens; other screens depend on it. */
-    public const string DESIGN_SYSTEM_HANDLE = 'cvm-admin-ui';
+    public const string DESIGN_SYSTEM_HANDLE = 'cvmtry-admin-ui';
 
     /** Style handle for the shared, multi-page component styles. */
-    public const string COMMON_HANDLE = 'cvm-admin-common';
+    public const string COMMON_HANDLE = 'cvmtry-admin-common';
+
+    /** Script handle for the data-cvmtry-confirm prompts on destructive actions. */
+    public const string CONFIRM_HANDLE = 'cvmtry-admin-confirm';
 
     /**
      * Registers the enqueue hook.
@@ -75,16 +83,28 @@ final class AdminAssets
 
         wp_enqueue_style(
             self::DESIGN_SYSTEM_HANDLE,
-            CVM_PLUGIN_URL . 'assets/css/admin-ui.css',
+            CVMTRY_PLUGIN_URL . 'assets/css/admin-ui.css',
             [],
-            CVM_VERSION
+            CVMTRY_VERSION
         );
 
         wp_enqueue_style(
             self::COMMON_HANDLE,
-            CVM_PLUGIN_URL . 'assets/css/admin-common.css',
+            CVMTRY_PLUGIN_URL . 'assets/css/admin-common.css',
             [self::DESIGN_SYSTEM_HANDLE],
-            CVM_VERSION
+            CVMTRY_VERSION
+        );
+
+        // Registered, not enqueued: it loads only as a dependency of the page
+        // scripts whose screens offer a Remove / Clear All action, so none of
+        // them needs an inline event handler to ask first — and a screen with
+        // no such action (Home ships no JavaScript at all) never receives it.
+        wp_register_script(
+            self::CONFIRM_HANDLE,
+            CVMTRY_PLUGIN_URL . 'assets/js/admin-confirm.js',
+            [],
+            CVMTRY_VERSION,
+            true
         );
     }
 

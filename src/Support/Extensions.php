@@ -28,7 +28,7 @@ if (!defined('ABSPATH')) exit;
  *    an arbitrary serializer that can throw, recurse, or leak a private field.
  *  - **Every surface is bounded** in nesting depth, key count, and encoded
  *    bytes, with per-surface caps — 32 KB is reasonable in a webhook body and
- *    absurd in an inline <script> tag on every page view.
+ *    absurd in the tracker's inline configuration on every page view.
  *
  * Truncation is deterministic: keys are sorted before any cap is applied, so
  * the same input always yields the same output rather than depending on the
@@ -87,6 +87,15 @@ final class Extensions
         int $maxKeys,
         mixed ...$args
     ): array {
+        // Only Convermetry's own extension hooks are dispatched from here, so
+        // a caller cannot turn this into a way to run someone else's filter.
+        if (!str_starts_with($filter, 'convermetry_')) {
+            _doing_it_wrong(__METHOD__, esc_html('Extension hook names must start with "convermetry_".'), '1.0.1');
+
+            return $target;
+        }
+
+        // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.DynamicHooknameFound -- $filter is checked above to start with "convermetry_"; every caller passes a literal convermetry_* hook name.
         $extensions = self::sanitize(apply_filters($filter, [], ...$args), $maxBytes, $maxKeys);
 
         if ($extensions === []) {

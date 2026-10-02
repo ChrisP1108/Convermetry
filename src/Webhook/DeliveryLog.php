@@ -46,10 +46,10 @@ use Convermetry\Support\SensitiveKeys;
 final class DeliveryLog
 {
     /** Table name without the wpdb prefix. */
-    private const string TABLE = 'cvm_webhook_deliveries';
+    private const string TABLE = 'cvmtry_webhook_deliveries';
 
     /** Option key storing the installed schema version. */
-    private const string DB_VERSION_OPTION = 'cvm_delivery_db_version';
+    private const string DB_VERSION_OPTION = 'cvmtry_delivery_db_version';
 
     /** Current schema version; bump when the CREATE TABLE below changes. */
     private const string DB_VERSION = '1.0.0';
@@ -279,6 +279,7 @@ final class DeliveryLog
             return LogOutcome::Suppressed;
         }
 
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery -- write to the plugin's custom delivery log table.
         $inserted = $wpdb->insert(
             self::tableName(),
             $row,
@@ -456,7 +457,9 @@ final class DeliveryLog
         $values[] = $perPage;
         $values[] = ($page - 1) * $perPage;
 
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, PluginCheck.Security.DirectDB.UnescapedDBParameter -- admin list read on the custom delivery log table, run on demand behind a capability check so deletes and new rows show immediately. $where comes from buildWhereClause(): fixed SQL fragments whose placeholders are bound, in order, to the values passed here.
         $rows = $wpdb->get_results(
+            // phpcs:ignore WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber -- $where comes from buildWhereClause(): fixed SQL fragments whose placeholders are bound, in order, to the values passed here, after the table name and before LIMIT/OFFSET.
             $wpdb->prepare(
                 // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared, WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- $where is buildWhereClause() output: fixed SQL fragments whose %s/%d placeholders are bound to $values here.
                 "SELECT * FROM %i {$where} ORDER BY id DESC LIMIT %d OFFSET %d",
@@ -480,6 +483,7 @@ final class DeliveryLog
 
         [$where, $values] = self::buildWhereClause($filters);
 
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, PluginCheck.Security.DirectDB.UnescapedDBParameter -- admin list read on the custom delivery log table, run on demand behind a capability check so deletes and new rows show immediately. $where comes from buildWhereClause(): fixed SQL fragments whose placeholders are bound, in order, to the values passed here.
         return (int) $wpdb->get_var(
             $wpdb->prepare(
                 // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared, WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- $where is buildWhereClause() output: fixed SQL fragments whose %s/%d placeholders are bound to $values here.
@@ -507,6 +511,7 @@ final class DeliveryLog
     {
         global $wpdb;
 
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- streaming export from the custom delivery log table, keyset-paginated.
         $rows = $wpdb->get_results(
             $wpdb->prepare(
                 'SELECT * FROM %i WHERE id < %d ORDER BY id DESC LIMIT %d',
@@ -533,6 +538,7 @@ final class DeliveryLog
 
         [$where, $values] = self::buildWhereClause(array_diff_key($filters, ['year' => 0, 'month' => 0, 'search' => 0, 'created_from' => 0, 'created_before' => 0]));
 
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, PluginCheck.Security.DirectDB.UnescapedDBParameter -- admin list read on the custom delivery log table, run on demand behind a capability check so deletes and new rows show immediately. $where comes from buildWhereClause(): fixed SQL fragments whose placeholders are bound, in order, to the values passed here.
         $rows = $wpdb->get_col(
             $wpdb->prepare(
                 // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared, WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- $where is buildWhereClause() output: fixed SQL fragments whose %s/%d placeholders are bound to $values here.
@@ -573,6 +579,7 @@ final class DeliveryLog
     {
         global $wpdb;
 
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- admin list read on the custom delivery log table, run on demand behind a capability check so deletes and new rows show immediately.
         $rows = $wpdb->get_col($wpdb->prepare(
             "SELECT DISTINCT endpoint_url FROM %i WHERE endpoint_url <> '' ORDER BY endpoint_url ASC",
             self::tableName()
@@ -591,6 +598,7 @@ final class DeliveryLog
     {
         global $wpdb;
 
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- admin list read on the custom delivery log table, run on demand behind a capability check so deletes and new rows show immediately.
         $rows = $wpdb->get_col($wpdb->prepare(
             "SELECT DISTINCT form_provider FROM %i WHERE form_provider <> '' ORDER BY form_provider ASC",
             self::tableName()
@@ -609,6 +617,7 @@ final class DeliveryLog
     {
         global $wpdb;
 
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- admin list read on the custom delivery log table, run on demand behind a capability check so deletes and new rows show immediately.
         $rows = $wpdb->get_col($wpdb->prepare(
             "SELECT DISTINCT form_name FROM %i WHERE form_name <> '' ORDER BY form_name ASC LIMIT 200",
             self::tableName()
@@ -627,6 +636,7 @@ final class DeliveryLog
     {
         global $wpdb;
 
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- write to the plugin's custom delivery log table.
         $wpdb->delete(self::tableName(), ['id' => $id], ['%d']);
     }
 
@@ -649,6 +659,7 @@ final class DeliveryLog
             return [];
         }
 
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- personal-data export reads the live custom delivery log rows.
         $rows = $wpdb->get_results(
             $wpdb->prepare(
                 'SELECT id, success, endpoint_url, endpoint_label, kind, attempt, response_code, created_at'
@@ -697,6 +708,7 @@ final class DeliveryLog
             return 0;
         }
 
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- personal-data erasure write to the plugin's custom delivery log table.
         $changed = $wpdb->query($wpdb->prepare(
             'UPDATE %i SET request_data = %s, response_data = %s, request_url = endpoint_url WHERE submission_id = %s',
             self::tableName(),
@@ -739,6 +751,7 @@ final class DeliveryLog
             return 0;
         }
 
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- personal-data erasure on the custom delivery log table.
         $rows = $wpdb->get_results(
             $wpdb->prepare(
                 'SELECT id, request_data FROM %i'
@@ -764,6 +777,7 @@ final class DeliveryLog
                 continue;
             }
 
+            // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- personal-data erasure on the custom delivery log table.
             $updated = $wpdb->update(
                 self::tableName(),
                 ['request_data' => $newBody],
@@ -865,6 +879,7 @@ final class DeliveryLog
         Retention::started('delivery_log', $cutoff);
 
         do {
+            // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- bounded retention delete on the custom delivery log table.
             $deleted = $wpdb->query(
                 $wpdb->prepare(
                     "DELETE FROM %i WHERE created_at < %s LIMIT %d",

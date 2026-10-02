@@ -3,7 +3,7 @@
  *
  * Reserved for styling exclusive to Convermetry → Home
  * (src/Admin/HomePage.php). The page currently needs none: it is built
- * entirely from assets/css/admin-ui.css's `cvm-ui-*` design-system
+ * entirely from assets/css/admin-ui.css's `cvmtry-ui-*` design-system
  * components and tokens, with no rule of its own.
  *
  * This file is enqueued on the Home screen regardless, so a future

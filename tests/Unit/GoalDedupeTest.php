@@ -220,7 +220,7 @@ final class GoalDedupeTest extends TestCase
         Functions\when('wp_generate_uuid4')->justReturn('uuid-' . uniqid('', true));
         Functions\when('wp_rand')->alias(static fn(): int => random_int(0, PHP_INT_MAX));
 
-        // An empty-string batch id is treated the same as null: cvm_track_event()
+        // An empty-string batch id is treated the same as null: cvmtry_track_event()
         // and the provider hooks never set one.
         self::assertNotSame(
             PreparedEvent::mintUid('', 0),

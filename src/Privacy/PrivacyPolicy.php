@@ -56,7 +56,7 @@ final class PrivacyPolicy
         $para     = static fn(string $text): string => '<p>' . $text . '</p>';
 
         $html  = $tutorial(esc_html__('This text is generated from your current Convermetry settings and changes when they do. It is a starting point for your own policy, not legal advice: review it, adapt it to how you actually use the data, and state your legal basis for processing it. Convermetry does not by itself make a site compliant with any privacy law.', 'convermetry'));
-        $html .= $tutorial(esc_html__('Convermetry sets no cookies, but it does store identifiers in the visitor\'s browser (localStorage and sessionStorage). In the EU and UK, the rules that govern cookies also apply to that kind of browser storage, and analytics may need consent. Convermetry has no consent banner of its own: if you need consent, have your consent tool block the "cvm-tracker" script until it is given, or return false from the convermetry_should_enqueue_tracker filter.', 'convermetry'));
+        $html .= $tutorial(esc_html__('Convermetry sets no cookies, but it does store identifiers in the visitor\'s browser (localStorage and sessionStorage). In the EU and UK, the rules that govern cookies also apply to that kind of browser storage, and analytics may need consent. Convermetry has no consent banner of its own: if you need consent, have your consent tool block the "cvmtry-tracker" script until it is given, or return false from the convermetry_should_enqueue_tracker filter.', 'convermetry'));
         $html .= '<strong class="privacy-policy-tutorial">' . esc_html__('Suggested text:', 'convermetry') . ' </strong>';
 
         $html .= '<h3>' . esc_html__('Website analytics', 'convermetry') . '</h3>';

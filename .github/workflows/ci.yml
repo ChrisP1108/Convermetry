@@ -59,14 +59,17 @@ jobs:
         with:
           node-version: '20'
 
-      - name: Syntax check the tracker
-        run: node --check assets/js/tracker.js
+      - name: Syntax check the tracker and admin scripts
+        run: |
+          node --check assets/js/tracker.js
+          node --check assets/js/admin-confirm.js
 
       - name: Tracker behaviour
         run: |
           node tests/js/bricks-tracker.test.mjs
           node tests/js/ninja-tracker.test.mjs
           node tests/js/form-events.test.mjs
+          node tests/js/admin-confirm.test.mjs
 
   analyse:
     name: Static analysis (PHPStan level 8)
@@ -117,7 +120,7 @@ jobs:
         image: mysql:8.0
         env:
           MYSQL_ROOT_PASSWORD: root
-          MYSQL_DATABASE: cvm_test
+          MYSQL_DATABASE: cvmtry_test
         ports:
           - 3306:3306
         options: >-
@@ -142,11 +145,11 @@ jobs:
 
       - name: Integration suite
         env:
-          CVM_TEST_DB_HOST: 127.0.0.1
-          CVM_TEST_DB_PORT: 3306
-          CVM_TEST_DB_NAME: cvm_test
-          CVM_TEST_DB_USER: root
-          CVM_TEST_DB_PASS: root
+          CVMTRY_TEST_DB_HOST: 127.0.0.1
+          CVMTRY_TEST_DB_PORT: 3306
+          CVMTRY_TEST_DB_NAME: cvmtry_test
+          CVMTRY_TEST_DB_USER: root
+          CVMTRY_TEST_DB_PASS: root
         run: vendor/bin/phpunit -c phpunit.integration.xml
 
       # The suite skips itself when no database is reachable, which is right for
@@ -154,11 +157,11 @@ jobs:
       # turn every test into a silent pass. Fail if nothing actually ran.
       - name: Assert the suite actually ran
         env:
-          CVM_TEST_DB_HOST: 127.0.0.1
-          CVM_TEST_DB_PORT: 3306
-          CVM_TEST_DB_NAME: cvm_test
-          CVM_TEST_DB_USER: root
-          CVM_TEST_DB_PASS: root
+          CVMTRY_TEST_DB_HOST: 127.0.0.1
+          CVMTRY_TEST_DB_PORT: 3306
+          CVMTRY_TEST_DB_NAME: cvmtry_test
+          CVMTRY_TEST_DB_USER: root
+          CVMTRY_TEST_DB_PASS: root
         run: |
           set -e
           OUT="$(vendor/bin/phpunit -c phpunit.integration.xml --do-not-cache-result | tail -3)"
@@ -217,7 +220,7 @@ jobs:
         image: mysql:8.0
         env:
           MYSQL_ROOT_PASSWORD: root
-          MYSQL_DATABASE: cvm_wp_test
+          MYSQL_DATABASE: cvmtry_wp_test
         ports:
           - 3306:3306
         options: >-
@@ -256,26 +259,26 @@ jobs:
       - name: End-to-end suite
         working-directory: convermetry
         env:
-          CVM_WP_DIR: ${{ github.workspace }}/wordpress
-          CVM_WP_DB_HOST: 127.0.0.1
-          CVM_WP_DB_NAME: cvm_wp_test
-          CVM_WP_DB_USER: root
-          CVM_WP_DB_PASS: root
-          CVM_WP_PORT: 8731
+          CVMTRY_WP_DIR: ${{ github.workspace }}/wordpress
+          CVMTRY_WP_DB_HOST: 127.0.0.1
+          CVMTRY_WP_DB_NAME: cvmtry_wp_test
+          CVMTRY_WP_DB_USER: root
+          CVMTRY_WP_DB_PASS: root
+          CVMTRY_WP_PORT: 8731
         run: vendor/bin/phpunit -c phpunit.wordpress.xml
 
-      # The suite skips itself when CVM_WP_DIR is unset, which is right for a
+      # The suite skips itself when CVMTRY_WP_DIR is unset, which is right for a
       # laptop and wrong here: a misconfigured job would otherwise turn every
       # test into a silent pass.
       - name: Assert the suite actually ran
         working-directory: convermetry
         env:
-          CVM_WP_DIR: ${{ github.workspace }}/wordpress
-          CVM_WP_DB_HOST: 127.0.0.1
-          CVM_WP_DB_NAME: cvm_wp_test
-          CVM_WP_DB_USER: root
-          CVM_WP_DB_PASS: root
-          CVM_WP_PORT: 8731
+          CVMTRY_WP_DIR: ${{ github.workspace }}/wordpress
+          CVMTRY_WP_DB_HOST: 127.0.0.1
+          CVMTRY_WP_DB_NAME: cvmtry_wp_test
+          CVMTRY_WP_DB_USER: root
+          CVMTRY_WP_DB_PASS: root
+          CVMTRY_WP_PORT: 8731
         run: |
           set -e
           OUT="$(vendor/bin/phpunit -c phpunit.wordpress.xml --do-not-cache-result | tail -3)"

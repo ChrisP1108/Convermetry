@@ -7,7 +7,8 @@
  *
  * Pure progressive enhancement throughout. The nav is plain anchor links, so
  * with this file blocked every jump still works; the hook detail panels are
- * revealed by a <noscript> rule, so their content stays reachable too.
+ * revealed by admin-about.css's `.no-js` rules when scripting is off, so their
+ * content stays reachable too.
  */
 
 /* Hook reference — "Learn More" / "Collapse" accordions.
@@ -21,7 +22,7 @@
     var __ = wp.i18n.__;
 
     document.addEventListener('click', function (e) {
-        var button = e.target.closest && e.target.closest('.cvm-about-hook-toggle');
+        var button = e.target.closest && e.target.closest('.cvmtry-about-hook-toggle');
         if (!button) {
             return;
         }
@@ -46,7 +47,7 @@
     'use strict';
 
     var links = Array.prototype.slice.call(
-        document.querySelectorAll('.cvm-about-nav-link[data-cvm-section]')
+        document.querySelectorAll('.cvmtry-about-nav-link[data-cvmtry-section]')
     );
 
     if (!links.length || typeof IntersectionObserver !== 'function') {
@@ -57,7 +58,7 @@
     var sections = [];
 
     links.forEach(function (link) {
-        var id = link.getAttribute('data-cvm-section');
+        var id = link.getAttribute('data-cvmtry-section');
         var section = document.getElementById(id);
 
         if (section) {
@@ -76,7 +77,7 @@
         links.forEach(function (link) {
             link.classList.toggle(
                 'is-active',
-                link.getAttribute('data-cvm-section') === id
+                link.getAttribute('data-cvmtry-section') === id
             );
         });
     }
@@ -119,7 +120,7 @@
     // smooth scroll to settle.
     links.forEach(function (link) {
         link.addEventListener('click', function () {
-            setActive(link.getAttribute('data-cvm-section'));
+            setActive(link.getAttribute('data-cvmtry-section'));
         });
     });
 })();

@@ -11,7 +11,7 @@
 
 /* Delivery Log — webhook label badge --------------------------------- */
 
-.cvm-log-webhook-label {
+.cvmtry-log-webhook-label {
     display: inline-block;
     padding: 1px 8px;
     background: #e8f0fb;
@@ -24,36 +24,36 @@
     letter-spacing: 0.03em;
 }
 
-/* The Deliveries API card, and the shared .cvm-card given this page's own
+/* The Deliveries API card, and the shared .cvmtry-card given this page's own
    tighter padding/border ------------------------------------------------- */
 
-.cvm-delivery-wrap .cvm-card {
+.cvmtry-delivery-wrap .cvmtry-card {
     border-color: #c3c4c7;
     border-radius: 4px;
     padding: 20px 24px;
     margin-bottom: 20px;
 }
 
-.cvm-api-key-row {
+.cvmtry-api-key-row {
     display: flex;
     align-items: center;
     gap: 8px;
     flex-wrap: wrap;
 }
 
-.cvm-api-key-row code {
+.cvmtry-api-key-row code {
     word-break: break-all;
 }
 
 /* Log entries --------------------------------------------------------- */
 
-.cvm-log-list {
+.cvmtry-log-list {
     margin: 0;
     padding: 0;
     list-style: none;
 }
 
-.cvm-log-item {
+.cvmtry-log-item {
     border: 1px solid #dcdcde;
     border-left-width: 4px;
     border-radius: 4px;
@@ -63,17 +63,17 @@
     line-height: 1.5;
 }
 
-.cvm-log-error {
+.cvmtry-log-error {
     border-left-color: #d63638;
     background: #fff8f8;
 }
 
-.cvm-log-success {
+.cvmtry-log-success {
     border-left-color: #00a32a;
     background: #f7fef7;
 }
 
-.cvm-log-meta {
+.cvmtry-log-meta {
     display: flex;
     align-items: center;
     gap: 12px;
@@ -81,13 +81,13 @@
     flex-wrap: wrap;
 }
 
-.cvm-log-time {
+.cvmtry-log-time {
     color: #757575;
     font-size: 12px;
     flex-shrink: 0;
 }
 
-.cvm-log-kind-label {
+.cvmtry-log-kind-label {
     display: inline-block;
     padding: 1px 8px;
     background: #e8f0fb;
@@ -100,7 +100,7 @@
     letter-spacing: 0.03em;
 }
 
-.cvm-log-status {
+.cvmtry-log-status {
     padding: 2px 8px;
     border-radius: 3px;
     font-size: 11px;
@@ -110,17 +110,17 @@
     flex-shrink: 0;
 }
 
-.cvm-log-status.error {
+.cvmtry-log-status.error {
     background: #d63638;
     color: #fff;
 }
 
-.cvm-log-status.success {
+.cvmtry-log-status.success {
     background: #00a32a;
     color: #fff;
 }
 
-.cvm-log-delete-btn {
+.cvmtry-log-delete-btn {
     margin-left: auto;
     flex-shrink: 0;
     padding: 1px 8px !important;
@@ -131,36 +131,36 @@
     border-color: #d63638 !important;
 }
 
-.cvm-log-delete-btn:hover {
+.cvmtry-log-delete-btn:hover {
     background: #d63638 !important;
     color: #fff !important;
 }
 
-.cvm-log-url {
+.cvmtry-log-url {
     margin-bottom: 6px;
     word-break: break-all;
 }
 
-.cvm-log-url code {
+.cvmtry-log-url code {
     font-size: 12px;
     background: #f0f0f1;
     padding: 1px 5px;
     border-radius: 2px;
 }
 
-.cvm-log-error-msg {
+.cvmtry-log-error-msg {
     color: #d63638;
     margin-bottom: 8px;
     font-weight: 500;
 }
 
-.cvm-log-data,
-.cvm-log-response {
+.cvmtry-log-data,
+.cvmtry-log-response {
     margin-bottom: 6px;
 }
 
-.cvm-log-data pre,
-.cvm-log-response pre {
+.cvmtry-log-data pre,
+.cvmtry-log-response pre {
     background: #f6f7f7;
     border: 1px solid #dcdcde;
     border-radius: 3px;
@@ -176,17 +176,17 @@
 
 /* Request headers detail --------------------------------------------- */
 
-.cvm-log-headers {
+.cvmtry-log-headers {
     margin: 8px 0;
     font-size: 12px;
 }
 
-.cvm-log-headers summary {
+.cvmtry-log-headers summary {
     cursor: pointer;
     color: #2271b1;
 }
 
-.cvm-log-headers pre {
+.cvmtry-log-headers pre {
     background: #f6f7f7;
     border: 1px solid #dcdcde;
     border-radius: 4px;

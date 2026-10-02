@@ -7,8 +7,8 @@
  * visitor's field values, and per-endpoint delivery results) is fetched the
  * first time the row is expanded and cached on the element after that.
  *
- * All data comes from the cvm_get_submissions / cvm_get_submission_detail
- * AJAX actions; configuration and nonces arrive via the CVM_SUB object
+ * All data comes from the cvmtry_get_submissions / cvmtry_get_submission_detail
+ * AJAX actions; configuration and nonces arrive via the CVMTRY_SUB object
  * localized by SubmissionsPage.
  */
 (function () {
@@ -17,7 +17,7 @@
     const { __, sprintf } = wp.i18n;
 
     // Localized by WordPress (AdminAssets::monthNames()).
-    const MONTH_NAMES = (typeof CVM_SUB !== 'undefined' && Array.isArray(CVM_SUB.monthNames)) ? CVM_SUB.monthNames : [];
+    const MONTH_NAMES = (typeof CVMTRY_SUB !== 'undefined' && Array.isArray(CVMTRY_SUB.monthNames)) ? CVMTRY_SUB.monthNames : [];
 
     /**
      * Safely escapes a string for insertion into HTML.
@@ -46,16 +46,16 @@
     }
 
     function cfg(key) {
-        return (typeof CVM_SUB !== 'undefined' && CVM_SUB[key]) ? CVM_SUB[key] : '';
+        return (typeof CVMTRY_SUB !== 'undefined' && CVMTRY_SUB[key]) ? CVMTRY_SUB[key] : '';
     }
 
     // ── Boot ─────────────────────────────────────────────────────────────────
 
     function initSubmissions() {
-        const root = document.getElementById('cvm-submissions');
+        const root = document.getElementById('cvmtry-submissions');
         if (!root) return;
 
-        // Seeded from ?cvm_search= so a deep link (a notification email links
+        // Seeded from ?cvmtry_search= so a deep link (a notification email links
         // here with the submission id) opens that one submission rather than
         // the full list. Server-sanitized before localization.
         const state = {
@@ -67,7 +67,7 @@
         let initialized = false;
 
         const controls = document.createElement('div');
-        controls.className = 'cvm-acc-controls';
+        controls.className = 'cvmtry-acc-controls';
         controls.innerHTML = buildControlsHtml();
         root.appendChild(controls);
 
@@ -75,7 +75,7 @@
         // is a list, not a table, so a floating header row would be read as
         // stray text — each row's button carries its own full aria-label.
         const heading = document.createElement('div');
-        heading.className = 'cvm-submission-heading';
+        heading.className = 'cvmtry-submission-heading';
         heading.setAttribute('aria-hidden', 'true');
         heading.innerHTML = [
             __('Date', 'convermetry'),
@@ -91,24 +91,24 @@
         root.appendChild(heading);
 
         const list = document.createElement('ul');
-        list.className = 'cvm-submission-list';
+        list.className = 'cvmtry-submission-list';
         root.appendChild(list);
 
         const paginationEl = document.createElement('div');
-        paginationEl.className = 'cvm-pagination';
+        paginationEl.className = 'cvmtry-pagination';
         root.appendChild(paginationEl);
 
         // ── Controls wiring ──────────────────────────────────────────────────
         const simpleFilters = [
-            ['.cvm-filter-lead-status', 'leadStatus'],
-            ['.cvm-filter-has-value', 'hasValue'],
-            ['.cvm-filter-year', 'year'],
-            ['.cvm-filter-month', 'month'],
-            ['.cvm-filter-provider', 'provider'],
-            ['.cvm-filter-form', 'formName'],
-            ['.cvm-filter-channel', 'channel'],
-            ['.cvm-filter-campaign', 'campaign'],
-            ['.cvm-filter-status', 'status']
+            ['.cvmtry-filter-lead-status', 'leadStatus'],
+            ['.cvmtry-filter-has-value', 'hasValue'],
+            ['.cvmtry-filter-year', 'year'],
+            ['.cvmtry-filter-month', 'month'],
+            ['.cvmtry-filter-provider', 'provider'],
+            ['.cvmtry-filter-form', 'formName'],
+            ['.cvmtry-filter-channel', 'channel'],
+            ['.cvmtry-filter-campaign', 'campaign'],
+            ['.cvmtry-filter-status', 'status']
         ];
 
         simpleFilters.forEach(function (pair) {
@@ -121,7 +121,7 @@
             });
         });
 
-        controls.querySelector('.cvm-per-page').addEventListener('change', function () {
+        controls.querySelector('.cvmtry-per-page').addEventListener('change', function () {
             state.perPage = parseInt(this.value, 10);
             state.page = 1;
             fetchSubmissions();
@@ -130,13 +130,13 @@
         // Reflect a seeded search in the box, so the filtered view is visibly
         // filtered and the clear button is discoverable.
         if (state.search !== '') {
-            controls.querySelector('.cvm-search-input').value = state.search;
+            controls.querySelector('.cvmtry-search-input').value = state.search;
         }
 
         // Debounced: every keystroke would otherwise fire a LIKE query over the
         // LONGTEXT submission_data column.
         let searchTimer = null;
-        controls.querySelector('.cvm-search-input').addEventListener('input', function () {
+        controls.querySelector('.cvmtry-search-input').addEventListener('input', function () {
             const value = this.value;
             clearTimeout(searchTimer);
             searchTimer = setTimeout(function () {
@@ -145,9 +145,9 @@
                 fetchSubmissions();
             }, 300);
         });
-        controls.querySelector('.cvm-search-clear').addEventListener('click', function () {
+        controls.querySelector('.cvmtry-search-clear').addEventListener('click', function () {
             clearTimeout(searchTimer);
-            controls.querySelector('.cvm-search-input').value = '';
+            controls.querySelector('.cvmtry-search-input').value = '';
             state.search = '';
             state.page = 1;
             fetchSubmissions();
@@ -155,7 +155,7 @@
 
         // ── Accordion expand (lazy detail load) ──────────────────────────────
         list.addEventListener('click', function (e) {
-            const header = e.target.closest('.cvm-submission-summary');
+            const header = e.target.closest('.cvmtry-submission-summary');
             if (!header || !list.contains(header)) return;
 
             const bodyId = header.getAttribute('aria-controls');
@@ -167,16 +167,16 @@
             body.hidden = isExpanded;
 
             if (!isExpanded && body.dataset.loaded !== '1') {
-                loadDetail(header.closest('.cvm-submission-item'), body);
+                loadDetail(header.closest('.cvmtry-submission-item'), body);
             }
         });
 
         // ── Delete (inside an expanded detail panel) ─────────────────────────
         list.addEventListener('click', function (e) {
-            const btn = e.target.closest('.cvm-submission-delete-btn');
+            const btn = e.target.closest('.cvmtry-submission-delete-btn');
             if (!btn) return;
 
-            const item  = btn.closest('.cvm-submission-item');
+            const item  = btn.closest('.cvmtry-submission-item');
             const rowId = item ? item.dataset.rowId : null;
             if (!rowId) return;
 
@@ -186,7 +186,7 @@
             btn.textContent = __('Deleting…', 'convermetry');
 
             const fd = new FormData();
-            fd.append('action', 'cvm_delete_submission');
+            fd.append('action', 'cvmtry_delete_submission');
             fd.append('nonce', cfg('deleteNonce'));
             fd.append('submission_row', rowId);
 
@@ -210,17 +210,17 @@
         // whole list after each save would collapse the row you were working in
         // and lose your place.
         list.addEventListener('click', function (e) {
-            const btn = e.target.closest('.cvm-lead-save');
+            const btn = e.target.closest('.cvmtry-lead-save');
             if (!btn) return;
 
-            const block = btn.closest('.cvm-lead-block');
-            const item  = btn.closest('.cvm-submission-item');
+            const block = btn.closest('.cvmtry-lead-block');
+            const item  = btn.closest('.cvmtry-submission-item');
             if (!block || !item) return;
 
             const submissionId = block.dataset.submissionId;
-            const statusSelect = block.querySelector('.cvm-lead-status');
-            const valueInput   = block.querySelector('.cvm-lead-value');
-            const feedback     = block.querySelector('.cvm-lead-feedback');
+            const statusSelect = block.querySelector('.cvmtry-lead-status');
+            const valueInput   = block.querySelector('.cvmtry-lead-value');
+            const feedback     = block.querySelector('.cvmtry-lead-feedback');
             if (!submissionId || !statusSelect || !valueInput) return;
 
             btn.disabled    = true;
@@ -228,7 +228,7 @@
             if (feedback) feedback.textContent = '';
 
             const fd = new FormData();
-            fd.append('action', 'cvm_update_lead');
+            fd.append('action', 'cvmtry_update_lead');
             fd.append('nonce', cfg('leadNonce'));
             fd.append('submission_id', submissionId);
             fd.append('lead_status', statusSelect.value);
@@ -244,7 +244,7 @@
 
                     if (!resp.success) {
                         if (feedback) {
-                            feedback.className = 'cvm-lead-feedback cvm-lead-error';
+                            feedback.className = 'cvmtry-lead-feedback cvmtry-lead-error';
                             feedback.textContent = (resp.data && resp.data.message) ||
                                 __('The lead could not be updated.', 'convermetry');
                         }
@@ -258,7 +258,7 @@
                     updateRowChip(item, resp.data);
 
                     if (feedback) {
-                        feedback.className = 'cvm-lead-feedback cvm-lead-saved';
+                        feedback.className = 'cvmtry-lead-feedback cvmtry-lead-saved';
                         feedback.textContent = __('Saved', 'convermetry');
                     }
                 })
@@ -266,7 +266,7 @@
                     btn.disabled    = false;
                     btn.textContent = __('Save', 'convermetry');
                     if (feedback) {
-                        feedback.className = 'cvm-lead-feedback cvm-lead-error';
+                        feedback.className = 'cvmtry-lead-feedback cvmtry-lead-error';
                         feedback.textContent = __('The lead could not be updated.', 'convermetry');
                     }
                 });
@@ -280,14 +280,14 @@
          * @param {object}      data
          */
         function updateRowChip(item, data) {
-            const cell = item.querySelector('.cvm-sub-lead-status');
+            const cell = item.querySelector('.cvmtry-sub-lead-status');
             if (!cell) return;
 
-            let html = '<span class="cvm-status-chip ' + escapeAttr(data.chipClass) + '">' +
+            let html = '<span class="cvmtry-status-chip ' + escapeAttr(data.chipClass) + '">' +
                        escapeHtml(data.statusLabel) + '</span>';
 
             if (data.valueLabel) {
-                html += '<span class="cvm-sub-lead-value">' + escapeHtml(data.valueLabel) + '</span>';
+                html += '<span class="cvmtry-sub-lead-value">' + escapeHtml(data.valueLabel) + '</span>';
             }
 
             cell.innerHTML = html;
@@ -308,10 +308,10 @@
             const actions = btn.parentElement;
             if (!actions) return;
 
-            let note = actions.querySelector('.cvm-delete-error');
+            let note = actions.querySelector('.cvmtry-delete-error');
             if (!note) {
                 note = document.createElement('span');
-                note.className = 'cvm-delete-error';
+                note.className = 'cvmtry-delete-error';
                 note.setAttribute('role', 'alert');
                 actions.insertBefore(note, btn);
             }
@@ -325,10 +325,10 @@
          * @param {HTMLElement} body
          */
         function loadDetail(item, body) {
-            body.innerHTML = '<p class="cvm-empty-msg">' + escapeHtml(__('Loading…', 'convermetry')) + '</p>';
+            body.innerHTML = '<p class="cvmtry-empty-msg">' + escapeHtml(__('Loading…', 'convermetry')) + '</p>';
 
             const fd = new FormData();
-            fd.append('action', 'cvm_get_submission_detail');
+            fd.append('action', 'cvmtry_get_submission_detail');
             fd.append('nonce', cfg('detailNonce'));
             fd.append('submission_row', item.dataset.rowId);
 
@@ -339,13 +339,13 @@
                         body.innerHTML = resp.data.html;
                         body.dataset.loaded = '1';
                     } else {
-                        body.innerHTML = '<p class="cvm-empty-msg">' +
+                        body.innerHTML = '<p class="cvmtry-empty-msg">' +
                             escapeHtml((resp.data && resp.data.message) || __('This submission could not be loaded.', 'convermetry')) +
                             '</p>';
                     }
                 })
                 .catch(function () {
-                    body.innerHTML = '<p class="cvm-empty-msg">' + escapeHtml(__('This submission could not be loaded.', 'convermetry')) + '</p>';
+                    body.innerHTML = '<p class="cvmtry-empty-msg">' + escapeHtml(__('This submission could not be loaded.', 'convermetry')) + '</p>';
                 });
         }
 
@@ -354,7 +354,7 @@
          * on screen.
          */
         function syncExportLink() {
-            const link = document.querySelector('.cvm-export-filtered');
+            const link = document.querySelector('.cvmtry-export-filtered');
             const base = cfg('exportBase');
             if (!link || !base) return;
 
@@ -389,12 +389,12 @@
         function fetchSubmissions() {
             const seq = ++fetchSeq;
 
-            list.innerHTML         = '<li class="cvm-empty-msg">' + escapeHtml(__('Loading…', 'convermetry')) + '</li>';
+            list.innerHTML         = '<li class="cvmtry-empty-msg">' + escapeHtml(__('Loading…', 'convermetry')) + '</li>';
             paginationEl.innerHTML = '';
             syncExportLink();
 
             const fd = new FormData();
-            fd.append('action', 'cvm_get_submissions');
+            fd.append('action', 'cvmtry_get_submissions');
             fd.append('nonce', cfg('listNonce'));
             fd.append('page', state.page);
             fd.append('per_page', state.perPage);
@@ -416,7 +416,7 @@
                         return; // A newer request superseded this one.
                     }
                     if (!resp.success) {
-                        list.innerHTML = '<li class="cvm-empty-msg">' + escapeHtml(__('Failed to load submissions.', 'convermetry')) + '</li>';
+                        list.innerHTML = '<li class="cvmtry-empty-msg">' + escapeHtml(__('Failed to load submissions.', 'convermetry')) + '</li>';
                         return;
                     }
                     const data = resp.data;
@@ -434,14 +434,14 @@
                         updateDateOptions(controls, data.years || [], data.months || []);
                         initialized = true;
                     }
-                    updateListOptions(controls, '.cvm-filter-provider', data.providers || [], __('All Providers', 'convermetry'));
-                    updateListOptions(controls, '.cvm-filter-form', data.formNames || [], __('All Forms', 'convermetry'));
-                    updateListOptions(controls, '.cvm-filter-channel', data.channels || [], __('All Channels', 'convermetry'));
-                    updateListOptions(controls, '.cvm-filter-campaign', data.campaigns || [], __('All Campaigns', 'convermetry'));
+                    updateListOptions(controls, '.cvmtry-filter-provider', data.providers || [], __('All Providers', 'convermetry'));
+                    updateListOptions(controls, '.cvmtry-filter-form', data.formNames || [], __('All Forms', 'convermetry'));
+                    updateListOptions(controls, '.cvmtry-filter-channel', data.channels || [], __('All Channels', 'convermetry'));
+                    updateListOptions(controls, '.cvmtry-filter-campaign', data.campaigns || [], __('All Campaigns', 'convermetry'));
 
                     list.innerHTML = data.html !== ''
                         ? data.html
-                        : '<li class="cvm-empty-msg">' + escapeHtml(emptyMessage(state)) + '</li>';
+                        : '<li class="cvmtry-empty-msg">' + escapeHtml(emptyMessage(state)) + '</li>';
 
                     renderPagination(paginationEl, data.currentPage, data.totalPages, data.total, state.perPage, function (p) {
                         state.page = p;
@@ -450,7 +450,7 @@
                 })
                 .catch(function () {
                     if (seq === fetchSeq) {
-                        list.innerHTML = '<li class="cvm-empty-msg">' + escapeHtml(__('Failed to load submissions.', 'convermetry')) + '</li>';
+                        list.innerHTML = '<li class="cvmtry-empty-msg">' + escapeHtml(__('Failed to load submissions.', 'convermetry')) + '</li>';
                     }
                 });
         }
@@ -484,8 +484,8 @@
      * @param {string[]}    months
      */
     function updateDateOptions(controls, years, months) {
-        const yearSelect  = controls.querySelector('.cvm-filter-year');
-        const monthSelect = controls.querySelector('.cvm-filter-month');
+        const yearSelect  = controls.querySelector('.cvmtry-filter-year');
+        const monthSelect = controls.querySelector('.cvmtry-filter-month');
 
         yearSelect.innerHTML = '<option value="">' + escapeHtml(__('All Years', 'convermetry')) + '</option>';
         years.forEach(function (y) {
@@ -546,14 +546,14 @@
     /**
      * Lead-status filter options, built from the labels the server localized.
      *
-     * Read from CVM_SUB rather than duplicated here so the vocabulary has one
+     * Read from CVMTRY_SUB rather than duplicated here so the vocabulary has one
      * owner — LeadStatus — and a status added there cannot go missing from the
      * filter.
      *
      * @returns {string}
      */
     function leadStatusOptions() {
-        const statuses = (typeof CVM_SUB !== 'undefined' && CVM_SUB.leadStatuses) || {};
+        const statuses = (typeof CVMTRY_SUB !== 'undefined' && CVMTRY_SUB.leadStatuses) || {};
         let html = '';
 
         for (const machine in statuses) {
@@ -577,14 +577,14 @@
             return '<option value="' + escapeAttr(value) + '">' + escapeHtml(label) + '</option>';
         };
 
-        return '<div class="cvm-acc-filters">' +
-                   '<select class="cvm-filter-year">' + option('', __('All Years', 'convermetry')) + '</select>' +
-                   '<select class="cvm-filter-month">' + option('', __('All Months', 'convermetry')) + '</select>' +
-                   '<span style="display:none"><select class="cvm-filter-provider">' + option('', __('All Providers', 'convermetry')) + '</select></span>' +
-                   '<span style="display:none"><select class="cvm-filter-form">' + option('', __('All Forms', 'convermetry')) + '</select></span>' +
-                   '<span style="display:none"><select class="cvm-filter-channel">' + option('', __('All Channels', 'convermetry')) + '</select></span>' +
-                   '<span style="display:none"><select class="cvm-filter-campaign">' + option('', __('All Campaigns', 'convermetry')) + '</select></span>' +
-                   '<select class="cvm-filter-status">' +
+        return '<div class="cvmtry-acc-filters">' +
+                   '<select class="cvmtry-filter-year">' + option('', __('All Years', 'convermetry')) + '</select>' +
+                   '<select class="cvmtry-filter-month">' + option('', __('All Months', 'convermetry')) + '</select>' +
+                   '<span style="display:none"><select class="cvmtry-filter-provider">' + option('', __('All Providers', 'convermetry')) + '</select></span>' +
+                   '<span style="display:none"><select class="cvmtry-filter-form">' + option('', __('All Forms', 'convermetry')) + '</select></span>' +
+                   '<span style="display:none"><select class="cvmtry-filter-channel">' + option('', __('All Channels', 'convermetry')) + '</select></span>' +
+                   '<span style="display:none"><select class="cvmtry-filter-campaign">' + option('', __('All Campaigns', 'convermetry')) + '</select></span>' +
+                   '<select class="cvmtry-filter-status">' +
                        option('', __('All Delivery States', 'convermetry')) +
                        option('delivered', __('Delivered', 'convermetry')) +
                        option('partial', __('Partially delivered', 'convermetry')) +
@@ -592,22 +592,22 @@
                        option('pending', __('Queued', 'convermetry')) +
                        option('not_sent', __('Not sent', 'convermetry')) +
                    '</select>' +
-                   '<select class="cvm-filter-lead-status">' +
+                   '<select class="cvmtry-filter-lead-status">' +
                        option('', __('All Lead Statuses', 'convermetry')) +
                        leadStatusOptions() +
                    '</select>' +
-                   '<select class="cvm-filter-has-value">' +
+                   '<select class="cvmtry-filter-has-value">' +
                        option('', __('Any Value', 'convermetry')) +
                        option('yes', __('Has a value', 'convermetry')) +
                        option('no', __('No value recorded', 'convermetry')) +
                    '</select>' +
-                   '<div class="cvm-acc-search">' +
-                       '<input type="text" class="cvm-search-input" placeholder="' + escapeAttr(__('Search name, email, field values, IDs…', 'convermetry')) + '" />' +
-                       '<button type="button" class="cvm-search-clear" aria-label="' + escapeAttr(__('Clear search', 'convermetry')) + '">✕</button>' +
+                   '<div class="cvmtry-acc-search">' +
+                       '<input type="text" class="cvmtry-search-input" placeholder="' + escapeAttr(__('Search name, email, field values, IDs…', 'convermetry')) + '" />' +
+                       '<button type="button" class="cvmtry-search-clear" aria-label="' + escapeAttr(__('Clear search', 'convermetry')) + '">✕</button>' +
                    '</div>' +
                '</div>' +
-               '<div class="cvm-acc-perpage">' +
-                   '<label>' + escapeHtml(__('Per page:', 'convermetry')) + ' <select class="cvm-per-page">' +
+               '<div class="cvmtry-acc-perpage">' +
+                   '<label>' + escapeHtml(__('Per page:', 'convermetry')) + ' <select class="cvmtry-per-page">' +
                        '<option value="5">5</option>' +
                        '<option value="10" selected>10</option>' +
                        '<option value="25">25</option>' +
@@ -637,27 +637,27 @@
         const end   = Math.min(currentPage * perPage, totalItems);
 
         /* translators: 1: first item shown, 2: last item shown, 3: total number of items. */
-        let html = '<span class="cvm-page-info">' + escapeHtml(sprintf(__('Showing %1$d–%2$d of %3$d', 'convermetry'), start, end, totalItems)) + '</span>';
+        let html = '<span class="cvmtry-page-info">' + escapeHtml(sprintf(__('Showing %1$d–%2$d of %3$d', 'convermetry'), start, end, totalItems)) + '</span>';
 
         if (totalPages > 1) {
-            html += '<div class="cvm-page-buttons">';
+            html += '<div class="cvmtry-page-buttons">';
 
             if (currentPage > 1) {
-                html += '<button class="cvm-page-btn" data-page="' + (currentPage - 1) + '" aria-label="' + escapeAttr(__('Previous page', 'convermetry')) + '">&#8249;</button>';
+                html += '<button class="cvmtry-page-btn" data-page="' + (currentPage - 1) + '" aria-label="' + escapeAttr(__('Previous page', 'convermetry')) + '">&#8249;</button>';
             }
 
             getPageNumbers(currentPage, totalPages).forEach(function (p) {
                 if (p === '...') {
-                    html += '<span class="cvm-page-ellipsis">&#8230;</span>';
+                    html += '<span class="cvmtry-page-ellipsis">&#8230;</span>';
                 } else {
-                    const activeClass = p === currentPage ? ' cvm-page-btn-active' : '';
+                    const activeClass = p === currentPage ? ' cvmtry-page-btn-active' : '';
                     /* translators: %d: page number. */
-                    html += '<button class="cvm-page-btn' + activeClass + '" data-page="' + p + '" aria-label="' + escapeAttr(sprintf(__('Page %d', 'convermetry'), p)) + '">' + p + '</button>';
+                    html += '<button class="cvmtry-page-btn' + activeClass + '" data-page="' + p + '" aria-label="' + escapeAttr(sprintf(__('Page %d', 'convermetry'), p)) + '">' + p + '</button>';
                 }
             });
 
             if (currentPage < totalPages) {
-                html += '<button class="cvm-page-btn" data-page="' + (currentPage + 1) + '" aria-label="' + escapeAttr(__('Next page', 'convermetry')) + '">&#8250;</button>';
+                html += '<button class="cvmtry-page-btn" data-page="' + (currentPage + 1) + '" aria-label="' + escapeAttr(__('Next page', 'convermetry')) + '">&#8250;</button>';
             }
 
             html += '</div>';
@@ -665,7 +665,7 @@
 
         container.innerHTML = html;
 
-        container.querySelectorAll('.cvm-page-btn[data-page]').forEach(function (btn) {
+        container.querySelectorAll('.cvmtry-page-btn[data-page]').forEach(function (btn) {
             btn.addEventListener('click', function () {
                 onPageChange(parseInt(this.dataset.page, 10));
             });

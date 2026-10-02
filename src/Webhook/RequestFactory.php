@@ -225,7 +225,7 @@ final class RequestFactory
      */
     public static function withProtocolHeaders(array $headers, string $endpointRef, string $body, string $deliveryId): array
     {
-        $headers['User-Agent']      = 'WordPress/Convermetry ' . CVM_VERSION;
+        $headers['User-Agent']      = 'WordPress/Convermetry ' . CVMTRY_VERSION;
         $headers['Idempotency-Key'] = $deliveryId;
 
         $secret = Options::secretForEndpointRef($endpointRef);

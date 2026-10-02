@@ -100,8 +100,10 @@ final class FunnelReport
 
         global $wpdb;
 
-        // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- StepCompiler assembles the statement from fixed SQL fragments whose placeholders are bound to $built['params'] right here.
-        $row = ReportQuery::rows($wpdb->prepare($built['sql'], $built['params']))[0] ?? [];
+        ['sql' => $sql, 'params' => $params] = $built;
+
+        // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- buildQuery() assembles the statement from fixed SQL fragments (StepCompiler's, plus internal table names and aliases) whose placeholders are bound to $params right here.
+        $row = ReportQuery::rows($wpdb->prepare($sql, $params))[0] ?? [];
 
         $result = self::shape($steps, $row);
 
@@ -333,7 +335,7 @@ final class FunnelReport
      */
     private static function cacheKey(array $funnel, string $start, string $end): string
     {
-        return 'cvm_funnel_' . md5(implode('|', [
+        return 'cvmtry_funnel_' . md5(implode('|', [
             (string) ($funnel['funnel_id'] ?? ''),
             FunnelSettings::definitionHash($funnel),
             $start,

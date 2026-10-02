@@ -14,12 +14,12 @@ use Convermetry\Support\Url;
  * form at submit time (refreshed per submission attempt, before any AJAX
  * handler serializes the form):
  *
- *  - cvm_conversion_id — a fresh conversion token for THIS submission
+ *  - cvmtry_conversion_id — a fresh conversion token for THIS submission
  *    attempt. The tracker's own form_success event reuses the same token,
  *    so the frontend event and the server-confirmed conversion share one
  *    conversion_id and can never double-count.
- *  - cvm_session_id    — the visitor's current analytics session id.
- *  - cvm_context       — a compact JSON snapshot of the session's
+ *  - cvmtry_session_id    — the visitor's current analytics session id.
+ *  - cvmtry_context       — a compact JSON snapshot of the session's
  *    attribution (utm fields, click-id TYPE, entrance referrer / verified
  *    direct marker, landing page, submitting page URL).
  *
@@ -39,15 +39,15 @@ use Convermetry\Support\Url;
 final class Correlation
 {
     /** Hidden input: the per-attempt conversion token. */
-    public const string FIELD_CONVERSION = 'cvm_conversion_id';
+    public const string FIELD_CONVERSION = 'cvmtry_conversion_id';
 
     /** Hidden input: the analytics session id. */
-    public const string FIELD_SESSION = 'cvm_session_id';
+    public const string FIELD_SESSION = 'cvmtry_session_id';
 
     /** Hidden input: the JSON attribution context snapshot. */
-    public const string FIELD_CONTEXT = 'cvm_context';
+    public const string FIELD_CONTEXT = 'cvmtry_context';
 
-    /** Maximum accepted bytes for the cvm_context JSON. */
+    /** Maximum accepted bytes for the cvmtry_context JSON. */
     private const int MAX_CONTEXT_BYTES = 4096;
 
     /**
@@ -198,7 +198,7 @@ final class Correlation
     }
 
     /**
-     * Parses and sanitizes the cvm_context JSON snapshot.
+     * Parses and sanitizes the cvmtry_context JSON snapshot.
      *
      * Every field is validated exactly like the tracking REST endpoint
      * validates it: utm values are text-sanitized, capped, and dropped when

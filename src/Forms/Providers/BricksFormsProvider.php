@@ -142,6 +142,7 @@ final class BricksFormsProvider implements FormProviderInterface
         $metaKeys = BricksFormsBridge::CONTENT_META_KEYS;
 
         /** @var string[] $candidates */
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- form discovery on admin screens; the result is cached by FormProviderRegistry::discoveredForms().
         $candidates = $wpdb->get_col($wpdb->prepare(
             'SELECT DISTINCT post_id FROM %i WHERE meta_key IN (' . implode(', ', array_fill(0, count($metaKeys), '%s')) . ')',
             array_merge([$wpdb->postmeta], $metaKeys)
@@ -157,6 +158,7 @@ final class BricksFormsProvider implements FormProviderInterface
         }
 
         /** @var string[] $postIds */
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- form discovery on admin screens; the result is cached by FormProviderRegistry::discoveredForms().
         $postIds = $wpdb->get_col($wpdb->prepare(
             'SELECT ID FROM %i WHERE ID IN (' . implode(', ', array_fill(0, count($candidates), '%d')) . ')'
             . " AND post_type <> 'revision' AND post_status NOT IN ('trash', 'auto-draft')",

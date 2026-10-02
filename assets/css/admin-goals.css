@@ -9,26 +9,26 @@
  * specific to the goal DEFINITION form.
  */
 
-.cvm-goal-actions {
+.cvmtry-goal-actions {
     white-space: nowrap;
 }
 
 /* The "this goal has never fired" explanation, attached to its own row so it
    spans the full table width rather than squeezing into one cell. */
 
-.cvm-goal-note td {
+.cvmtry-goal-note td {
     padding-top: 0;
     border-top: none;
     color: #646970;
     font-size: 12px;
 }
 
-.cvm-goal-form .cvm-goal-type,
-.cvm-goal-form .cvm-goal-operator {
+.cvmtry-goal-form .cvmtry-goal-type,
+.cvmtry-goal-form .cvmtry-goal-operator {
     margin-right: 6px;
     margin-bottom: 4px;
 }
 
-.cvm-goal-form .cvm-goal-value[hidden] {
+.cvmtry-goal-form .cvmtry-goal-value[hidden] {
     display: none;
 }

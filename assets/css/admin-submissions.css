@@ -11,14 +11,14 @@
  * this file — see that file's header for the full ownership map.
  */
 
-.cvm-submissions-intro {
+.cvmtry-submissions-intro {
     max-width: 780px;
     margin: 8px 0 16px;
 }
 
 /* The list carries the page's card chrome itself: unlike the Activity Log,
    these rows are not nested inside a page-level accordion. */
-.cvm-submissions-wrap .cvm-acc-controls {
+.cvmtry-submissions-wrap .cvmtry-acc-controls {
     background: #fff;
     border: 1px solid #c3c4c7;
     border-bottom: none;
@@ -27,7 +27,7 @@
     margin-bottom: 0;
 }
 
-.cvm-submission-list {
+.cvmtry-submission-list {
     margin: 0;
     padding: 0;
     list-style: none;
@@ -39,11 +39,11 @@
     overflow: hidden;
 }
 
-.cvm-submission-list > .cvm-empty-msg {
+.cvmtry-submission-list > .cvmtry-empty-msg {
     padding: 20px 16px;
 }
 
-.cvm-submission-item + .cvm-submission-item {
+.cvmtry-submission-item + .cvmtry-submission-item {
     border-top: 1px solid #f0f0f1;
 }
 
@@ -53,13 +53,13 @@
    (qualified, worth this much) before the operational detail (was it
    delivered) that matters least to the person doing the qualifying. */
 
-.cvm-submission-heading,
-.cvm-submission-summary {
+.cvmtry-submission-heading,
+.cvmtry-submission-summary {
     display: grid;
     grid-template-columns: 118px minmax(130px, 1.3fr) minmax(105px, 1fr) minmax(85px, 0.9fr) 100px 100px 130px 140px 14px;
 }
 
-.cvm-submission-heading {
+.cvmtry-submission-heading {
     align-items: center;
     gap: 12px;
     padding: 8px 16px 8px 19px;
@@ -73,13 +73,13 @@
     color: #757575;
 }
 
-.cvm-submission-heading span {
+.cvmtry-submission-heading span {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
 }
 
-.cvm-submission-summary {
+.cvmtry-submission-summary {
     width: 100%;
     align-items: center;
     gap: 12px;
@@ -94,80 +94,80 @@
     transition: background-color 0.15s ease;
 }
 
-.cvm-submission-summary:hover {
+.cvmtry-submission-summary:hover {
     background: #f6f7f7;
 }
 
-.cvm-submission-summary[aria-expanded="true"] {
+.cvmtry-submission-summary[aria-expanded="true"] {
     background: #f6f7f7;
     border-left-color: #2271b1;
 }
 
-.cvm-submission-summary:focus-visible {
+.cvmtry-submission-summary:focus-visible {
     outline: 2px solid #2271b1;
     outline-offset: -2px;
 }
 
-.cvm-sub-col {
+.cvmtry-sub-col {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
 }
 
-.cvm-sub-date {
+.cvmtry-sub-date {
     color: #50575e;
     font-size: 12px;
 }
 
-.cvm-sub-lead {
+.cvmtry-sub-lead {
     font-weight: 600;
 }
 
-.cvm-sub-provider {
+.cvmtry-sub-provider {
     display: block;
     color: #757575;
     font-size: 11px;
     text-transform: capitalize;
 }
 
-.cvm-sub-page,
-.cvm-sub-channel,
-.cvm-sub-campaign {
+.cvmtry-sub-page,
+.cvmtry-sub-channel,
+.cvmtry-sub-campaign {
     color: #50575e;
     font-size: 12px;
 }
 
-.cvm-sub-status {
+.cvmtry-sub-status {
     overflow: visible;
     white-space: normal;
 }
 
 /* Expanded detail --------------------------------------------------------- */
 
-.cvm-submission-detail {
+.cvmtry-submission-detail {
     border-top: 1px solid #f0f0f1;
     background: #fbfbfc;
 }
 
-.cvm-detail-inner {
+.cvmtry-detail-inner {
     padding: 16px 16px 20px 19px;
 }
 
-.cvm-detail-actions {
+.cvmtry-detail-actions {
     display: flex;
     justify-content: flex-end;
     margin-bottom: 4px;
 }
 
-.cvm-detail-block {
+.cvmtry-detail-block {
     margin-top: 16px;
 }
 
-.cvm-detail-block:first-of-type {
+.cvmtry-detail-block:first-of-type {
     margin-top: 0;
 }
 
-.cvm-detail-block h4 {
+.cvmtry-detail-block h4 {
     margin: 0 0 8px;
     font-size: 12px;
     font-weight: 700;
@@ -176,7 +176,7 @@
     color: #757575;
 }
 
-.cvm-detail-grid {
+.cvmtry-detail-grid {
     display: grid;
     grid-template-columns: minmax(120px, max-content) 1fr;
     gap: 4px 16px;
@@ -184,11 +184,11 @@
     font-size: 13px;
 }
 
-.cvm-detail-grid dt {
+.cvmtry-detail-grid dt {
     color: #50575e;
 }
 
-.cvm-detail-grid dd {
+.cvmtry-detail-grid dd {
     margin: 0;
     color: #1d2327;
     overflow-wrap: anywhere;
@@ -196,24 +196,24 @@
 
 /* Submitted fields ---------------------------------------------------- */
 
-.cvm-field-table-wrap {
+.cvmtry-field-table-wrap {
     overflow-x: auto;
     border: 1px solid #dcdcde;
     border-radius: 4px;
     background: #fff;
 }
 
-.cvm-field-table {
+.cvmtry-field-table {
     width: 100%;
     border-collapse: collapse;
     font-size: 13px;
 }
 
-.cvm-field-table tr + tr {
+.cvmtry-field-table tr + tr {
     border-top: 1px solid #f0f0f1;
 }
 
-.cvm-field-table th {
+.cvmtry-field-table th {
     width: 30%;
     min-width: 140px;
     padding: 8px 12px;
@@ -224,7 +224,7 @@
     overflow-wrap: anywhere;
 }
 
-.cvm-field-table td {
+.cvmtry-field-table td {
     padding: 8px 12px;
     color: #1d2327;
     vertical-align: top;
@@ -234,76 +234,76 @@
 
 /* Visitor journey ------------------------------------------------------- */
 
-.cvm-journey {
+.cvmtry-journey {
     margin: 0;
     padding: 0;
     list-style: none;
     font-size: 13px;
 }
 
-.cvm-journey li {
+.cvmtry-journey li {
     position: relative;
     padding: 3px 0 3px 18px;
     color: #50575e;
     overflow-wrap: anywhere;
 }
 
-.cvm-journey li::before {
+.cvmtry-journey li::before {
     content: "↓";
     position: absolute;
     left: 0;
     color: #a7aaad;
 }
 
-.cvm-journey li:first-child::before {
+.cvmtry-journey li:first-child::before {
     content: "•";
 }
 
-.cvm-journey-end {
+.cvmtry-journey-end {
     font-weight: 600;
     color: #0a7c2f !important;
 }
 
 /* Per-endpoint delivery results ------------------------------------------- */
 
-.cvm-delivery-list {
+.cvmtry-delivery-list {
     margin: 0 0 8px;
     padding: 0;
     list-style: none;
     font-size: 13px;
 }
 
-.cvm-delivery-row {
+.cvmtry-delivery-row {
     display: flex;
     align-items: baseline;
     gap: 8px;
     padding: 4px 0;
 }
 
-.cvm-delivery-mark {
+.cvmtry-delivery-mark {
     flex-shrink: 0;
     font-weight: 700;
 }
 
-.cvm-delivery-mark.ok {
+.cvmtry-delivery-mark.ok {
     color: #0a7c2f;
 }
 
-.cvm-delivery-mark.fail {
+.cvmtry-delivery-mark.fail {
     color: #b32d2e;
 }
 
-.cvm-delivery-name {
+.cvmtry-delivery-name {
     flex: 1;
     overflow-wrap: anywhere;
 }
 
-.cvm-delivery-result {
+.cvmtry-delivery-result {
     color: #50575e;
     white-space: nowrap;
 }
 
-.cvm-delivery-loglink {
+.cvmtry-delivery-loglink {
     margin: 8px 0 0;
     font-size: 12px;
     color: #757575;
@@ -312,23 +312,23 @@
 /* Narrow screens: the grid columns stop fitting well before mobile ------- */
 
 @media screen and (max-width: 1100px) {
-    .cvm-submission-summary {
+    .cvmtry-submission-summary {
         grid-template-columns: 1fr 1fr;
         gap: 4px 12px;
     }
 
-    .cvm-submission-summary .cvm-accordion-arrow {
+    .cvmtry-submission-summary .cvmtry-accordion-arrow {
         display: none;
     }
 
-    .cvm-sub-col {
+    .cvmtry-sub-col {
         white-space: normal;
     }
 }
 
 /* Delete failure notice inside an expanded row. */
 
-.cvm-delete-error {
+.cvmtry-delete-error {
     margin-right: 10px;
     color: #b32d2e;
     font-size: 12px;
@@ -338,7 +338,7 @@
 /* The heading row's columns stop matching the rows once they collapse. */
 
 @media screen and (max-width: 1100px) {
-    .cvm-submission-heading {
+    .cvmtry-submission-heading {
         display: none;
     }
 }
@@ -350,20 +350,20 @@
  * happened and cannot be changed.
  */
 
-.cvm-lead-block {
+.cvmtry-lead-block {
     background: #f6f7f7;
     border-radius: 4px;
     padding: 12px 16px;
 }
 
-.cvm-lead-controls {
+.cvmtry-lead-controls {
     display: flex;
     flex-wrap: wrap;
     align-items: flex-end;
     gap: 12px;
 }
 
-.cvm-lead-field {
+.cvmtry-lead-field {
     display: flex;
     flex-direction: column;
     gap: 4px;
@@ -372,35 +372,35 @@
     color: #50575e;
 }
 
-.cvm-lead-field input,
-.cvm-lead-field select {
+.cvmtry-lead-field input,
+.cvmtry-lead-field select {
     font-weight: 400;
     min-width: 150px;
 }
 
 /* Reserves its space so the row does not jump when a message appears. */
 
-.cvm-lead-feedback {
+.cvmtry-lead-feedback {
     min-height: 1.4em;
     font-size: 12px;
     align-self: center;
 }
 
-.cvm-lead-saved {
+.cvmtry-lead-saved {
     color: #007017;
 }
 
-.cvm-lead-error {
+.cvmtry-lead-error {
     color: #b32d2e;
 }
 
-.cvm-lead-history {
+.cvmtry-lead-history {
     margin-top: 14px;
     padding-top: 10px;
     border-top: 1px solid #dcdcde;
 }
 
-.cvm-lead-history h5 {
+.cvmtry-lead-history h5 {
     margin: 0 0 6px;
     font-size: 11px;
     text-transform: uppercase;
@@ -408,19 +408,19 @@
     color: #757575;
 }
 
-.cvm-lead-history ul {
+.cvmtry-lead-history ul {
     margin: 0;
     font-size: 12px;
     color: #50575e;
 }
 
-.cvm-lead-history li {
+.cvmtry-lead-history li {
     margin: 0 0 3px;
 }
 
 /* The value under a status chip in the collapsed row. */
 
-.cvm-sub-lead-value {
+.cvmtry-sub-lead-value {
     display: block;
     margin-top: 3px;
     font-size: 11px;

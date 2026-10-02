@@ -39,14 +39,14 @@ function bricksForm(elementId, attributes = {}) {
         id: `brxe-${elementId}`,
         class: 'brxe-form',
         method: 'post',
-        'data-cvm-form-key': `bricks:${elementId}`,
+        'data-cvmtry-form-key': `bricks:${elementId}`,
         ...attributes,
     });
 }
 
 /** The conversion token that travelled in one submit event's FormData. */
 function tokenIn(formData) {
-    return formData.get('cvm_conversion_id');
+    return formData.get('cvmtry_conversion_id');
 }
 
 console.log('\nBricks tracker — executed against the real tracker source\n');
@@ -65,9 +65,9 @@ test('the prepared FormData carries all three correlation values', () => {
         /^c[a-f0-9]{16}$/,
         'a conversion token must travel with the request'
     );
-    assert.match(formData.get('cvm_session_id'), /^[a-f0-9]{16,64}$/);
-    assert.ok(formData.get('cvm_context'), 'the attribution snapshot must travel');
-    assert.doesNotThrow(() => JSON.parse(formData.get('cvm_context')));
+    assert.match(formData.get('cvmtry_session_id'), /^[a-f0-9]{16,64}$/);
+    assert.ok(formData.get('cvmtry_context'), 'the attribution snapshot must travel');
+    assert.doesNotThrow(() => JSON.parse(formData.get('cvmtry_context')));
 });
 
 test('nothing is written into the form-field-<id> namespace', () => {
@@ -84,11 +84,11 @@ test('nothing is written into the form-field-<id> namespace', () => {
         ['form-field-15bc57'],
         "the tracker must not add to Bricks' submitted fields"
     );
-    assert.ok(keys.includes('cvm_conversion_id'), 'the values travel top level instead');
+    assert.ok(keys.includes('cvmtry_conversion_id'), 'the values travel top level instead');
 });
 
-test('a data-cvm-ignore form is left completely alone', () => {
-    const form = bricksForm('ab12cd', { 'data-cvm-ignore': '' });
+test('a data-cvmtry-ignore form is left completely alone', () => {
+    const form = bricksForm('ab12cd', { 'data-cvmtry-ignore': '' });
     const harness = bootTracker({ forms: [form] });
     const formData = new FormData();
 
@@ -128,7 +128,7 @@ test('the token the native submit listener minted is reused, not replaced', () =
     // The native submit event fires first, in capture phase, and refreshes the
     // form's hidden correlation fields for this attempt.
     harness.document.dispatchEvent({ type: 'submit', target: form });
-    const hidden = form.querySelector('input[name="cvm_conversion_id"]');
+    const hidden = form.querySelector('input[name="cvmtry_conversion_id"]');
     assert.ok(hidden, 'a Bricks form is recognised by its rendered tracking key');
 
     const formData = new FormData();
@@ -302,7 +302,7 @@ test('error tracking respects the site owner\'s switch', () => {
 });
 
 test('an opted-out form reports neither conversions nor errors', () => {
-    const form = bricksForm('ab12cd', { 'data-cvm-ignore': '' });
+    const form = bricksForm('ab12cd', { 'data-cvmtry-ignore': '' });
     const harness = bootTracker({ forms: [form] });
 
     harness.dispatch('bricks/form/submit', { elementId: 'ab12cd', formData: new FormData() });

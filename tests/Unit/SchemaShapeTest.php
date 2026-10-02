@@ -52,11 +52,11 @@ final class SchemaShapeTest extends TestCase
     public static function tableOwners(): array
     {
         return [
-            'events'             => [DatabaseManager::class, 'cvm_events'],
-            'form submissions'   => [FormSubmissions::class, 'cvm_form_submissions'],
-            'goal completions'   => [GoalCompletions::class, 'cvm_goal_completions'],
-            'lead events'        => [LeadEvents::class, 'cvm_lead_events'],
-            'notification queue' => [NotificationQueue::class, 'cvm_notification_queue'],
+            'events'             => [DatabaseManager::class, 'cvmtry_events'],
+            'form submissions'   => [FormSubmissions::class, 'cvmtry_form_submissions'],
+            'goal completions'   => [GoalCompletions::class, 'cvmtry_goal_completions'],
+            'lead events'        => [LeadEvents::class, 'cvmtry_lead_events'],
+            'notification queue' => [NotificationQueue::class, 'cvmtry_notification_queue'],
         ];
     }
 

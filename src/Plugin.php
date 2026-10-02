@@ -141,7 +141,7 @@ final class Plugin
         SettingsEvents::init();
 
         // Same idea, one option: keeps the autoloaded browser-selector mirror in
-        // step with cvm_goals no matter who writes it, so the tracker never has
+        // step with cvmtry_goals no matter who writes it, so the tracker never has
         // to pull the non-autoloaded goal list on a visitor page load.
         GoalRepository::init();
 
@@ -196,28 +196,28 @@ final class Plugin
             3
         );
 
-        add_action('cvm_cleanup_old_events', [DatabaseManager::class, 'cleanupOldEvents']);
-        add_action('cvm_cleanup_old_events', [DeliveryLog::class, 'purgeOld']);
-        add_action('cvm_cleanup_old_events', [FormSubmissions::class, 'purgeOld']);
+        add_action('cvmtry_cleanup_old_events', [DatabaseManager::class, 'cleanupOldEvents']);
+        add_action('cvmtry_cleanup_old_events', [DeliveryLog::class, 'purgeOld']);
+        add_action('cvmtry_cleanup_old_events', [FormSubmissions::class, 'purgeOld']);
         // Goal completions and lead status history are analytics data and age
         // out on exactly the same window as everything else — a site owner who
         // sets 30-day retention must not find two tables quietly keeping
         // conversion history forever.
-        add_action('cvm_cleanup_old_events', [GoalCompletions::class, 'purgeOld']);
-        add_action('cvm_cleanup_old_events', [LeadEvents::class, 'purgeOld']);
+        add_action('cvmtry_cleanup_old_events', [GoalCompletions::class, 'purgeOld']);
+        add_action('cvmtry_cleanup_old_events', [LeadEvents::class, 'purgeOld']);
         // Finishes the derived-column backfill (channel/utm_campaign from
         // 1.2.0, delivery_state from 1.3.0); a no-op once every row is
         // populated. The catch-up hook drains large tables sooner than the
         // daily run would, re-arming itself while work remains.
-        add_action('cvm_cleanup_old_events', [FormSubmissions::class, 'backfillOnCleanup']);
+        add_action('cvmtry_cleanup_old_events', [FormSubmissions::class, 'backfillOnCleanup']);
         add_action(FormSubmissions::BACKFILL_CATCHUP_HOOK, [FormSubmissions::class, 'backfillCatchUp']);
-        add_action('cvm_cleanup_old_events', [FormDeliveryQueue::class, 'ensureWorkerScheduled']);
+        add_action('cvmtry_cleanup_old_events', [FormDeliveryQueue::class, 'ensureWorkerScheduled']);
         // Safety net for queue rows whose INSERT was refused and whose bounded
         // repair chain ended without them — including the case where the repair
         // cron could not be scheduled at all, so nothing else would ever retry.
-        add_action('cvm_cleanup_old_events', [FormDeliveryQueue::class, 'repairPending']);
-        add_action('cvm_cleanup_old_events', [NotificationQueue::class, 'ensureWorkerScheduled']);
-        add_action('cvm_cleanup_old_events', [NotificationQueue::class, 'purgeOrphans']);
+        add_action('cvmtry_cleanup_old_events', [FormDeliveryQueue::class, 'repairPending']);
+        add_action('cvmtry_cleanup_old_events', [NotificationQueue::class, 'ensureWorkerScheduled']);
+        add_action('cvmtry_cleanup_old_events', [NotificationQueue::class, 'purgeOrphans']);
         add_action(DatabaseManager::CLEANUP_CATCHUP_HOOK, [DatabaseManager::class, 'cleanupOldEventsCatchUp']);
 
         $this->ensureCronScheduled();
@@ -256,8 +256,8 @@ final class Plugin
      */
     private function ensureCronScheduled(): void
     {
-        if (!wp_next_scheduled('cvm_cleanup_old_events')) {
-            wp_schedule_event(time(), 'daily', 'cvm_cleanup_old_events');
+        if (!wp_next_scheduled('cvmtry_cleanup_old_events')) {
+            wp_schedule_event(time(), 'daily', 'cvmtry_cleanup_old_events');
         }
 
         AnalyticsDispatcher::schedule();

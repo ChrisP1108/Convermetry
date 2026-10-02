@@ -40,8 +40,8 @@ use Convermetry\Support\Pagination;
  * back into the Activity Log.
  *
  * Rows are fetched client-side (assets/js/submissions.js) via the
- * cvm_get_submissions AJAX action, with detail panels loaded lazily on first
- * expand via cvm_get_submission_detail.
+ * cvmtry_get_submissions AJAX action, with detail panels loaded lazily on first
+ * expand via cvmtry_get_submission_detail.
  */
 final class SubmissionsPage
 {
@@ -66,10 +66,10 @@ final class SubmissionsPage
         add_action('admin_init', [self::class, 'processExport']);
         add_action('admin_enqueue_scripts', [self::class, 'enqueueAssets']);
 
-        add_action('wp_ajax_cvm_get_submissions', [self::class, 'handleGetSubmissionsAjax']);
-        add_action('wp_ajax_cvm_get_submission_detail', [self::class, 'handleGetDetailAjax']);
-        add_action('wp_ajax_cvm_delete_submission', [self::class, 'handleDeleteAjax']);
-        add_action('wp_ajax_cvm_update_lead', [self::class, 'handleUpdateLeadAjax']);
+        add_action('wp_ajax_cvmtry_get_submissions', [self::class, 'handleGetSubmissionsAjax']);
+        add_action('wp_ajax_cvmtry_get_submission_detail', [self::class, 'handleGetDetailAjax']);
+        add_action('wp_ajax_cvmtry_delete_submission', [self::class, 'handleDeleteAjax']);
+        add_action('wp_ajax_cvmtry_update_lead', [self::class, 'handleUpdateLeadAjax']);
     }
 
     /**
@@ -105,43 +105,42 @@ final class SubmissionsPage
         }
 
         wp_enqueue_style(
-            'cvm-submissions',
-            CVM_PLUGIN_URL . 'assets/css/admin-submissions.css',
+            'cvmtry-submissions',
+            CVMTRY_PLUGIN_URL . 'assets/css/admin-submissions.css',
             [AdminAssets::COMMON_HANDLE],
-            CVM_VERSION
+            CVMTRY_VERSION
         );
 
         wp_enqueue_script(
-            'cvm-submissions',
-            CVM_PLUGIN_URL . 'assets/js/submissions.js',
-            ['wp-i18n'],
-            CVM_VERSION,
+            'cvmtry-submissions',
+            CVMTRY_PLUGIN_URL . 'assets/js/submissions.js',
+            ['wp-i18n', AdminAssets::CONFIRM_HANDLE],
+            CVMTRY_VERSION,
             true
         );
-        wp_set_script_translations('cvm-submissions', 'convermetry');
+        wp_set_script_translations('cvmtry-submissions', 'convermetry');
 
-        wp_localize_script('cvm-submissions', 'CVM_SUB', [
+        wp_localize_script('cvmtry-submissions', 'CVMTRY_SUB', [
             'ajaxUrl'      => admin_url('admin-ajax.php'),
             // Seeds the list's search box from the URL, so a deep link can
             // open one submission. Notification emails link here with the
             // submission id, and buildWhereClause() matches submission_id
             // exactly — without this the link would silently open the full,
             // unfiltered list, which is worse than no link at all.
-            'initialSearch' => isset($_GET['cvm_search'])
-                ? sanitize_text_field(wp_unslash($_GET['cvm_search']))
-                : '',
-            'listNonce'    => wp_create_nonce('cvm_get_submissions'),
-            'detailNonce'  => wp_create_nonce('cvm_get_submission_detail'),
-            'deleteNonce'  => wp_create_nonce('cvm_delete_submission'),
-            'leadNonce'    => wp_create_nonce('cvm_update_lead'),
+            // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- read-only deep link: it only pre-fills the search box; rows are fetched by the nonce-verified, capability-checked cvmtry_get_submissions action.
+            'initialSearch' => isset($_GET['cvmtry_search']) ? sanitize_text_field(wp_unslash($_GET['cvmtry_search'])) : '',
+            'listNonce'    => wp_create_nonce('cvmtry_get_submissions'),
+            'detailNonce'  => wp_create_nonce('cvmtry_get_submission_detail'),
+            'deleteNonce'  => wp_create_nonce('cvmtry_delete_submission'),
+            'leadNonce'    => wp_create_nonce('cvmtry_update_lead'),
             'leadStatuses' => LeadStatus::labels(),
             'monthNames'   => AdminAssets::monthNames(),
             'exportBase'   => wp_nonce_url(
                 add_query_arg(
-                    ['page' => self::MENU_SLUG, 'cvm_export' => 'csv_filtered'],
+                    ['page' => self::MENU_SLUG, 'cvmtry_export' => 'csv_filtered'],
                     self_admin_url('admin.php')
                 ),
-                'cvm_submissions_export_csv_filtered'
+                'cvmtry_submissions_export_csv_filtered'
             ),
         ]);
     }
@@ -158,10 +157,10 @@ final class SubmissionsPage
     {
         if (
             sanitize_text_field(wp_unslash($_SERVER['REQUEST_METHOD'] ?? '')) !== 'POST' ||
-            !isset($_POST['cvm_action']) ||
-            sanitize_key(wp_unslash($_POST['cvm_action'])) !== 'clear_submissions' ||
-            !isset($_POST['cvm_clear_nonce']) ||
-            !wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['cvm_clear_nonce'])), 'cvm_clear_submissions') ||
+            !isset($_POST['cvmtry_action']) ||
+            sanitize_key(wp_unslash($_POST['cvmtry_action'])) !== 'clear_submissions' ||
+            !isset($_POST['cvmtry_clear_nonce']) ||
+            !wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['cvmtry_clear_nonce'])), 'cvmtry_clear_submissions') ||
             !Capability::currentUserCan(Capability::SUBMISSIONS_DELETE)
         ) {
             return;
@@ -170,7 +169,7 @@ final class SubmissionsPage
         FormSubmissions::clearAll();
 
         wp_safe_redirect(
-            add_query_arg(['page' => self::MENU_SLUG, 'cvm_cleared' => '1'], self_admin_url('admin.php'))
+            add_query_arg(['page' => self::MENU_SLUG, 'cvmtry_cleared' => '1'], self_admin_url('admin.php'))
         );
         exit;
     }
@@ -186,7 +185,7 @@ final class SubmissionsPage
      */
     public static function processExport(): void
     {
-        if (!isset($_GET['cvm_export']) || !Capability::currentUserCan(Capability::SUBMISSIONS_EXPORT)) {
+        if (!isset($_GET['cvmtry_export']) || !Capability::currentUserCan(Capability::SUBMISSIONS_EXPORT)) {
             return;
         }
 
@@ -196,7 +195,7 @@ final class SubmissionsPage
             return;
         }
 
-        $type = sanitize_key((string) $_GET['cvm_export']);
+        $type = sanitize_key((string) $_GET['cvmtry_export']);
         if ($type !== 'csv' && $type !== 'csv_filtered') {
             return;
         }
@@ -205,7 +204,7 @@ final class SubmissionsPage
             !isset($_GET['_wpnonce']) ||
             !wp_verify_nonce(
                 sanitize_text_field(wp_unslash($_GET['_wpnonce'])),
-                'cvm_submissions_export_' . $type
+                'cvmtry_submissions_export_' . $type
             )
         ) {
             wp_die(esc_html__('Invalid or expired export link.', 'convermetry'), '', ['response' => 403]);
@@ -218,7 +217,7 @@ final class SubmissionsPage
     }
 
     /**
-     * Handles the cvm_get_submissions AJAX action.
+     * Handles the cvmtry_get_submissions AJAX action.
      *
      * Returns one page of rendered submission rows plus the totals and the
      * distinct values every filter dropdown needs.
@@ -227,7 +226,7 @@ final class SubmissionsPage
      */
     public static function handleGetSubmissionsAjax(): never
     {
-        self::authorize('cvm_get_submissions', Capability::SUBMISSIONS_VIEW);
+        self::authorize('cvmtry_get_submissions', Capability::SUBMISSIONS_VIEW);
 
         // phpcs:disable WordPress.Security.NonceVerification.Missing -- verified by self::authorize() above.
         $perPage = Pagination::perPage(isset($_POST['per_page']) ? intval(wp_unslash($_POST['per_page'])) : Pagination::DEFAULT_PER_PAGE);
@@ -268,13 +267,13 @@ final class SubmissionsPage
     }
 
     /**
-     * Handles the cvm_get_submission_detail AJAX action.
+     * Handles the cvmtry_get_submission_detail AJAX action.
      *
      * @return never
      */
     public static function handleGetDetailAjax(): never
     {
-        self::authorize('cvm_get_submission_detail', Capability::SUBMISSIONS_VIEW);
+        self::authorize('cvmtry_get_submission_detail', Capability::SUBMISSIONS_VIEW);
 
         // phpcs:ignore WordPress.Security.NonceVerification.Missing -- verified by self::authorize() above.
         $id  = isset($_POST['submission_row']) ? intval(wp_unslash($_POST['submission_row'])) : 0;
@@ -297,13 +296,13 @@ final class SubmissionsPage
     }
 
     /**
-     * Handles the cvm_delete_submission AJAX action.
+     * Handles the cvmtry_delete_submission AJAX action.
      *
      * @return never
      */
     public static function handleDeleteAjax(): never
     {
-        self::authorize('cvm_delete_submission', Capability::SUBMISSIONS_DELETE);
+        self::authorize('cvmtry_delete_submission', Capability::SUBMISSIONS_DELETE);
 
         // phpcs:ignore WordPress.Security.NonceVerification.Missing -- verified by self::authorize() above.
         $id = isset($_POST['submission_row']) ? intval(wp_unslash($_POST['submission_row'])) : 0;
@@ -316,7 +315,7 @@ final class SubmissionsPage
     }
 
     /**
-     * Handles the cvm_update_lead AJAX action.
+     * Handles the cvmtry_update_lead AJAX action.
      *
      * Status and value are sent independently — the UI updates whichever the
      * administrator touched — so an absent key means "leave unchanged" while an
@@ -327,7 +326,7 @@ final class SubmissionsPage
      */
     public static function handleUpdateLeadAjax(): never
     {
-        self::authorize('cvm_update_lead', Capability::LEADS_EDIT);
+        self::authorize('cvmtry_update_lead', Capability::LEADS_EDIT);
 
         // phpcs:disable WordPress.Security.NonceVerification.Missing -- verified by self::authorize() above.
         $submissionId = sanitize_text_field(wp_unslash((string) ($_POST['submission_id'] ?? '')));
@@ -559,7 +558,8 @@ final class SubmissionsPage
             return;
         }
 
-        $cleared = isset($_GET['cvm_cleared']) && $_GET['cvm_cleared'] === '1';
+        // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- display-only flag from the redirect after processClearSubmissions(), which verifies its nonce and capability; it only selects a notice.
+        $cleared = isset($_GET['cvmtry_cleared']) && sanitize_key(wp_unslash($_GET['cvmtry_cleared'])) === '1';
         $total   = FormSubmissions::getCount();
         $posture = self::webhookPosture();
 
@@ -572,19 +572,19 @@ final class SubmissionsPage
         }
 
         ?>
-        <div class="wrap cvm-wrap cvm-submissions-wrap">
+        <div class="wrap cvmtry-wrap cvmtry-submissions-wrap">
             <h1><?php esc_html_e('Submissions', 'convermetry'); ?></h1>
 
             <?php if ($cleared): ?>
                 <div class="notice notice-success is-dismissible"><p><?php esc_html_e('All submissions have been deleted.', 'convermetry'); ?></p></div>
             <?php endif; ?>
 
-            <p class="description cvm-submissions-intro">
+            <p class="description cvmtry-submissions-intro">
                 <?php esc_html_e('Every form submission Convermetry confirmed server-side, joined to the analytics session that produced it. Submissions are recorded whether or not a webhook is configured — expand a row to see the form, its attribution, and the visitor\'s answers.', 'convermetry'); ?>
             </p>
 
             <?php if ($posture === 'none'): ?>
-                <div class="notice notice-info inline cvm-retention-notice">
+                <div class="notice notice-info inline cvmtry-retention-notice">
                     <p>
                         <?php
                         echo wp_kses_post(sprintf(
@@ -596,7 +596,7 @@ final class SubmissionsPage
                     </p>
                 </div>
             <?php elseif ($posture === 'paused'): ?>
-                <div class="notice notice-info inline cvm-retention-notice">
+                <div class="notice notice-info inline cvmtry-retention-notice">
                     <p>
                         <?php
                         echo wp_kses_post(sprintf(
@@ -609,7 +609,7 @@ final class SubmissionsPage
                 </div>
             <?php endif; ?>
 
-            <div class="notice notice-info inline cvm-retention-notice">
+            <div class="notice notice-info inline cvmtry-retention-notice">
                 <p>
                     <?php
                     echo wp_kses_post(sprintf(
@@ -626,14 +626,14 @@ final class SubmissionsPage
                 </p>
             </div>
 
-            <div class="cvm-delivery-toolbar">
-                <form method="post" action="" class="cvm-clear-form">
-                    <?php wp_nonce_field('cvm_clear_submissions', 'cvm_clear_nonce'); ?>
-                    <input type="hidden" name="cvm_action" value="clear_submissions">
+            <div class="cvmtry-delivery-toolbar">
+                <form method="post" action="" class="cvmtry-clear-form">
+                    <?php wp_nonce_field('cvmtry_clear_submissions', 'cvmtry_clear_nonce'); ?>
+                    <input type="hidden" name="cvmtry_action" value="clear_submissions">
                     <button
                         type="submit"
-                        class="button button-secondary cvm-btn-danger"
-                        onclick="return confirm(<?php echo esc_attr((string) wp_json_encode(__('Delete every stored submission? This permanently removes the lead data and cannot be undone. Activity Log entries are not affected.', 'convermetry'))); ?>);"
+                        class="button button-secondary cvmtry-btn-danger"
+                        data-cvmtry-confirm="<?php echo esc_attr(__('Delete every stored submission? This permanently removes the lead data and cannot be undone. Activity Log entries are not affected.', 'convermetry')); ?>"
                         <?php disabled($total, 0); ?>
                     >
                         <?php esc_html_e('Clear All Submissions', 'convermetry'); ?>
@@ -641,10 +641,10 @@ final class SubmissionsPage
                 </form>
 
                 <?php if ($total > 0): ?>
-                    <div class="cvm-export-buttons">
-                        <a href="#" class="button button-secondary cvm-export-filtered"><?php esc_html_e('Export Current Filters', 'convermetry'); ?></a>
+                    <div class="cvmtry-export-buttons">
+                        <a href="#" class="button button-secondary cvmtry-export-filtered"><?php esc_html_e('Export Current Filters', 'convermetry'); ?></a>
                         <a
-                            href="<?php echo esc_url(wp_nonce_url(add_query_arg(['page' => self::MENU_SLUG, 'cvm_export' => 'csv'], self_admin_url('admin.php')), 'cvm_submissions_export_csv')); ?>"
+                            href="<?php echo esc_url(wp_nonce_url(add_query_arg(['page' => self::MENU_SLUG, 'cvmtry_export' => 'csv'], self_admin_url('admin.php')), 'cvmtry_submissions_export_csv')); ?>"
                             class="button button-secondary"
                         >
                             <?php esc_html_e('Export All To CSV', 'convermetry'); ?>
@@ -653,7 +653,7 @@ final class SubmissionsPage
                 <?php endif; ?>
             </div>
 
-            <div id="cvm-submissions" data-total="<?php echo esc_attr((string) $total); ?>">
+            <div id="cvmtry-submissions" data-total="<?php echo esc_attr((string) $total); ?>">
                 <!-- Controls, list, and pagination injected by submissions.js -->
             </div>
         </div>
@@ -683,7 +683,7 @@ final class SubmissionsPage
 
         $state      = ($status['state'] ?? DeliveryState::NotSent)->value;
         $stateLabel = $status['label'] ?? __('Not sent', 'convermetry');
-        $bodyId     = 'cvm-sub-body-' . $rowId;
+        $bodyId     = 'cvmtry-sub-body-' . $rowId;
 
         $leadStatus = LeadStatus::normalize($row['lead_status'] ?? null);
         $leadValue  = Money::format(
@@ -693,10 +693,10 @@ final class SubmissionsPage
 
         ob_start();
         ?>
-        <li class="cvm-submission-item" data-row-id="<?php echo esc_attr((string) $rowId); ?>">
+        <li class="cvmtry-submission-item" data-row-id="<?php echo esc_attr((string) $rowId); ?>">
             <button
                 type="button"
-                class="cvm-submission-summary"
+                class="cvmtry-submission-summary"
                 aria-expanded="false"
                 aria-controls="<?php echo esc_attr($bodyId); ?>"
                 aria-label="<?php echo esc_attr(sprintf(
@@ -708,43 +708,43 @@ final class SubmissionsPage
                     $stateLabel
                 )); ?>"
             >
-                <span class="cvm-sub-col cvm-sub-date"><?php echo esc_html(self::formatDate($created)); ?></span>
-                <span class="cvm-sub-col cvm-sub-lead"><?php echo esc_html($lead); ?></span>
-                <span class="cvm-sub-col cvm-sub-form">
+                <span class="cvmtry-sub-col cvmtry-sub-date"><?php echo esc_html(self::formatDate($created)); ?></span>
+                <span class="cvmtry-sub-col cvmtry-sub-lead"><?php echo esc_html($lead); ?></span>
+                <span class="cvmtry-sub-col cvmtry-sub-form">
                     <?php echo esc_html($formName !== '' ? $formName : __('(unnamed form)', 'convermetry')); ?>
                     <?php if ($provider !== ''): ?>
-                        <span class="cvm-sub-provider"><?php echo esc_html($provider); ?></span>
+                        <span class="cvmtry-sub-provider"><?php echo esc_html($provider); ?></span>
                     <?php endif; ?>
                 </span>
-                <span class="cvm-sub-col cvm-sub-page"><?php echo esc_html(self::pathOf($pageUrl)); ?></span>
-                <span class="cvm-sub-col cvm-sub-channel"><?php echo esc_html($channel !== '' ? $channel : '—'); ?></span>
-                <span class="cvm-sub-col cvm-sub-campaign"><?php echo esc_html($campaign !== '' ? $campaign : '—'); ?></span>
-                <span class="cvm-sub-col cvm-sub-lead-status">
-                    <span class="cvm-status-chip <?php echo esc_attr(LeadStatus::chipClass($leadStatus)); ?>">
+                <span class="cvmtry-sub-col cvmtry-sub-page"><?php echo esc_html(self::pathOf($pageUrl)); ?></span>
+                <span class="cvmtry-sub-col cvmtry-sub-channel"><?php echo esc_html($channel !== '' ? $channel : '—'); ?></span>
+                <span class="cvmtry-sub-col cvmtry-sub-campaign"><?php echo esc_html($campaign !== '' ? $campaign : '—'); ?></span>
+                <span class="cvmtry-sub-col cvmtry-sub-lead-status">
+                    <span class="cvmtry-status-chip <?php echo esc_attr(LeadStatus::chipClass($leadStatus)); ?>">
                         <?php echo esc_html(LeadStatus::label($leadStatus)); ?>
                     </span>
                     <?php if ($leadValue !== '') : ?>
-                        <span class="cvm-sub-lead-value"><?php echo esc_html($leadValue); ?></span>
+                        <span class="cvmtry-sub-lead-value"><?php echo esc_html($leadValue); ?></span>
                     <?php endif; ?>
                 </span>
-                <span class="cvm-sub-col cvm-sub-status">
-                    <span class="cvm-status-chip cvm-status-<?php echo esc_attr($state); ?>">
+                <span class="cvmtry-sub-col cvmtry-sub-status">
+                    <span class="cvmtry-status-chip cvmtry-status-<?php echo esc_attr($state); ?>">
                         <?php echo esc_html($stateLabel); ?>
                     </span>
                 </span>
                 <?php foreach (self::extraColumns($row) as $key => $html): ?>
-                    <span class="cvm-sub-col cvm-sub-ext" data-column="<?php echo esc_attr($key); ?>"><?php
+                    <span class="cvmtry-sub-col cvmtry-sub-ext" data-column="<?php echo esc_attr($key); ?>"><?php
                         // The callback owns escaping (see extraColumns()); this
                         // is a second line of defence that still permits the
                         // chips and links the filter exists for.
                         echo wp_kses_post($html);
                     ?></span>
                 <?php endforeach; ?>
-                <span class="cvm-accordion-arrow" aria-hidden="true">&#9660;</span>
+                <span class="cvmtry-accordion-arrow" aria-hidden="true">&#9660;</span>
             </button>
 
-            <div class="cvm-submission-detail" id="<?php echo esc_attr($bodyId); ?>" data-submission-id="<?php echo esc_attr($subId); ?>" hidden>
-                <!-- Injected by submissions.js via cvm_get_submission_detail -->
+            <div class="cvmtry-submission-detail" id="<?php echo esc_attr($bodyId); ?>" data-submission-id="<?php echo esc_attr($subId); ?>" hidden>
+                <!-- Injected by submissions.js via cvmtry_get_submission_detail -->
             </div>
         </li>
         <?php
@@ -763,7 +763,7 @@ final class SubmissionsPage
          * Filters extra cells appended to each row of the submissions list.
          *
          * Return a map of KEY => already-escaped HTML. Each entry becomes one
-         * <span class="cvm-sub-col cvm-sub-ext" data-column="{key}"> at the end
+         * <span class="cvmtry-sub-col cvmtry-sub-ext" data-column="{key}"> at the end
          * of the row, after the delivery-status chip and before the expand
          * arrow. With nothing registered no span is emitted and the list's HTML
          * is unchanged.
@@ -776,7 +776,7 @@ final class SubmissionsPage
          * The row is a horizontal flex layout sized for its eight core columns,
          * so keep additions to one short value; this list is not a data grid.
          *
-         * Runs once per row rendered, inside the cvm_get_submissions AJAX
+         * Runs once per row rendered, inside the cvmtry_get_submissions AJAX
          * response, after that handler's nonce and submissions.view checks.
          *
          * $row CONTAINS PERSONAL DATA, including the visitor's submitted values
@@ -860,10 +860,10 @@ final class SubmissionsPage
 
         ob_start();
         ?>
-        <div class="cvm-detail-inner">
+        <div class="cvmtry-detail-inner">
 
-            <div class="cvm-detail-actions">
-                <button type="button" class="button cvm-submission-delete-btn"><?php esc_html_e('Delete Submission', 'convermetry'); ?></button>
+            <div class="cvmtry-detail-actions">
+                <button type="button" class="button cvmtry-submission-delete-btn"><?php esc_html_e('Delete Submission', 'convermetry'); ?></button>
                 <?php
                 /**
                  * Fires in one submission's action bar, after the Delete button.
@@ -884,15 +884,15 @@ final class SubmissionsPage
 
             <?php self::printLeadBlock($row); ?>
 
-            <div class="cvm-detail-block">
+            <div class="cvmtry-detail-block">
                 <h4><?php esc_html_e('Form', 'convermetry'); ?></h4>
                 <?php self::printPairs($formPairs); ?>
             </div>
 
-            <div class="cvm-detail-block">
+            <div class="cvmtry-detail-block">
                 <h4><?php esc_html_e('Analytics & attribution', 'convermetry'); ?></h4>
                 <?php if (!$hasContext): ?>
-                    <p class="cvm-empty-msg">
+                    <p class="cvmtry-empty-msg">
                         <?php esc_html_e('No analytics context was captured for this submission — the tracker\'s correlation fields did not reach the server (JavaScript blocked, tracking disabled, a privacy signal honored, or a server-to-server submission).', 'convermetry'); ?>
                     </p>
                 <?php endif; ?>
@@ -900,24 +900,24 @@ final class SubmissionsPage
             </div>
 
             <?php if ($recentPages !== []): ?>
-                <div class="cvm-detail-block">
+                <div class="cvmtry-detail-block">
                     <h4><?php esc_html_e('Visitor journey', 'convermetry'); ?></h4>
-                    <ol class="cvm-journey">
+                    <ol class="cvmtry-journey">
                         <?php foreach (array_reverse($recentPages) as $pageUrl): ?>
                             <li><?php echo esc_html(self::pathOf((string) $pageUrl)); ?></li>
                         <?php endforeach; ?>
-                        <li class="cvm-journey-end"><?php esc_html_e('Form submitted', 'convermetry'); ?></li>
+                        <li class="cvmtry-journey-end"><?php esc_html_e('Form submitted', 'convermetry'); ?></li>
                     </ol>
                 </div>
             <?php endif; ?>
 
-            <div class="cvm-detail-block">
+            <div class="cvmtry-detail-block">
                 <h4><?php esc_html_e('Submitted fields', 'convermetry'); ?></h4>
                 <?php if ($fields->isEmpty()): ?>
-                    <p class="cvm-empty-msg"><?php esc_html_e('This submission recorded no field values.', 'convermetry'); ?></p>
+                    <p class="cvmtry-empty-msg"><?php esc_html_e('This submission recorded no field values.', 'convermetry'); ?></p>
                 <?php else: ?>
-                    <div class="cvm-field-table-wrap">
-                        <table class="cvm-field-table">
+                    <div class="cvmtry-field-table-wrap">
+                        <table class="cvmtry-field-table">
                             <tbody>
                             <?php foreach ($fields->toDisplayPairs() as $pair): ?>
                                 <tr>
@@ -932,7 +932,7 @@ final class SubmissionsPage
             </div>
 
             <?php if ($pageQuery !== []): ?>
-                <div class="cvm-detail-block">
+                <div class="cvmtry-detail-block">
                     <h4><?php esc_html_e('Page query parameters', 'convermetry'); ?></h4>
                     <?php self::printPairs(array_map(
                         static fn(string|int $key, mixed $v): array => [(string) $key, self::flatten($v)],
@@ -942,7 +942,7 @@ final class SubmissionsPage
                 </div>
             <?php endif; ?>
 
-            <div class="cvm-detail-block">
+            <div class="cvmtry-detail-block">
                 <h4><?php esc_html_e('Webhook delivery', 'convermetry'); ?></h4>
                 <?php self::printDeliveryBlock($status, (string) ($row['submission_id'] ?? '')); ?>
             </div>
@@ -951,14 +951,14 @@ final class SubmissionsPage
             /**
              * Fires at the end of one submission's detail panel.
              *
-             * Runs inside the cvm_get_submission_detail AJAX response, after
+             * Runs inside the cvmtry_get_submission_detail AJAX response, after
              * that handler's nonce check and its submissions.view capability
              * check — so a callback need not re-authorize, though it must apply
              * its own check for anything a viewer of this screen should not see.
              *
              * A callback ECHOES its own markup and MUST escape everything it
              * prints; Convermetry escapes none of it. Wrap output in a
-             * <div class="cvm-detail-block"> with an <h4> to match the panels
+             * <div class="cvmtry-detail-block"> with an <h4> to match the panels
              * above it.
              *
              * $row IS THE SUBMISSION ROW AND CONTAINS PERSONAL DATA: the
@@ -1004,11 +1004,11 @@ final class SubmissionsPage
         $history  = LeadEvents::forSubmission($submissionId, 10);
 
         ?>
-        <div class="cvm-detail-block cvm-lead-block" data-submission-id="<?php echo esc_attr($submissionId); ?>">
+        <div class="cvmtry-detail-block cvmtry-lead-block" data-submission-id="<?php echo esc_attr($submissionId); ?>">
             <h4><?php esc_html_e('Lead outcome', 'convermetry'); ?></h4>
 
             <?php if (!$editable): ?>
-                <p class="cvm-empty-msg">
+                <p class="cvmtry-empty-msg">
                     <?php
                     echo wp_kses_post(sprintf(
                         /* translators: %s: lead status, such as "Qualified". */
@@ -1021,10 +1021,10 @@ final class SubmissionsPage
                     <?php endif; ?>
                 </p>
             <?php else: ?>
-                <div class="cvm-lead-controls">
-                    <label class="cvm-lead-field">
+                <div class="cvmtry-lead-controls">
+                    <label class="cvmtry-lead-field">
                         <span><?php esc_html_e('Status', 'convermetry'); ?></span>
-                        <select class="cvm-lead-status">
+                        <select class="cvmtry-lead-status">
                             <?php foreach (LeadStatus::labels() as $machine => $label): ?>
                                 <option value="<?php echo esc_attr($machine); ?>" <?php selected($machine, $status); ?>>
                                     <?php echo esc_html($label); ?>
@@ -1033,7 +1033,7 @@ final class SubmissionsPage
                         </select>
                     </label>
 
-                    <label class="cvm-lead-field">
+                    <label class="cvmtry-lead-field">
                         <span><?php
                         echo esc_html($currency !== ''
                             /* translators: %s: ISO currency code, such as USD. */
@@ -1042,15 +1042,15 @@ final class SubmissionsPage
                         ?></span>
                         <input
                             type="text"
-                            class="cvm-lead-value"
+                            class="cvmtry-lead-value"
                             value="<?php echo esc_attr($value); ?>"
                             placeholder="<?php echo esc_attr(Options::leadCurrency() !== '' ? '12,500.00' : '0.00'); ?>"
                             inputmode="decimal"
                         >
                     </label>
 
-                    <button type="button" class="button button-primary cvm-lead-save"><?php esc_html_e('Save', 'convermetry'); ?></button>
-                    <span class="cvm-lead-feedback" role="status" aria-live="polite"></span>
+                    <button type="button" class="button button-primary cvmtry-lead-save"><?php esc_html_e('Save', 'convermetry'); ?></button>
+                    <span class="cvmtry-lead-feedback" role="status" aria-live="polite"></span>
                 </div>
 
                 <p class="description">
@@ -1059,7 +1059,7 @@ final class SubmissionsPage
             <?php endif; ?>
 
             <?php if ($updatedAt !== '' || $history !== []): ?>
-                <div class="cvm-lead-history">
+                <div class="cvmtry-lead-history">
                     <h5><?php esc_html_e('History', 'convermetry'); ?></h5>
                     <ul>
                         <?php foreach ($history as $entry): ?>
@@ -1112,7 +1112,7 @@ final class SubmissionsPage
 
         if ($state === DeliveryState::NotSent) {
             ?>
-            <p class="cvm-empty-msg">
+            <p class="cvmtry-empty-msg">
                 <?php switch (self::webhookPosture()):
                     case 'none': ?>
                         <?php esc_html_e('Not sent — no webhook endpoint is configured to receive form submissions. The submission is still fully recorded here.', 'convermetry'); ?>
@@ -1130,7 +1130,7 @@ final class SubmissionsPage
 
         $logUrl = add_query_arg(['page' => ActivityLogPage::MENU_SLUG], self_admin_url('admin.php'));
         ?>
-        <ul class="cvm-delivery-list">
+        <ul class="cvmtry-delivery-list">
             <?php foreach ($endpoints as $endpoint): ?>
                 <?php
                 $label  = $endpoint->label;
@@ -1138,12 +1138,12 @@ final class SubmissionsPage
                 $ok     = $endpoint->ok;
                 $queued = $endpoint->queued;
                 ?>
-                <li class="cvm-delivery-row">
-                    <span class="cvm-delivery-mark <?php echo esc_attr($queued ? 'queued' : ($ok ? 'ok' : 'fail')); ?>" aria-hidden="true">
+                <li class="cvmtry-delivery-row">
+                    <span class="cvmtry-delivery-mark <?php echo esc_attr($queued ? 'queued' : ($ok ? 'ok' : 'fail')); ?>" aria-hidden="true">
                         <?php echo esc_html($queued ? '⏳' : ($ok ? '✓' : '✕')); ?>
                     </span>
-                    <span class="cvm-delivery-name"><?php echo esc_html($label !== '' ? $label : $url); ?></span>
-                    <span class="cvm-delivery-result">
+                    <span class="cvmtry-delivery-name"><?php echo esc_html($label !== '' ? $label : $url); ?></span>
+                    <span class="cvmtry-delivery-result">
                         <?php
                         if ($queued) {
                             echo esc_html($endpoint->attempt > 0
@@ -1169,7 +1169,7 @@ final class SubmissionsPage
                 </li>
             <?php endforeach; ?>
         </ul>
-        <p class="cvm-delivery-loglink">
+        <p class="cvmtry-delivery-loglink">
             <?php
             echo wp_kses_post(sprintf(
                 /* translators: 1: URL of the Activity Log screen, 2: the submission id. */
@@ -1196,7 +1196,7 @@ final class SubmissionsPage
             return;
         }
 
-        echo '<dl class="cvm-detail-grid">';
+        echo '<dl class="cvmtry-detail-grid">';
         foreach ($pairs as [$label, $value]) {
             echo '<dt>' . esc_html($label) . '</dt><dd>' . esc_html($value) . '</dd>';
         }

@@ -51,10 +51,10 @@ use Convermetry\Webhook\FormDeliveryQueue;
 final class MigrationRunner
 {
     /** Cron hook that runs pending migrations away from a visitor's request. */
-    public const string CRON_HOOK = 'cvm_run_migrations';
+    public const string CRON_HOOK = 'cvmtry_run_migrations';
 
     /** Option key holding the migration lease. */
-    private const string LOCK_OPTION = 'cvm_migration_lock';
+    private const string LOCK_OPTION = 'cvmtry_migration_lock';
 
     /**
      * Seconds before a held lease is considered abandoned and may be stolen.
@@ -334,6 +334,7 @@ final class MigrationRunner
             return $token;
         }
 
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- lease row in the options table, read and written through $wpdb so the claim stays atomic and never enters the option cache.
         $held = (string) $wpdb->get_var($wpdb->prepare(
             "SELECT option_value FROM %i WHERE option_name = %s",
             $wpdb->options,
@@ -351,6 +352,7 @@ final class MigrationRunner
             return null;
         }
 
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery -- lease row in the options table, read and written through $wpdb so the claim stays atomic and never enters the option cache.
         $wpdb->query($wpdb->prepare(
             "DELETE FROM %i WHERE option_name = %s AND option_value = %s",
             $wpdb->options,
@@ -377,6 +379,7 @@ final class MigrationRunner
     {
         global $wpdb;
 
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery -- lease row in the options table, read and written through $wpdb so the claim stays atomic and never enters the option cache.
         $inserted = $wpdb->query($wpdb->prepare(
             "INSERT IGNORE INTO %i (option_name, option_value, autoload) VALUES (%s, %s, 'off')",
             $wpdb->options,
@@ -400,6 +403,7 @@ final class MigrationRunner
     {
         global $wpdb;
 
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery -- lease row in the options table, read and written through $wpdb so the claim stays atomic and never enters the option cache.
         $wpdb->query($wpdb->prepare(
             "DELETE FROM %i WHERE option_name = %s AND option_value LIKE %s",
             $wpdb->options,

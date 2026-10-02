@@ -53,7 +53,7 @@ use Convermetry\Webhook\FormDeliveryQueue;
 final class FormSubmissions
 {
     /** Table name without the wpdb prefix. */
-    private const string TABLE = 'cvm_form_submissions';
+    private const string TABLE = 'cvmtry_form_submissions';
 
     /** Recognized webhook delivery states (see {@see classifyDelivery()}). */
     public const array DELIVERY_STATES = [
@@ -65,7 +65,7 @@ final class FormSubmissions
     ];
 
     /** Option key storing the installed schema version. */
-    private const string DB_VERSION_OPTION = 'cvm_submissions_db_version';
+    private const string DB_VERSION_OPTION = 'cvmtry_submissions_db_version';
 
     /** Current schema version; bump when the CREATE TABLE below changes. */
     private const string DB_VERSION = '1.4.0';
@@ -89,7 +89,7 @@ final class FormSubmissions
     private const int BACKFILL_TIME_BUDGET = 10;
 
     /** Cron hook that drains the derived-column backfill after an upgrade. */
-    public const string BACKFILL_CATCHUP_HOOK = 'cvm_submissions_backfill_catchup';
+    public const string BACKFILL_CATCHUP_HOOK = 'cvmtry_submissions_backfill_catchup';
 
     /**
      * Every column {@see createTable()} must verify before stamping the version.
@@ -269,6 +269,7 @@ final class FormSubmissions
         // never enter the backfill queue: the worker exists to drain history
         // after an upgrade, and a site that creates rows faster than the daily
         // budgeted pass drains them would never converge.
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- write to the plugin's custom submissions table.
         $inserted = $wpdb->query($wpdb->prepare(
             'INSERT IGNORE INTO %i'
             . ' (submission_id, conversion_id, session_id, provider, form_key, form_name,'
@@ -343,6 +344,7 @@ final class FormSubmissions
     {
         global $wpdb;
 
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- single-row read from the custom submissions table; lead updates and delivery-state refreshes change the row, so it is read live.
         $row = $wpdb->get_row(
             $wpdb->prepare('SELECT * FROM %i WHERE id = %d', self::tableName(), $id),
             ARRAY_A
@@ -361,6 +363,7 @@ final class FormSubmissions
     {
         global $wpdb;
 
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- single-row read from the custom submissions table; lead updates and delivery-state refreshes change the row, so it is read live.
         $row = $wpdb->get_row(
             $wpdb->prepare('SELECT * FROM %i WHERE submission_id = %s', self::tableName(), $submissionId),
             ARRAY_A
@@ -385,6 +388,7 @@ final class FormSubmissions
     {
         global $wpdb;
 
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- single-row read from the custom submissions table, read live.
         $row = $wpdb->get_row(
             $wpdb->prepare(
                 'SELECT id, form_key, provider, form_name FROM %i WHERE submission_id = %s',
@@ -423,6 +427,7 @@ final class FormSubmissions
             return null;
         }
 
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- single-row read from the custom submissions table inside a lead update, read live.
         $row = $wpdb->get_row(
             $wpdb->prepare(
                 'SELECT lead_status, lead_value, lead_currency FROM %i WHERE submission_id = %s',
@@ -477,8 +482,10 @@ final class FormSubmissions
             return false;
         }
 
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- transactional write to the plugin's custom submissions and lead history table.
         $wpdb->query('START TRANSACTION');
 
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- transactional write to the plugin's custom submissions and lead history table.
         $updated = $wpdb->update(
             self::tableName(),
             [
@@ -495,6 +502,7 @@ final class FormSubmissions
         );
 
         if ($updated === false) {
+            // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- transactional write to the plugin's custom submissions and lead history table.
             $wpdb->query('ROLLBACK');
             Errors::storage('leads', 'update', 'lead_update_failed', ['submission_id' => $submissionId]);
 
@@ -502,6 +510,7 @@ final class FormSubmissions
         }
 
         if (!LeadEvents::record($submissionId, $fromStatus, $status, $value, $currency, $userId, $eventId)) {
+            // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- transactional write to the plugin's custom submissions and lead history table.
             $wpdb->query('ROLLBACK');
             Errors::storage('leads', 'history_insert', 'lead_history_insert_failed', [
                 'submission_id' => $submissionId,
@@ -510,6 +519,7 @@ final class FormSubmissions
             return false;
         }
 
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- transactional write to the plugin's custom submissions and lead history table.
         $wpdb->query('COMMIT');
 
         return true;
@@ -542,6 +552,7 @@ final class FormSubmissions
 
         // Ordered ascending so the LAST attempt per endpoint wins — see
         // buildEndpointOutcomes().
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- recomputes a submission's delivery state from the live delivery log and queue rows, then writes it.
         $logRows = $wpdb->get_results($wpdb->prepare(
             'SELECT endpoint_url, endpoint_label, success, response_code, attempt, created_at'
             . " FROM %i WHERE submission_id = %s AND message_type = 'form_submission'"
@@ -550,6 +561,7 @@ final class FormSubmissions
             $submissionId
         ), ARRAY_A);
 
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- recomputes a submission's delivery state from the live delivery log and queue rows, then writes it.
         $queueRows = $wpdb->get_results($wpdb->prepare(
             'SELECT endpoint_url, status, attempt, next_attempt_at FROM %i WHERE submission_id = %s',
             FormDeliveryQueue::tableName(),
@@ -565,6 +577,7 @@ final class FormSubmissions
         // rather than firing on every recomputation. This method runs several
         // times per delivery — on enqueue, after each attempt, after each retry
         // is scheduled — and most of those leave the state exactly as it was.
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- recomputes a submission's delivery state from the live delivery log and queue rows, then writes it.
         $previous = (string) $wpdb->get_var($wpdb->prepare(
             'SELECT delivery_state FROM %i WHERE submission_id = %s',
             self::tableName(),
@@ -573,6 +586,7 @@ final class FormSubmissions
 
         $state = self::classifyDelivery($endpoints);
 
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- recomputes a submission's delivery state from the live delivery log and queue rows, then writes it.
         $wpdb->update(
             self::tableName(),
             [
@@ -763,6 +777,7 @@ final class FormSubmissions
         $passes   = 0;
 
         do {
+            // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- bounded migration backfill over the custom submissions table.
             $rows = $wpdb->get_results(
                 $wpdb->prepare(
                     // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- BACKFILL_PREDICATE is a class-constant literal with no input in it.
@@ -794,6 +809,7 @@ final class FormSubmissions
                 if ($row['channel'] === null) {
                     $derived = self::deriveColumns((string) ($row['context'] ?? ''));
 
+                    // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- bounded migration backfill over the custom submissions table.
                     $wpdb->update(
                         $table,
                         ['channel' => $derived['channel'], 'utm_campaign' => $derived['utm_campaign']],
@@ -806,6 +822,7 @@ final class FormSubmissions
                 if ($row['landing_page'] === null) {
                     $derived ??= self::deriveColumns((string) ($row['context'] ?? ''));
 
+                    // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- bounded migration backfill over the custom submissions table.
                     $wpdb->update(
                         $table,
                         [
@@ -852,6 +869,7 @@ final class FormSubmissions
     {
         global $wpdb;
 
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- migration sentinel on the custom submissions table; it must reflect the backfill's progress.
         return (bool) $wpdb->get_var($wpdb->prepare(
             // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- BACKFILL_PREDICATE is a class-constant literal with no input in it.
             'SELECT 1 FROM %i WHERE ' . self::BACKFILL_PREDICATE . ' LIMIT 1',
@@ -991,7 +1009,9 @@ final class FormSubmissions
         $values[] = $perPage;
         $values[] = ($page - 1) * $perPage;
 
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, PluginCheck.Security.DirectDB.UnescapedDBParameter -- admin list read on the custom submissions table, run on demand behind a capability check so deletes and new rows show immediately. $where comes from buildWhereClause(): fixed SQL fragments whose placeholders are bound, in order, to the values passed here.
         $rows = $wpdb->get_results(
+            // phpcs:ignore WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber -- $where comes from buildWhereClause(): fixed SQL fragments whose placeholders are bound, in order, to the values passed here, after the table name and before LIMIT/OFFSET.
             $wpdb->prepare(
                 // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared, WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- $where is buildWhereClause() output: fixed SQL fragments whose %s/%d placeholders are bound to $values here.
                 "SELECT * FROM %i {$where} ORDER BY id DESC LIMIT %d OFFSET %d",
@@ -1015,6 +1035,7 @@ final class FormSubmissions
 
         [$where, $values] = self::buildWhereClause($filters);
 
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, PluginCheck.Security.DirectDB.UnescapedDBParameter -- admin list read on the custom submissions table, run on demand behind a capability check so deletes and new rows show immediately. $where comes from buildWhereClause(): fixed SQL fragments whose placeholders are bound, in order, to the values passed here.
         return (int) $wpdb->get_var(
             $wpdb->prepare(
                 // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared, WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- $where is buildWhereClause() output: fixed SQL fragments whose %s/%d placeholders are bound to $values here.
@@ -1050,7 +1071,9 @@ final class FormSubmissions
         $values[] = $beforeId;
         $values[] = $limit;
 
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, PluginCheck.Security.DirectDB.UnescapedDBParameter -- streaming CSV export from the custom submissions table, keyset-paginated. $where comes from buildWhereClause(): fixed SQL fragments whose placeholders are bound, in order, to the values passed here.
         $rows = $wpdb->get_results(
+            // phpcs:ignore WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber -- $where comes from buildWhereClause(): fixed SQL fragments whose placeholders are bound, in order, to the values passed here, after the table name and before LIMIT/OFFSET.
             $wpdb->prepare(
                 // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared, WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- $where is buildWhereClause() output: fixed SQL fragments whose %s/%d placeholders are bound to $values here.
                 "SELECT * FROM %i {$where} ORDER BY id DESC LIMIT %d",
@@ -1078,6 +1101,7 @@ final class FormSubmissions
     {
         global $wpdb;
 
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- one-column primary-key read from the custom submissions table for the Home screen.
         $value = $wpdb->get_var($wpdb->prepare('SELECT created_at FROM %i ORDER BY id DESC LIMIT 1', self::tableName()));
 
         return is_string($value) && $value !== '' ? $value : null;
@@ -1098,6 +1122,7 @@ final class FormSubmissions
             array_diff_key($filters, ['year' => 0, 'month' => 0, 'search' => 0])
         );
 
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, PluginCheck.Security.DirectDB.UnescapedDBParameter -- admin list read on the custom submissions table, run on demand behind a capability check so deletes and new rows show immediately. $where comes from buildWhereClause(): fixed SQL fragments whose placeholders are bound, in order, to the values passed here.
         $rows = $wpdb->get_col(
             $wpdb->prepare(
                 // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared, WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- $where is buildWhereClause() output: fixed SQL fragments whose %s/%d placeholders are bound to $values here.
@@ -1147,6 +1172,7 @@ final class FormSubmissions
 
         // The column is bound as an identifier (and was allowlisted above), so
         // nothing about it is spliced into the statement as text.
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- admin list read on the custom submissions table, run on demand behind a capability check so deletes and new rows show immediately.
         $rows = $wpdb->get_col($wpdb->prepare(
             "SELECT DISTINCT %i FROM %i WHERE %i IS NOT NULL AND %i <> '' ORDER BY %i ASC LIMIT 200",
             $column,
@@ -1192,6 +1218,7 @@ final class FormSubmissions
     {
         global $wpdb;
 
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- personal-data export/erasure reads the live custom submissions rows.
         $rows = $wpdb->get_results(
             $wpdb->prepare(
                 'SELECT * FROM %i WHERE id > %d'
@@ -1233,15 +1260,18 @@ final class FormSubmissions
 
         // Read the submission's globally unique id before the row goes away —
         // the queue is keyed by that, not by the numeric row id.
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- delete cascade across the plugin's custom tables.
         $submissionId = (string) $wpdb->get_var($wpdb->prepare(
             'SELECT submission_id FROM %i WHERE id = %d',
             self::tableName(),
             $id
         ));
 
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- delete cascade across the plugin's custom tables.
         $wpdb->delete(self::tableName(), ['id' => $id], ['%d']);
 
         if ($submissionId !== '') {
+            // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- delete cascade across the plugin's custom tables.
             $wpdb->delete(FormDeliveryQueue::tableName(), ['submission_id' => $submissionId], ['%s']);
 
             // Queued email notifications go the same way, and the reasoning is
@@ -1302,6 +1332,7 @@ final class FormSubmissions
 
         // The queue carries form-submission deliveries only, so every row in
         // it belongs to a submission that no longer exists.
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Clear All empties the plugin's custom tables.
         $wpdb->query($wpdb->prepare('DELETE FROM %i', FormDeliveryQueue::tableName()));
 
         // Same argument for queued notifications: every one of them refers to
@@ -1489,6 +1520,7 @@ final class FormSubmissions
         Retention::started('form_submissions', $cutoff);
 
         do {
+            // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- bounded retention delete on the custom submissions table.
             $deleted = $wpdb->query($wpdb->prepare(
                 'DELETE FROM %i WHERE created_at < %s LIMIT %d',
                 $table,

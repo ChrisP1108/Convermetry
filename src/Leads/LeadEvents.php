@@ -44,10 +44,10 @@ use Convermetry\Support\Retention;
 final class LeadEvents
 {
     /** Table name without the wpdb prefix. */
-    private const string TABLE = 'cvm_lead_events';
+    private const string TABLE = 'cvmtry_lead_events';
 
     /** Option key storing the installed schema version. */
-    private const string DB_VERSION_OPTION = 'cvm_leads_db_version';
+    private const string DB_VERSION_OPTION = 'cvmtry_leads_db_version';
 
     /** Current schema version; bump when the CREATE TABLE below changes. */
     private const string DB_VERSION = '1.0.0';
@@ -217,6 +217,7 @@ final class LeadEvents
         // back into NULL inside the statement, so the SQL is one fixed string
         // and every value is bound. A real value is a decimal string such as
         // "0.00", never '', so nothing else can be mistaken for "no value".
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- write to the plugin's custom lead history table.
         $inserted = $wpdb->query($wpdb->prepare(
             'INSERT INTO %i'
             . ' (lead_event_id, submission_id, from_status, to_status, value, currency, user_id, created_at)'
@@ -250,6 +251,7 @@ final class LeadEvents
             return [];
         }
 
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- lead history for one submission, read live from the custom lead history table.
         $rows = $wpdb->get_results(
             $wpdb->prepare(
                 'SELECT lead_event_id, from_status, to_status, value, currency, user_id, created_at'
@@ -275,6 +277,7 @@ final class LeadEvents
         global $wpdb;
 
         if ($submissionId !== '') {
+            // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- write to the plugin's custom lead history table.
             $wpdb->delete(self::tableName(), ['submission_id' => $submissionId], ['%s']);
         }
     }
@@ -319,6 +322,7 @@ final class LeadEvents
         Retention::started('lead_events', $cutoff);
 
         do {
+            // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- bounded retention delete on the custom lead history table.
             $deleted = $wpdb->query($wpdb->prepare(
                 'DELETE FROM %i WHERE created_at < %s LIMIT %d',
                 $table,

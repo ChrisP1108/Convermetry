@@ -97,7 +97,7 @@ final class RateLimitFailClosedTest extends TestCase
     {
         $method = new ReflectionMethod(TrackingController::class, 'chargeBucket');
 
-        return (bool) $method->invoke(null, 'cvm_rl_test', $events, $max);
+        return (bool) $method->invoke(null, 'cvmtry_rl_test', $events, $max);
     }
 
     /** The window the implementation will compute for "now". */

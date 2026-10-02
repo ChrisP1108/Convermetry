@@ -35,16 +35,16 @@ use Convermetry\Support\QueueOutcome;
 final class NotificationQueue
 {
     /** Unprefixed table name. */
-    private const string TABLE = 'cvm_notification_queue';
+    private const string TABLE = 'cvmtry_notification_queue';
 
     /** Option storing the applied schema version. */
-    private const string DB_VERSION_OPTION = 'cvm_notification_db_version';
+    private const string DB_VERSION_OPTION = 'cvmtry_notification_db_version';
 
     /** Current schema version. */
     private const string DB_VERSION = '1.0.0';
 
     /** Cron hook running the worker. */
-    public const string WORKER_HOOK = 'cvm_process_notifications';
+    public const string WORKER_HOOK = 'cvmtry_process_notifications';
 
     /** Rows claimed per pass. */
     private const int BATCH_SIZE = 10;
@@ -101,7 +101,7 @@ final class NotificationQueue
     }
 
     /** Transient recording the most recent permanent failure, for the admin. */
-    public const string FAILURE_TRANSIENT = 'cvm_notification_last_failure';
+    public const string FAILURE_TRANSIENT = 'cvmtry_notification_last_failure';
 
     /**
      * Every column createTable() must verify before stamping the version.
@@ -288,6 +288,7 @@ final class NotificationQueue
     {
         global $wpdb;
 
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- deduplication check on the custom notification queue table; it must see the live row.
         return (int) $wpdb->get_var($wpdb->prepare(
             'SELECT COUNT(*) FROM %i WHERE submission_id = %s AND recipient_key = %s',
             self::tableName(),
@@ -334,6 +335,7 @@ final class NotificationQueue
         foreach ($recipients as $recipient) {
             $recipientKey = self::recipientKey($recipient);
 
+            // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- write to the plugin's custom notification queue table.
             $inserted = $wpdb->query($wpdb->prepare(
                 'INSERT IGNORE INTO %i'
                 . ' (submission_id, recipient, recipient_key, settings_json, status, attempt,'
@@ -423,6 +425,7 @@ final class NotificationQueue
         $now   = gmdate('Y-m-d H:i:s');
 
         // Reclaim rows stranded in 'sending' by a worker that died mid-pass.
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- queue worker on the custom notification queue table; claims and state must read the live rows, so they are never cached.
         $wpdb->query($wpdb->prepare(
             "UPDATE %i SET status = 'pending', claim = '' WHERE status = 'sending' AND claimed_at < %s",
             $table,
@@ -438,6 +441,7 @@ final class NotificationQueue
 
         $token = md5(wp_generate_uuid4() . wp_rand());
 
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- queue worker on the custom notification queue table; claims and state must read the live rows, so they are never cached.
         $wpdb->query($wpdb->prepare(
             "UPDATE %i SET status = 'sending', claim = %s, claimed_at = %s
              WHERE status = 'pending' AND next_attempt_at <= %s
@@ -450,6 +454,7 @@ final class NotificationQueue
             self::BATCH_SIZE
         ));
 
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- queue worker on the custom notification queue table; claims and state must read the live rows, so they are never cached.
         $rows = $wpdb->get_results($wpdb->prepare(
             "SELECT * FROM %i WHERE claim = %s AND status = 'sending' ORDER BY next_attempt_at ASC",
             $table,
@@ -465,6 +470,7 @@ final class NotificationQueue
 
         foreach ($rows as $row) {
             if (microtime(true) >= $deadline) {
+                // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- queue worker on the custom notification queue table; claims and state must read the live rows, so they are never cached.
                 $wpdb->query($wpdb->prepare(
                     "UPDATE %i SET status = 'pending', claim = '' WHERE id = %d AND claim = %s",
                     $table,
@@ -500,6 +506,7 @@ final class NotificationQueue
         // delayed.
         $createdAt = (int) strtotime(((string) $row['created_at']) . ' UTC');
         if ($createdAt > 0 && $createdAt < time() - self::MAX_AGE) {
+            // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- queue worker on the custom notification queue table; claims and state must read the live rows, so they are never cached.
             $wpdb->delete(self::tableName(), ['id' => $rowId], ['%d']);
             self::announceCancellation($submissionId, $recipient, 'expired', 1);
             return;
@@ -521,6 +528,7 @@ final class NotificationQueue
         // and sending. Cancel rather than send: the email body IS the erased
         // lead, so this is the point where deletion has to win.
         if ($submission === null) {
+            // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- queue worker on the custom notification queue table; claims and state must read the live rows, so they are never cached.
             $wpdb->delete(self::tableName(), ['id' => $rowId], ['%d']);
             self::announceCancellation($submissionId, $recipient, 'submission_deleted', 1);
             return;
@@ -609,6 +617,7 @@ final class NotificationQueue
 
         if ($result->ok) {
             // Accepted by the local transport — not confirmed delivered.
+            // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- queue worker on the custom notification queue table; claims and state must read the live rows, so they are never cached.
             $wpdb->delete(self::tableName(), ['id' => $rowId], ['%d']);
 
             /**
@@ -691,6 +700,7 @@ final class NotificationQueue
         $table  = self::tableName();
 
         if ($attempt > count($delays)) {
+            // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- queue worker on the custom notification queue table; claims and state must read the live rows, so they are never cached.
             $wpdb->delete($table, ['id' => $rowId], ['%d']);
 
             // Abandoning silently is the failure mode that matters here. The
@@ -725,6 +735,7 @@ final class NotificationQueue
 
         $nextAt = time() + $delays[$attempt - 1];
 
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- queue worker on the custom notification queue table; claims and state must read the live rows, so they are never cached.
         $wpdb->update(
             $table,
             [
@@ -772,6 +783,7 @@ final class NotificationQueue
             return;
         }
 
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- write to the plugin's custom notification queue table.
         $deleted = $wpdb->delete(self::tableName(), ['submission_id' => $submissionId], ['%s']);
 
         // One aggregate announcement rather than one per row: the delete never
@@ -792,6 +804,7 @@ final class NotificationQueue
     {
         global $wpdb;
 
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- write to the plugin's custom notification queue table.
         $deleted = $wpdb->query($wpdb->prepare('DELETE FROM %i', self::tableName()));
 
         if (is_int($deleted) && $deleted > 0) {
@@ -817,6 +830,7 @@ final class NotificationQueue
     {
         global $wpdb;
 
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- bounded retention delete on the custom notification queue table.
         $wpdb->query($wpdb->prepare(
             'DELETE FROM %i WHERE created_at < %s LIMIT %d',
             self::tableName(),
@@ -834,6 +848,7 @@ final class NotificationQueue
     {
         global $wpdb;
 
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- live queue depth from the custom notification queue table.
         return (int) $wpdb->get_var($wpdb->prepare(
             "SELECT COUNT(*) FROM %i WHERE status IN ('pending','sending')",
             self::tableName()
@@ -853,6 +868,7 @@ final class NotificationQueue
             return;
         }
 
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- next due time from the live custom notification queue table, to schedule the worker.
         $next = (string) $wpdb->get_var($wpdb->prepare(
             "SELECT MIN(next_attempt_at) FROM %i WHERE status IN ('pending','sending')",
             self::tableName()

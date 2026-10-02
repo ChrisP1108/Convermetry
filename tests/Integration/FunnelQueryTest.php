@@ -323,7 +323,7 @@ final class FunnelQueryTest extends IntegrationTestCase
         ]);
 
         self::$db->query(self::$db->prepare(
-            'INSERT INTO wp_cvm_goal_completions
+            'INSERT INTO wp_cvmtry_goal_completions
              (completion_id, goal_id, definition_hash, dedupe_key, event_uid, source_event_id,
               session_id, page_url, created_at)
              VALUES (%s, %s, %s, %s, %s, %d, %s, %s, %s)',
@@ -367,7 +367,7 @@ final class FunnelQueryTest extends IntegrationTestCase
         $this->view('goal2', '/land/', '2026-08-10 09:00:00');
 
         self::$db->query(self::$db->prepare(
-            'INSERT INTO wp_cvm_goal_completions
+            'INSERT INTO wp_cvmtry_goal_completions
              (completion_id, goal_id, definition_hash, dedupe_key, event_uid, source_event_id,
               session_id, page_url, created_at)
              VALUES (%s, %s, %s, %s, %s, %d, %s, %s, %s)',
@@ -403,7 +403,7 @@ final class FunnelQueryTest extends IntegrationTestCase
         $this->view('goal3', '/land/', '2026-08-10 09:00:00');
 
         self::$db->query(self::$db->prepare(
-            'INSERT INTO wp_cvm_goal_completions
+            'INSERT INTO wp_cvmtry_goal_completions
              (completion_id, goal_id, definition_hash, dedupe_key, event_uid, source_event_id,
               session_id, page_url, created_at)
              VALUES (%s, %s, %s, %s, %s, NULL, %s, %s, %s)',

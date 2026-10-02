@@ -67,9 +67,9 @@ test('a Ninja Forms submission carries all three correlation values as top-level
     const harness = bootTracker({ jquery: true });
     const sent = runPrefilters(harness, ninjaRequest());
 
-    assert.match(sent.get('cvm_conversion_id'), /^c[a-f0-9]{16}$/);
-    assert.match(sent.get('cvm_session_id'), /^[a-f0-9]{16,64}$/);
-    assert.doesNotThrow(() => JSON.parse(sent.get('cvm_context')));
+    assert.match(sent.get('cvmtry_conversion_id'), /^c[a-f0-9]{16}$/);
+    assert.match(sent.get('cvmtry_session_id'), /^[a-f0-9]{16,64}$/);
+    assert.doesNotThrow(() => JSON.parse(sent.get('cvmtry_context')));
     assert.equal(sent.get('action'), 'nf_ajax_submit', 'Ninja Forms\' own fields are untouched');
     assert.equal(sent.get('security'), 'abc123');
 });
@@ -80,7 +80,7 @@ test('the correlation values stay out of the formData document Ninja Forms store
     const formData = JSON.parse(sent.get('formData'));
 
     assert.deepEqual(formData.extra, {});
-    assert.ok(!JSON.stringify(formData).includes('cvm_'));
+    assert.ok(!JSON.stringify(formData).includes('cvmtry_'));
 });
 
 test('each attempt gets a fresh conversion token and the same session', () => {
@@ -88,8 +88,8 @@ test('each attempt gets a fresh conversion token and the same session', () => {
     const first = runPrefilters(harness, ninjaRequest());
     const second = runPrefilters(harness, ninjaRequest());
 
-    assert.notEqual(first.get('cvm_conversion_id'), second.get('cvm_conversion_id'));
-    assert.equal(first.get('cvm_session_id'), second.get('cvm_session_id'));
+    assert.notEqual(first.get('cvmtry_conversion_id'), second.get('cvmtry_conversion_id'));
+    assert.equal(first.get('cvmtry_session_id'), second.get('cvmtry_session_id'));
 });
 
 test('any other admin-ajax request is left alone', () => {
@@ -119,8 +119,8 @@ test('a GET request is left alone, so nothing lands in a URL', () => {
     assert.equal(request.options.data, before);
 });
 
-test('a data-cvm-ignore form container is left alone', () => {
-    const container = new FakeElement('div', { id: 'nf-form-3-cont', 'data-cvm-ignore': '' });
+test('a data-cvmtry-ignore form container is left alone', () => {
+    const container = new FakeElement('div', { id: 'nf-form-3-cont', 'data-cvmtry-ignore': '' });
     const harness = bootTracker({ forms: [container], jquery: true });
     const request = ninjaRequest({ formId: '3' });
     const before = request.options.data;
@@ -135,7 +135,7 @@ test('unparseable formData still correlates and does not throw', () => {
     request.originalOptions.data.formData = '{not json';
 
     const sent = runPrefilters(harness, request);
-    assert.match(sent.get('cvm_conversion_id'), /^c[a-f0-9]{16}$/);
+    assert.match(sent.get('cvmtry_conversion_id'), /^c[a-f0-9]{16}$/);
 });
 
 test('without jQuery nothing is registered and the tracker still boots', () => {

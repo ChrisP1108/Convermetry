@@ -30,7 +30,7 @@ use Convermetry\Support\KeyValuePairs;
 final class FormSettings
 {
     /** The wp_options key holding all per-form configuration. */
-    public const string OPTION_KEY = 'cvm_form_settings';
+    public const string OPTION_KEY = 'cvmtry_form_settings';
 
     /**
      * Returns every stored per-form configuration.

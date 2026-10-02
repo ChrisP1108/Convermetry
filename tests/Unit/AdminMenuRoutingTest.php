@@ -52,6 +52,12 @@ final class AdminMenuRoutingTest extends TestCase
     /** @var list<string> */
     private array $enqueued = [];
 
+    /** @var array<string, list<string>> Handle => dependencies, per wp_enqueue_script(). */
+    private array $scriptDeps = [];
+
+    /** @var list<string> */
+    private array $registered = [];
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -60,7 +66,9 @@ final class AdminMenuRoutingTest extends TestCase
 
         $this->submenus = [];
         $this->menus    = [];
-        $this->enqueued = [];
+        $this->enqueued   = [];
+        $this->scriptDeps = [];
+        $this->registered = [];
 
         Functions\when('add_action')->justReturn(true);
         Functions\when('apply_filters')->alias(
@@ -106,8 +114,14 @@ final class AdminMenuRoutingTest extends TestCase
         Functions\when('wp_enqueue_style')->alias(function (string $handle): void {
             $this->enqueued[] = $handle;
         });
-        Functions\when('wp_enqueue_script')->alias(function (string $handle): void {
-            $this->enqueued[] = $handle;
+        Functions\when('wp_enqueue_script')->alias(function (string $handle, string $src = '', array $deps = []): void {
+            $this->enqueued[]          = $handle;
+            $this->scriptDeps[$handle] = $deps;
+        });
+        Functions\when('wp_register_script')->alias(function (string $handle): bool {
+            $this->registered[] = $handle;
+
+            return true;
         });
 
         // Several pages' enqueueAssets() also localizes data onto their
@@ -313,6 +327,86 @@ final class AdminMenuRoutingTest extends TestCase
         ];
     }
 
+    // ---------------------------------------------------------- confirm prompts
+
+    /**
+     * The confirm-prompt script is registered on Convermetry screens and never
+     * enqueued by AdminAssets itself: it reaches a screen only as a dependency
+     * of a page script that needs it, so Home stays free of JavaScript.
+     */
+    public function testTheConfirmScriptIsRegisteredButNotEnqueued(): void
+    {
+        foreach (self::convermetryHooks() as [$hook]) {
+            $this->enqueued   = [];
+            $this->registered = [];
+
+            AdminAssets::enqueue($hook);
+
+            self::assertSame([AdminAssets::CONFIRM_HANDLE], $this->registered, $hook . ' did not register the confirm script.');
+            self::assertNotContains(AdminAssets::CONFIRM_HANDLE, $this->enqueued, $hook . ' enqueued the confirm script directly.');
+        }
+
+        foreach (self::foreignHooks() as [$hook]) {
+            $this->registered = [];
+            AdminAssets::enqueue($hook);
+            self::assertSame([], $this->registered, $hook . ' received the confirm script.');
+        }
+    }
+
+    /**
+     * Each screen with a Remove or Clear All action loads the confirm script
+     * through its own page script, so the prompt cannot silently disappear.
+     *
+     * @dataProvider destructiveScreens
+     */
+    public function testScreensWithDestructiveActionsDependOnTheConfirmScript(
+        string $class,
+        string $hook,
+        string $scriptHandle,
+    ): void {
+        Functions\when('self_admin_url')->alias(static fn(string $path = ''): string => 'https://example.test/wp-admin/' . $path);
+        Functions\when('add_query_arg')->alias(static fn(array $args, string $url): string => $url . '?' . http_build_query($args));
+        Functions\when('wp_nonce_url')->alias(static fn(string $url): string => $url);
+        // The Funnels screen hands its script the configured goals.
+        Functions\when('get_option')->alias(static fn(string $name, mixed $default = false): mixed => $default);
+
+        $class::enqueueAssets($hook);
+
+        self::assertArrayHasKey($scriptHandle, $this->scriptDeps, $hook . ' did not enqueue ' . $scriptHandle);
+        self::assertContains(AdminAssets::CONFIRM_HANDLE, $this->scriptDeps[$scriptHandle]);
+    }
+
+    /**
+     * @return array<string, array{0: string, 1: string, 2: string}>
+     */
+    public static function destructiveScreens(): array
+    {
+        return [
+            'goals'        => [GoalsPage::class, 'convermetry_page_convermetry-goals', 'cvmtry-goals'],
+            'funnels'      => [FunnelsPage::class, 'convermetry_page_convermetry-funnels', 'cvmtry-funnels'],
+            'activity log' => [ActivityLogPage::class, 'convermetry_page_convermetry-activity', 'cvmtry-activity-log'],
+            'submissions'  => [SubmissionsPage::class, 'convermetry_page_convermetry-submissions', 'cvmtry-submissions'],
+        ];
+    }
+
+    /**
+     * Admin screens print no script or style blocks and no inline event
+     * handlers: every script and stylesheet is an enqueued file, and
+     * confirmations go through data-cvmtry-confirm.
+     */
+    public function testAdminScreensPrintNoInlineScriptsStylesOrHandlers(): void
+    {
+        $files = glob(__DIR__ . '/../../src/Admin/{,Pages/}*.php', GLOB_BRACE) ?: [];
+        self::assertNotEmpty($files);
+
+        foreach ($files as $file) {
+            $source = (string) file_get_contents($file);
+
+            self::assertDoesNotMatchRegularExpression('~<(script|style|noscript)\b~i', $source, basename($file) . ' prints an inline block.');
+            self::assertDoesNotMatchRegularExpression('~\son(click|submit|change|load|input)=~i', $source, basename($file) . ' uses an inline event handler.');
+        }
+    }
+
     /**
      * The Analytics chart assets are the heaviest thing the plugin ships to
      * wp-admin, and they are useful on exactly one screen.
@@ -323,7 +417,7 @@ final class AdminMenuRoutingTest extends TestCase
         self::assertSame([], $this->enqueued, 'The Home screen must not load the chart assets.');
 
         AnalyticsPage::enqueueAssets('convermetry_page_convermetry-analytics');
-        self::assertSame(['cvm-analytics', 'cvm-dashboard'], $this->enqueued);
+        self::assertSame(['cvmtry-analytics', 'cvmtry-dashboard'], $this->enqueued);
     }
 
     /**
@@ -365,10 +459,10 @@ final class AdminMenuRoutingTest extends TestCase
     public static function pageStylesheets(): array
     {
         return [
-            'home'          => [HomePage::class, 'toplevel_page_convermetry', 'cvm-home'],
-            'about'         => [AboutPage::class, 'convermetry_page_convermetry-about', 'cvm-about'],
-            'activity log'  => [ActivityLogPage::class, 'convermetry_page_convermetry-activity', 'cvm-activity-log'],
-            'settings'      => [SettingsPage::class, 'convermetry_page_convermetry-settings', 'cvm-settings'],
+            'home'          => [HomePage::class, 'toplevel_page_convermetry', 'cvmtry-home'],
+            'about'         => [AboutPage::class, 'convermetry_page_convermetry-about', 'cvmtry-about'],
+            'activity log'  => [ActivityLogPage::class, 'convermetry_page_convermetry-activity', 'cvmtry-activity-log'],
+            'settings'      => [SettingsPage::class, 'convermetry_page_convermetry-settings', 'cvmtry-settings'],
         ];
     }
 
@@ -396,7 +490,7 @@ final class AdminMenuRoutingTest extends TestCase
         }
 
         HomePage::enqueueAssets('toplevel_page_convermetry');
-        self::assertSame(['cvm-home'], $this->enqueued);
+        self::assertSame(['cvmtry-home'], $this->enqueued);
     }
 
     /**

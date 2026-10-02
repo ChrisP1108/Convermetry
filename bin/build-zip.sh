@@ -111,8 +111,8 @@ check_version() {
   fi
 }
 
-check_version "CVM_VERSION in convermetry.php" \
-  "$(grep -m1 "define('CVM_VERSION'" convermetry.php | sed -E "s/.*'([0-9][^']*)'.*/\1/")"
+check_version "CVMTRY_VERSION in convermetry.php" \
+  "$(grep -m1 "define('CVMTRY_VERSION'" convermetry.php | sed -E "s/.*'([0-9][^']*)'.*/\1/")"
 
 check_version "README.md version line" \
   "$(grep -m1 '^- \*\*Version:\*\*' README.md | awk '{print $3}')"
@@ -126,7 +126,7 @@ if [[ -f readme.txt ]]; then
 fi
 
 # Payload examples in the README and the PayloadBuilder docblock hardcode the
-# version; the live payload builds it from CVM_VERSION, so only the prose copies
+# version; the live payload builds it from CVMTRY_VERSION, so only the prose copies
 # can rot. Only scan the copies that exist, so a minimal tree (the shell
 # regression fixtures) does not trip grep's missing-file error.
 VERSION_EXAMPLE_FILES=()

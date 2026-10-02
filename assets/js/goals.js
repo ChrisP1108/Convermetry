@@ -20,24 +20,24 @@
 
     const { __ } = wp.i18n;
 
-    const form = document.querySelector('.cvm-goal-form');
+    const form = document.querySelector('.cvmtry-goal-form');
     if (!form) {
         return;
     }
 
-    const typeSelect = form.querySelector('.cvm-goal-type');
-    const operator = form.querySelector('.cvm-goal-operator');
-    const valueField = form.querySelector('.cvm-goal-value');
-    const valueHelp = form.querySelector('.cvm-goal-value-help');
-    const dynamicRow = form.querySelector('.cvm-goal-dynamic-row');
-    const idField = form.querySelector('.cvm-goal-id');
-    const nameField = form.querySelector('#cvm-goal-name');
-    const amountField = form.querySelector('#cvm-goal-value-amount');
+    const typeSelect = form.querySelector('.cvmtry-goal-type');
+    const operator = form.querySelector('.cvmtry-goal-operator');
+    const valueField = form.querySelector('.cvmtry-goal-value');
+    const valueHelp = form.querySelector('.cvmtry-goal-value-help');
+    const dynamicRow = form.querySelector('.cvmtry-goal-dynamic-row');
+    const idField = form.querySelector('.cvmtry-goal-id');
+    const nameField = form.querySelector('#cvmtry-goal-name');
+    const amountField = form.querySelector('#cvmtry-goal-value-amount');
     const onceField = form.querySelector('input[name="goal[once_per_session]"]');
     const enabledField = form.querySelector('input[name="goal[enabled]"]');
     const dynamicField = form.querySelector('input[name="goal[dynamic_value]"]');
-    const cancelBtn = form.querySelector('.cvm-goal-cancel');
-    const title = document.getElementById('cvm-goal-editor-title');
+    const cancelBtn = form.querySelector('.cvmtry-goal-cancel');
+    const title = document.getElementById('cvmtry-goal-editor-title');
 
     /** Operators that describe themselves fully and take no value. */
     const VALUELESS = { tel: true, mailto: true, external: true };
@@ -147,7 +147,7 @@
         syncOperators();
     }
 
-    const editButtons = document.querySelectorAll('.cvm-goal-edit');
+    const editButtons = document.querySelectorAll('.cvmtry-goal-edit');
     for (let i = 0; i < editButtons.length; i++) {
         editButtons[i].addEventListener('click', function () {
             let goal = null;

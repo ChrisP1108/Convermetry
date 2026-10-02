@@ -138,8 +138,8 @@ final class NoCallbackCompatibilityTest extends TestCase
             'global_query'   => [],
         ]);
 
-        if (!defined('CVM_VERSION')) {
-            self::markTestSkipped('CVM_VERSION is defined by the bootstrap.');
+        if (!defined('CVMTRY_VERSION')) {
+            self::markTestSkipped('CVMTRY_VERSION is defined by the bootstrap.');
         }
 
         $headers = RequestFactory::withProtocolHeaders(
@@ -151,7 +151,7 @@ final class NoCallbackCompatibilityTest extends TestCase
 
         self::assertSame([
             'Content-Type'            => 'application/json; charset=utf-8',
-            'User-Agent'              => 'WordPress/Convermetry ' . CVM_VERSION,
+            'User-Agent'              => 'WordPress/Convermetry ' . CVMTRY_VERSION,
             'Idempotency-Key'         => 'deliv123',
             'X-Convermetry-Signature' => 'sha256=' . hash_hmac('sha256', '{"a":1}', 'shh'),
         ], $headers);

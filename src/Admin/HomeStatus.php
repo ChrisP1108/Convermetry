@@ -170,7 +170,7 @@ final class HomeStatus
                 $this->recentFailures
             ),
             self::backgroundProcessingState(
-                wp_next_scheduled('cvm_cleanup_old_events') !== false,
+                wp_next_scheduled('cvmtry_cleanup_old_events') !== false,
                 $this->pendingDeliveries === null
                     || $this->pendingDeliveries === 0
                     || wp_next_scheduled(FormDeliveryQueue::WORKER_HOOK) !== false,

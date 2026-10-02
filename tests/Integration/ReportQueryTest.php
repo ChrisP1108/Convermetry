@@ -6,6 +6,7 @@ namespace Convermetry\Tests\Integration;
 use Convermetry\Analytics\FormEngagementReport;
 use Convermetry\Analytics\GoalReports;
 use Convermetry\Analytics\LeadReports;
+use Convermetry\Analytics\Reports;
 use Convermetry\Database\FormSubmissions;
 use Convermetry\Database\NewSubmission;
 
@@ -173,7 +174,123 @@ final class ReportQueryTest extends IntegrationTestCase
         }
     }
 
+    /**
+     * An empty form key means every form; a key narrows the report to that
+     * one form. Both are a single prepared statement now, so both shapes are
+     * pinned here.
+     */
+    public function testFrictionPointsCanBeLimitedToOneForm(): void
+    {
+        $this->formEvent('form_error', 'f1', '2026-08-10 09:00:00', [
+            'element_label' => 'phone', 'element_tag' => 'tel', 'event_value' => 'required',
+        ]);
+        $this->formEvent('form_error', 'f2', '2026-08-10 09:05:00', [
+            'form_key' => 'wpforms:12', 'element_label' => 'email', 'element_tag' => 'email', 'event_value' => 'required',
+        ]);
+
+        self::assertCount(2, FormEngagementReport::frictionPoints(self::START, self::END));
+
+        $one = FormEngagementReport::frictionPoints(self::START, self::END, 'wpforms:12');
+
+        self::assertCount(1, $one);
+        self::assertSame('wpforms:12', $one[0]['form_key']);
+        self::assertSame('email', $one[0]['field_id']);
+    }
+
     // ── Goals ────────────────────────────────────────────────────────────────
+
+    /**
+     * Records one goal completion.
+     */
+    private function goalCompletion(string $n, string $goalId, string $at, array $extra = []): void
+    {
+        $row = array_merge([
+            'completion_id'   => str_repeat($n, 32),
+            'goal_id'         => $goalId,
+            'definition_hash' => 'abcdef123456',
+            'dedupe_key'      => str_repeat($n, 32),
+            'event_uid'       => str_repeat($n, 32),
+            'session_id'      => 'sess' . $n,
+            'created_at'      => $at,
+        ], $extra);
+
+        $columns = array_keys($row);
+
+        self::$db->query(self::$db->prepare(
+            'INSERT INTO wp_cvmtry_goal_completions (`' . implode('`, `', $columns) . '`) VALUES ('
+            . implode(', ', array_fill(0, count($columns), '%s')) . ')',
+            array_values($row)
+        ));
+    }
+
+    public function testGoalBreakdownCoversEveryGoalWhenNoneIsChosen(): void
+    {
+        $first  = 'g' . str_repeat('c', 16);
+        $second = 'g' . str_repeat('d', 16);
+
+        $this->goalCompletion('1', $first, '2026-08-10 09:00:00', ['channel' => 'Paid Search']);
+        $this->goalCompletion('2', $second, '2026-08-10 09:00:00', ['channel' => 'Paid Search']);
+        $this->goalCompletion('3', $second, '2026-08-10 09:00:00', ['channel' => 'Email']);
+
+        $all = GoalReports::breakdown(self::START, self::END, '', 'channel');
+
+        self::assertSame('Paid Search', $all[0]['label']);
+        self::assertSame(2, $all[0]['completions'], 'Both goals count when no goal is chosen.');
+
+        $one = GoalReports::breakdown(self::START, self::END, $first, 'channel');
+
+        self::assertCount(1, $one);
+        self::assertSame(1, $one[0]['completions']);
+    }
+
+    public function testAnUnknownBreakdownDimensionReturnsNothing(): void
+    {
+        $this->goalCompletion('1', 'g' . str_repeat('e', 16), '2026-08-10 09:00:00');
+
+        self::assertSame([], GoalReports::breakdown(self::START, self::END, '', 'session_id'));
+    }
+
+    public function testGoalDailySeriesIsZeroFilledAndCanBeScopedToOneGoal(): void
+    {
+        $first  = 'g' . str_repeat('f', 16);
+        $second = 'g' . str_repeat('h', 16);
+
+        $this->goalCompletion('1', $first, '2026-08-02 10:00:00');
+        $this->goalCompletion('2', $second, '2026-08-02 11:00:00');
+        $this->goalCompletion('3', $second, '2026-08-04 11:00:00');
+
+        $all = GoalReports::daily('2026-08-01 00:00:00', '2026-08-04 23:59:59');
+
+        self::assertSame(
+            [
+                ['date' => '2026-08-01', 'count' => 0],
+                ['date' => '2026-08-02', 'count' => 2],
+                ['date' => '2026-08-03', 'count' => 0],
+                ['date' => '2026-08-04', 'count' => 1],
+            ],
+            $all
+        );
+
+        $one = GoalReports::daily('2026-08-01 00:00:00', '2026-08-04 23:59:59', $first);
+
+        self::assertSame(1, $one[1]['count']);
+        self::assertSame(0, $one[3]['count'], 'The other goal\'s completion is not counted.');
+    }
+
+    public function testGoalLastSeenIsTheNewestCompletionPerGoal(): void
+    {
+        $first  = 'g' . str_repeat('j', 16);
+        $second = 'g' . str_repeat('k', 16);
+
+        $this->goalCompletion('1', $first, '2026-08-02 10:00:00');
+        $this->goalCompletion('2', $first, '2026-08-09 10:00:00');
+        $this->goalCompletion('3', $second, '2026-08-05 10:00:00');
+
+        self::assertSame(
+            [$first => '2026-08-09 10:00:00', $second => '2026-08-05 10:00:00'],
+            GoalReports::lastSeen()
+        );
+    }
 
     /**
      * A goal's conversion rate divides converting SESSIONS by sessions, so an
@@ -190,7 +307,7 @@ final class ReportQueryTest extends IntegrationTestCase
         // One session, three completions — an every-occurrence goal.
         foreach (['1', '2', '3'] as $n) {
             self::$db->query(self::$db->prepare(
-                'INSERT INTO wp_cvm_goal_completions
+                'INSERT INTO wp_cvmtry_goal_completions
                  (completion_id, goal_id, definition_hash, dedupe_key, event_uid, session_id, value, currency, created_at)
                  VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)',
                 str_repeat($n, 32),
@@ -222,7 +339,7 @@ final class ReportQueryTest extends IntegrationTestCase
 
         foreach ([['1', 'Paid Search'], ['2', 'Paid Search'], ['3', 'Organic Search']] as [$n, $channel]) {
             self::$db->query(self::$db->prepare(
-                'INSERT INTO wp_cvm_goal_completions
+                'INSERT INTO wp_cvmtry_goal_completions
                  (completion_id, goal_id, definition_hash, dedupe_key, event_uid, session_id, channel, created_at)
                  VALUES (%s, %s, %s, %s, %s, %s, %s, %s)',
                 str_repeat($n, 32),
@@ -319,6 +436,30 @@ final class ReportQueryTest extends IntegrationTestCase
     }
 
     /**
+     * The overall totals bind the same status lists as the per-dimension
+     * report: spam leaves the denominator, and won counts as qualified.
+     */
+    public function testLeadSummaryCountsWonAsQualifiedAndExcludesSpam(): void
+    {
+        foreach (['won', 'qualified', 'new', 'spam'] as $i => $status) {
+            $this->insertSubmission([
+                'submission_id' => 'sum' . $i,
+                'conversion_id' => 'sumc' . $i,
+                'lead_status'   => $status,
+                'lead_value'    => $status === 'won' ? '10.00' : null,
+                'lead_currency' => $status === 'won' ? 'USD' : '',
+            ]);
+        }
+
+        $summary = LeadReports::summary(self::START, self::END);
+
+        self::assertSame(3, $summary['leads']);
+        self::assertSame(2, $summary['qualified']);
+        self::assertSame(1, $summary['won']);
+        self::assertSame(1, $summary['valued']);
+    }
+
+    /**
      * Time to lead is measured from the converting session's first pageview. A
      * submission whose session has no pageview at all is excluded rather than
      * counted as instant.
@@ -385,7 +526,7 @@ final class ReportQueryTest extends IntegrationTestCase
         );
 
         // A fully-populated row must not be selected.
-        self::$db->query('TRUNCATE TABLE wp_cvm_form_submissions');
+        self::$db->query('TRUNCATE TABLE wp_cvmtry_form_submissions');
         $this->insertSubmission([
             'submission_id'  => 'new1',
             'conversion_id'  => 'newc1',
@@ -434,7 +575,7 @@ final class ReportQueryTest extends IntegrationTestCase
         ));
 
         self::assertNull(
-            self::$db->get_var("SELECT landing_page FROM wp_cvm_form_submissions WHERE landing_page IS NULL LIMIT 1"),
+            self::$db->get_var("SELECT landing_page FROM wp_cvmtry_form_submissions WHERE landing_page IS NULL LIMIT 1"),
             'A freshly inserted submission must carry its landing page already.'
         );
 
@@ -442,7 +583,7 @@ final class ReportQueryTest extends IntegrationTestCase
             ['Paid Search', 'spring', 'google', 'cpc', 'cmp-1', 'https://example.com/land/'],
             array_values((array) self::$db->get_row(
                 'SELECT channel, utm_campaign, utm_source, utm_medium, utm_id, landing_page'
-                . " FROM wp_cvm_form_submissions WHERE submission_id = 'fresh1'",
+                . " FROM wp_cvmtry_form_submissions WHERE submission_id = 'fresh1'",
                 ARRAY_A
             )),
             'Every derived column is written from the context at insert time.'
@@ -456,7 +597,7 @@ final class ReportQueryTest extends IntegrationTestCase
         // NotSent means.
         self::assertSame(
             'not_sent',
-            self::$db->get_var("SELECT delivery_state FROM wp_cvm_form_submissions WHERE submission_id = 'fresh1'"),
+            self::$db->get_var("SELECT delivery_state FROM wp_cvmtry_form_submissions WHERE submission_id = 'fresh1'"),
             'A submission with no delivery attempted carries that verdict from the start.'
         );
 
@@ -479,7 +620,7 @@ final class ReportQueryTest extends IntegrationTestCase
         $rowId = $this->insertSubmission(['submission_id' => 'casc1', 'conversion_id' => 'cascc1']);
 
         self::$db->query(self::$db->prepare(
-            'INSERT INTO wp_cvm_lead_events (lead_event_id, submission_id, from_status, to_status, currency, user_id, created_at)
+            'INSERT INTO wp_cvmtry_lead_events (lead_event_id, submission_id, from_status, to_status, currency, user_id, created_at)
              VALUES (%s, %s, %s, %s, %s, %d, %s)',
             str_repeat('a', 32),
             'casc1',
@@ -490,14 +631,14 @@ final class ReportQueryTest extends IntegrationTestCase
             '2026-08-10 09:00:00'
         ));
 
-        self::assertSame('1', self::$db->get_var('SELECT COUNT(*) FROM wp_cvm_lead_events'));
+        self::assertSame('1', self::$db->get_var('SELECT COUNT(*) FROM wp_cvmtry_lead_events'));
 
         FormSubmissions::deleteSubmission($rowId);
 
-        self::assertSame('0', self::$db->get_var('SELECT COUNT(*) FROM wp_cvm_form_submissions'));
+        self::assertSame('0', self::$db->get_var('SELECT COUNT(*) FROM wp_cvmtry_form_submissions'));
         self::assertSame(
             '0',
-            self::$db->get_var('SELECT COUNT(*) FROM wp_cvm_lead_events'),
+            self::$db->get_var('SELECT COUNT(*) FROM wp_cvmtry_lead_events'),
             'The lead history outlived the lead it describes.'
         );
     }
@@ -515,15 +656,15 @@ final class ReportQueryTest extends IntegrationTestCase
         self::assertTrue($ok);
         self::assertSame(
             'won',
-            self::$db->get_var("SELECT lead_status FROM wp_cvm_form_submissions WHERE submission_id = 'upd1'")
+            self::$db->get_var("SELECT lead_status FROM wp_cvmtry_form_submissions WHERE submission_id = 'upd1'")
         );
         self::assertSame(
             '12500.00',
-            self::$db->get_var("SELECT lead_value FROM wp_cvm_form_submissions WHERE submission_id = 'upd1'")
+            self::$db->get_var("SELECT lead_value FROM wp_cvmtry_form_submissions WHERE submission_id = 'upd1'")
         );
 
         $history = self::$db->get_results(
-            "SELECT from_status, to_status, value, user_id FROM wp_cvm_lead_events WHERE submission_id = 'upd1'"
+            "SELECT from_status, to_status, value, user_id FROM wp_cvmtry_lead_events WHERE submission_id = 'upd1'"
         );
 
         self::assertCount(1, $history);
@@ -531,5 +672,85 @@ final class ReportQueryTest extends IntegrationTestCase
         self::assertSame('won', $history[0]['to_status']);
         self::assertSame('12500.00', $history[0]['value']);
         self::assertSame('7', (string) $history[0]['user_id']);
+    }
+
+    // ── Campaigns and landing pages ──────────────────────────────────────────
+
+    /**
+     * Traffic and conversions are aggregated separately and joined in PHP;
+     * an untagged pageview is never a campaign, and a campaign that converted
+     * with no pageview in the window is appended as an orphan row.
+     */
+    public function testTopCampaignsJoinsTrafficConversionsAndOrphans(): void
+    {
+        $spring = ['utm_source' => 'google', 'utm_medium' => 'cpc', 'utm_campaign' => 'spring'];
+
+        $this->insertEvent($spring + ['session_id' => 'c1']);
+        $this->insertEvent($spring + ['session_id' => 'c2']);
+        $this->insertEvent(['session_id' => 'c3']);
+        $this->insertEvent($spring + ['session_id' => 'c1', 'event_type' => 'form_success', 'event_value' => 'conv-spring-1']);
+        $this->insertEvent([
+            'utm_source' => 'newsletter', 'utm_medium' => 'email', 'utm_campaign' => 'autumn',
+            'session_id' => 'c4', 'event_type' => 'form_success', 'event_value' => 'conv-autumn-1',
+        ]);
+
+        $rows = Reports::topCampaigns(self::START, self::END);
+
+        self::assertCount(2, $rows);
+        self::assertSame('spring', $rows[0]['utm_campaign']);
+        self::assertSame(2, $rows[0]['views']);
+        self::assertSame(2, $rows[0]['sessions']);
+        self::assertSame(1, $rows[0]['conversions']);
+        self::assertSame(50.0, $rows[0]['conversion_rate']);
+
+        self::assertSame('autumn', $rows[1]['utm_campaign'], 'A conversion with no pageview is kept as an orphan row.');
+        self::assertSame(0, $rows[1]['views']);
+        self::assertSame(1, $rows[1]['conversions']);
+    }
+
+    public function testTopCampaignContentCountsOnlyTermOrContentRows(): void
+    {
+        $base = ['utm_source' => 'google', 'utm_medium' => 'cpc', 'utm_campaign' => 'spring'];
+
+        $this->insertEvent($base + ['utm_term' => 'crm', 'session_id' => 'd1']);
+        $this->insertEvent($base + ['utm_term' => 'crm', 'session_id' => 'd2']);
+        $this->insertEvent($base + ['session_id' => 'd3']);
+        $this->insertEvent($base + ['utm_term' => 'crm', 'session_id' => 'd1', 'event_type' => 'form_success', 'event_value' => 'conv-crm-1']);
+
+        $rows = Reports::topCampaignContent(self::START, self::END);
+
+        self::assertCount(1, $rows, 'A row with neither term nor content is not a keyword row.');
+        self::assertSame('crm', $rows[0]['utm_term']);
+        self::assertSame(2, $rows[0]['views']);
+        self::assertSame(1, $rows[0]['conversions']);
+    }
+
+    /**
+     * A landing page is a session's first pageview, and only for sessions
+     * that started inside the window.
+     */
+    public function testTopLandingPagesCountsEachSessionsFirstPageview(): void
+    {
+        $this->insertEvent(['session_id' => 'l1', 'page_url' => 'https://example.com/a/', 'created_at' => '2026-08-10 09:00:00']);
+        $this->insertEvent(['session_id' => 'l1', 'page_url' => 'https://example.com/b/', 'created_at' => '2026-08-10 09:01:00']);
+        $this->insertEvent(['session_id' => 'l2', 'page_url' => 'https://example.com/a/', 'created_at' => '2026-08-11 09:00:00']);
+        // Started before the window: not a landing in it.
+        $this->insertEvent(['session_id' => 'l3', 'page_url' => 'https://example.com/b/', 'created_at' => '2026-07-31 23:59:00']);
+        $this->insertEvent(['session_id' => 'l3', 'page_url' => 'https://example.com/b/', 'created_at' => '2026-08-01 00:01:00']);
+
+        $rows = Reports::topLandingPages(self::START, self::END);
+
+        self::assertCount(1, $rows);
+        self::assertSame('https://example.com/a/', $rows[0]['page_url']);
+        self::assertSame(2, $rows[0]['sessions']);
+    }
+
+    public function testHasEventsAnswersForAnEmptyAndANonEmptyTable(): void
+    {
+        self::assertFalse(Reports::hasEvents());
+
+        $this->insertEvent([]);
+
+        self::assertTrue(Reports::hasEvents());
     }
 }

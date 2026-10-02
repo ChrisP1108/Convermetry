@@ -29,23 +29,23 @@
 
     const { __, _n, sprintf } = wp.i18n;
 
-    const PANEL_STORE_KEY = 'cvm-dash-panels';
+    const PANEL_STORE_KEY = 'cvmtry-dash-panels';
     const WEEK_JUMP = 7;
 
     // ── Chart ─────────────────────────────────────────────────────────────────
 
     function initChart() {
-        document.querySelectorAll('.cvm-chart-plot').forEach(function (plot, plotIndex) {
-            const group    = plot.querySelector('.cvm-chart-cols');
-            const scroller = plot.closest('.cvm-chart-scroll');
-            const cols     = Array.prototype.slice.call(plot.querySelectorAll('.cvm-chart-col'));
+        document.querySelectorAll('.cvmtry-chart-plot').forEach(function (plot, plotIndex) {
+            const group    = plot.querySelector('.cvmtry-chart-cols');
+            const scroller = plot.closest('.cvmtry-chart-scroll');
+            const cols     = Array.prototype.slice.call(plot.querySelectorAll('.cvmtry-chart-col'));
             if (!group || !cols.length) {
                 return;
             }
 
             // ── Tooltip (single instance per chart) ───────────────────────────
             const tip = document.createElement('div');
-            tip.className = 'cvm-chart-tip';
+            tip.className = 'cvmtry-chart-tip';
             tip.setAttribute('aria-hidden', 'true');
             tip.hidden = true;
             plot.appendChild(tip);
@@ -65,7 +65,7 @@
                 // viewport or hidden under the sticky Y-axis.
                 if (scroller) {
                     const scRect = scroller.getBoundingClientRect();
-                    const yaxis  = scroller.querySelector('.cvm-chart-yaxis');
+                    const yaxis  = scroller.querySelector('.cvmtry-chart-yaxis');
                     const left   = scRect.left + (yaxis ? yaxis.getBoundingClientRect().width : 0);
                     minX = Math.max(minX, left - plotRect.left + half);
                     maxX = Math.min(maxX, scRect.right - plotRect.left - half);
@@ -101,11 +101,11 @@
                 tip.textContent = '';
 
                 const dateEl = document.createElement('span');
-                dateEl.className = 'cvm-chart-tip-date';
+                dateEl.className = 'cvmtry-chart-tip-date';
                 dateEl.textContent = btn.getAttribute('data-date') || '';
 
                 const countEl = document.createElement('span');
-                countEl.className = 'cvm-chart-tip-count';
+                countEl.className = 'cvmtry-chart-tip-count';
                 countEl.textContent = label;
 
                 tip.appendChild(dateEl);
@@ -126,13 +126,13 @@
 
             const instructions = document.createElement('p');
             instructions.className = 'screen-reader-text';
-            instructions.id = 'cvm-chart-keys-' + plotIndex;
+            instructions.id = 'cvmtry-chart-keys-' + plotIndex;
             instructions.textContent = __('Chart navigation: use the Left and Right Arrow keys to move between days, Home and End for the first and latest day, and Page Up or Page Down to jump a week. Press Escape to dismiss the tooltip.', 'convermetry');
             plot.appendChild(instructions);
             group.setAttribute('aria-describedby', instructions.id);
 
             function setTabStop(btn) {
-                const current = group.querySelector('.cvm-chart-col[tabindex="0"]');
+                const current = group.querySelector('.cvmtry-chart-col[tabindex="0"]');
                 if (current && current !== btn) {
                     current.setAttribute('tabindex', '-1');
                 }
@@ -153,7 +153,7 @@
             }
 
             plot.addEventListener('keydown', function (e) {
-                const btn = e.target.closest('.cvm-chart-col');
+                const btn = e.target.closest('.cvmtry-chart-col');
                 if (!btn) {
                     return;
                 }
@@ -196,18 +196,18 @@
             // cleanly (without a hide/show flicker) when it crosses to the
             // neighbouring day.
             plot.addEventListener('mouseover', function (e) {
-                const btn = e.target.closest('.cvm-chart-col');
+                const btn = e.target.closest('.cvmtry-chart-col');
                 if (btn && !(e.relatedTarget && btn.contains(e.relatedTarget))) {
                     show(btn);
                 }
             });
             plot.addEventListener('mouseout', function (e) {
-                const btn = e.target.closest('.cvm-chart-col');
+                const btn = e.target.closest('.cvmtry-chart-col');
                 if (!btn) {
                     return;
                 }
                 const to = e.relatedTarget;
-                if (to && (btn.contains(to) || (to.closest && to.closest('.cvm-chart-col')))) {
+                if (to && (btn.contains(to) || (to.closest && to.closest('.cvmtry-chart-col')))) {
                     return; // Still inside this day, or handed over to another day.
                 }
                 if (activeBtn === btn) {
@@ -217,7 +217,7 @@
 
             // ── Keyboard focus ────────────────────────────────────────────────
             plot.addEventListener('focusin', function (e) {
-                const btn = e.target.closest('.cvm-chart-col');
+                const btn = e.target.closest('.cvmtry-chart-col');
                 if (btn) {
                     setTabStop(btn); // Clicks/taps focus a day too — keep the rover in sync.
                     show(btn);
@@ -233,20 +233,20 @@
             // A tap selects and shows the day; on touch (no hover available), a
             // second tap on the already-active day dismisses the tooltip.
             plot.addEventListener('click', function (e) {
-                const btn = e.target.closest('.cvm-chart-col');
+                const btn = e.target.closest('.cvmtry-chart-col');
                 if (!btn) {
                     return;
                 }
                 const isTouch = e.pointerType === 'touch'
                     || (window.matchMedia && window.matchMedia('(hover: none)').matches);
 
-                if (isTouch && activeBtn === btn && !tip.hidden && btn.hasAttribute('data-cvm-shown')) {
-                    btn.removeAttribute('data-cvm-shown');
+                if (isTouch && activeBtn === btn && !tip.hidden && btn.hasAttribute('data-cvmtry-shown')) {
+                    btn.removeAttribute('data-cvmtry-shown');
                     hide();
                     return;
                 }
-                cols.forEach(function (c) { c.removeAttribute('data-cvm-shown'); });
-                btn.setAttribute('data-cvm-shown', '1');
+                cols.forEach(function (c) { c.removeAttribute('data-cvmtry-shown'); });
+                btn.setAttribute('data-cvmtry-shown', '1');
                 setTabStop(btn);
                 show(btn);
             });
@@ -254,7 +254,7 @@
             // A tap or click outside the chart dismisses the tooltip.
             document.addEventListener('pointerdown', function (e) {
                 if (!plot.contains(e.target)) {
-                    cols.forEach(function (c) { c.removeAttribute('data-cvm-shown'); });
+                    cols.forEach(function (c) { c.removeAttribute('data-cvmtry-shown'); });
                     hide();
                 }
             });
@@ -270,7 +270,7 @@
                         return;
                     }
                     const scRect = scroller.getBoundingClientRect();
-                    const yaxis  = scroller.querySelector('.cvm-chart-yaxis');
+                    const yaxis  = scroller.querySelector('.cvmtry-chart-yaxis');
                     const left   = scRect.left + (yaxis ? yaxis.getBoundingClientRect().width : 0);
                     const btnRect = activeBtn.getBoundingClientRect();
 
@@ -309,14 +309,14 @@
     }
 
     function initPanels() {
-        const panels = Array.prototype.slice.call(document.querySelectorAll('.cvm-dash .cvm-panel'));
+        const panels = Array.prototype.slice.call(document.querySelectorAll('.cvmtry-dash .cvmtry-panel'));
         if (!panels.length) {
             return;
         }
 
-        const toolbar  = document.querySelector('.cvm-dash .cvm-panel-toolbar');
-        const expand   = toolbar ? toolbar.querySelector('.cvm-panels-expand') : null;
-        const collapse = toolbar ? toolbar.querySelector('.cvm-panels-collapse') : null;
+        const toolbar  = document.querySelector('.cvmtry-dash .cvmtry-panel-toolbar');
+        const expand   = toolbar ? toolbar.querySelector('.cvmtry-panels-expand') : null;
+        const collapse = toolbar ? toolbar.querySelector('.cvmtry-panels-collapse') : null;
 
         function updateToolbarButtons() {
             const openCount = panels.filter(function (p) { return p.open; }).length;
@@ -375,7 +375,7 @@
                 return;
             }
             savedStates = [];
-            document.querySelectorAll('.cvm-dash details').forEach(function (details) {
+            document.querySelectorAll('.cvmtry-dash details').forEach(function (details) {
                 savedStates.push([details, details.open]);
                 details.open = true;
             });
@@ -391,7 +391,7 @@
             savedStates = null;
         });
 
-        const printBtn = document.querySelector('.cvm-dash .cvm-print-btn');
+        const printBtn = document.querySelector('.cvmtry-dash .cvmtry-print-btn');
         if (printBtn) {
             printBtn.addEventListener('click', function () {
                 window.print();

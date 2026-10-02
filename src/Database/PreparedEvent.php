@@ -94,7 +94,7 @@ final class PreparedEvent
      * completion collides with the original. Everything else gets a random uid,
      * which honestly degrades to "this is a distinct occurrence":
      *
-     *  - server-side events (cvm_track_event(), provider hooks) carry no batch
+     *  - server-side events (cvmtry_track_event(), provider hooks) carry no batch
      *    id by design and cannot be replayed, so a random uid is exact;
      *  - a browser batch whose id was missing or malformed cannot be
      *    deduplicated by any means, and inventing a stable-looking uid from the

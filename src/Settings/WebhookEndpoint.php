@@ -8,7 +8,7 @@ if (!defined('ABSPATH')) exit;
 /**
  * One webhook endpoint as configured on the Webhooks page.
  *
- * Read out of the 'cvm_webhook_settings' option, which is why
+ * Read out of the 'cvmtry_webhook_settings' option, which is why
  * {@see fromStoredArray()} coerces every field rather than trusting the
  * shape: the option is administrator-editable through the UI, through WP-CLI,
  * and through any filter a site has on option reads.

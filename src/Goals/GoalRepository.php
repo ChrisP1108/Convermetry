@@ -144,7 +144,7 @@ final class GoalRepository
 
         // Served from a small AUTOLOADED mirror rather than by reading the goal
         // list. The script loader asks for these on every tracked frontend
-        // request, but cvm_goals is deliberately non-autoloaded (see persist()),
+        // request, but cvmtry_goals is deliberately non-autoloaded (see persist()),
         // so without a persistent object cache that was an extra uncached SELECT
         // plus a normalize-every-goal pass on every visitor page — even on the
         // overwhelming majority of sites with no selector goals at all.

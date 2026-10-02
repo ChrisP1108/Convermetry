@@ -28,7 +28,7 @@ use Convermetry\Webhook\DeliveryLog;
  *    debounced payload search, per-page selection, and per-entry delete.
  *
  * Log lists are populated client-side (assets/js/activity-log.js) via the
- * cvm_get_activity_logs AJAX action; only row counts are fetched on page
+ * cvmtry_get_activity_logs AJAX action; only row counts are fetched on page
  * load. Log data lives in the {@see DeliveryLog} table.
  */
 final class ActivityLogPage
@@ -51,10 +51,10 @@ final class ActivityLogPage
         add_action('admin_init', [self::class, 'processExport']);
         add_action('admin_enqueue_scripts', [self::class, 'enqueueAssets']);
 
-        add_action('wp_ajax_cvm_get_activity_logs', [self::class, 'handleGetLogsAjax']);
-        add_action('wp_ajax_cvm_delete_activity_log', [self::class, 'handleDeleteLogAjax']);
-        add_action('wp_ajax_cvm_toggle_delivery_api', [self::class, 'handleApiToggleAjax']);
-        add_action('wp_ajax_cvm_regen_delivery_api_key', [self::class, 'handleApiRegenKeyAjax']);
+        add_action('wp_ajax_cvmtry_get_activity_logs', [self::class, 'handleGetLogsAjax']);
+        add_action('wp_ajax_cvmtry_delete_activity_log', [self::class, 'handleDeleteLogAjax']);
+        add_action('wp_ajax_cvmtry_toggle_delivery_api', [self::class, 'handleApiToggleAjax']);
+        add_action('wp_ajax_cvmtry_regen_delivery_api_key', [self::class, 'handleApiRegenKeyAjax']);
     }
 
     /**
@@ -87,27 +87,27 @@ final class ActivityLogPage
         }
 
         wp_enqueue_style(
-            'cvm-activity-log',
-            CVM_PLUGIN_URL . 'assets/css/admin-activity-log.css',
+            'cvmtry-activity-log',
+            CVMTRY_PLUGIN_URL . 'assets/css/admin-activity-log.css',
             [AdminAssets::COMMON_HANDLE],
-            CVM_VERSION
+            CVMTRY_VERSION
         );
 
         wp_enqueue_script(
-            'cvm-activity-log',
-            CVM_PLUGIN_URL . 'assets/js/activity-log.js',
-            ['wp-i18n'],
-            CVM_VERSION,
+            'cvmtry-activity-log',
+            CVMTRY_PLUGIN_URL . 'assets/js/activity-log.js',
+            ['wp-i18n', AdminAssets::CONFIRM_HANDLE],
+            CVMTRY_VERSION,
             true
         );
-        wp_set_script_translations('cvm-activity-log', 'convermetry');
+        wp_set_script_translations('cvmtry-activity-log', 'convermetry');
 
-        wp_localize_script('cvm-activity-log', 'CVM_LOG', [
+        wp_localize_script('cvmtry-activity-log', 'CVMTRY_LOG', [
             'ajaxUrl'        => admin_url('admin-ajax.php'),
-            'logsNonce'      => wp_create_nonce('cvm_get_activity_logs'),
-            'deleteNonce'    => wp_create_nonce('cvm_delete_activity_log'),
-            'apiToggleNonce' => wp_create_nonce('cvm_toggle_delivery_api'),
-            'apiRegenNonce'  => wp_create_nonce('cvm_regen_delivery_api_key'),
+            'logsNonce'      => wp_create_nonce('cvmtry_get_activity_logs'),
+            'deleteNonce'    => wp_create_nonce('cvmtry_delete_activity_log'),
+            'apiToggleNonce' => wp_create_nonce('cvmtry_toggle_delivery_api'),
+            'apiRegenNonce'  => wp_create_nonce('cvmtry_regen_delivery_api_key'),
             'monthNames'     => AdminAssets::monthNames(),
         ]);
     }
@@ -122,10 +122,10 @@ final class ActivityLogPage
     {
         if (
             sanitize_text_field(wp_unslash($_SERVER['REQUEST_METHOD'] ?? '')) !== 'POST' ||
-            !isset($_POST['cvm_action']) ||
-            sanitize_key(wp_unslash($_POST['cvm_action'])) !== 'clear_activity_logs' ||
-            !isset($_POST['cvm_clear_nonce']) ||
-            !wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['cvm_clear_nonce'])), 'cvm_clear_activity_logs') ||
+            !isset($_POST['cvmtry_action']) ||
+            sanitize_key(wp_unslash($_POST['cvmtry_action'])) !== 'clear_activity_logs' ||
+            !isset($_POST['cvmtry_clear_nonce']) ||
+            !wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['cvmtry_clear_nonce'])), 'cvmtry_clear_activity_logs') ||
             !Capability::currentUserCan(Capability::ACTIVITY_MANAGE)
         ) {
             return;
@@ -134,7 +134,7 @@ final class ActivityLogPage
         DeliveryLog::clearLogs();
 
         wp_safe_redirect(
-            add_query_arg(['page' => self::MENU_SLUG, 'cvm_cleared' => '1'], self_admin_url('admin.php'))
+            add_query_arg(['page' => self::MENU_SLUG, 'cvmtry_cleared' => '1'], self_admin_url('admin.php'))
         );
         exit;
     }
@@ -146,7 +146,7 @@ final class ActivityLogPage
      */
     public static function processExport(): void
     {
-        if (!isset($_GET['cvm_export']) || !Capability::currentUserCan(Capability::ACTIVITY_VIEW)) {
+        if (!isset($_GET['cvmtry_export']) || !Capability::currentUserCan(Capability::ACTIVITY_VIEW)) {
             return;
         }
 
@@ -156,14 +156,14 @@ final class ActivityLogPage
             return;
         }
 
-        $type = sanitize_key((string) $_GET['cvm_export']);
+        $type = sanitize_key((string) $_GET['cvmtry_export']);
         if ($type !== 'csv' && $type !== 'json') {
             return;
         }
 
         if (
             !isset($_GET['_wpnonce']) ||
-            !wp_verify_nonce(sanitize_text_field(wp_unslash($_GET['_wpnonce'])), 'cvm_export_' . $type)
+            !wp_verify_nonce(sanitize_text_field(wp_unslash($_GET['_wpnonce'])), 'cvmtry_export_' . $type)
         ) {
             wp_die(esc_html__('Invalid or expired export link.', 'convermetry'), '', ['response' => 403]);
         }
@@ -172,7 +172,7 @@ final class ActivityLogPage
     }
 
     /**
-     * Handles the cvm_get_activity_logs AJAX action.
+     * Handles the cvmtry_get_activity_logs AJAX action.
      *
      * Accepts page, per_page, status, search, filter_year, filter_month,
      * endpoint, message_type, provider, and form_name from POST. Returns
@@ -185,7 +185,7 @@ final class ActivityLogPage
     {
         if (
             !isset($_POST['nonce']) ||
-            !wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['nonce'])), 'cvm_get_activity_logs') ||
+            !wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['nonce'])), 'cvmtry_get_activity_logs') ||
             !Capability::currentUserCan(Capability::ACTIVITY_VIEW)
         ) {
             wp_send_json_error(['message' => __('Unauthorized.', 'convermetry')]);
@@ -245,7 +245,7 @@ final class ActivityLogPage
     {
         if (
             !isset($_POST['nonce']) ||
-            !wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['nonce'])), 'cvm_delete_activity_log') ||
+            !wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['nonce'])), 'cvmtry_delete_activity_log') ||
             !Capability::currentUserCan(Capability::ACTIVITY_MANAGE)
         ) {
             wp_send_json_error(['message' => __('Unauthorized.', 'convermetry')]);
@@ -273,7 +273,7 @@ final class ActivityLogPage
     {
         if (
             !isset($_POST['nonce']) ||
-            !wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['nonce'])), 'cvm_toggle_delivery_api') ||
+            !wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['nonce'])), 'cvmtry_toggle_delivery_api') ||
             !Capability::currentUserCan(Capability::API_MANAGE)
         ) {
             wp_send_json_error(['message' => __('Unauthorized.', 'convermetry')]);
@@ -299,7 +299,7 @@ final class ActivityLogPage
     {
         if (
             !isset($_POST['nonce']) ||
-            !wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['nonce'])), 'cvm_regen_delivery_api_key') ||
+            !wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['nonce'])), 'cvmtry_regen_delivery_api_key') ||
             !Capability::currentUserCan(Capability::API_MANAGE)
         ) {
             wp_send_json_error(['message' => __('Unauthorized.', 'convermetry')]);
@@ -322,7 +322,8 @@ final class ActivityLogPage
             return;
         }
 
-        $cleared     = isset($_GET['cvm_cleared']) && $_GET['cvm_cleared'] === '1';
+        // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- display-only flag from the redirect after processClearLogs(), which verifies its nonce and capability; it only selects a notice.
+        $cleared     = isset($_GET['cvmtry_cleared']) && sanitize_key(wp_unslash($_GET['cvmtry_cleared'])) === '1';
         $totalOk     = DeliveryLog::getLogCount(['status' => 'success']);
         $totalErrors = DeliveryLog::getLogCount(['status' => 'error']);
         $totalAll    = $totalOk + $totalErrors;
@@ -330,7 +331,7 @@ final class ActivityLogPage
         $hasKey      = DeliveryLogController::hasKey();
 
         ?>
-        <div class="wrap cvm-wrap cvm-delivery-wrap">
+        <div class="wrap cvmtry-wrap cvmtry-delivery-wrap">
             <h1><?php esc_html_e('Activity Log', 'convermetry'); ?></h1>
 
             <?php if ($cleared): ?>
@@ -338,27 +339,27 @@ final class ActivityLogPage
             <?php endif; ?>
 
             <!-- ── Deliveries API Card ────────────────────────────────────── -->
-            <div class="cvm-card cvm-delivery-api-card">
-                <h2 class="cvm-card-title"><?php esc_html_e('Deliveries API', 'convermetry'); ?></h2>
+            <div class="cvmtry-card cvmtry-delivery-api-card">
+                <h2 class="cvmtry-card-title"><?php esc_html_e('Deliveries API', 'convermetry'); ?></h2>
                 <p class="description" style="margin-bottom:12px;">
                     <?php echo wp_kses_post(__('Enable a read-only REST endpoint that returns activity log data as JSON, with <code>status</code>, <code>message_type</code>, <code>endpoint</code>, <code>provider</code>, and <code>form_id</code> filters. Pass the API key as the <code>Authorization</code> header on every request. This API is intended for <strong>server-to-server</strong> use — never embed the key in public frontend JavaScript, where any visitor could read it.', 'convermetry')); ?>
                 </p>
 
-                <div class="cvm-toggle-row">
-                    <label class="cvm-toggle" for="cvm-delivery-api-toggle" aria-label="<?php esc_attr_e('Toggle Deliveries API active state', 'convermetry'); ?>">
+                <div class="cvmtry-toggle-row">
+                    <label class="cvmtry-toggle" for="cvmtry-delivery-api-toggle" aria-label="<?php esc_attr_e('Toggle Deliveries API active state', 'convermetry'); ?>">
                         <input
                             type="checkbox"
-                            id="cvm-delivery-api-toggle"
+                            id="cvmtry-delivery-api-toggle"
                             <?php checked($apiActive, true); ?>
                         >
-                        <span class="cvm-toggle-slider" aria-hidden="true"></span>
+                        <span class="cvmtry-toggle-slider" aria-hidden="true"></span>
                     </label>
-                    <span class="cvm-toggle-label" id="cvm-api-toggle-label">
+                    <span class="cvmtry-toggle-label" id="cvmtry-api-toggle-label">
                         <?php echo esc_html($apiActive ? __('Active', 'convermetry') : __('Inactive', 'convermetry')); ?>
                     </span>
                 </div>
 
-                <div id="cvm-api-key-section"<?php echo $apiActive ? '' : ' hidden'; ?>>
+                <div id="cvmtry-api-key-section"<?php echo $apiActive ? '' : ' hidden'; ?>>
                     <table class="form-table" role="presentation" style="margin-top:12px;">
                         <tr>
                             <th scope="row"><?php esc_html_e('Endpoint', 'convermetry'); ?></th>
@@ -369,10 +370,10 @@ final class ActivityLogPage
                         <tr>
                             <th scope="row"><?php esc_html_e('API Key', 'convermetry'); ?></th>
                             <td>
-                                <div class="cvm-api-key-row">
-                                    <code id="cvm-api-key-value" data-masked="1"><?php echo esc_html($hasKey ? '••••••••••••••••••••' : __('(no key generated yet)', 'convermetry')); ?></code>
-                                    <button type="button" class="button cvm-copy-key-btn" hidden><?php esc_html_e('Copy', 'convermetry'); ?></button>
-                                    <button type="button" class="button cvm-regen-key-btn"><?php esc_html_e('Regenerate', 'convermetry'); ?></button>
+                                <div class="cvmtry-api-key-row">
+                                    <code id="cvmtry-api-key-value" data-masked="1"><?php echo esc_html($hasKey ? '••••••••••••••••••••' : __('(no key generated yet)', 'convermetry')); ?></code>
+                                    <button type="button" class="button cvmtry-copy-key-btn" hidden><?php esc_html_e('Copy', 'convermetry'); ?></button>
+                                    <button type="button" class="button cvmtry-regen-key-btn"><?php esc_html_e('Regenerate', 'convermetry'); ?></button>
                                 </div>
                                 <p class="description" style="margin-top:6px;">
                                     <?php echo wp_kses_post(__('Only a hash of the key is stored, so the key is shown <strong>once</strong> — right after it is generated. Copy it then; if it is lost, regenerate a new one (any integrations using the old key stop working).', 'convermetry')); ?>
@@ -383,7 +384,7 @@ final class ActivityLogPage
                 </div>
             </div>
 
-            <div class="notice notice-info inline cvm-retention-notice">
+            <div class="notice notice-info inline cvmtry-retention-notice">
                 <p>
                     <?php
                     echo wp_kses_post(sprintf(
@@ -400,29 +401,29 @@ final class ActivityLogPage
                 </p>
             </div>
 
-            <div class="cvm-delivery-toolbar">
-                <form method="post" action="" class="cvm-clear-form">
-                    <?php wp_nonce_field('cvm_clear_activity_logs', 'cvm_clear_nonce'); ?>
-                    <input type="hidden" name="cvm_action" value="clear_activity_logs">
+            <div class="cvmtry-delivery-toolbar">
+                <form method="post" action="" class="cvmtry-clear-form">
+                    <?php wp_nonce_field('cvmtry_clear_activity_logs', 'cvmtry_clear_nonce'); ?>
+                    <input type="hidden" name="cvmtry_action" value="clear_activity_logs">
                     <button
                         type="submit"
-                        class="button button-secondary cvm-btn-danger"
-                        onclick="return confirm(<?php echo esc_attr((string) wp_json_encode(__('Are you sure you want to clear all activity logs? This cannot be undone.', 'convermetry'))); ?>);"
+                        class="button button-secondary cvmtry-btn-danger"
+                        data-cvmtry-confirm="<?php echo esc_attr(__('Are you sure you want to clear all activity logs? This cannot be undone.', 'convermetry')); ?>"
                     >
                         <?php esc_html_e('Clear All Logs', 'convermetry'); ?>
                     </button>
                 </form>
 
                 <?php if ($totalAll > 0): ?>
-                    <div class="cvm-export-buttons">
+                    <div class="cvmtry-export-buttons">
                         <a
-                            href="<?php echo esc_url(wp_nonce_url(add_query_arg(['page' => self::MENU_SLUG, 'cvm_export' => 'csv'], self_admin_url('admin.php')), 'cvm_export_csv')); ?>"
+                            href="<?php echo esc_url(wp_nonce_url(add_query_arg(['page' => self::MENU_SLUG, 'cvmtry_export' => 'csv'], self_admin_url('admin.php')), 'cvmtry_export_csv')); ?>"
                             class="button button-secondary"
                         >
                             <?php esc_html_e('Export All To CSV', 'convermetry'); ?>
                         </a>
                         <a
-                            href="<?php echo esc_url(wp_nonce_url(add_query_arg(['page' => self::MENU_SLUG, 'cvm_export' => 'json'], self_admin_url('admin.php')), 'cvm_export_json')); ?>"
+                            href="<?php echo esc_url(wp_nonce_url(add_query_arg(['page' => self::MENU_SLUG, 'cvmtry_export' => 'json'], self_admin_url('admin.php')), 'cvmtry_export_json')); ?>"
                             class="button button-secondary"
                         >
                             <?php esc_html_e('Export All To JSON', 'convermetry'); ?>
@@ -432,26 +433,26 @@ final class ActivityLogPage
             </div>
 
             <!-- ── Successful Deliveries Accordion ─────────────────────────── -->
-            <div class="cvm-accordion">
-                <button type="button" class="cvm-accordion-header" aria-expanded="false" aria-controls="cvm-acc-success">
-                    <span class="cvm-accordion-title"><?php esc_html_e('Successful Deliveries', 'convermetry'); ?></span>
-                    <span class="cvm-badge"><?php echo esc_html((string) $totalOk); ?></span>
-                    <span class="cvm-accordion-arrow" aria-hidden="true">&#9660;</span>
+            <div class="cvmtry-accordion">
+                <button type="button" class="cvmtry-accordion-header" aria-expanded="false" aria-controls="cvmtry-acc-success">
+                    <span class="cvmtry-accordion-title"><?php esc_html_e('Successful Deliveries', 'convermetry'); ?></span>
+                    <span class="cvmtry-badge"><?php echo esc_html((string) $totalOk); ?></span>
+                    <span class="cvmtry-accordion-arrow" aria-hidden="true">&#9660;</span>
                 </button>
-                <div class="cvm-accordion-body" id="cvm-acc-success" data-status="success" hidden>
-                    <!-- Log list injected by activity-log.js via cvm_get_activity_logs AJAX -->
+                <div class="cvmtry-accordion-body" id="cvmtry-acc-success" data-status="success" hidden>
+                    <!-- Log list injected by activity-log.js via cvmtry_get_activity_logs AJAX -->
                 </div>
             </div>
 
             <!-- ── Failed Deliveries Accordion ─────────────────────────────── -->
-            <div class="cvm-accordion">
-                <button type="button" class="cvm-accordion-header" aria-expanded="false" aria-controls="cvm-acc-errors">
-                    <span class="cvm-accordion-title"><?php esc_html_e('Failed Deliveries', 'convermetry'); ?></span>
-                    <span class="cvm-badge cvm-badge-error"><?php echo esc_html((string) $totalErrors); ?></span>
-                    <span class="cvm-accordion-arrow" aria-hidden="true">&#9660;</span>
+            <div class="cvmtry-accordion">
+                <button type="button" class="cvmtry-accordion-header" aria-expanded="false" aria-controls="cvmtry-acc-errors">
+                    <span class="cvmtry-accordion-title"><?php esc_html_e('Failed Deliveries', 'convermetry'); ?></span>
+                    <span class="cvmtry-badge cvmtry-badge-error"><?php echo esc_html((string) $totalErrors); ?></span>
+                    <span class="cvmtry-accordion-arrow" aria-hidden="true">&#9660;</span>
                 </button>
-                <div class="cvm-accordion-body" id="cvm-acc-errors" data-status="error" hidden>
-                    <!-- Log list injected by activity-log.js via cvm_get_activity_logs AJAX -->
+                <div class="cvmtry-accordion-body" id="cvmtry-acc-errors" data-status="error" hidden>
+                    <!-- Log list injected by activity-log.js via cvmtry_get_activity_logs AJAX -->
                 </div>
             </div>
 
@@ -498,7 +499,7 @@ final class ActivityLogPage
     private static function renderLogEntryHtml(array $entry): string
     {
         $isError     = (int) ($entry['success'] ?? 0) === 0;
-        $itemClass   = $isError ? 'cvm-log-error' : 'cvm-log-success';
+        $itemClass   = $isError ? 'cvmtry-log-error' : 'cvmtry-log-success';
         $statusText  = $isError ? __('Error', 'convermetry') : __('Success', 'convermetry');
         $statusClass = $isError ? 'error' : 'success';
         $timestamp   = (string) ($entry['created_at'] ?? '');
@@ -539,49 +540,49 @@ final class ActivityLogPage
 
         ob_start();
         ?>
-        <li class="cvm-log-item <?php echo esc_attr($itemClass); ?>" data-log-id="<?php echo esc_attr((string) ($entry['id'] ?? '')); ?>">
+        <li class="cvmtry-log-item <?php echo esc_attr($itemClass); ?>" data-log-id="<?php echo esc_attr((string) ($entry['id'] ?? '')); ?>">
 
-            <div class="cvm-log-meta">
-                <span class="cvm-log-time"><?php
+            <div class="cvmtry-log-meta">
+                <span class="cvmtry-log-time"><?php
                 /* translators: %s: date and time in UTC. */
                 echo esc_html(sprintf(__('%s UTC', 'convermetry'), $timestamp));
                 ?></span>
                 <?php if ($label !== ''): ?>
-                    <span class="cvm-log-webhook-label"><?php echo esc_html($label); ?></span>
+                    <span class="cvmtry-log-webhook-label"><?php echo esc_html($label); ?></span>
                 <?php endif; ?>
-                <span class="cvm-log-kind-label"><?php echo esc_html(self::kindLabel($messageType, $kind, $attempt)); ?></span>
-                <span class="cvm-log-status <?php echo esc_attr($statusClass); ?>">
+                <span class="cvmtry-log-kind-label"><?php echo esc_html(self::kindLabel($messageType, $kind, $attempt)); ?></span>
+                <span class="cvmtry-log-status <?php echo esc_attr($statusClass); ?>">
                     <?php echo esc_html($statusText); ?>
                     <?php if ($code !== 0): ?>
                         (<?php echo esc_html((string) $code); ?>)
                     <?php endif; ?>
                 </span>
-                <button type="button" class="button cvm-log-delete-btn" aria-label="<?php
+                <button type="button" class="button cvmtry-log-delete-btn" aria-label="<?php
                 /* translators: %s: the Activity Log entry's numeric id. */
                 echo esc_attr(sprintf(__('Delete log entry %s', 'convermetry'), (string) ($entry['id'] ?? '')));
                 ?>"><?php esc_html_e('Delete', 'convermetry'); ?></button>
             </div>
 
             <?php if ($endpoint !== ''): ?>
-                <div class="cvm-log-url">
+                <div class="cvmtry-log-url">
                     <strong><?php esc_html_e('Endpoint:', 'convermetry'); ?></strong> <code><?php echo esc_html($endpoint); ?></code>
                 </div>
             <?php endif; ?>
 
             <?php if ($requestUrl !== '' && $requestUrl !== $endpoint): ?>
-                <div class="cvm-log-url">
+                <div class="cvmtry-log-url">
                     <strong><?php esc_html_e('Request URL:', 'convermetry'); ?></strong> <code><?php echo esc_html($requestUrl); ?></code>
                 </div>
             <?php endif; ?>
 
             <?php if ($deliveryId !== ''): ?>
-                <div class="cvm-log-url">
+                <div class="cvmtry-log-url">
                     <strong><?php esc_html_e('Delivery ID:', 'convermetry'); ?></strong> <code><?php echo esc_html($deliveryId); ?></code>
                 </div>
             <?php endif; ?>
 
             <?php if ((string) ($entry['submission_id'] ?? '') !== ''): ?>
-                <div class="cvm-log-url">
+                <div class="cvmtry-log-url">
                     <strong><?php esc_html_e('Submission ID:', 'convermetry'); ?></strong> <code><?php echo esc_html((string) $entry['submission_id']); ?></code>
                     <?php if ((string) ($entry['conversion_id'] ?? '') !== ''): ?>
                         &nbsp;<strong><?php esc_html_e('Conversion ID:', 'convermetry'); ?></strong> <code><?php echo esc_html((string) $entry['conversion_id']); ?></code>
@@ -590,7 +591,7 @@ final class ActivityLogPage
             <?php endif; ?>
 
             <?php if ((string) ($entry['form_provider'] ?? '') !== ''): ?>
-                <div class="cvm-log-url">
+                <div class="cvmtry-log-url">
                     <strong><?php esc_html_e('Provider:', 'convermetry'); ?></strong> <?php echo esc_html((string) $entry['form_provider']); ?>
                     <?php if ((string) ($entry['form_name'] ?? '') !== ''): ?>
                         &nbsp;<strong><?php esc_html_e('Form:', 'convermetry'); ?></strong> <?php echo esc_html((string) $entry['form_name']); ?>
@@ -599,25 +600,25 @@ final class ActivityLogPage
             <?php endif; ?>
 
             <?php if ($errorMessage !== ''): ?>
-                <div class="cvm-log-error-msg">
+                <div class="cvmtry-log-error-msg">
                     <strong><?php esc_html_e('Error:', 'convermetry'); ?></strong> <?php echo esc_html($errorMessage); ?>
                 </div>
             <?php endif; ?>
 
             <?php if ($prettyHeaders !== ''): ?>
-                <details class="cvm-log-headers">
+                <details class="cvmtry-log-headers">
                     <summary><?php esc_html_e('Request headers (sensitive values redacted)', 'convermetry'); ?></summary>
                     <pre><?php echo esc_html($prettyHeaders); ?></pre>
                 </details>
             <?php endif; ?>
 
-            <div class="cvm-log-data">
+            <div class="cvmtry-log-data">
                 <strong><?php esc_html_e('Payload:', 'convermetry'); ?></strong>
                 <pre><?php echo esc_html((string) $prettyRequest); ?></pre>
             </div>
 
             <?php if ($rawResponse !== '' && $errorMessage === ''): ?>
-                <div class="cvm-log-response">
+                <div class="cvmtry-log-response">
                     <strong><?php esc_html_e('Response:', 'convermetry'); ?></strong>
                     <pre><?php echo esc_html($rawResponse); ?></pre>
                 </div>

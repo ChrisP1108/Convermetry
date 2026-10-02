@@ -54,7 +54,7 @@ final class ExtensionsTest extends TestCase
 
         $target = ['schema_version' => '1.0', 'source' => 'convermetry', 'analytics' => ['totals' => []]];
 
-        $result = Extensions::attach($target, 'extensions', 'some_filter', 1024, 10);
+        $result = Extensions::attach($target, 'extensions', 'convermetry_test_extensions', 1024, 10);
 
         self::assertSame($target, $result);
         self::assertArrayNotHasKey('extensions', $result);
@@ -64,9 +64,25 @@ final class ExtensionsTest extends TestCase
     {
         Functions\when('apply_filters')->justReturn(['acme/orders' => ['count' => 3]]);
 
-        $result = Extensions::attach(['source' => 'convermetry'], 'extensions', 'some_filter', 1024, 10);
+        $result = Extensions::attach(['source' => 'convermetry'], 'extensions', 'convermetry_test_extensions', 1024, 10);
 
         self::assertSame(['source' => 'convermetry', 'extensions' => ['acme/orders' => ['count' => 3]]], $result);
+    }
+
+    /**
+     * attach() dispatches only Convermetry's own hooks. A name without the
+     * prefix is refused before apply_filters() runs, and the target comes back
+     * untouched.
+     */
+    public function testAHookWithoutTheConvermetryPrefixIsNeverDispatched(): void
+    {
+        Functions\expect('apply_filters')->never();
+        Functions\expect('_doing_it_wrong')->once();
+        Functions\when('esc_html')->returnArg();
+
+        $target = ['source' => 'convermetry'];
+
+        self::assertSame($target, Extensions::attach($target, 'extensions', 'some_other_plugin_filter', 1024, 10));
     }
 
     /**
@@ -77,7 +93,7 @@ final class ExtensionsTest extends TestCase
     {
         Functions\when('apply_filters')->justReturn(['acme/x' => 1]);
 
-        $result = Extensions::attach(['extensions' => 'core-owned'], 'extensions', 'some_filter', 1024, 10);
+        $result = Extensions::attach(['extensions' => 'core-owned'], 'extensions', 'convermetry_test_extensions', 1024, 10);
 
         self::assertSame('core-owned', $result['extensions']);
     }
@@ -139,7 +155,7 @@ final class ExtensionsTest extends TestCase
     {
         Functions\when('apply_filters')->justReturn(['totals' => ['pageview' => 999], 'acme/ok' => 1]);
 
-        $result = Extensions::attach(['totals' => ['pageview' => 1]], 'extensions', 'f', 1024, 10);
+        $result = Extensions::attach(['totals' => ['pageview' => 1]], 'extensions', 'convermetry_test_extensions', 1024, 10);
 
         self::assertSame(['acme/ok' => 1], $result['extensions']);
         self::assertSame(['pageview' => 1], $result['totals']);

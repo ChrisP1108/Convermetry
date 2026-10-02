@@ -58,14 +58,14 @@ abstract class IntegrationTestCase extends TestCase
 
         if (self::$db === null) {
             self::markTestSkipped(
-                'No test database reachable. Set CVM_TEST_DB_HOST / CVM_TEST_DB_SOCKET (and friends) to run '
+                'No test database reachable. Set CVMTRY_TEST_DB_HOST / CVMTRY_TEST_DB_SOCKET (and friends) to run '
                 . 'the integration suite; see tests/Integration/bootstrap.php.'
             );
         }
 
         $GLOBALS['wpdb']                = self::$db;
-        $GLOBALS['cvm_test_options']    = [];
-        $GLOBALS['cvm_test_transients'] = [];
+        $GLOBALS['cvmtry_test_options']    = [];
+        $GLOBALS['cvmtry_test_transients'] = [];
 
         // Keyed by table name — iterate the KEYS. Iterating values here would
         // silently issue "TRUNCATE TABLE Convermetry\Database\DatabaseManager",
@@ -86,10 +86,10 @@ abstract class IntegrationTestCase extends TestCase
     protected static function tables(): array
     {
         return [
-            'wp_cvm_events'           => DatabaseManager::class,
-            'wp_cvm_form_submissions' => FormSubmissions::class,
-            'wp_cvm_goal_completions' => GoalCompletions::class,
-            'wp_cvm_lead_events'      => LeadEvents::class,
+            'wp_cvmtry_events'           => DatabaseManager::class,
+            'wp_cvmtry_form_submissions' => FormSubmissions::class,
+            'wp_cvmtry_goal_completions' => GoalCompletions::class,
+            'wp_cvmtry_lead_events'      => LeadEvents::class,
         ];
     }
 
@@ -166,7 +166,7 @@ abstract class IntegrationTestCase extends TestCase
         $placeholders = implode(', ', array_fill(0, count($columns), '%s'));
 
         self::$db->query(self::$db->prepare(
-            'INSERT INTO wp_cvm_events (`' . implode('`, `', $columns) . '`) VALUES (' . $placeholders . ')',
+            'INSERT INTO wp_cvmtry_events (`' . implode('`, `', $columns) . '`) VALUES (' . $placeholders . ')',
             array_values($row)
         ));
 
@@ -218,7 +218,7 @@ abstract class IntegrationTestCase extends TestCase
         }
 
         self::$db->query(self::$db->prepare(
-            'INSERT INTO wp_cvm_form_submissions (`' . implode('`, `', $columns) . '`) VALUES ('
+            'INSERT INTO wp_cvmtry_form_submissions (`' . implode('`, `', $columns) . '`) VALUES ('
             . implode(', ', $placeholders) . ')',
             $values
         ));

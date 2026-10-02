@@ -319,7 +319,7 @@ final class AtomicFormsBridge
      * Native field ids are preserved as the id — they are what automation joins
      * on — and Elementor's editor label travels alongside for humans.
      * {@see \Convermetry\Forms\SubmissionFields} owns sanitizing, the label
-     * fallback, and stripping Convermetry's own cvm_* fields, so none of that is
+     * fallback, and stripping Convermetry's own cvmtry_* fields, so none of that is
      * repeated here. Nothing is keyed by label: two fields called "Name" stay
      * two fields, which a label-keyed map could not express.
      *

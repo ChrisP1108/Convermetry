@@ -15,7 +15,7 @@ use PHPUnit\Framework\TestCase;
  *
  * The two that matter most here are structural rather than cosmetic.
  *
- * A filtered field list is re-normalized, so cvm_* — Convermetry's own
+ * A filtered field list is re-normalized, so cvmtry_* — Convermetry's own
  * correlation fields, which the tracker puts in the form and the normalizer
  * strips — cannot be reintroduced as if a visitor had typed them. A callback
  * that returned them would otherwise write the plugin's internal session and
@@ -50,7 +50,7 @@ final class SubmissionHookTest extends TestCase
     // -------------------------------------------------- field re-normalization
 
     /**
-     * The rule the second normalize() pass exists for. cvm_* fields are
+     * The rule the second normalize() pass exists for. cvmtry_* fields are
      * Convermetry's own tracking inputs, not the visitor's answers, and a
      * filter must not be able to launder them back into submitted data.
      */
@@ -62,8 +62,8 @@ final class SubmissionHookTest extends TestCase
 
         // What the service does with a changed filter result.
         $reNormalized = SubmissionFields::normalize(array_merge($normalized, [
-            ['id' => 'cvm_conversion_id', 'label' => 'Conversion', 'value' => 'c-123'],
-            ['id' => 'cvm_session_id', 'label' => 'Session', 'value' => 's-123'],
+            ['id' => 'cvmtry_conversion_id', 'label' => 'Conversion', 'value' => 'c-123'],
+            ['id' => 'cvmtry_session_id', 'label' => 'Session', 'value' => 's-123'],
         ]));
 
         self::assertSame(['email'], array_column($reNormalized, 'id'));

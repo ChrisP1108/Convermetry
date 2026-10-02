@@ -17,7 +17,7 @@ use Convermetry\Settings\Options;
  *  - the public tracking endpoint, for every event's page_url, target_url, and
  *    referrer ({@see \Convermetry\Api\TrackingController});
  *  - the form correlation reader, for the landing page and submitting page a
- *    browser posts inside cvm_context ({@see \Convermetry\Tracking\Correlation});
+ *    browser posts inside cvmtry_context ({@see \Convermetry\Tracking\Correlation});
  *  - goal ingestion, which stores a completion's page and landing page; and
  *  - funnel step matching, which compares a configured URL against a stored one.
  *
@@ -155,7 +155,7 @@ final class Url
      * the host must additionally belong to this site.
      *
      * This is the variant the form correlation reader uses for the landing page
-     * and submitting page a browser posts inside cvm_context, and the one goal
+     * and submitting page a browser posts inside cvmtry_context, and the one goal
      * ingestion uses for a completion's landing page. Unlike {@see pageUrl()} it
      * does no port handling and applies its own length bound.
      *

@@ -290,9 +290,9 @@ final class NotificationLifecycleTest extends TestCase
     {
         $source = $this->source('uninstall.php');
 
-        self::assertStringContainsString('cvm_notification_queue', $source);
-        self::assertStringContainsString("delete_option('cvm_notification_settings')", $source);
-        self::assertStringContainsString("delete_option('cvm_notification_db_version')", $source);
+        self::assertStringContainsString('cvmtry_notification_queue', $source);
+        self::assertStringContainsString("delete_option('cvmtry_notification_settings')", $source);
+        self::assertStringContainsString("delete_option('cvmtry_notification_db_version')", $source);
         self::assertStringContainsString(NotificationQueue::WORKER_HOOK, $source);
     }
 
@@ -323,11 +323,11 @@ final class NotificationLifecycleTest extends TestCase
         $source = $this->source('src/Plugin.php');
 
         self::assertStringContainsString(
-            "add_action('cvm_cleanup_old_events', [NotificationQueue::class, 'purgeOrphans'])",
+            "add_action('cvmtry_cleanup_old_events', [NotificationQueue::class, 'purgeOrphans'])",
             $source
         );
         self::assertStringContainsString(
-            "add_action('cvm_cleanup_old_events', [NotificationQueue::class, 'ensureWorkerScheduled'])",
+            "add_action('cvmtry_cleanup_old_events', [NotificationQueue::class, 'ensureWorkerScheduled'])",
             $source
         );
     }

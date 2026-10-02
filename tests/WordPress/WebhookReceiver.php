@@ -22,7 +22,7 @@ final class WebhookReceiver
 
     public function __construct(private int $port)
     {
-        $this->log   = (string) tempnam(sys_get_temp_dir(), 'cvm-receiver-');
+        $this->log   = (string) tempnam(sys_get_temp_dir(), 'cvmtry-receiver-');
         $this->token = bin2hex(random_bytes(8));
     }
 
@@ -48,7 +48,7 @@ final class WebhookReceiver
             $descriptors,
             $pipes,
             null,
-            ['CVM_RECEIVER_LOG' => $this->log, 'CVM_RECEIVER_TOKEN' => $this->token] + getenv()
+            ['CVMTRY_RECEIVER_LOG' => $this->log, 'CVMTRY_RECEIVER_TOKEN' => $this->token] + getenv()
         );
 
         if (!is_resource($process)) {

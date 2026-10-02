@@ -210,32 +210,32 @@ final class SubmissionFieldsTest extends TestCase
      * Correlation fields must never reach storage, payloads, logs, CSV, or
      * email — from EITHER input shape.
      */
-    public function testInternalCvmFieldsAreStrippedFromALegacyMap(): void
+    public function testInternalCvmtryFieldsAreStrippedFromALegacyMap(): void
     {
         $out = SubmissionFields::normalize([
-            'cvm_conversion_id' => 'c1',
-            'CVM_Session_Id'    => 's1',
-            'cvm_context'       => '{}',
+            'cvmtry_conversion_id' => 'c1',
+            'CVMTRY_Session_Id'    => 's1',
+            'cvmtry_context'       => '{}',
             'email'             => 'a@b.com',
         ]);
 
         self::assertSame([['id' => 'email', 'label' => 'email', 'value' => 'a@b.com']], $out);
     }
 
-    public function testInternalCvmFieldsAreStrippedFromADescriptorList(): void
+    public function testInternalCvmtryFieldsAreStrippedFromADescriptorList(): void
     {
         $out = SubmissionFields::normalize([
-            ['id' => 'cvm_conversion_id', 'label' => 'Conversion', 'value' => 'c1'],
-            ['id' => 'CVM_SESSION_ID',    'label' => 'Session',    'value' => 's1'],
+            ['id' => 'cvmtry_conversion_id', 'label' => 'Conversion', 'value' => 'c1'],
+            ['id' => 'CVMTRY_SESSION_ID',    'label' => 'Session',    'value' => 's1'],
             ['id' => 'email',             'label' => 'Email',      'value' => 'a@b.com'],
         ]);
 
         self::assertSame([['id' => 'email', 'label' => 'Email', 'value' => 'a@b.com']], $out);
     }
 
-    public function testFieldsMerelyContainingCvmAreNotStripped(): void
+    public function testFieldsMerelyContainingCvmtryAreNotStripped(): void
     {
-        $out = SubmissionFields::normalize(['my_cvm_note' => 'keep', 'cvmx' => 'keep']);
+        $out = SubmissionFields::normalize(['my_cvmtry_note' => 'keep', 'cvmtryx' => 'keep']);
 
         self::assertCount(2, $out);
     }

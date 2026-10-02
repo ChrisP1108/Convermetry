@@ -35,7 +35,7 @@ use ReflectionMethod;
  */
 final class QueueRepairRecordTest extends IntegrationTestCase
 {
-    private const string PREFIX = 'cvm_queue_repair_';
+    private const string PREFIX = 'cvmtry_queue_repair_';
 
     protected function setUp(): void
     {
@@ -84,7 +84,7 @@ final class QueueRepairRecordTest extends IntegrationTestCase
         self::assertNotNull($db);
 
         return (int) $db->get_var(
-            "SELECT COUNT(*) FROM wp_options WHERE option_name LIKE 'cvm\\_queue\\_repair\\_%'"
+            "SELECT COUNT(*) FROM wp_options WHERE option_name LIKE 'cvmtry\\_queue\\_repair\\_%'"
         );
     }
 
@@ -203,8 +203,8 @@ final class QueueRepairRecordTest extends IntegrationTestCase
         $db = self::$db;
         self::assertNotNull($db);
 
-        $db->query("INSERT INTO wp_options (option_name, option_value, autoload) VALUES ('cvm_queue_repairs', 'legacy', 'off')");
-        $db->query("INSERT INTO wp_options (option_name, option_value, autoload) VALUES ('cvm_settings', 'keep', 'yes')");
+        $db->query("INSERT INTO wp_options (option_name, option_value, autoload) VALUES ('cvmtry_queue_repairs', 'legacy', 'off')");
+        $db->query("INSERT INTO wp_options (option_name, option_value, autoload) VALUES ('cvmtry_settings', 'keep', 'yes')");
 
         $this->write('sub-1', ['endpoint-a'], time() - (8 * DAY_IN_SECONDS));
 
@@ -212,7 +212,7 @@ final class QueueRepairRecordTest extends IntegrationTestCase
 
         self::assertSame(
             '2',
-            $db->get_var("SELECT COUNT(*) FROM wp_options WHERE option_name IN ('cvm_queue_repairs', 'cvm_settings')"),
+            $db->get_var("SELECT COUNT(*) FROM wp_options WHERE option_name IN ('cvmtry_queue_repairs', 'cvmtry_settings')"),
             'Only names under the repair prefix are the safety net\'s business'
         );
         self::assertSame(0, $this->rowCount());

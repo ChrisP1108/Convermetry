@@ -38,7 +38,7 @@ enum HomeStatusLevel: string
      */
     public function pillClass(): string
     {
-        return 'cvm-ui-status cvm-ui-status--' . $this->value;
+        return 'cvmtry-ui-status cvmtry-ui-status--' . $this->value;
     }
 
     /**
@@ -68,8 +68,8 @@ enum HomeStatusLevel: string
     public function cardClass(): string
     {
         return match ($this) {
-            self::Warning => ' cvm-ui-card--warning',
-            self::Error   => ' cvm-ui-card--error',
+            self::Warning => ' cvmtry-ui-card--warning',
+            self::Error   => ' cvmtry-ui-card--error',
             default       => '',
         };
     }

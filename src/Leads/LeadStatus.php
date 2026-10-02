@@ -171,11 +171,11 @@ final class LeadStatus
     public static function chipClass(string $status): string
     {
         return match ($status) {
-            'won'                  => 'cvm-status-delivered',
-            'qualified'            => 'cvm-status-partial',
-            'lost', 'unqualified'  => 'cvm-status-failed',
-            'spam'                 => 'cvm-status-not_sent',
-            default                => 'cvm-status-pending',
+            'won'                  => 'cvmtry-status-delivered',
+            'qualified'            => 'cvmtry-status-partial',
+            'lost', 'unqualified'  => 'cvmtry-status-failed',
+            'spam'                 => 'cvmtry-status-not_sent',
+            default                => 'cvmtry-status-pending',
         };
     }
 }

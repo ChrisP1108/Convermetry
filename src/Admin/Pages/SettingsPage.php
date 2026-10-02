@@ -31,7 +31,7 @@ final class SettingsPage
     public const string MENU_SLUG = 'convermetry-settings';
 
     /** Settings API option group. */
-    private const string OPTION_GROUP = 'cvm_settings_group';
+    private const string OPTION_GROUP = 'cvmtry_settings_group';
 
     /**
      * Registers menu and settings hooks.
@@ -77,10 +77,10 @@ final class SettingsPage
         }
 
         wp_enqueue_style(
-            'cvm-settings',
-            CVM_PLUGIN_URL . 'assets/css/admin-settings.css',
+            'cvmtry-settings',
+            CVMTRY_PLUGIN_URL . 'assets/css/admin-settings.css',
             [AdminAssets::COMMON_HANDLE],
-            CVM_VERSION
+            CVMTRY_VERSION
         );
     }
 
@@ -169,7 +169,7 @@ final class SettingsPage
         $settings = Options::all();
 
         ?>
-        <div class="wrap cvm-wrap">
+        <div class="wrap cvmtry-wrap">
         <h1><?php esc_html_e('Convermetry Settings', 'convermetry'); ?></h1>
         <?php
 
@@ -203,23 +203,23 @@ final class SettingsPage
     private static function renderIdentitySection(array $settings): void
     {
         ?>
-        <div class="cvm-card">
-        <h2 class="cvm-card-title"><?php esc_html_e('Website & Client', 'convermetry'); ?></h2>
+        <div class="cvmtry-card">
+        <h2 class="cvmtry-card-title"><?php esc_html_e('Website & Client', 'convermetry'); ?></h2>
         <p class="description" style="margin-bottom:14px;"><?php echo wp_kses_post(__('Sent as <code>website_info</code> in every webhook payload — analytics reports and form submissions alike — so downstream systems receiving deliveries from several installs can identify which site and client a payload belongs to. Every key is always present (empty when not configured), giving consumers a predictable schema.', 'convermetry')); ?></p>
         <table class="form-table" role="presentation">
         <tr><th scope="row"><?php esc_html_e('Site name / URL / domain', 'convermetry'); ?></th><td>
         <code><?php echo esc_html(get_bloginfo('name')); ?></code> &middot; <code><?php echo esc_html(home_url()); ?></code>
         &middot; <code><?php echo esc_html(WebsiteInfo::domain()); ?></code>
         <p class="description"><?php echo wp_kses_post(__('Derived automatically — <code>domain</code> is the home URL host with any leading <code>www.</code> removed.', 'convermetry')); ?></p></td></tr>
-        <tr><th scope="row"><label for="cvm-client-first-name"><?php esc_html_e('Client First Name', 'convermetry'); ?></label></th><td>
-        <input type="text" id="cvm-client-first-name" class="regular-text" name="<?php echo esc_attr(Options::OPTION_KEY . '[client_first_name]'); ?>" value="<?php echo esc_attr((string) $settings['client_first_name']); ?>"></td></tr>
-        <tr><th scope="row"><label for="cvm-client-last-name"><?php esc_html_e('Client Last Name', 'convermetry'); ?></label></th><td>
-        <input type="text" id="cvm-client-last-name" class="regular-text" name="<?php echo esc_attr(Options::OPTION_KEY . '[client_last_name]'); ?>" value="<?php echo esc_attr((string) $settings['client_last_name']); ?>"></td></tr>
-        <tr><th scope="row"><label for="cvm-client-id"><?php esc_html_e('Client ID', 'convermetry'); ?> <span class="description"><?php esc_html_e('(optional)', 'convermetry'); ?></span></label></th><td>
-        <input type="text" id="cvm-client-id" class="regular-text" name="<?php echo esc_attr(Options::OPTION_KEY . '[client_id]'); ?>" value="<?php echo esc_attr((string) $settings['client_id']); ?>">
+        <tr><th scope="row"><label for="cvmtry-client-first-name"><?php esc_html_e('Client First Name', 'convermetry'); ?></label></th><td>
+        <input type="text" id="cvmtry-client-first-name" class="regular-text" name="<?php echo esc_attr(Options::OPTION_KEY . '[client_first_name]'); ?>" value="<?php echo esc_attr((string) $settings['client_first_name']); ?>"></td></tr>
+        <tr><th scope="row"><label for="cvmtry-client-last-name"><?php esc_html_e('Client Last Name', 'convermetry'); ?></label></th><td>
+        <input type="text" id="cvmtry-client-last-name" class="regular-text" name="<?php echo esc_attr(Options::OPTION_KEY . '[client_last_name]'); ?>" value="<?php echo esc_attr((string) $settings['client_last_name']); ?>"></td></tr>
+        <tr><th scope="row"><label for="cvmtry-client-id"><?php esc_html_e('Client ID', 'convermetry'); ?> <span class="description"><?php esc_html_e('(optional)', 'convermetry'); ?></span></label></th><td>
+        <input type="text" id="cvmtry-client-id" class="regular-text" name="<?php echo esc_attr(Options::OPTION_KEY . '[client_id]'); ?>" value="<?php echo esc_attr((string) $settings['client_id']); ?>">
         <p class="description"><?php echo wp_kses_post(__('Sent as <code>website_info.client.id</code>.', 'convermetry')); ?></p></td></tr>
-        <tr><th scope="row"><label for="cvm-website-id"><?php esc_html_e('Website ID', 'convermetry'); ?> <span class="description"><?php esc_html_e('(optional)', 'convermetry'); ?></span></label></th><td>
-        <input type="text" id="cvm-website-id" class="regular-text" name="<?php echo esc_attr(Options::OPTION_KEY . '[website_id]'); ?>" value="<?php echo esc_attr((string) $settings['website_id']); ?>">
+        <tr><th scope="row"><label for="cvmtry-website-id"><?php esc_html_e('Website ID', 'convermetry'); ?> <span class="description"><?php esc_html_e('(optional)', 'convermetry'); ?></span></label></th><td>
+        <input type="text" id="cvmtry-website-id" class="regular-text" name="<?php echo esc_attr(Options::OPTION_KEY . '[website_id]'); ?>" value="<?php echo esc_attr((string) $settings['website_id']); ?>">
         <p class="description"><?php echo wp_kses_post(__('Sent as <code>website_info.id</code>.', 'convermetry')); ?></p></td></tr></table></div>
         <?php
     }
@@ -284,9 +284,9 @@ final class SettingsPage
         <?php esc_html_e('Store visitor IP addresses', 'convermetry'); ?></label>
         <p class="description"><?php echo wp_kses_post(__('On by default. Records the visitor\'s IP with <strong>every analytics event</strong> (page views, clicks, hovers, scroll milestones, conversions) and with <strong>every server-confirmed form submission</strong> — surfaced in analytics reports and sent as <code>form_submission.ip_address</code> in webhook payloads. Useful for fraud checks, spam review, and CRM deduplication. Turning this off leaves the address empty on new rows; rows already stored are unchanged and age out with the retention window. No IP is ever sent to a geolocation service. Behind a proxy or CDN, map the real address with the <code>convermetry_client_ip</code> filter.', 'convermetry')); ?></p>
         <p class="description"><?php echo wp_kses_post(__('<strong>Privacy note:</strong> in the EU/UK an IP address is personal data. Storing it for general visitor activity — not just leads someone actively submitted — usually needs to be disclosed in your privacy policy and to rest on a lawful basis. When <em>Honor Do Not Track / Global Privacy Control</em> is enabled above, a visitor sending either signal gets no stored IP on either path — their analytics events are not recorded at all, and a form they submit is still delivered but carries an empty address.', 'convermetry')); ?></p></td></tr>
-        <tr><th scope="row"><label for="cvm-hover-dwell"><?php esc_html_e('Hover dwell time (ms)', 'convermetry'); ?></label></th><td>
-        <input type="number" id="cvm-hover-dwell" min="200" max="10000" step="50" name="<?php echo esc_attr(Options::OPTION_KEY . '[hover_dwell_ms]'); ?>" value="<?php echo esc_attr((string) $settings['hover_dwell_ms']); ?>" class="small-text">
-        <p class="description"><?php echo wp_kses_post(__('How long the pointer must rest on an element before a hover event is recorded. Add <code>data-cvm-hover</code> to any element — images included — to opt it into hover tracking.', 'convermetry')); ?></p></td></tr></table>
+        <tr><th scope="row"><label for="cvmtry-hover-dwell"><?php esc_html_e('Hover dwell time (ms)', 'convermetry'); ?></label></th><td>
+        <input type="number" id="cvmtry-hover-dwell" min="200" max="10000" step="50" name="<?php echo esc_attr(Options::OPTION_KEY . '[hover_dwell_ms]'); ?>" value="<?php echo esc_attr((string) $settings['hover_dwell_ms']); ?>" class="small-text">
+        <p class="description"><?php echo wp_kses_post(__('How long the pointer must rest on an element before a hover event is recorded. Add <code>data-cvmtry-hover</code> to any element — images included — to opt it into hover tracking.', 'convermetry')); ?></p></td></tr></table>
         <?php
     }
 
@@ -301,11 +301,11 @@ final class SettingsPage
         ?>
         <h2><?php esc_html_e('Data', 'convermetry'); ?></h2>
         <table class="form-table" role="presentation">
-        <tr><th scope="row"><label for="cvm-retention"><?php esc_html_e('Retention period (days)', 'convermetry'); ?></label></th><td>
-        <input type="number" id="cvm-retention" min="7" max="365" name="<?php echo esc_attr(Options::OPTION_KEY . '[retention_days]'); ?>" value="<?php echo esc_attr((string) $settings['retention_days']); ?>" class="small-text">
+        <tr><th scope="row"><label for="cvmtry-retention"><?php esc_html_e('Retention period (days)', 'convermetry'); ?></label></th><td>
+        <input type="number" id="cvmtry-retention" min="7" max="365" name="<?php echo esc_attr(Options::OPTION_KEY . '[retention_days]'); ?>" value="<?php echo esc_attr((string) $settings['retention_days']); ?>" class="small-text">
         <p class="description"><?php esc_html_e('Analytics events, form submission records, goal completions, lead status history, and activity log entries older than this are deleted by a daily cleanup job. Default is 90 days.', 'convermetry'); ?></p></td></tr>
-        <tr><th scope="row"><label for="cvm-currency"><?php esc_html_e('Lead value currency', 'convermetry'); ?></label></th><td>
-        <input type="text" id="cvm-currency" maxlength="3" size="5" name="<?php echo esc_attr(Options::OPTION_KEY . '[lead_currency]'); ?>" value="<?php echo esc_attr((string) ($settings['lead_currency'] ?? '')); ?>" class="small-text" pattern="[A-Za-z]{3}" placeholder="USD">
+        <tr><th scope="row"><label for="cvmtry-currency"><?php esc_html_e('Lead value currency', 'convermetry'); ?></label></th><td>
+        <input type="text" id="cvmtry-currency" maxlength="3" size="5" name="<?php echo esc_attr(Options::OPTION_KEY . '[lead_currency]'); ?>" value="<?php echo esc_attr((string) ($settings['lead_currency'] ?? '')); ?>" class="small-text" pattern="[A-Za-z]{3}" placeholder="USD">
         <p class="description"><?php echo wp_kses_post(__('Three-letter ISO 4217 code (USD, EUR, GBP, AUD…) used when you record a value against a lead on the Submissions screen. The code is <strong>saved onto each lead</strong> at the moment you enter its value, so changing this later never rewrites what is already recorded — and reports total each currency separately rather than adding different currencies together.', 'convermetry')); ?></p></td></tr>
         <tr><th scope="row"><?php esc_html_e('Activity Log privacy', 'convermetry'); ?></th><td>
         <label><input type="checkbox" name="<?php echo esc_attr(Options::OPTION_KEY . '[log_submission_data]'); ?>" value="1" <?php echo checked(!empty($settings['log_submission_data']), true, false); ?>>

@@ -277,7 +277,7 @@ final class EmailBuilder
      * A deep link to this submission in the Submissions admin page.
      *
      * The list is JavaScript-rendered and seeds its search box from
-     * 'cvm_search' (see SubmissionsPage::enqueueAssets()), and
+     * 'cvmtry_search' (see SubmissionsPage::enqueueAssets()), and
      * FormSubmissions::buildWhereClause() matches submission_id exactly, so
      * this lands on a one-row list rather than the full table.
      *
@@ -290,7 +290,7 @@ final class EmailBuilder
         return (string) add_query_arg(
             [
                 'page'       => SubmissionsPage::MENU_SLUG,
-                'cvm_search' => rawurlencode((string) ($submission['submission_id'] ?? '')),
+                'cvmtry_search' => rawurlencode((string) ($submission['submission_id'] ?? '')),
             ],
             $siteInfo->adminUrl
         );

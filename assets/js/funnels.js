@@ -19,25 +19,25 @@
 
     const { __, sprintf } = wp.i18n;
 
-    const form = document.querySelector('.cvm-funnel-form');
+    const form = document.querySelector('.cvmtry-funnel-form');
     if (!form) {
         return;
     }
 
-    const cfg = (typeof CVM_FUNNEL !== 'undefined') ? CVM_FUNNEL : {};
+    const cfg = (typeof CVMTRY_FUNNEL !== 'undefined') ? CVMTRY_FUNNEL : {};
     const stepTypes = cfg.stepTypes || {};
     const goals = cfg.goals || {};
     const operators = cfg.operators || ['equals', 'contains', 'starts_with', 'ends_with'];
     const maxSteps = cfg.maxSteps || 8;
     const minSteps = cfg.minSteps || 2;
 
-    const rows = form.querySelector('.cvm-funnel-step-rows');
-    const addBtn = form.querySelector('.cvm-funnel-add-step');
-    const idField = form.querySelector('.cvm-funnel-id');
-    const nameField = form.querySelector('#cvm-funnel-name');
+    const rows = form.querySelector('.cvmtry-funnel-step-rows');
+    const addBtn = form.querySelector('.cvmtry-funnel-add-step');
+    const idField = form.querySelector('.cvmtry-funnel-id');
+    const nameField = form.querySelector('#cvmtry-funnel-name');
     const enabledField = form.querySelector('input[name="funnel[enabled]"]');
-    const cancelBtn = form.querySelector('.cvm-funnel-cancel');
-    const title = document.getElementById('cvm-funnel-editor-title');
+    const cancelBtn = form.querySelector('.cvmtry-funnel-cancel');
+    const title = document.getElementById('cvmtry-funnel-editor-title');
 
     /** Human labels for the page-step operators, translated server-side
      *  (FunnelsPage::operatorLabels()) so rows added here read exactly like
@@ -94,25 +94,25 @@
         }
 
         const row = document.createElement('div');
-        row.className = 'cvm-funnel-step-row';
+        row.className = 'cvmtry-funnel-step-row';
         row.innerHTML =
-            '<span class="cvm-funnel-step-num">' + (index + 1) + '</span>' +
-            '<select class="cvm-step-type" name="funnel[steps][' + index + '][type]">' +
+            '<span class="cvmtry-funnel-step-num">' + (index + 1) + '</span>' +
+            '<select class="cvmtry-step-type" name="funnel[steps][' + index + '][type]">' +
                 optionsHtml(stepTypes, step.type || 'page') +
             '</select>' +
-            '<select class="cvm-step-operator" name="funnel[steps][' + index + '][operator]">' +
+            '<select class="cvmtry-step-operator" name="funnel[steps][' + index + '][operator]">' +
                 optionsHtml(operatorMap, step.operator || 'equals') +
             '</select>' +
-            '<select class="cvm-step-goal">' +
+            '<select class="cvmtry-step-goal">' +
                 (Object.keys(goalMap).length
                     ? optionsHtml(goalMap, step.type === 'goal' ? step.value : '')
                     : '<option value="">' + escapeHtml(__('No goals configured yet', 'convermetry')) + '</option>') +
             '</select>' +
-            '<input type="text" class="cvm-step-value" name="funnel[steps][' + index + '][value]" ' +
+            '<input type="text" class="cvmtry-step-value" name="funnel[steps][' + index + '][value]" ' +
                 'value="' + escapeAttr(step.value || '') + '" placeholder="/services/">' +
-            '<input type="text" class="cvm-step-label" name="funnel[steps][' + index + '][label]" ' +
+            '<input type="text" class="cvmtry-step-label" name="funnel[steps][' + index + '][label]" ' +
                 'value="' + escapeAttr(step.label || '') + '" placeholder="' + escapeAttr(__('Label (optional)', 'convermetry')) + '">' +
-            '<button type="button" class="button-link cvm-btn-danger-link cvm-step-remove" ' +
+            '<button type="button" class="button-link cvmtry-btn-danger-link cvmtry-step-remove" ' +
                 /* translators: %d: the funnel step's position. */
                 'aria-label="' + escapeAttr(sprintf(__('Remove step %d', 'convermetry'), index + 1)) + '">' +
                 escapeHtml(__('Remove', 'convermetry')) + '</button>';
@@ -130,10 +130,10 @@
      * validate rather than three.
      */
     function syncRow(row) {
-        const type = row.querySelector('.cvm-step-type').value;
-        const operator = row.querySelector('.cvm-step-operator');
-        const goalSelect = row.querySelector('.cvm-step-goal');
-        const value = row.querySelector('.cvm-step-value');
+        const type = row.querySelector('.cvmtry-step-type').value;
+        const operator = row.querySelector('.cvmtry-step-operator');
+        const goalSelect = row.querySelector('.cvmtry-step-goal');
+        const value = row.querySelector('.cvmtry-step-value');
 
         const isPage = type === 'page';
         const isGoal = type === 'goal';
@@ -153,19 +153,19 @@
 
     /** Renumbers rows after an add or remove, so field names stay sequential. */
     function renumber() {
-        const all = rows.querySelectorAll('.cvm-funnel-step-row');
+        const all = rows.querySelectorAll('.cvmtry-funnel-step-row');
         for (let i = 0; i < all.length; i++) {
-            all[i].querySelector('.cvm-funnel-step-num').textContent = String(i + 1);
-            all[i].querySelector('.cvm-step-type').name = 'funnel[steps][' + i + '][type]';
-            all[i].querySelector('.cvm-step-operator').name = 'funnel[steps][' + i + '][operator]';
-            all[i].querySelector('.cvm-step-value').name = 'funnel[steps][' + i + '][value]';
-            all[i].querySelector('.cvm-step-label').name = 'funnel[steps][' + i + '][label]';
+            all[i].querySelector('.cvmtry-funnel-step-num').textContent = String(i + 1);
+            all[i].querySelector('.cvmtry-step-type').name = 'funnel[steps][' + i + '][type]';
+            all[i].querySelector('.cvmtry-step-operator').name = 'funnel[steps][' + i + '][operator]';
+            all[i].querySelector('.cvmtry-step-value').name = 'funnel[steps][' + i + '][value]';
+            all[i].querySelector('.cvmtry-step-label').name = 'funnel[steps][' + i + '][label]';
         }
         addBtn.disabled = all.length >= maxSteps;
     }
 
     function addRow(step) {
-        const count = rows.querySelectorAll('.cvm-funnel-step-row').length;
+        const count = rows.querySelectorAll('.cvmtry-funnel-step-row').length;
         if (count >= maxSteps) {
             return;
         }
@@ -176,17 +176,17 @@
     }
 
     rows.addEventListener('change', function (e) {
-        const row = e.target.closest('.cvm-funnel-step-row');
+        const row = e.target.closest('.cvmtry-funnel-step-row');
         if (row) {
             syncRow(row);
         }
     });
 
     rows.addEventListener('click', function (e) {
-        if (!e.target.closest('.cvm-step-remove')) {
+        if (!e.target.closest('.cvmtry-step-remove')) {
             return;
         }
-        const row = e.target.closest('.cvm-funnel-step-row');
+        const row = e.target.closest('.cvmtry-funnel-step-row');
         if (row) {
             row.remove();
             renumber();
@@ -231,7 +231,7 @@
         }
     }
 
-    const editButtons = document.querySelectorAll('.cvm-funnel-edit');
+    const editButtons = document.querySelectorAll('.cvmtry-funnel-edit');
     for (let i = 0; i < editButtons.length; i++) {
         editButtons[i].addEventListener('click', function () {
             let funnel = null;
@@ -255,7 +255,7 @@
      *  implies otherwise. PHP renders these so the form still works with the
      *  script blocked; here we adopt them rather than replace them. */
     function resetRows() {
-        const existing = rows.querySelectorAll('.cvm-funnel-step-row');
+        const existing = rows.querySelectorAll('.cvmtry-funnel-step-row');
 
         // Drop anything past the baseline, blank what remains.
         for (let i = existing.length - 1; i >= minSteps; i--) {
@@ -263,10 +263,10 @@
         }
         for (let i = 0; i < existing.length && i < minSteps; i++) {
             const row = existing[i];
-            row.querySelector('.cvm-step-type').value = 'page';
-            row.querySelector('.cvm-step-operator').value = 'equals';
-            row.querySelector('.cvm-step-value').value = '';
-            row.querySelector('.cvm-step-label').value = '';
+            row.querySelector('.cvmtry-step-type').value = 'page';
+            row.querySelector('.cvmtry-step-operator').value = 'equals';
+            row.querySelector('.cvmtry-step-value').value = '';
+            row.querySelector('.cvmtry-step-label').value = '';
             syncRow(row);
         }
 

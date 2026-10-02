@@ -69,6 +69,7 @@ final class ElementorProvider implements FormProviderInterface
         $forms = [];
 
         /** @var string[] $postIds */
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- form discovery on admin screens; the result is cached by FormProviderRegistry::discoveredForms().
         $postIds = $wpdb->get_col($wpdb->prepare(
             "SELECT DISTINCT post_id FROM %i WHERE meta_key = %s",
             $wpdb->postmeta,

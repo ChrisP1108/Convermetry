@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Convermetry
  * Description: Visitor analytics, campaign attribution, and server-confirmed form conversion tracking with reliable webhook delivery. Connects every lead to its analytics session, traffic source, and campaign, and delivers analytics reports and form submissions to any number of webhook endpoints with signing, retries, and idempotency.
- * Version:     1.0.0
+ * Version:     1.0.1
  * Requires at least: 6.3
  * Requires PHP: 8.3
  * Author:      Chris Paschall
@@ -22,6 +22,18 @@ if (!defined('ABSPATH')) exit;
  */
 if (version_compare(PHP_VERSION, '8.3', '<')) {
     add_action('admin_notices', function () {
+        // Only someone who can act on it, and only on the Dashboard and the
+        // Plugins screen: the notice explains why the plugin is not running,
+        // and it disappears once PHP is upgraded or the plugin deactivated.
+        $screen = function_exists('get_current_screen') ? get_current_screen() : null;
+        if (
+            !current_user_can('activate_plugins')
+            || !$screen
+            || !in_array($screen->id, array('dashboard', 'plugins'), true)
+        ) {
+            return;
+        }
+
         echo '<div class="notice notice-error"><p>';
         echo wp_kses_post(sprintf(
             /* translators: %s: the PHP version the server is running. */
@@ -39,14 +51,14 @@ if (version_compare(PHP_VERSION, '8.3', '<')) {
  */
 } else {
 
-    define('CVM_VERSION', '1.0.0');
-    define('CVM_PLUGIN_FILE', __FILE__);
-    define('CVM_PLUGIN_DIR', plugin_dir_path(__FILE__));
-    define('CVM_PLUGIN_URL', plugin_dir_url(__FILE__));
+    define('CVMTRY_VERSION', '1.0.1');
+    define('CVMTRY_PLUGIN_FILE', __FILE__);
+    define('CVMTRY_PLUGIN_DIR', plugin_dir_path(__FILE__));
+    define('CVMTRY_PLUGIN_URL', plugin_dir_url(__FILE__));
 
-    require_once CVM_PLUGIN_DIR . 'src/Autoloader.php';
+    require_once CVMTRY_PLUGIN_DIR . 'src/Autoloader.php';
 
-    Convermetry\Autoloader::boot(CVM_PLUGIN_DIR);
+    Convermetry\Autoloader::boot(CVMTRY_PLUGIN_DIR);
 
     /**
      * Plugin activation: create the custom tables and schedule the cron
@@ -65,8 +77,8 @@ if (version_compare(PHP_VERSION, '8.3', '<')) {
         Convermetry\Goals\GoalCompletions::createTable();
         Convermetry\Leads\LeadEvents::createTable();
 
-        if (!wp_next_scheduled('cvm_cleanup_old_events')) {
-            wp_schedule_event(time(), 'daily', 'cvm_cleanup_old_events');
+        if (!wp_next_scheduled('cvmtry_cleanup_old_events')) {
+            wp_schedule_event(time(), 'daily', 'cvmtry_cleanup_old_events');
         }
 
         Convermetry\Webhook\AnalyticsDispatcher::schedule();
@@ -97,7 +109,7 @@ if (version_compare(PHP_VERSION, '8.3', '<')) {
      * window or when the plugin is uninstalled (see uninstall.php).
      */
     register_deactivation_hook(__FILE__, static function (): void {
-        wp_clear_scheduled_hook('cvm_cleanup_old_events');
+        wp_clear_scheduled_hook('cvmtry_cleanup_old_events');
         wp_clear_scheduled_hook(Convermetry\Database\MigrationRunner::CRON_HOOK);
         wp_clear_scheduled_hook(Convermetry\Database\DatabaseManager::CLEANUP_CATCHUP_HOOK);
         wp_clear_scheduled_hook(Convermetry\Database\FormSubmissions::BACKFILL_CATCHUP_HOOK);
@@ -139,7 +151,7 @@ if (version_compare(PHP_VERSION, '8.3', '<')) {
      *                                   conversion dedup stays consistent.
      * @return bool True when the event row was stored.
      */
-    function cvm_track_event($type, array $data = array())
+    function cvmtry_track_event($type, array $data = array())
     {
         return Convermetry\Database\DatabaseManager::insertEvent((string) $type, $data);
     }
@@ -171,7 +183,7 @@ if (version_compare(PHP_VERSION, '8.3', '<')) {
      *
      *    'id'    — the field's stable machine-readable key. Required; an entry
      *              whose id is empty after sanitizing is dropped, as is any
-     *              id beginning with 'cvm_' (Convermetry's own correlation
+     *              id beginning with 'cvmtry_' (Convermetry's own correlation
      *              fields, in any letter case).
      *    'label' — the human-readable label shown in the Submissions panel,
      *              CSV exports and notification emails. Falls back to 'id'

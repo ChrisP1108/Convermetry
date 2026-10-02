@@ -130,13 +130,13 @@ final class FormEngagementReport
                     SUM(CASE WHEN s.created_at >= %s THEN 1 ELSE 0 END) AS in_progress
              FROM (
                  SELECT DISTINCT e.form_key, e.session_id, MIN(e.id) AS id, MIN(e.created_at) AS created_at
-                 FROM {$table} AS e
+                 FROM %i AS e
                  WHERE e.event_type = 'form_start' AND e.form_key <> '' AND e.session_id <> ''
                    AND e.created_at >= %s AND e.created_at < %s
                  GROUP BY e.form_key, e.session_id
              ) AS s
              WHERE NOT EXISTS (
-                 SELECT 1 FROM {$table} AS x
+                 SELECT 1 FROM %i AS x
                  WHERE x.event_type = 'form_success'
                    AND x.session_id = s.session_id
                    AND x.form_key = s.form_key
@@ -146,8 +146,10 @@ final class FormEngagementReport
              GROUP BY s.form_key",
             $mature,
             $mature,
+            $table,
             $start,
             $end,
+            $table,
             self::COMPLETION_WINDOW_MINUTES
         ));
 
@@ -181,27 +183,26 @@ final class FormEngagementReport
         global $wpdb;
         $table = DatabaseManager::tableName();
 
-        $where  = "event_type = 'form_error' AND created_at >= %s AND created_at < %s";
-        $params = [$start, $end];
-
-        if ($formKey !== '') {
-            $where   .= ' AND form_key = %s';
-            $params[] = $formKey;
-        }
-
-        $params[] = $limit;
-
+        // An empty $formKey means every form. MySQL folds the constant
+        // comparison away before planning, so a one-form query still filters
+        // on form_key.
         $rows = ReportQuery::rows($wpdb->prepare(
             "SELECT form_key, element_label AS field_id, element_tag AS field_type,
                     event_value AS error_type,
                     COUNT(*) AS errors,
                     COUNT(DISTINCT NULLIF(session_id, '')) AS sessions
-             FROM {$table}
-             WHERE {$where}
+             FROM %i
+             WHERE event_type = 'form_error' AND created_at >= %s AND created_at < %s
+               AND (%s = '' OR form_key = %s)
              GROUP BY form_key, element_label, element_tag, event_value
              ORDER BY errors DESC, field_id ASC
              LIMIT %d",
-            $params
+            $table,
+            $start,
+            $end,
+            $formKey,
+            $formKey,
+            $limit
         ));
 
         return array_map(static fn(array $row): array => [

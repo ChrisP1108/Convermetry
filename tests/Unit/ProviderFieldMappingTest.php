@@ -71,7 +71,7 @@ final class ProviderFieldMappingTest extends TestCase
         // Every gate that would otherwise pull in another subsystem: no
         // analytics event, no IP capture, no webhook endpoints, no exclusions.
         Functions\when('get_option')->alias(static fn(string $key, $default = false) => match ($key) {
-            'cvm_settings' => ['track_form_success' => false, 'store_ip_address' => false],
+            'cvmtry_settings' => ['track_form_success' => false, 'store_ip_address' => false],
             default        => is_array($default) ? $default : [],
         });
 
@@ -391,9 +391,9 @@ final class ProviderFieldMappingTest extends TestCase
             42,
             [
                 'email'             => 'john@example.com',
-                'cvm_conversion_id' => 'c1',
-                'cvm_session_id'    => 's1',
-                'cvm_context'       => '{}',
+                'cvmtry_conversion_id' => 'c1',
+                'cvmtry_session_id'    => 's1',
+                'cvmtry_context'       => '{}',
             ],
             (object) ['id' => 3, 'title' => 'Contact'],
         ]);

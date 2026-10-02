@@ -29,83 +29,87 @@ function convermetry_uninstall_current_site(): void
     // the form-delivery queue, the notification queue, goal completions,
     // and lead status history.
     $tables = [
-        'cvm_events',
-        'cvm_webhook_deliveries',
-        'cvm_form_submissions',
-        'cvm_delivery_queue',
-        'cvm_notification_queue',
-        'cvm_goal_completions',
-        'cvm_lead_events',
+        'cvmtry_events',
+        'cvmtry_webhook_deliveries',
+        'cvmtry_form_submissions',
+        'cvmtry_delivery_queue',
+        'cvmtry_notification_queue',
+        'cvmtry_goal_completions',
+        'cvmtry_lead_events',
     ];
 
     foreach ($tables as $table) {
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.DirectDatabaseQuery.SchemaChange -- uninstall removes the plugin's own tables and option rows.
         $wpdb->query($wpdb->prepare('DROP TABLE IF EXISTS %i', $wpdb->prefix . $table));
     }
 
     // Plugin options.
-    delete_option('cvm_settings');
-    delete_option('cvm_webhook_settings');
-    delete_option('cvm_form_settings');
-    delete_option('cvm_notification_settings');
-    delete_option('cvm_goals');
-    delete_option('cvm_goal_selectors');
-    delete_option('cvm_funnels');
-    delete_option('cvm_db_version');
-    delete_option('cvm_delivery_db_version');
-    delete_option('cvm_submissions_db_version');
-    delete_option('cvm_queue_db_version');
-    delete_option('cvm_notification_db_version');
-    delete_option('cvm_goals_db_version');
-    delete_option('cvm_leads_db_version');
-    delete_option('cvm_delivery_api_active');
-    delete_option('cvm_delivery_api_key_hash');
-    delete_option('cvm_webhook_last_sent');
-    delete_option('cvm_webhook_retry_state');
-    delete_option('cvm_webhook_state_version');
-    delete_option('cvm_webhook_dispatch_lock');
-    delete_option('cvm_migration_lock');
+    delete_option('cvmtry_settings');
+    delete_option('cvmtry_webhook_settings');
+    delete_option('cvmtry_form_settings');
+    delete_option('cvmtry_notification_settings');
+    delete_option('cvmtry_goals');
+    delete_option('cvmtry_goal_selectors');
+    delete_option('cvmtry_funnels');
+    delete_option('cvmtry_db_version');
+    delete_option('cvmtry_delivery_db_version');
+    delete_option('cvmtry_submissions_db_version');
+    delete_option('cvmtry_queue_db_version');
+    delete_option('cvmtry_notification_db_version');
+    delete_option('cvmtry_goals_db_version');
+    delete_option('cvmtry_leads_db_version');
+    delete_option('cvmtry_delivery_api_active');
+    delete_option('cvmtry_delivery_api_key_hash');
+    delete_option('cvmtry_webhook_last_sent');
+    delete_option('cvmtry_webhook_retry_state');
+    delete_option('cvmtry_webhook_state_version');
+    delete_option('cvmtry_webhook_dispatch_lock');
+    delete_option('cvmtry_migration_lock');
 
     // Cleanup mutex. Unlike at deactivation, uninstall runs strictly after
     // deactivation has already completed — no plugin code can still be
     // running — so there is no in-progress holder left to disturb.
-    delete_option('cvm_cleanup_lock');
+    delete_option('cvmtry_cleanup_lock');
 
     // Rate-limit counter rows, written directly to the options table by the
     // tracking REST controller when no persistent object cache is available.
+    // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- uninstall removes the plugin's own tables and option rows.
     $wpdb->query($wpdb->prepare(
         'DELETE FROM %i WHERE option_name LIKE %s',
         $wpdb->options,
-        $wpdb->esc_like('cvm_rl_') . '%'
+        $wpdb->esc_like('cvmtry_rl_') . '%'
     ));
 
     // Queue-repair records, one row per submission, written directly for the
     // same reason.
+    // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- uninstall removes the plugin's own tables and option rows.
     $wpdb->query($wpdb->prepare(
         'DELETE FROM %i WHERE option_name LIKE %s',
         $wpdb->options,
-        $wpdb->esc_like('cvm_queue_repair_') . '%'
+        $wpdb->esc_like('cvmtry_queue_repair_') . '%'
     ));
 
     // Transients (form-discovery caches, rate-limit flag, failure-log
     // throttle, API auth-failure counters).
+    // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- uninstall removes the plugin's own tables and option rows.
     $wpdb->query($wpdb->prepare(
         'DELETE FROM %i WHERE option_name LIKE %s OR option_name LIKE %s',
         $wpdb->options,
-        $wpdb->esc_like('_transient_cvm_') . '%',
-        $wpdb->esc_like('_transient_timeout_cvm_') . '%'
+        $wpdb->esc_like('_transient_cvmtry_') . '%',
+        $wpdb->esc_like('_transient_timeout_cvmtry_') . '%'
     ));
 
     // Scheduled cron events, including any pending single-event retries and
     // queue-worker runs.
-    wp_clear_scheduled_hook('cvm_cleanup_old_events');
-    wp_clear_scheduled_hook('cvm_cleanup_old_events_catchup');
-    wp_clear_scheduled_hook('cvm_run_migrations');
-    wp_clear_scheduled_hook('cvm_submissions_backfill_catchup');
-    wp_clear_scheduled_hook('cvm_dispatch_webhooks');
-    wp_clear_scheduled_hook('cvm_process_form_queue');
-    wp_unschedule_hook('cvm_reconcile_form_queue');
-    wp_clear_scheduled_hook('cvm_process_notifications');
-    wp_unschedule_hook('cvm_retry_webhook');
+    wp_clear_scheduled_hook('cvmtry_cleanup_old_events');
+    wp_clear_scheduled_hook('cvmtry_cleanup_old_events_catchup');
+    wp_clear_scheduled_hook('cvmtry_run_migrations');
+    wp_clear_scheduled_hook('cvmtry_submissions_backfill_catchup');
+    wp_clear_scheduled_hook('cvmtry_dispatch_webhooks');
+    wp_clear_scheduled_hook('cvmtry_process_form_queue');
+    wp_unschedule_hook('cvmtry_reconcile_form_queue');
+    wp_clear_scheduled_hook('cvmtry_process_notifications');
+    wp_unschedule_hook('cvmtry_retry_webhook');
 }
 
 if (is_multisite()) {

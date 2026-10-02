@@ -370,7 +370,7 @@ final class AboutPage
                 'filter',
                 'apply_filters(\'convermetry_submission_fields\', array $fields, string $formKey, string $provider)',
                 'Forms &amp; submissions',
-                __('The normalized field descriptors. A <strong>changed</strong> result is re-normalized, so <code>cvm_*</code> stays stripped and the descriptor shape holds. <strong>Contains PII</strong>', 'convermetry'),
+                __('The normalized field descriptors. A <strong>changed</strong> result is re-normalized, so <code>cvmtry_*</code> stays stripped and the descriptor shape holds. <strong>Contains PII</strong>', 'convermetry'),
             ],
             [
                 'convermetry_submission_context_extensions',
@@ -878,7 +878,7 @@ final class AboutPage
                 'array $fields' => __('Normalized <code>[\'id\', \'label\', \'value\']</code> descriptors, so spam rules can read them. <strong>Contains PII</strong>', 'convermetry'),
             ],
             'convermetry_submission_fields' => [
-                'array $fields' => __('Normalized <code>[\'id\', \'label\', \'value\']</code> descriptors. A <strong>changed</strong> result is re-normalized, so <code>cvm_*</code> stays stripped and the descriptor shape holds. <strong>Contains PII</strong>', 'convermetry'),
+                'array $fields' => __('Normalized <code>[\'id\', \'label\', \'value\']</code> descriptors. A <strong>changed</strong> result is re-normalized, so <code>cvmtry_*</code> stays stripped and the descriptor shape holds. <strong>Contains PII</strong>', 'convermetry'),
                 'string $formKey' => __('Provider-qualified form identity', 'convermetry'),
                 'string $provider' => __('Provider key', 'convermetry'),
             ],
@@ -1279,7 +1279,7 @@ final class AboutPage
             . "}, 10, 5);",
         'convermetry_analytics_admin_panels' => "add_action('convermetry_analytics_admin_panels', function (string \$start, string \$end): void {\n"
             . "    // Runs after this screen's capability check. ESCAPE YOUR OWN OUTPUT.\n"
-            . "    printf('<div class=\"cvm-card\"><h3>%s</h3><p>%s</p></div>',\n"
+            . "    printf('<div class=\"cvmtry-card\"><h3>%s</h3><p>%s</p></div>',\n"
             . "        esc_html__('Revenue', 'acme'),\n"
             . "        esc_html(acme_revenue_between(\$start, \$end)));\n"
             . "}, 10, 2);",
@@ -1371,7 +1371,7 @@ final class AboutPage
             . "});",
         'convermetry_forms_admin_sections' => "add_action('convermetry_forms_admin_sections', function (): void {\n"
             . "    // Outside the settings form — post your own form to admin-post.php.\n"
-            . "    echo '<div class=\"cvm-card\"><h3>' . esc_html__('Acme sync', 'acme') . '</h3></div>';\n"
+            . "    echo '<div class=\"cvmtry-card\"><h3>' . esc_html__('Acme sync', 'acme') . '</h3></div>';\n"
             . "});",
         'convermetry_form_submission' => "do_action('convermetry_form_submission',\n"
             . "    ['form_name' => 'Booking Widget', 'form_id' => 'booking-1'],\n"
@@ -1551,20 +1551,20 @@ final class AboutPage
         }
 
         wp_enqueue_style(
-            'cvm-about',
-            CVM_PLUGIN_URL . 'assets/css/admin-about.css',
+            'cvmtry-about',
+            CVMTRY_PLUGIN_URL . 'assets/css/admin-about.css',
             [AdminAssets::COMMON_HANDLE],
-            CVM_VERSION
+            CVMTRY_VERSION
         );
 
         wp_enqueue_script(
-            'cvm-about',
-            CVM_PLUGIN_URL . 'assets/js/about.js',
+            'cvmtry-about',
+            CVMTRY_PLUGIN_URL . 'assets/js/about.js',
             ['wp-i18n'],
-            CVM_VERSION,
+            CVMTRY_VERSION,
             true
         );
-        wp_set_script_translations('cvm-about', 'convermetry');
+        wp_set_script_translations('cvmtry-about', 'convermetry');
     }
 
     /**
@@ -1578,14 +1578,14 @@ final class AboutPage
     private static function nav(): void
     {
         ?>
-        <nav class="cvm-about-nav" aria-label="<?php esc_attr_e('Documentation sections', 'convermetry'); ?>">
-        <div class="cvm-about-nav-inner">
-        <a class="cvm-about-nav-top" href="#cvm-about-top"><span aria-hidden="true">&uarr;</span> <?php esc_html_e('Top', 'convermetry'); ?></a>
+        <nav class="cvmtry-about-nav" aria-label="<?php esc_attr_e('Documentation sections', 'convermetry'); ?>">
+        <div class="cvmtry-about-nav-inner">
+        <a class="cvmtry-about-nav-top" href="#cvmtry-about-top"><span aria-hidden="true">&uarr;</span> <?php esc_html_e('Top', 'convermetry'); ?></a>
         <?php
 
         foreach (self::sections() as $id => $label) {
             printf(
-                '<a class="cvm-about-nav-link" href="#%1$s" data-cvm-section="%1$s">%2$s</a>',
+                '<a class="cvmtry-about-nav-link" href="#%1$s" data-cvmtry-section="%1$s">%2$s</a>',
                 esc_attr($id),
                 esc_html($label)
             );
@@ -1605,8 +1605,8 @@ final class AboutPage
     private static function sectionStart(string $id): void
     {
         ?>
-        <section class="cvm-about-section" id="<?php echo esc_attr($id); ?>">
-        <h2 class="cvm-about-section-title"><?php echo esc_html(self::sections()[$id] ?? $id); ?></h2>
+        <section class="cvmtry-about-section" id="<?php echo esc_attr($id); ?>">
+        <h2 class="cvmtry-about-section-title"><?php echo esc_html(self::sections()[$id] ?? $id); ?></h2>
         <?php
     }
 
@@ -1631,8 +1631,8 @@ final class AboutPage
     private static function cardStart(string $title): void
     {
         ?>
-        <div class="cvm-card cvm-about-card">
-        <h3 class="cvm-card-title"><?php echo esc_html($title); ?></h3>
+        <div class="cvmtry-card cvmtry-about-card">
+        <h3 class="cvmtry-card-title"><?php echo esc_html($title); ?></h3>
         <?php
     }
 
@@ -1657,7 +1657,7 @@ final class AboutPage
     private static function code(string $code): void
     {
         ?>
-        <pre class="cvm-about-code"><?php echo esc_html($code); ?></pre>
+        <pre class="cvmtry-about-code"><?php echo esc_html($code); ?></pre>
         <?php
     }
 
@@ -1685,9 +1685,9 @@ final class AboutPage
         $example  = self::HOOK_EXAMPLES[$name] ?? '';
         $detailId = 'hook-detail-' . $name;
         ?>
-        <div class="cvm-about-hook" id="hook-<?php echo esc_attr($name); ?>">
-        <h4 class="cvm-about-hook-name"><code><?php echo esc_html($name); ?></code><span class="cvm-about-hook-type cvm-about-hook-type-<?php echo esc_attr($type); ?>"><?php echo esc_html($type); ?></span></h4>
-        <p class="cvm-about-hook-summary"><?php echo wp_kses_post($summary); ?></p>
+        <div class="cvmtry-about-hook" id="hook-<?php echo esc_attr($name); ?>">
+        <h4 class="cvmtry-about-hook-name"><code><?php echo esc_html($name); ?></code><span class="cvmtry-about-hook-type cvmtry-about-hook-type-<?php echo esc_attr($type); ?>"><?php echo esc_html($type); ?></span></h4>
+        <p class="cvmtry-about-hook-summary"><?php echo wp_kses_post($summary); ?></p>
         <?php
         self::code($signature);
 
@@ -1695,12 +1695,12 @@ final class AboutPage
             return;
         }
         ?>
-        <button type="button" class="cvm-about-hook-toggle" aria-expanded="false"
+        <button type="button" class="cvmtry-about-hook-toggle" aria-expanded="false"
                 aria-controls="<?php echo esc_attr($detailId); ?>"><?php esc_html_e('Learn More', 'convermetry'); ?></button>
-        <div class="cvm-about-hook-detail" id="<?php echo esc_attr($detailId); ?>" hidden>
+        <div class="cvmtry-about-hook-detail" id="<?php echo esc_attr($detailId); ?>" hidden>
             <?php if ($args !== []) { ?>
-            <p class="cvm-about-hook-detail-title"><?php esc_html_e('Arguments', 'convermetry'); ?></p>
-            <table class="cvm-about-hook-args">
+            <p class="cvmtry-about-hook-detail-title"><?php esc_html_e('Arguments', 'convermetry'); ?></p>
+            <table class="cvmtry-about-hook-args">
             <tbody>
             <?php foreach ($args as $arg => $note) { ?>
                 <tr>
@@ -1713,7 +1713,7 @@ final class AboutPage
             <?php } ?>
 
             <?php if ($example !== '') { ?>
-            <p class="cvm-about-hook-detail-title"><?php esc_html_e('Example', 'convermetry'); ?></p>
+            <p class="cvmtry-about-hook-detail-title"><?php esc_html_e('Example', 'convermetry'); ?></p>
             <?php self::code($example); ?>
             <?php } ?>
         </div>
@@ -1744,16 +1744,16 @@ final class AboutPage
         }
 
         ?>
-        <div class="wrap cvm-wrap cvm-about">
-        <h1 id="cvm-about-top"><?php esc_html_e('About Convermetry', 'convermetry'); ?></h1>
-        <p class="cvm-about-intro"><?php
+        <div class="wrap cvmtry-wrap cvmtry-about">
+        <h1 id="cvmtry-about-top"><?php esc_html_e('About Convermetry', 'convermetry'); ?></h1>
+        <p class="cvmtry-about-intro"><?php
         echo esc_html(sprintf(
             /* translators: %s: plugin version number. */
             __('Convermetry %s — visitor analytics, campaign attribution, and server-confirmed form conversion tracking with reliable webhook delivery. It answers the full funnel question: where a visitor came from, what they did, which form they submitted, what they submitted, which campaign produced the lead, what that lead turned out to be worth, and whether it reached your downstream systems.', 'convermetry'),
-            CVM_VERSION
+            CVMTRY_VERSION
         ));
         ?></p>
-        <p class="cvm-about-meta"><?php echo wp_kses_post(__('Everything on this page is also in the plugin\'s <code>README.md</code>. Use the bar below to jump between sections.', 'convermetry')); ?></p>
+        <p class="cvmtry-about-meta"><?php echo wp_kses_post(__('Everything on this page is also in the plugin\'s <code>README.md</code>. Use the bar below to jump between sections.', 'convermetry')); ?></p>
         <?php
 
         self::nav();
@@ -1806,19 +1806,19 @@ Was the lead worth anything?
 Was it successfully delivered to external systems?');
         ?>
         <p><?php echo wp_kses_post(__('Convermetry works standalone — a full analytics dashboard, form integrations, lead outcomes, and webhook delivery inside one WordPress install — and is architected so a future Convermetry SaaS can receive <code>analytics_report</code> and <code>form_submission</code> messages from many installations, keyed by a shared, versioned payload schema.', 'convermetry')); ?></p>
-        <ul class="cvm-about-requirements">
-        <li><span class="cvm-about-label"><?php esc_html_e('Version', 'convermetry'); ?></span> <?php echo esc_html(CVM_VERSION); ?></li>
-        <li><span class="cvm-about-label"><?php esc_html_e('WordPress', 'convermetry'); ?></span> 6.3+</li>
-        <li><span class="cvm-about-label"><?php esc_html_e('PHP', 'convermetry'); ?></span> 8.3+</li>
-        <li><span class="cvm-about-label"><?php esc_html_e('REST namespace', 'convermetry'); ?></span> <code>convermetry/v1</code></li>
-        <li><span class="cvm-about-label"><?php esc_html_e('PHP namespace', 'convermetry'); ?></span> <code>Convermetry\</code></li>
-        <li><span class="cvm-about-label"><?php esc_html_e('License', 'convermetry'); ?></span> <?php esc_html_e('GPL-2.0-or-later', 'convermetry'); ?></li></ul>
+        <ul class="cvmtry-about-requirements">
+        <li><span class="cvmtry-about-label"><?php esc_html_e('Version', 'convermetry'); ?></span> <?php echo esc_html(CVMTRY_VERSION); ?></li>
+        <li><span class="cvmtry-about-label"><?php esc_html_e('WordPress', 'convermetry'); ?></span> 6.3+</li>
+        <li><span class="cvmtry-about-label"><?php esc_html_e('PHP', 'convermetry'); ?></span> 8.3+</li>
+        <li><span class="cvmtry-about-label"><?php esc_html_e('REST namespace', 'convermetry'); ?></span> <code>convermetry/v1</code></li>
+        <li><span class="cvmtry-about-label"><?php esc_html_e('PHP namespace', 'convermetry'); ?></span> <code>Convermetry\</code></li>
+        <li><span class="cvmtry-about-label"><?php esc_html_e('License', 'convermetry'); ?></span> <?php esc_html_e('GPL-2.0-or-later', 'convermetry'); ?></li></ul>
         <?php
         self::cardEnd();
 
         self::cardStart(__('How the pieces connect', 'convermetry'));
         ?>
-        <p><?php echo wp_kses_post(__('A dependency-free frontend tracker records page views, clicks, form attempts, hovers, scroll depth, and confirmed conversions, with last-touch campaign attribution persisted per session (30-minute inactivity window, no cookies). When a visitor submits a form, the tracker injects hidden internal fields — a per-attempt <code>cvm_conversion_id</code> token, the <code>cvm_session_id</code>, and an attribution snapshot — into the form before any AJAX handler serializes it. The server-side form-provider integration reads those fields when the form plugin confirms the submission, strips them from the lead data, records the conversion under the same token, and queues webhook deliveries in the background. Correlation is token-based end to end; timestamps are never used to match a submission to a session.', 'convermetry')); ?></p>
+        <p><?php echo wp_kses_post(__('A dependency-free frontend tracker records page views, clicks, form attempts, hovers, scroll depth, and confirmed conversions, with last-touch campaign attribution persisted per session (30-minute inactivity window, no cookies). When a visitor submits a form, the tracker injects hidden internal fields — a per-attempt <code>cvmtry_conversion_id</code> token, the <code>cvmtry_session_id</code>, and an attribution snapshot — into the form before any AJAX handler serializes it. The server-side form-provider integration reads those fields when the form plugin confirms the submission, strips them from the lead data, records the conversion under the same token, and queues webhook deliveries in the background. Correlation is token-based end to end; timestamps are never used to match a submission to a session.', 'convermetry')); ?></p>
         <?php
         self::code('session_id
     ├── source / medium, campaign, click-id type
@@ -1830,7 +1830,7 @@ Was it successfully delivered to external systems?');
                                                  → email notification
                                                  → lead status & value');
         ?>
-        <div class="cvm-about-note"><?php esc_html_e('Nothing in that chain waits on a third party. A form submission is recorded and returned to the visitor before any payload is built or any HTTP request is made — an external webhook outage can never make a valid submission appear to fail.', 'convermetry'); ?></div>
+        <div class="cvmtry-about-note"><?php esc_html_e('Nothing in that chain waits on a third party. A form submission is recorded and returned to the visitor before any payload is built or any HTTP request is made — an external webhook outage can never make a valid submission appear to fail.', 'convermetry'); ?></div>
         <?php
         self::cardEnd();
 
@@ -1867,7 +1867,7 @@ Was it successfully delivered to external systems?');
         self::cardStart(__('Submissions vs. Activity Log', 'convermetry'));
         ?>
         <p><?php esc_html_e('These two are easy to confuse, and they answer different questions. Clearing one never touches the other.', 'convermetry'); ?></p>
-        <table class="cvm-about-table"><thead><tr><th scope="col"></th><th scope="col"><?php esc_html_e('Submissions', 'convermetry'); ?></th><th scope="col"><?php esc_html_e('Activity Log', 'convermetry'); ?></th></tr></thead><tbody>
+        <table class="cvmtry-about-table"><thead><tr><th scope="col"></th><th scope="col"><?php esc_html_e('Submissions', 'convermetry'); ?></th><th scope="col"><?php esc_html_e('Activity Log', 'convermetry'); ?></th></tr></thead><tbody>
         <tr><td><?php esc_html_e('One row is', 'convermetry'); ?></td><td><?php esc_html_e('one form submission', 'convermetry'); ?></td><td><?php echo wp_kses_post(__('one delivery <em>attempt</em>', 'convermetry')); ?></td></tr>
         <tr><td><?php esc_html_e('Exists without webhooks', 'convermetry'); ?></td><td><strong><?php esc_html_e('Yes', 'convermetry'); ?></strong></td><td><?php esc_html_e('No', 'convermetry'); ?></td></tr>
         <tr><td><?php esc_html_e('Shows', 'convermetry'); ?></td><td><?php esc_html_e('the lead, its attribution, its answers, its outcome', 'convermetry'); ?></td><td><?php esc_html_e('the payload sent and the response returned', 'convermetry'); ?></td></tr>
@@ -1880,7 +1880,7 @@ Was it successfully delivered to external systems?');
         ?>
         <p><?php echo wp_kses_post(__('For a selectable 7/30/90-day period (UTC calendar days, clamped to the retention window with an explanatory notice when clamped): summary cards, an accessible daily page-view chart (single-Tab-stop keyboard navigation, touch/mouse tooltips, visible axes, data-table fallback), and collapsible sections for Content, Engagement, Acquisition, Devices, Conversions, Goals, Lead outcomes, and Recent Activity. A <strong>Print / Save as PDF</strong> button produces a print-optimized report. Empty states and per-section database-error notices are explicit — a failed query is never rendered as a silent zero.', 'convermetry')); ?></p>
         <p><?php esc_html_e('Three form metrics are deliberately kept distinct, because merging them would hide which evidence each rests on:', 'convermetry'); ?></p>
-        <ul class="cvm-about-features">
+        <ul class="cvmtry-about-features">
         <li><?php echo wp_kses_post(__('<strong>Form Submit Attempts</strong> — frontend <code>submit</code> events; success unconfirmed.', 'convermetry')); ?></li>
         <li><?php echo wp_kses_post(__('<strong>Confirmed Conversions</strong> — unique conversions deduplicated by <code>conversion_id</code> across both detection paths.', 'convermetry')); ?></li>
         <li><?php echo wp_kses_post(__('<strong>Server-Confirmed Submissions</strong> — submissions a form plugin\'s own server-side success hook confirmed. Where a provider integration exists, this signal is authoritative.', 'convermetry')); ?></li></ul>
@@ -1890,7 +1890,7 @@ Was it successfully delivered to external systems?');
         self::cardStart(__('Who can see what', 'convermetry'));
         ?>
         <p><?php echo wp_kses_post(__('Every Convermetry screen resolves its required capability through one named scope, and the scope is applied to <strong>menu visibility and every handler behind it</strong> — never to the menu alone, which would hide a screen while leaving its POST handler reachable. All fourteen default to <code>manage_options</code>, so nothing changes until you filter one.', 'convermetry')); ?></p>
-        <table class="cvm-about-table"><thead><tr><th scope="col"><?php esc_html_e('Scope', 'convermetry'); ?></th><th scope="col"><?php esc_html_e('Covers', 'convermetry'); ?></th></tr></thead><tbody>
+        <table class="cvmtry-about-table"><thead><tr><th scope="col"><?php esc_html_e('Scope', 'convermetry'); ?></th><th scope="col"><?php esc_html_e('Covers', 'convermetry'); ?></th></tr></thead><tbody>
         <tr><td><code>analytics.view</code></td><td><?php esc_html_e('The dashboard and this About page.', 'convermetry'); ?></td></tr>
         <tr><td><code>submissions.view</code></td><td><?php esc_html_e('The Submissions list and detail panels.', 'convermetry'); ?></td></tr>
         <tr><td><code>submissions.export</code></td><td><?php echo wp_kses_post(__('CSV export — <strong>every lead\'s name and email in one file</strong>. Grant deliberately.', 'convermetry')); ?></td></tr>
@@ -1922,7 +1922,7 @@ Was it successfully delivered to external systems?');
         ?>
         <p><?php echo wp_kses_post(__('A single dependency-free script is enqueued deferred on frontend pages — never for logged-in users while exclusion is on, which is the default. It batches events and delivers them to <code>POST /wp-json/convermetry/v1/track</code>.', 'convermetry')); ?></p>
         <p><?php echo wp_kses_post(__('<strong>Tracked event types</strong>, each individually toggleable under <strong>Settings → Tracking</strong>:', 'convermetry')); ?></p>
-        <table class="cvm-about-table"><thead><tr><th scope="col"><?php esc_html_e('Type', 'convermetry'); ?></th><th scope="col"><?php esc_html_e('Records', 'convermetry'); ?></th></tr></thead><tbody>
+        <table class="cvmtry-about-table"><thead><tr><th scope="col"><?php esc_html_e('Type', 'convermetry'); ?></th><th scope="col"><?php esc_html_e('Records', 'convermetry'); ?></th></tr></thead><tbody>
         <tr><td><code>pageview</code></td><td><?php esc_html_e('One per page view, with the session\'s attribution snapshot.', 'convermetry'); ?></td></tr>
         <tr><td><code>click</code></td><td><?php esc_html_e('Clicked element label/tag and destination.', 'convermetry'); ?></td></tr>
         <tr><td><code>form_view</code></td><td><?php esc_html_e('A form scrolled into view. Fires once per visible form per page view.', 'convermetry'); ?></td></tr>
@@ -1930,7 +1930,7 @@ Was it successfully delivered to external systems?');
         <tr><td><code>form_error</code></td><td><?php echo wp_kses_post(__('A native browser validation failure — field id, field type, and which <code>ValidityState</code> flag failed. <strong>Never the value typed.</strong>', 'convermetry')); ?></td></tr>
         <tr><td><code>form_submit</code></td><td><?php esc_html_e('A submit press. Success unconfirmed.', 'convermetry'); ?></td></tr>
         <tr><td><code>form_success</code></td><td><?php echo wp_kses_post(__('A confirmed conversion, carrying the <code>conversion_id</code> in <code>event_value</code>.', 'convermetry')); ?></td></tr>
-        <tr><td><code>hover</code></td><td><?php echo wp_kses_post(__('Configurable dwell time; opt-in per element via <code>data-cvm-hover</code>.', 'convermetry')); ?></td></tr>
+        <tr><td><code>hover</code></td><td><?php echo wp_kses_post(__('Configurable dwell time; opt-in per element via <code>data-cvmtry-hover</code>.', 'convermetry')); ?></td></tr>
         <tr><td><code>scroll_depth</code></td><td><?php esc_html_e('50% and 100% milestones.', 'convermetry'); ?></td></tr>
         <tr><td><code>custom_event</code></td><td><?php echo wp_kses_post(__('A named event from <code>Convermetry.track()</code>, kept only when a goal matches its name.', 'convermetry')); ?></td></tr></tbody></table>
         <p><?php echo wp_kses_post(__('<strong>Delivery reliability.</strong> Batches flush every 5 seconds, at 20 events, and on page exit via <code>navigator.sendBeacon</code>. Every batch is persisted to a bounded <code>sessionStorage</code> store <em>before</em> it is sent and removed only on server acknowledgment. Failed sends back off exponentially with jitter; a 429 pauses the whole tab and honors <code>Retry-After</code>. Delivery is <strong>at-least-once</strong> and replays are <strong>idempotent</strong> — rows are stored under a unique (batch id, event ordinal) key, so a replayed batch never inflates counts.', 'convermetry')); ?></p>
@@ -1950,13 +1950,13 @@ Was it successfully delivered to external systems?');
         self::cardStart(__('Session → submission → conversion correlation', 'convermetry'));
         ?>
         <p><?php echo wp_kses_post(__('The link between analytics and leads is <strong>token-based — never timestamps</strong>.', 'convermetry')); ?></p>
-        <ol class="cvm-about-list">
-        <li><?php echo wp_kses_post(__('On page load, and again at submit time in the capture phase <em>before</em> any AJAX handler serializes the form, the tracker injects three hidden fields: <code>cvm_conversion_id</code> (a fresh token per submission attempt), <code>cvm_session_id</code>, and <code>cvm_context</code> (a compact JSON snapshot of attribution, entrance referrer, landing page, and page URL).', 'convermetry')); ?></li>
-        <li><?php echo wp_kses_post(__('The form plugin processes the submission normally. When its <strong>server-side success hook</strong> fires, Convermetry\'s adapter extracts and strictly validates those fields — every transport shape is handled, including Fluent Forms\' serialized <code>data</code> blob — and <strong>strips every <code>cvm_*</code> field</strong> from the lead data.', 'convermetry')); ?></li>
+        <ol class="cvmtry-about-list">
+        <li><?php echo wp_kses_post(__('On page load, and again at submit time in the capture phase <em>before</em> any AJAX handler serializes the form, the tracker injects three hidden fields: <code>cvmtry_conversion_id</code> (a fresh token per submission attempt), <code>cvmtry_session_id</code>, and <code>cvmtry_context</code> (a compact JSON snapshot of attribution, entrance referrer, landing page, and page URL).', 'convermetry')); ?></li>
+        <li><?php echo wp_kses_post(__('The form plugin processes the submission normally. When its <strong>server-side success hook</strong> fires, Convermetry\'s adapter extracts and strictly validates those fields — every transport shape is handled, including Fluent Forms\' serialized <code>data</code> blob — and <strong>strips every <code>cvmtry_*</code> field</strong> from the lead data.', 'convermetry')); ?></li>
         <li><?php echo wp_kses_post(__('The confirmed conversion is recorded as a <code>form_success</code> analytics event under that same token, together with a durable submission row.', 'convermetry')); ?></li>
         <li><?php echo wp_kses_post(__('The tracker\'s own frontend success listeners reuse the <strong>same token</strong>, so whichever paths fire, every report deduplicates them into <strong>one</strong> conversion.', 'convermetry')); ?></li></ol>
         <p><?php echo wp_kses_post(__('AJAX forms are fully supported. When the fields are absent — tracker disabled, privacy signals honored, JavaScript blocked, server-to-server submissions — the conversion id is generated on the server and the submission still records and delivers, just with an empty <code>analytics_context</code>. No cookies are used at any point.', 'convermetry')); ?></p>
-        <div class="cvm-about-note"><?php echo wp_kses_post(__('<strong>Duplicate protection at every layer:</strong> a double-fired provider callback hits the <code>UNIQUE conversion_id</code> index and records nothing twice; queue rows are unique per (submission, endpoint); reports count <code>DISTINCT conversion_id</code>; receivers deduplicate by <code>delivery_id</code>.', 'convermetry')); ?></div>
+        <div class="cvmtry-about-note"><?php echo wp_kses_post(__('<strong>Duplicate protection at every layer:</strong> a double-fired provider callback hits the <code>UNIQUE conversion_id</code> index and records nothing twice; queue rows are unique per (submission, endpoint); reports count <code>DISTINCT conversion_id</code>; receivers deduplicate by <code>delivery_id</code>.', 'convermetry')); ?></div>
         <?php
         self::cardEnd();
 
@@ -1974,7 +1974,7 @@ Was it successfully delivered to external systems?');
 
         self::cardStart(__('Four things beyond the conversion count', 'convermetry'));
         ?>
-        <ul class="cvm-about-features">
+        <ul class="cvmtry-about-features">
         <li><?php echo wp_kses_post(__('<strong>Goals</strong> count important actions that are not form submissions: a phone number tapped, a PDF opened, a booking link followed, a pricing page reached.', 'convermetry')); ?></li>
         <li><?php echo wp_kses_post(__('<strong>Funnels</strong> measure the ordered path to a conversion — how many sessions reached each step and how many were lost between them.', 'convermetry')); ?></li>
         <li><?php echo wp_kses_post(__('<strong>Form engagement</strong> reports views, starts, attempts, successes and abandonment per form, plus which fields fail validation most often.', 'convermetry')); ?></li>
@@ -1986,18 +1986,18 @@ Was it successfully delivered to external systems?');
         ?>
         <p><?php echo wp_kses_post(__('<strong>A confirmed form submission is not a goal.</strong> A submission is <em>server-confirmed</em> — the form plugin\'s own success hook said so. A goal completion is a <em>browser-observed</em> signal. They are stored in different tables and counted separately on purpose: folding submissions into goals would quietly downgrade the plugin\'s most trustworthy number to the standard of its least.', 'convermetry')); ?></p>
         <p><?php echo wp_kses_post(__('<strong>Matching happens on the server</strong>, at ingestion, against data the tracker already sends. The browser is never told what your goals are. Three consequences:', 'convermetry')); ?></p>
-        <ul class="cvm-about-features">
+        <ul class="cvmtry-about-features">
         <li><?php esc_html_e('Your list of valuable actions is competitive information and stays on the server.', 'convermetry'); ?></li>
         <li><?php echo wp_kses_post(__('<strong>Phone and email goals need no configuration at all.</strong> The tracker already reports click destinations and keeps <code>tel:</code> and <code>mailto:</code> URLs whole while stripping query strings from everything else — pick "on a phone number link" and you are done. No CSS selector required.', 'convermetry')); ?></li>
         <li><?php esc_html_e('A visitor cannot manufacture a conversion by claiming one. They can only report the same raw activity any visitor reports; the server decides what it means.', 'convermetry'); ?></li></ul>
         <p><?php echo wp_kses_post(__('The one exception is a <strong>CSS selector</strong>, which genuinely cannot be evaluated without the DOM. Only those selectors are sent to the tracker, and the goal ids it reports back are re-validated against your enabled selector goals before anything is recorded.', 'convermetry')); ?></p>
-        <table class="cvm-about-table"><thead><tr><th scope="col"><?php esc_html_e('Goal type', 'convermetry'); ?></th><th scope="col"><?php esc_html_e('Rules', 'convermetry'); ?></th></tr></thead><tbody>
+        <table class="cvmtry-about-table"><thead><tr><th scope="col"><?php esc_html_e('Goal type', 'convermetry'); ?></th><th scope="col"><?php esc_html_e('Rules', 'convermetry'); ?></th></tr></thead><tbody>
         <tr><td><?php esc_html_e('Reaching a page', 'convermetry'); ?></td><td><?php echo wp_kses_post(__('is exactly · contains · starts with · ends with. A path (<code>/thank-you/</code>) matches the URL\'s path; a full URL matches the whole URL. Trailing slashes are forgiven and matching is case-insensitive.', 'convermetry')); ?></td></tr>
         <tr><td><?php esc_html_e('A click', 'convermetry'); ?></td><td><?php echo wp_kses_post(__('on a phone number link · on an email link · that leaves this site · where the link contains / is exactly · matching a CSS selector. A phone tap is deliberately <strong>not</strong> also counted as an external link.', 'convermetry')); ?></td></tr>
         <tr><td><?php esc_html_e('A custom event', 'convermetry'); ?></td><td><?php echo wp_kses_post(__('Matched by name, fired from your own code with <code>Convermetry.track(\'name\')</code>.', 'convermetry')); ?></td></tr></tbody></table>
         <p><?php echo wp_kses_post(__('<strong>Counting.</strong> Each goal counts either <em>once per visit</em> or <em>every occurrence</em>, and deduplication is enforced by a <strong>UNIQUE database constraint</strong> rather than a PHP check — so an at-least-once replay of a tracker batch collides with the original instead of double-counting.', 'convermetry')); ?></p>
         <p><?php echo wp_kses_post(__('<strong>Editing.</strong> A goal keeps its id forever. Editing its <em>matching rule</em> starts a new measurement series (and reports say the definition changed) so two different questions are never blended into one line. Renaming, pausing, or repricing a goal resets nothing. Removing one is a soft delete: past completions are kept and still appear, correctly labelled, in reports for earlier periods. Goals count from when you create them and are never applied retroactively.', 'convermetry')); ?></p>
-        <div class="cvm-about-note"><?php echo wp_kses_post(__('Goals do <strong>not</strong> override the tracking toggles they depend on — a click goal cannot fire while click tracking is off. Silently re-enabling tracking you switched off would be the wrong fix, so the Goals screen names the specific setting and links to it instead.', 'convermetry')); ?></div>
+        <div class="cvmtry-about-note"><?php echo wp_kses_post(__('Goals do <strong>not</strong> override the tracking toggles they depend on — a click goal cannot fire while click tracking is off. Silently re-enabling tracking you switched off would be the wrong fix, so the Goals screen names the specific setting and links to it instead.', 'convermetry')); ?></div>
         <?php
         self::cardEnd();
 
@@ -2032,7 +2032,7 @@ Earliest-occurrence comparison: MIN(B)=09:00 < A, so it reports failure.');
         self::cardStart(__('Form engagement & abandonment', 'convermetry'));
         ?>
         <p><?php esc_html_e('Mixing units here would make every rate meaningless and the mix would be invisible, so each column states its unit and its evidence:', 'convermetry'); ?></p>
-        <table class="cvm-about-table"><thead><tr><th scope="col"><?php esc_html_e('Column', 'convermetry'); ?></th><th scope="col"><?php esc_html_e('Unit', 'convermetry'); ?></th><th scope="col"><?php esc_html_e('Evidence', 'convermetry'); ?></th></tr></thead><tbody>
+        <table class="cvmtry-about-table"><thead><tr><th scope="col"><?php esc_html_e('Column', 'convermetry'); ?></th><th scope="col"><?php esc_html_e('Unit', 'convermetry'); ?></th><th scope="col"><?php esc_html_e('Evidence', 'convermetry'); ?></th></tr></thead><tbody>
         <tr><td><?php esc_html_e('Views', 'convermetry'); ?></td><td><?php echo wp_kses_post(__('<strong>sessions</strong> in which the form scrolled into view', 'convermetry')); ?></td><td><?php esc_html_e('browser-observed', 'convermetry'); ?></td></tr>
         <tr><td><?php esc_html_e('Started', 'convermetry'); ?></td><td><?php echo wp_kses_post(__('<strong>sessions</strong> in which someone began filling it in', 'convermetry')); ?></td><td><?php esc_html_e('browser-observed', 'convermetry'); ?></td></tr>
         <tr><td><?php esc_html_e('Attempts', 'convermetry'); ?></td><td><?php echo wp_kses_post(__('<strong>raw submit presses</strong> — one visitor fighting a validation error produces several, which is the point', 'convermetry')); ?></td><td><?php esc_html_e('browser-observed', 'convermetry'); ?></td></tr>
@@ -2049,7 +2049,7 @@ phone            tel      Left empty                                  218
 desired-service  select   Left empty                                  164
 email            email    Wrong format (e.g. not an email address)    131');
         ?>
-        <div class="cvm-about-note"><?php echo wp_kses_post(__('<strong>No value a visitor typed is ever recorded.</strong> A validation event is rebuilt on the server from exactly three whitelisted pieces — the field\'s developer-chosen id, its type, and which <code>ValidityState</code> flag failed — and every other key in the request is discarded <em>by construction</em> rather than by a blocklist. Field ids are character-restricted and truncated to 64 characters, so an implementation that mistakenly sent a typed value would be stripped to something unrecognizable rather than quietly stored.', 'convermetry')); ?></div>
+        <div class="cvmtry-about-note"><?php echo wp_kses_post(__('<strong>No value a visitor typed is ever recorded.</strong> A validation event is rebuilt on the server from exactly three whitelisted pieces — the field\'s developer-chosen id, its type, and which <code>ValidityState</code> flag failed — and every other key in the request is discarded <em>by construction</em> rather than by a blocklist. Field ids are character-restricted and truncated to 64 characters, so an implementation that mistakenly sent a typed value would be stripped to something unrecognizable rather than quietly stored.', 'convermetry')); ?></div>
         <p><?php echo wp_kses_post(__('<strong>Elementor is excluded from form-level engagement.</strong> It identifies a form by its display <em>name</em> on the server while exposing a widget <em>id</em> in the browser, so the two cannot be matched reliably — and an engagement figure attributed to the wrong form is worse than none. Elementor submissions are recorded, attributed, delivered and reported normally everywhere else. The other six providers are fully supported.', 'convermetry')); ?></p>
         <?php
         self::cardEnd();
@@ -2057,7 +2057,7 @@ email            email    Wrong format (e.g. not an email address)    131');
         self::cardStart(__('Lead status & value', 'convermetry'));
         ?>
         <p><?php echo wp_kses_post(__('Set both on the <strong>Submissions</strong> detail panel; both are filterable in the list.', 'convermetry')); ?></p>
-        <table class="cvm-about-table"><thead><tr><th scope="col"><?php esc_html_e('Status', 'convermetry'); ?></th><th scope="col"><?php esc_html_e('Meaning', 'convermetry'); ?></th></tr></thead><tbody>
+        <table class="cvmtry-about-table"><thead><tr><th scope="col"><?php esc_html_e('Status', 'convermetry'); ?></th><th scope="col"><?php esc_html_e('Meaning', 'convermetry'); ?></th></tr></thead><tbody>
         <tr><td><code>new</code></td><td><?php esc_html_e('Not yet assessed — the default for every submission.', 'convermetry'); ?></td></tr>
         <tr><td><code>qualified</code></td><td><?php esc_html_e('A real, well-matched lead.', 'convermetry'); ?></td></tr>
         <tr><td><code>unqualified</code></td><td><?php esc_html_e('A genuine person who was not a fit.', 'convermetry'); ?></td></tr>
@@ -2065,13 +2065,13 @@ email            email    Wrong format (e.g. not an email address)    131');
         <tr><td><code>lost</code></td><td><?php esc_html_e('A real lead that did not convert.', 'convermetry'); ?></td></tr>
         <tr><td><code>spam</code></td><td><?php esc_html_e('Never a lead at all.', 'convermetry'); ?></td></tr></tbody></table>
         <p><?php echo wp_kses_post(__('<strong>This is deliberately not a CRM.</strong> Six statuses; no assignees, pipeline stages, follow-up dates, or activity notes. Every one of those would be a worse version of a tool you already have, and none changes the answer to <em>"which marketing produced valuable leads?"</em>', 'convermetry')); ?></p>
-        <ul class="cvm-about-features">
+        <ul class="cvmtry-about-features">
         <li><?php echo wp_kses_post(__('<strong><code>won</code> counts as qualified.</strong> A lead that converted was self-evidently qualified, and requiring it to pass through <code>qualified</code> first would under-report every site that records the final outcome in one step.', 'convermetry')); ?></li>
         <li><?php echo wp_kses_post(__('<strong>Only <code>spam</code> leaves the denominator.</strong> An unqualified or lost lead was still a lead your marketing produced. Excluding those would make a channel look better the more poor-quality leads it sent — which is exactly why <code>spam</code> is separate from <code>unqualified</code>.', 'convermetry')); ?></li></ul>
         <p><?php echo wp_kses_post(__('<strong>Value and currency.</strong> Values are stored as exact <code>DECIMAL(13,2)</code> and handled as decimal <strong>strings</strong> end to end — never floating point. A lead worth 0.10 recorded ten thousand times totals exactly 1000.00. Input is forgiving about presentation and strict about value: <code>$12,500.00</code>, <code>12 500</code>, <code>&euro;1.234,56</code> and <code>1234.56 USD</code> all parse; <code>12abc</code> is <strong>rejected</strong> rather than silently read as 12. The site currency is <strong>stamped onto each lead</strong> when you first record a value, so changing the setting later never rewrites what is already recorded — and reports group by currency and <strong>never sum across codes</strong>.', 'convermetry')); ?></p>
         <p><?php echo wp_kses_post(__('<strong>History.</strong> Every status or value change records who made it and when. The change and its history row are written in a single transaction, so a lead can never end up in a state its history disagrees with.', 'convermetry')); ?></p>
         <p><?php echo wp_kses_post(__('<strong>Reporting.</strong> <em>Analytics → Lead outcomes</em> breaks leads down by channel, campaign, landing page, and form: Lead Qualification Rate = (qualified + won) ÷ total; Lead-to-Win Rate = won ÷ total; Attributed Lead Value; Attributed Revenue (the same, restricted to <code>won</code>). <strong>Nothing is called ROI or ROAS</strong> — both are ratios against ad <em>spend</em>, Convermetry has no cost data, and a "return" computed without the investment half is not a weaker version of the metric, it is a different number wearing its name. <strong>Time to lead</strong> is measured from the first page view of the session that converted, and reported as medians rather than averages, because the distribution is heavily right-skewed.', 'convermetry')); ?></p>
-        <div class="cvm-about-note"><?php echo wp_kses_post(__('Lead status and value are recorded <strong>locally only</strong> in this version. A form payload is frozen when it is first delivered and scheduled analytics windows never revisit, so a lead field on either could only ever report “new” — wrong for every lead you qualify, and a field that lies is worse than an absent one. Use the <code>convermetry_lead_status_updated</code> action to push outcomes to your own systems today. Goal completions <em>do</em> travel, in the analytics report payload, because a completion either happened in the window or it did not.', 'convermetry')); ?></div>
+        <div class="cvmtry-about-note"><?php echo wp_kses_post(__('Lead status and value are recorded <strong>locally only</strong> in this version. A form payload is frozen when it is first delivered and scheduled analytics windows never revisit, so a lead field on either could only ever report “new” — wrong for every lead you qualify, and a field that lies is worse than an absent one. Use the <code>convermetry_lead_status_updated</code> action to push outcomes to your own systems today. Goal completions <em>do</em> travel, in the analytics report payload, because a completion either happened in the window or it did not.', 'convermetry')); ?></div>
         <?php
         self::cardEnd();
 
@@ -2090,7 +2090,7 @@ email            email    Wrong format (e.g. not an email address)    131');
         self::cardStart(__('Supported form providers', 'convermetry'));
         ?>
         <p><?php echo wp_kses_post(__('Providers are feature-detected — nothing breaks when a plugin is absent, and activation never fatals on a site with no form plugin at all — and their forms are discovered automatically. Detected forms are <strong>included by default</strong>, so a new form needs no setup; exclusions and per-form configuration live on the <strong>Forms</strong> page.', 'convermetry')); ?></p>
-        <table class="cvm-about-table"><thead><tr><th scope="col"><?php esc_html_e('Provider', 'convermetry'); ?></th><th scope="col"><?php esc_html_e('Server-side hook and notes', 'convermetry'); ?></th></tr></thead><tbody>
+        <table class="cvmtry-about-table"><thead><tr><th scope="col"><?php esc_html_e('Provider', 'convermetry'); ?></th><th scope="col"><?php esc_html_e('Server-side hook and notes', 'convermetry'); ?></th></tr></thead><tbody>
         <tr><td><?php esc_html_e('Elementor Pro', 'convermetry'); ?></td><td><?php echo wp_kses_post(__('<code>elementor_pro/forms/new_record</code>. Per-form settings key by the widget id, falling back to the legacy form <strong>name</strong> key until the next save.', 'convermetry')); ?></td></tr>
         <tr><td><?php esc_html_e('Elementor Pro — Atomic Forms', 'convermetry'); ?></td><td><?php echo wp_kses_post(__('The <code>convermetry</code> action, registered on <code>elementor_pro/atomic_forms/actions/register</code>. <strong>Opt in per form</strong>: nothing is captured until <em>Convermetry</em> is added under <em>Actions after submit</em> in the Elementor editor. Settings key by <code>&lt;document id&gt;:&lt;element id&gt;</code>.', 'convermetry')); ?></td></tr>
         <tr><td><?php esc_html_e('Bricks Builder', 'convermetry'); ?></td><td><?php echo wp_kses_post(__('The <code>convermetry</code> action, dispatched on <code>bricks/form/action/convermetry</code> (Bricks 1.12.2+). <strong>Opt in per form</strong>: nothing is captured until <em>Convermetry</em> is ticked under <em>Actions after successful form submit</em> in Bricks. Settings key by the form <strong>element id</strong>. Native Bricks Form element only.', 'convermetry')); ?></td></tr>
@@ -2106,7 +2106,7 @@ email            email    Wrong format (e.g. not an email address)    131');
 
         self::cardStart(__('Per-form configuration', 'convermetry'));
         ?>
-        <table class="cvm-about-table"><thead><tr><th scope="col"><?php esc_html_e('Setting', 'convermetry'); ?></th><th scope="col"><?php esc_html_e('Meaning', 'convermetry'); ?></th></tr></thead><tbody>
+        <table class="cvmtry-about-table"><thead><tr><th scope="col"><?php esc_html_e('Setting', 'convermetry'); ?></th><th scope="col"><?php esc_html_e('Meaning', 'convermetry'); ?></th></tr></thead><tbody>
         <tr><td><?php esc_html_e('Native Form ID', 'convermetry'); ?></td><td><?php esc_html_e('The provider\'s own identity (read-only).', 'convermetry'); ?></td></tr>
         <tr><td><?php esc_html_e('Custom/External Form ID', 'convermetry'); ?></td><td><?php echo wp_kses_post(__('Sent as <code>form_id</code> in payloads; the native id is the fallback.', 'convermetry')); ?></td></tr>
         <tr><td><?php esc_html_e('Enabled / Excluded', 'convermetry'); ?></td><td><?php echo wp_kses_post(__('Detected forms are included by default. Exclusion stops processing; configuration is <strong>preserved</strong> while excluded.', 'convermetry')); ?></td></tr>
@@ -2125,7 +2125,7 @@ Headers: Content-Type → global → per-form → runtime
         ?>
         <p><?php echo wp_kses_post(__('<strong>Convermetry → Submissions</strong> lists every server-confirmed lead with its date, form, provider, channel and campaign, delivery status, lead status and value. Filters cover date range, provider, form, channel, campaign, delivery state, lead status, and free-text search; the detail panel is loaded on demand and shows the submitted answers, the full analytics context, the delivery outcome per endpoint, and the lead\'s status history. CSV export streams in keyset-paginated chunks, so even a very large table exports in bounded memory.', 'convermetry')); ?></p>
         <p><?php echo wp_kses_post(__('Deleting a submission also cancels anything still queued for it — webhook queue rows and email notifications alike — and cascades its lead history away, firing <code>convermetry_submission_deleted</code> once everything attached to it is gone.', 'convermetry')); ?></p>
-        <p><?php echo wp_kses_post(__('Every submission — bundled provider or custom API — passes the same two extension points before anything is written: <a href="#hook-convermetry_should_record_submission"><code>convermetry_should_record_submission</code></a> can veto the whole write (the visitor still sees success), and <a href="#hook-convermetry_submission_fields"><code>convermetry_submission_fields</code></a> sees the normalized descriptors, with any change re-normalized so the <code>cvm_*</code> strip and the descriptor shape hold.', 'convermetry')); ?></p>
+        <p><?php echo wp_kses_post(__('Every submission — bundled provider or custom API — passes the same two extension points before anything is written: <a href="#hook-convermetry_should_record_submission"><code>convermetry_should_record_submission</code></a> can veto the whole write (the visitor still sees success), and <a href="#hook-convermetry_submission_fields"><code>convermetry_submission_fields</code></a> sees the normalized descriptors, with any change re-normalized so the <code>cvmtry_*</code> strip and the descriptor shape hold.', 'convermetry')); ?></p>
         <?php
         self::cardEnd();
 
@@ -2143,7 +2143,7 @@ Headers: Content-Type → global → per-form → runtime
 
         self::cardStart('submission_id · conversion_id · delivery_id');
         ?>
-        <table class="cvm-about-table"><thead><tr><th scope="col"><?php esc_html_e('Identifier', 'convermetry'); ?></th><th scope="col"><?php esc_html_e('Identifies', 'convermetry'); ?></th><th scope="col"><?php esc_html_e('Scope', 'convermetry'); ?></th></tr></thead><tbody>
+        <table class="cvmtry-about-table"><thead><tr><th scope="col"><?php esc_html_e('Identifier', 'convermetry'); ?></th><th scope="col"><?php esc_html_e('Identifies', 'convermetry'); ?></th><th scope="col"><?php esc_html_e('Scope', 'convermetry'); ?></th></tr></thead><tbody>
         <tr><td><code>submission_id</code></td><td><?php esc_html_e('The form submission itself.', 'convermetry'); ?></td><td><?php echo wp_kses_post(__('<strong>Global</strong> — identical in every delivery of that submission, to every endpoint. Deduplicate by it when aggregating the same lead arriving via multiple endpoints.', 'convermetry')); ?></td></tr>
         <tr><td><code>conversion_id</code></td><td><?php esc_html_e('The analytics conversion joined to the submission, and its session.', 'convermetry'); ?></td><td><?php echo wp_kses_post(__('Shared between the frontend <code>form_success</code> event and the server-confirmed record, so the two detection paths can never double-count. Every Convermetry conversion report deduplicates by it.', 'convermetry')); ?></td></tr>
         <tr><td><code>delivery_id</code></td><td><?php esc_html_e('One outbound webhook delivery.', 'convermetry'); ?></td><td><?php echo wp_kses_post(__('<strong>Endpoint-specific</strong>; stable across every retry; echoed as the <code>Idempotency-Key</code> header. <strong>Receivers deduplicate by this alone.</strong>', 'convermetry')); ?></td></tr></tbody></table>
@@ -2166,7 +2166,7 @@ Headers: Content-Type → global → per-form → runtime
         self::cardStart(__('The two outbound message types', 'convermetry'));
         ?>
         <p><?php echo wp_kses_post(__('Convermetry sends two kinds of webhook message. Every endpoint on the <strong>Webhooks</strong> page chooses which it receives, and the two are fully independent — an endpoint may take either one on its own, or both.', 'convermetry')); ?></p>
-        <ul class="cvm-about-features">
+        <ul class="cvmtry-about-features">
         <li><?php echo wp_kses_post(__('<strong>Analytics Reports</strong> — <code>message_type: analytics_report</code>. Scheduled, <em>aggregated</em> reporting for a time window, sent on the site-wide schedule you pick: hourly, twice daily, daily, or weekly. This is <em>not</em> one webhook per page view or click — an entire window is summarized into a single delivery. Each endpoint tracks its own delivery window, so a payload covers the time since <em>that</em> endpoint\'s last successful delivery, and a newly added endpoint can optionally be backfilled with the retained history. <strong>Send analytics test</strong> delivers one on demand.', 'convermetry')); ?></li>
         <li><?php echo wp_kses_post(__('<strong>Form Submissions</strong> — <code>message_type: form_submission</code>. One message per server-confirmed lead, delivered immediately through the background form-delivery queue instead of on a schedule. <strong>Send form test</strong> delivers one on demand.', 'convermetry')); ?></li></ul>
         <?php
@@ -2181,7 +2181,7 @@ Reporting Data Warehouse    Analytics ✓   Form Submissions ✗   (analytics on
 
         self::cardStart(__('Endpoint configuration', 'convermetry'));
         ?>
-        <table class="cvm-about-table"><thead><tr><th scope="col"><?php esc_html_e('Field', 'convermetry'); ?></th><th scope="col"><?php esc_html_e('Purpose', 'convermetry'); ?></th></tr></thead><tbody>
+        <table class="cvmtry-about-table"><thead><tr><th scope="col"><?php esc_html_e('Field', 'convermetry'); ?></th><th scope="col"><?php esc_html_e('Purpose', 'convermetry'); ?></th></tr></thead><tbody>
         <tr><td><?php esc_html_e('Webhook URL', 'convermetry'); ?></td><td><?php echo wp_kses_post(__('HTTPS required. The <code>convermetry_allow_insecure_webhooks</code> filter permits <code>http://</code> for development.', 'convermetry')); ?></td></tr>
         <tr><td><?php esc_html_e('Label', 'convermetry'); ?></td><td><?php esc_html_e('Optional; badges Activity Log entries and identifies endpoints in the REST API.', 'convermetry'); ?></td></tr>
         <tr><td><?php esc_html_e('Signing Secret', 'convermetry'); ?></td><td><?php esc_html_e('Optional per-endpoint HMAC key; overrides the shared secret for this endpoint only, so one receiver never learns the key that signs payloads for others.', 'convermetry'); ?></td></tr>
@@ -2198,11 +2198,11 @@ Reporting Data Warehouse    Analytics ✓   Form Submissions ✗   (analytics on
         ?>
         <p><?php echo wp_kses_post(__('<strong>Frozen requests.</strong> On the first attempt the final URL (all query-parameter layers merged), the configured headers, and the serialized JSON body are frozen and replayed byte-for-byte under the same <code>delivery_id</code>. A configuration change after a failure never mutates them, and endpoints that already acknowledged a delivery are never re-sent.', 'convermetry')); ?></p>
         <p><?php echo wp_kses_post(__('<strong>Three headers are regenerated per attempt</strong> from that frozen body: <code>Idempotency-Key</code> (always the same delivery id), <code>User-Agent</code> (carries the plugin version, so it changes if the site updates mid-chain), and <code>X-Convermetry-Signature</code>, computed with the secret <em>current at send time</em> — so rotating a secret changes a retry\'s signature, intentionally, so a rotated key still verifies.', 'convermetry')); ?></p>
-        <ul class="cvm-about-features">
+        <ul class="cvmtry-about-features">
         <li><?php echo wp_kses_post(__('<strong>Analytics reports</strong> retry through per-endpoint single-event crons. An exhausted chain — or one whose cron could not be scheduled, detected as <em>orphaned</em> — keeps its frozen delivery; the next scheduled dispatch re-sends it under the original id first, and only after acknowledgment does the endpoint\'s marker advance, exactly to the frozen window\'s end, so consecutive deliveries never overlap. Dispatch runs under a site-wide mutex (MySQL named lock, with a lease-based fallback), and each site\'s schedule is anchored at a stable random offset so fleets sharing one endpoint never stampede it.', 'convermetry')); ?></li>
         <li><?php echo wp_kses_post(__('<strong>Form submissions</strong> use one queue row per submission × endpoint. Rows are claimed atomically by a token-stamped conditional <code>UPDATE</code>, so overlapping workers cannot double-send, and rows stranded by a dead worker are reclaimed after 10 minutes. Acknowledged endpoints are deleted from the queue and never re-sent when a sibling endpoint fails.', 'convermetry')); ?></li></ul>
         <p><?php echo wp_kses_post(__('<strong>Conversion delivery inside Analytics Reports is lossless</strong> — a window holding more than 100 individual conversions is split into consecutive deliveries rather than truncated. Each <code>top_*</code> list holds up to 200 rows.', 'convermetry')); ?></p>
-        <div class="cvm-about-note"><?php echo wp_kses_post(__('<strong>Delivery is at-least-once.</strong> Any duplicate a receiver can ever see carries a <code>delivery_id</code> it has already processed — deduplicating by <code>delivery_id</code> is sufficient to never double-process.', 'convermetry')); ?></div>
+        <div class="cvmtry-about-note"><?php echo wp_kses_post(__('<strong>Delivery is at-least-once.</strong> Any duplicate a receiver can ever see carries a <code>delivery_id</code> it has already processed — deduplicating by <code>delivery_id</code> is sufficient to never double-process.', 'convermetry')); ?></div>
         <p><?php echo wp_kses_post(__('Every stage is observable and most are customizable: the URL, headers, timeout and payload are composed through filters that run <strong>once, before the freeze</strong> (<code>convermetry_webhook_query_args</code>, <code>convermetry_webhook_headers</code>, <code>convermetry_webhook_timeout</code>, <code>convermetry_webhook_payload</code>), and the lifecycle — queued, frozen, about to send, attempted, logged, succeeded, retry scheduled, chain exhausted, abandoned, canceled — is reported by ten actions that all carry the same credential-free context. See <a href="#hooks">Hooks</a>.', 'convermetry')); ?></p>
         <?php
         self::cardEnd();
@@ -2241,7 +2241,7 @@ if (!hash_equals($expected, $_SERVER[\'HTTP_X_CONVERMETRY_SIGNATURE\'] ?? \'\'))
         self::code('{
     "schema_version": "1.0 | 1.1 | 2.0",
     "source": "convermetry",
-    "plugin_version": "' . CVM_VERSION . '",
+    "plugin_version": "' . CVMTRY_VERSION . '",
     "message_type": "analytics_report | form_submission",
     "website_info": { … },
     "generated_at": "ISO-8601 UTC",
@@ -2260,7 +2260,7 @@ if (!hash_equals($expected, $_SERVER[\'HTTP_X_CONVERMETRY_SIGNATURE\'] ?? \'\'))
         self::code('{
     "schema_version": "1.1",
     "source": "convermetry",
-    "plugin_version": "' . CVM_VERSION . '",
+    "plugin_version": "' . CVMTRY_VERSION . '",
     "message_type": "analytics_report",
     "website_info": {
         "name": "Example Financial", "url": "https://example.com",
@@ -2322,7 +2322,7 @@ if (!hash_equals($expected, $_SERVER[\'HTTP_X_CONVERMETRY_SIGNATURE\'] ?? \'\'))
     }
 }');
         ?>
-        <ul class="cvm-about-features">
+        <ul class="cvmtry-about-features">
         <li><?php echo wp_kses_post(__('<code>period</code> is the UTC window the report covers — <code>start</code> inclusive, <code>end</code> exclusive.', 'convermetry')); ?></li>
         <li><?php echo wp_kses_post(__('The <code>analytics</code> section comes from the same reporting query layer the dashboard uses, so a payload and the admin screens cannot disagree.', 'convermetry')); ?></li>
         <li><?php echo wp_kses_post(__('<code>analytics.conversions.recent</code> lists the <em>individual</em> conversions inside the window — each with the visitor\'s <code>ip_address</code> when IP storage is on — while every other section is aggregate reporting data. <code>total</code> is deduplicated by conversion id, and <code>server_confirmed</code> counts the stored server-confirmed submissions.', 'convermetry')); ?></li>
@@ -2338,7 +2338,7 @@ if (!hash_equals($expected, $_SERVER[\'HTTP_X_CONVERMETRY_SIGNATURE\'] ?? \'\'))
         self::code('{
     "schema_version": "2.0",
     "source": "convermetry",
-    "plugin_version": "' . CVM_VERSION . '",
+    "plugin_version": "' . CVMTRY_VERSION . '",
     "message_type": "form_submission",
     "website_info": {
         "name": "Example Financial", "url": "https://example.com",
@@ -2378,13 +2378,13 @@ if (!hash_equals($expected, $_SERVER[\'HTTP_X_CONVERMETRY_SIGNATURE\'] ?? \'\'))
         self::cardStart(__('submission_data: schema 2.0', 'convermetry'));
         ?>
         <p><?php echo wp_kses_post(__('<code>submission_data</code> is an <strong>ordered list of field descriptors</strong>, not an object. Match on <code>id</code>; show <code>label</code>.', 'convermetry')); ?></p>
-        <table class="cvm-about-table"><thead><tr><th scope="col"><?php esc_html_e('Key', 'convermetry'); ?></th><th scope="col"><?php esc_html_e('Type', 'convermetry'); ?></th><th scope="col"><?php esc_html_e('Notes', 'convermetry'); ?></th></tr></thead><tbody>
+        <table class="cvmtry-about-table"><thead><tr><th scope="col"><?php esc_html_e('Key', 'convermetry'); ?></th><th scope="col"><?php esc_html_e('Type', 'convermetry'); ?></th><th scope="col"><?php esc_html_e('Notes', 'convermetry'); ?></th></tr></thead><tbody>
         <tr><td><code>id</code></td><td><?php esc_html_e('string', 'convermetry'); ?></td><td><?php echo wp_kses_post(__('The provider-native field ID or key. Stable across renames. <strong>Never empty</strong> — an entry without one is dropped.', 'convermetry')); ?></td></tr>
         <tr><td><code>label</code></td><td><?php esc_html_e('string', 'convermetry'); ?></td><td><?php echo wp_kses_post(__('The human-readable label captured at submission time. <strong>Falls back to <code>id</code></strong> when the provider exposes no reliable label.', 'convermetry')); ?></td></tr>
         <tr><td><code>value</code></td><td><?php esc_html_e('string | string[]', 'convermetry'); ?></td><td><?php echo wp_kses_post(__('A sanitized string, or a list of sanitized strings for multi-value fields. <strong>Never a nested object.</strong>', 'convermetry')); ?></td></tr></tbody></table>
         <p><?php echo wp_kses_post(__('<strong>Why a list.</strong> The pre-2.0 format was a <code>label =&gt; value</code> object, which forced every provider to discard either the stable ID (Gravity Forms, WPForms, Ninja Forms and Formidable key by label) or the human label (Elementor keys by ID). It also <strong>silently merged two fields that shared a label</strong> — two fields both called "Name" became one. A list preserves provider order, preserves duplicates, and keeps the ID for automation alongside the label for humans.', 'convermetry')); ?></p>
         <p><?php esc_html_e('Label availability differs by provider, and Convermetry does not guess:', 'convermetry'); ?></p>
-        <table class="cvm-about-table"><thead><tr><th scope="col"><?php esc_html_e('Provider', 'convermetry'); ?></th><th scope="col"><code>id</code></th><th scope="col"><code>label</code></th></tr></thead><tbody>
+        <table class="cvmtry-about-table"><thead><tr><th scope="col"><?php esc_html_e('Provider', 'convermetry'); ?></th><th scope="col"><code>id</code></th><th scope="col"><code>label</code></th></tr></thead><tbody>
         <tr><td><?php esc_html_e('Elementor', 'convermetry'); ?></td><td><?php esc_html_e('field ID', 'convermetry'); ?></td><td><?php esc_html_e('the field\'s title', 'convermetry'); ?></td></tr>
         <tr><td><?php esc_html_e('Elementor Atomic', 'convermetry'); ?></td><td><?php esc_html_e('field (element) ID', 'convermetry'); ?></td><td><?php esc_html_e('the field\'s editor label, else the ID', 'convermetry'); ?></td></tr>
         <tr><td><?php esc_html_e('Bricks Builder', 'convermetry'); ?></td><td><?php esc_html_e('field ID', 'convermetry'); ?></td><td><?php echo wp_kses_post(__('the field label, else the ID. Only fields Bricks <em>defines</em> are mapped, and <strong>password</strong> fields are dropped outright — Bricks field IDs are opaque, so the field type is the only thing that can tell a credential from a comment', 'convermetry')); ?></td></tr>
@@ -2394,7 +2394,7 @@ if (!hash_equals($expected, $_SERVER[\'HTTP_X_CONVERMETRY_SIGNATURE\'] ?? \'\'))
         <tr><td><?php esc_html_e('Formidable Forms', 'convermetry'); ?></td><td><?php esc_html_e('field ID', 'convermetry'); ?></td><td><?php esc_html_e('the field name, else its key', 'convermetry'); ?></td></tr>
         <tr><td><?php esc_html_e('Contact Form 7', 'convermetry'); ?></td><td><?php esc_html_e('posted field name', 'convermetry'); ?></td><td><?php echo wp_kses_post(__('<strong>same as <code>id</code></strong> — CF7 exposes no reliable label without parsing form markup', 'convermetry')); ?></td></tr>
         <tr><td><?php esc_html_e('Fluent Forms', 'convermetry'); ?></td><td><?php esc_html_e('submitted key', 'convermetry'); ?></td><td><?php echo wp_kses_post(__('<strong>same as <code>id</code></strong> — labels live in an internal JSON blob, not a public API', 'convermetry')); ?></td></tr></tbody></table>
-        <p><?php echo wp_kses_post(__('Convermetry\'s own correlation fields (<code>cvm_conversion_id</code>, <code>cvm_session_id</code>, <code>cvm_context</code>) are stripped before storage and never appear here.', 'convermetry')); ?></p>
+        <p><?php echo wp_kses_post(__('Convermetry\'s own correlation fields (<code>cvmtry_conversion_id</code>, <code>cvmtry_session_id</code>, <code>cvmtry_context</code>) are stripped before storage and never appear here.', 'convermetry')); ?></p>
         <p><?php echo wp_kses_post(__('<strong>Migrating from schema 1.0.</strong> Historical rows are <strong>never</strong> rewritten, in the database or on the wire — otherwise one <code>submission_id</code> could arrive in two different shapes, and a frozen retry could deliver a <code>1.0</code> body long after the upgrade. Branch on <code>schema_version</code>:', 'convermetry')); ?></p>
         <?php
         self::code('$data = $payload[\'form_submission\'][\'submission_data\'];
@@ -2427,7 +2427,7 @@ $fields = $payload[\'schema_version\'] === \'1.0\'
         self::cardStart(__('Internal email alerts', 'convermetry'));
         ?>
         <p><?php echo wp_kses_post(__('<strong>Convermetry → Notifications</strong> emails a chosen internal address when a form submission is recorded, enriched with the attribution Convermetry already captured for that visitor. It is <strong>off by default</strong> and has its own master switch — it works with no webhook endpoints configured, and disabling webhooks does not disable it. These are <strong>internal</strong> notifications: Convermetry never emails the person who submitted the form, and visitor autoresponders are out of scope.', 'convermetry')); ?></p>
-        <ul class="cvm-about-features">
+        <ul class="cvmtry-about-features">
         <li><?php echo wp_kses_post(__('<strong>Email creates a copy of lead data outside Convermetry\'s controls.</strong> Deleting a submission — or letting retention expire it — cancels anything still queued and guarantees no queued message can be rendered afterwards, because the queue stores no lead data of its own. It <strong>cannot recall a message already sent</strong>. If you are relying on Convermetry\'s retention window for a compliance story, enabling this changes that story.', 'convermetry')); ?></li>
         <li><?php echo wp_kses_post(__('<strong>Your form plugin probably already emails you.</strong> These are in addition, not a replacement.', 'convermetry')); ?></li>
         <li><?php echo wp_kses_post(__('<strong>"Sent" means handed to your mail system.</strong> Convermetry uses <code>wp_mail()</code>; a <code>true</code> return means the local transport <em>accepted</em> the message. Nothing in the plugin claims a notification was "delivered" — that word is reserved for webhooks, where a receiver actually returned 2xx.', 'convermetry')); ?></li>
@@ -2437,7 +2437,7 @@ $fields = $payload[\'schema_version\'] === \'1.0\'
 
         self::cardStart(__('Settings', 'convermetry'));
         ?>
-        <table class="cvm-about-table"><thead><tr><th scope="col"><?php esc_html_e('Setting', 'convermetry'); ?></th><th scope="col"><?php esc_html_e('Default', 'convermetry'); ?></th><th scope="col"><?php esc_html_e('Notes', 'convermetry'); ?></th></tr></thead><tbody>
+        <table class="cvmtry-about-table"><thead><tr><th scope="col"><?php esc_html_e('Setting', 'convermetry'); ?></th><th scope="col"><?php esc_html_e('Default', 'convermetry'); ?></th><th scope="col"><?php esc_html_e('Notes', 'convermetry'); ?></th></tr></thead><tbody>
         <tr><td><?php esc_html_e('Enable notifications', 'convermetry'); ?></td><td><strong><?php esc_html_e('Off', 'convermetry'); ?></strong></td><td><?php esc_html_e('Master switch.', 'convermetry'); ?></td></tr>
         <tr><td><?php esc_html_e('Recipients', 'convermetry'); ?></td><td><?php esc_html_e('none', 'convermetry'); ?></td><td><?php echo wp_kses_post(__('One address per line. Validated, deduplicated case-insensitively, capped at 20. Each recipient gets a <strong>separate message</strong>, so nobody sees the rest of the list. Never derived from submitted data.', 'convermetry')); ?></td></tr>
         <tr><td><?php esc_html_e('Subject', 'convermetry'); ?></td><td><code>New {form_name} submission on {site_name}</code></td><td><?php esc_html_e('Token allowlist below.', 'convermetry'); ?></td></tr>
@@ -2452,8 +2452,8 @@ $fields = $payload[\'schema_version\'] === \'1.0\'
 
         self::cardStart(__('What is never emailed, and how sending works', 'convermetry'));
         ?>
-        <p><?php echo wp_kses_post(__('Fields whose ID <strong>or</strong> label looks credential-bearing — passwords, tokens, API keys, secrets, authorization values — are <strong>omitted entirely</strong>, even with <em>Submitted fields</em> on. They are not shown as <code>[REDACTED]</code>: a placeholder would tell every recipient that a secret exists. This is the same policy as Activity Log redaction, so <code>convermetry_sensitive_keys</code> extends both at once. Convermetry\'s <code>cvm_*</code> fields never appear either.', 'convermetry')); ?></p>
-        <ul class="cvm-about-features">
+        <p><?php echo wp_kses_post(__('Fields whose ID <strong>or</strong> label looks credential-bearing — passwords, tokens, API keys, secrets, authorization values — are <strong>omitted entirely</strong>, even with <em>Submitted fields</em> on. They are not shown as <code>[REDACTED]</code>: a placeholder would tell every recipient that a secret exists. This is the same policy as Activity Log redaction, so <code>convermetry_sensitive_keys</code> extends both at once. Convermetry\'s <code>cvmtry_*</code> fields never appear either.', 'convermetry')); ?></p>
+        <ul class="cvmtry-about-features">
         <li><?php echo wp_kses_post(__('Notifications are <strong>queued, never sent during the visitor\'s request</strong>. No <code>wp_mail()</code>, payload build, or analytics query happens while they wait.', 'convermetry')); ?></li>
         <li><?php echo wp_kses_post(__('One queue row per <strong>(submission, recipient)</strong>, unique — a double-fired submission cannot produce two emails to one address, and one failing address does not re-mail the others.', 'convermetry')); ?></li>
         <li><?php echo wp_kses_post(__('The queue stores a recipient, a settings snapshot, and scheduling state — <strong>never the rendered email or the lead\'s answers</strong>. The submission is fetched fresh at send time, which is what makes deletion effective.', 'convermetry')); ?></li>
@@ -2479,7 +2479,7 @@ $fields = $payload[\'schema_version\'] === \'1.0\'
         self::cardStart(__('Custom form integration — two entry points', 'convermetry'));
         ?>
         <p><?php echo wp_kses_post(__('Any form Convermetry has no bundled provider for — a hand-rolled <code>&lt;form&gt;</code>, a headless front end, a booking widget, a server-to-server lead post — goes through one of two public entry points. Both run the <strong>same pipeline</strong>; they differ only in who handles a failed delivery.', 'convermetry')); ?></p>
-        <table class="cvm-about-table"><thead><tr><th scope="col"></th><th scope="col"><code>convermetry_form_submission</code></th><th scope="col"><code>convermetry_submit_form()</code></th></tr></thead><tbody>
+        <table class="cvmtry-about-table"><thead><tr><th scope="col"></th><th scope="col"><code>convermetry_form_submission</code></th><th scope="col"><code>convermetry_submit_form()</code></th></tr></thead><tbody>
         <tr><td><?php esc_html_e('Semantics', 'convermetry'); ?></td><td><?php esc_html_e('Fire-and-forget', 'convermetry'); ?></td><td><?php esc_html_e('Result-aware', 'convermetry'); ?></td></tr>
         <tr><td><?php esc_html_e('Delivery', 'convermetry'); ?></td><td><?php esc_html_e('Queued, sent by the background worker', 'convermetry'); ?></td><td><?php echo wp_kses_post(__('<strong>Synchronous</strong>, inside your request', 'convermetry')); ?></td></tr>
         <tr><td><?php esc_html_e('Retries', 'convermetry'); ?></td><td><?php esc_html_e('Automatic — the full webhook retry chain', 'convermetry'); ?></td><td><?php echo wp_kses_post(__('<strong>None</strong> — failures are handed back to you', 'convermetry')); ?></td></tr>
@@ -2512,7 +2512,7 @@ if (!\$result->ok) {
 
         self::cardStart(__('The form identifier', 'convermetry'));
         ?>
-        <table class="cvm-about-table"><thead><tr><th scope="col"><?php esc_html_e('Key', 'convermetry'); ?></th><th scope="col"><?php esc_html_e('Required', 'convermetry'); ?></th><th scope="col"><?php esc_html_e('Meaning', 'convermetry'); ?></th></tr></thead><tbody>
+        <table class="cvmtry-about-table"><thead><tr><th scope="col"><?php esc_html_e('Key', 'convermetry'); ?></th><th scope="col"><?php esc_html_e('Required', 'convermetry'); ?></th><th scope="col"><?php esc_html_e('Meaning', 'convermetry'); ?></th></tr></thead><tbody>
         <tr><td><code>form_name</code></td><td><strong><?php esc_html_e('Yes', 'convermetry'); ?></strong></td><td><?php echo wp_kses_post(__('The human name of the form. Travels as <code>form_submission.form_name</code>, titles notification emails, and labels the Submissions list. An empty <code>form_name</code> is rejected outright.', 'convermetry')); ?></td></tr>
         <tr><td><code>form_id</code></td><td><?php esc_html_e('No', 'convermetry'); ?></td><td><?php echo wp_kses_post(__('Your own stable identifier. Travels as <code>native_form_id</code>, and as <code>form_id</code> unless a Custom/External Form ID is set for it on the Forms page.', 'convermetry')); ?></td></tr></tbody></table>
         <p><?php echo wp_kses_post(__('Per-form settings — exclusion, URL parameters, headers, notification rules — key these submissions as <code>custom:&lt;form_id&gt;</code> when you pass a <code>form_id</code>, and <code>custom:&lt;form_name&gt;</code> when you do not. Passing a stable <code>form_id</code> is therefore what lets you rename the form later without resetting its configuration.', 'convermetry')); ?></p>
@@ -2522,7 +2522,7 @@ if (!\$result->ok) {
         self::cardStart(__('Submission fields — id, label, value', 'convermetry'));
         ?>
         <p><?php echo wp_kses_post(__('<strong>Two shapes are accepted, and both are fully supported.</strong> The richer descriptor list is preferred; the historical map is not deprecated.', 'convermetry')); ?></p>
-        <p class="cvm-about-subheading"><?php esc_html_e('(a) Descriptor list — preferred', 'convermetry'); ?></p>
+        <p class="cvmtry-about-subheading"><?php esc_html_e('(a) Descriptor list — preferred', 'convermetry'); ?></p>
         <p><?php echo wp_kses_post(__('An ordered list of <code>{id, label, value}</code> arrays, matching the <a href="#payloads"><code>submission_data</code> schema 2.0</a> wire format one-for-one:', 'convermetry')); ?></p>
         <?php
         self::code("convermetry_submit_form(
@@ -2534,11 +2534,11 @@ if (!\$result->ok) {
     ]
 );");
         ?>
-        <table class="cvm-about-table"><thead><tr><th scope="col"><?php esc_html_e('Key', 'convermetry'); ?></th><th scope="col"><?php esc_html_e('Required', 'convermetry'); ?></th><th scope="col"><?php esc_html_e('Rules', 'convermetry'); ?></th></tr></thead><tbody>
-        <tr><td><code>id</code></td><td><strong><?php esc_html_e('Yes', 'convermetry'); ?></strong></td><td><?php echo wp_kses_post(__('The field\'s stable, machine-readable identifier — what a receiver should match on. Passed through <code>sanitize_text_field()</code>. An entry whose <code>id</code> is empty after sanitizing is <strong>dropped</strong>, as is any <code>id</code> beginning with <code>cvm_</code> in any letter case.', 'convermetry')); ?></td></tr>
+        <table class="cvmtry-about-table"><thead><tr><th scope="col"><?php esc_html_e('Key', 'convermetry'); ?></th><th scope="col"><?php esc_html_e('Required', 'convermetry'); ?></th><th scope="col"><?php esc_html_e('Rules', 'convermetry'); ?></th></tr></thead><tbody>
+        <tr><td><code>id</code></td><td><strong><?php esc_html_e('Yes', 'convermetry'); ?></strong></td><td><?php echo wp_kses_post(__('The field\'s stable, machine-readable identifier — what a receiver should match on. Passed through <code>sanitize_text_field()</code>. An entry whose <code>id</code> is empty after sanitizing is <strong>dropped</strong>, as is any <code>id</code> beginning with <code>cvmtry_</code> in any letter case.', 'convermetry')); ?></td></tr>
         <tr><td><code>label</code></td><td><?php esc_html_e('No', 'convermetry'); ?></td><td><?php echo wp_kses_post(__('The human-readable label — what a person reads in the Submissions panel, a CSV export, or a notification email. Sanitized the same way, and <strong>falls back to <code>id</code></strong> when missing, blank, or not a scalar.', 'convermetry')); ?></td></tr>
         <tr><td><code>value</code></td><td><?php esc_html_e('No', 'convermetry'); ?></td><td><?php echo wp_kses_post(__('A scalar (cast to string) or a <strong>list of scalars</strong>, each sanitized. Arrays are reindexed with <code>array_values()</code>, so a multi-select\'s own keys are not part of the contract. Anything non-scalar — an object, a nested array — becomes an empty string rather than nested data. A missing <code>value</code> is an empty string.', 'convermetry')); ?></td></tr></tbody></table>
-        <p class="cvm-about-subheading"><?php esc_html_e('(b) name =&gt; value map — the long-standing shape', 'convermetry'); ?></p>
+        <p class="cvmtry-about-subheading"><?php esc_html_e('(b) name =&gt; value map — the long-standing shape', 'convermetry'); ?></p>
         <p><?php echo wp_kses_post(__('Every key becomes both the field\'s <code>id</code> <strong>and</strong> its <code>label</code>:', 'convermetry')); ?></p>
         <?php
         self::code("convermetry_submit_form(
@@ -2554,10 +2554,10 @@ if (!\$result->ok) {
 ]");
         ?>
         <p><?php esc_html_e('That is the only difference between the two shapes: the map cannot express a label distinct from the id. Use it when you have no separate label to give; reach for the descriptor list the moment you do.', 'convermetry'); ?></p>
-        <div class="cvm-about-note"><?php echo wp_kses_post(__('<strong>Shape detection is strict, and deliberately so.</strong> An array is treated as a descriptor list only when it is list-keyed <em>and every entry</em> is an array carrying a scalar <code>id</code>. One entry that fails sends the whole array down the map path, where nothing is lost — a permissive test that sniffed only the first entry would misread a map whose values happen to be arrays with an <code>id</code> key and silently discard your data.', 'convermetry')); ?></div>
-        <p class="cvm-about-subheading"><?php esc_html_e('Rules that apply to both shapes', 'convermetry'); ?></p>
-        <ul class="cvm-about-features">
-        <li><?php echo wp_kses_post(__('<strong><code>cvm_*</code> keys are always stripped</strong>, from either shape, in any letter case. Convermetry\'s correlation fields never reach storage, payloads, exports, emails, or the Activity Log.', 'convermetry')); ?></li>
+        <div class="cvmtry-about-note"><?php echo wp_kses_post(__('<strong>Shape detection is strict, and deliberately so.</strong> An array is treated as a descriptor list only when it is list-keyed <em>and every entry</em> is an array carrying a scalar <code>id</code>. One entry that fails sends the whole array down the map path, where nothing is lost — a permissive test that sniffed only the first entry would misread a map whose values happen to be arrays with an <code>id</code> key and silently discard your data.', 'convermetry')); ?></div>
+        <p class="cvmtry-about-subheading"><?php esc_html_e('Rules that apply to both shapes', 'convermetry'); ?></p>
+        <ul class="cvmtry-about-features">
+        <li><?php echo wp_kses_post(__('<strong><code>cvmtry_*</code> keys are always stripped</strong>, from either shape, in any letter case. Convermetry\'s correlation fields never reach storage, payloads, exports, emails, or the Activity Log.', 'convermetry')); ?></li>
         <li><?php echo wp_kses_post(__('<strong>Duplicate labels are preserved as separate fields.</strong> Nothing keys or deduplicates by label; two fields both labelled "Name" stay two fields. This is the whole reason the wire format is a list.', 'convermetry')); ?></li>
         <li><?php echo wp_kses_post(__('<strong>Order is preserved</strong> exactly as you passed it.', 'convermetry')); ?></li>
         <li><?php echo wp_kses_post(__('<strong>An empty field list is valid</strong> — it records a submission with an empty schema 2.0 list, not a legacy-shaped payload.', 'convermetry')); ?></li>
@@ -2569,7 +2569,7 @@ if (!\$result->ok) {
         ?>
         <p><?php echo wp_kses_post(__('Both entry points accept extra query parameters and headers for <strong>this submission only</strong>. They are scalar maps (non-scalar values are dropped) and sit at the end of the merge precedence chain, so they win over everything configured in wp-admin. The action takes them as one <code>$context</code> array; the function takes them as two arguments.', 'convermetry')); ?></p>
         <p><?php echo wp_kses_post(__('<code>convermetry_submit_form()</code> returns a readonly <code>Convermetry\\Forms\\SubmissionResult</code>:', 'convermetry')); ?></p>
-        <table class="cvm-about-table"><thead><tr><th scope="col"><?php esc_html_e('Property', 'convermetry'); ?></th><th scope="col"><?php esc_html_e('Type', 'convermetry'); ?></th><th scope="col"><?php esc_html_e('Meaning', 'convermetry'); ?></th></tr></thead><tbody>
+        <table class="cvmtry-about-table"><thead><tr><th scope="col"><?php esc_html_e('Property', 'convermetry'); ?></th><th scope="col"><?php esc_html_e('Type', 'convermetry'); ?></th><th scope="col"><?php esc_html_e('Meaning', 'convermetry'); ?></th></tr></thead><tbody>
         <tr><td><code>ok</code></td><td><?php esc_html_e('bool', 'convermetry'); ?></td><td><?php echo wp_kses_post(__('True when the submission was recorded <strong>and</strong> every attempted delivery succeeded (or was queued).', 'convermetry')); ?></td></tr>
         <tr><td><code>submissionId</code></td><td><?php esc_html_e('string', 'convermetry'); ?></td><td><?php esc_html_e('The globally unique submission id; empty when nothing was recorded.', 'convermetry'); ?></td></tr>
         <tr><td><code>conversionId</code></td><td><?php esc_html_e('string', 'convermetry'); ?></td><td><?php esc_html_e('The conversion id shared with analytics; empty when nothing was recorded.', 'convermetry'); ?></td></tr>
@@ -2584,32 +2584,32 @@ if (!\$result->ok) {
 
         self::cardStart(__('What both paths do', 'convermetry'));
         ?>
-        <ol class="cvm-about-list">
+        <ol class="cvmtry-about-list">
         <li><?php echo wp_kses_post(__('<strong>Per-form settings are honored.</strong> An excluded <code>custom:…</code> form records nothing and reports why.', 'convermetry')); ?></li>
         <li><?php echo wp_kses_post(__('<strong>Correlation fields are read from the current request</strong>, so a submission posted from a page the tracker ran on carries the visitor\'s real session, channel, campaign, entrance referrer, and landing page. When they are absent, a conversion id is generated server-side and the submission still records and delivers, with an empty <code>analytics_context</code>.', 'convermetry')); ?></li>
         <li><?php echo wp_kses_post(__('<strong>A <code>form_success</code> analytics event is recorded</strong> under the same conversion token, so the dashboard\'s conversion count includes it exactly once.', 'convermetry')); ?></li>
         <li><?php echo wp_kses_post(__('<strong>The submission row is written</strong>, with the denormalized channel, campaign and landing-page columns the Submissions filters and lead reports use, and the submitter\'s IP when IP storage is on.', 'convermetry')); ?></li>
         <li><?php echo wp_kses_post(__('<strong><code>convermetry_submission_recorded</code> fires</strong> — notifications queue here, and listeners run even with no webhook endpoints configured.', 'convermetry')); ?></li>
         <li><?php echo wp_kses_post(__('<strong>Delivery</strong>: queued for the background worker (action), or dispatched synchronously to every form endpoint (function).', 'convermetry')); ?></li></ol>
-        <p><?php echo wp_kses_post(__('Duplicate protection is the same as for bundled providers: a repeated <code>cvm_conversion_id</code> hits the <code>UNIQUE conversion_id</code> index, and the second call reports success <strong>without recording or delivering anything twice</strong>.', 'convermetry')); ?></p>
+        <p><?php echo wp_kses_post(__('Duplicate protection is the same as for bundled providers: a repeated <code>cvmtry_conversion_id</code> hits the <code>UNIQUE conversion_id</code> index, and the second call reports success <strong>without recording or delivering anything twice</strong>.', 'convermetry')); ?></p>
         <?php
         self::cardEnd();
 
         self::cardStart(__('Extending Convermetry — the extensions buckets', 'convermetry'));
         ?>
         <p><?php echo wp_kses_post(__('Five surfaces accept <strong>namespaced extension data</strong> from other plugins. Each is a filter that starts empty, and <strong>nothing appears until something fills it</strong> — with no callbacks registered, no <code>extensions</code> property exists anywhere.', 'convermetry')); ?></p>
-        <table class="cvm-about-table"><thead><tr><th scope="col"><?php esc_html_e('Surface', 'convermetry'); ?></th><th scope="col"><?php esc_html_e('Filter', 'convermetry'); ?></th><th scope="col"><?php esc_html_e('Budget', 'convermetry'); ?></th></tr></thead><tbody>
+        <table class="cvmtry-about-table"><thead><tr><th scope="col"><?php esc_html_e('Surface', 'convermetry'); ?></th><th scope="col"><?php esc_html_e('Filter', 'convermetry'); ?></th><th scope="col"><?php esc_html_e('Budget', 'convermetry'); ?></th></tr></thead><tbody>
         <tr><td><?php esc_html_e('Outbound webhook payloads', 'convermetry'); ?></td><td><code>convermetry_webhook_payload_extensions</code></td><td><?php esc_html_e('32 KB · 50 keys', 'convermetry'); ?></td></tr>
         <tr><td><?php esc_html_e('Analytics summaries (dashboard + payload)', 'convermetry'); ?></td><td><code>convermetry_analytics_extensions</code></td><td><?php esc_html_e('32 KB · 50 keys', 'convermetry'); ?></td></tr>
         <tr><td><?php esc_html_e('A submission\'s stored analytics context', 'convermetry'); ?></td><td><code>convermetry_submission_context_extensions</code></td><td><?php esc_html_e('8 KB · 20 keys', 'convermetry'); ?></td></tr>
         <tr><td><code>window.ConvermetryConfig</code></td><td><code>convermetry_tracker_config_extensions</code></td><td><?php esc_html_e('8 KB · 20 keys', 'convermetry'); ?></td></tr>
         <tr><td><?php esc_html_e('One delivery-log REST item', 'convermetry'); ?></td><td><code>convermetry_delivery_log_api_item</code></td><td><?php esc_html_e('4 KB · 10 keys', 'convermetry'); ?></td></tr></tbody></table>
-        <ul class="cvm-about-features">
+        <ul class="cvmtry-about-features">
         <li><?php echo wp_kses_post(__('<strong>Keys must be namespaced</strong> as <code>vendor/thing</code>, so two plugins writing to the same payload cannot collide.', 'convermetry')); ?></li>
         <li><?php echo wp_kses_post(__('Values must be <strong>JSON primitives</strong> — no objects, no resources, bounded depth. Anything over budget is dropped rather than truncated into invalid data.', 'convermetry')); ?></li>
         <li><?php echo wp_kses_post(__('<strong>Core keys are never replaceable.</strong> A filter cannot rewrite a conversion id, a session id, attribution, timestamps, form identity, or a REST item\'s <code>success</code> flag — a plugin that could would be able to lie to a monitoring dashboard.', 'convermetry')); ?></li>
         <li><?php echo wp_kses_post(__('The tracker bucket is inlined into <strong>every page view and is public</strong>. Never put a key, a token, or anything visitor-specific there.', 'convermetry')); ?></li></ul>
-        <p class="cvm-about-subheading"><?php esc_html_e('A dashboard panel that also travels on the wire', 'convermetry'); ?></p>
+        <p class="cvmtry-about-subheading"><?php esc_html_e('A dashboard panel that also travels on the wire', 'convermetry'); ?></p>
         <p><?php echo wp_kses_post(__('Register an <code>AnalyticsSectionInterface</code> adapter and it contributes both a panel on the Analytics screen and an entry in <code>analytics.extensions</code> — from one implementation, so the screen and the payload cannot disagree.', 'convermetry')); ?></p>
         <?php
         self::code("add_filter('convermetry_analytics_sections', function (array \$sections): array {
@@ -2626,20 +2626,20 @@ interface AnalyticsSectionInterface {
 }");
         ?>
         <p><?php echo wp_kses_post(__('It is a <strong>typed registry, never SQL</strong>: there is deliberately no way to pass a query fragment or a table name to a path that runs unattended on cron. A section that throws is dropped and reported through <code>convermetry_analytics_report_failed</code> rather than taking the report down with it.', 'convermetry')); ?></p>
-        <p class="cvm-about-subheading"><?php esc_html_e('Admin surfaces', 'convermetry'); ?></p>
+        <p class="cvmtry-about-subheading"><?php esc_html_e('Admin surfaces', 'convermetry'); ?></p>
         <p><?php echo wp_kses_post(__('Actions exist to render extra panels on the dashboard (<code>convermetry_analytics_admin_panels</code>), extra blocks and buttons on a submission (<code>convermetry_submission_detail_sections</code>, <code>convermetry_submission_row_actions</code>), extra content on the Forms screen (<code>convermetry_forms_admin_sections</code>), and filters to add list columns and CSV columns (<code>convermetry_submissions_columns</code>, <code>convermetry_submission_csv_columns</code> / <code>_values</code>). They run after this screen\'s capability check — but <strong>your callback must escape its own output</strong>, and CSV values go through the same formula-injection escaping as core ones.', 'convermetry')); ?></p>
         <?php
         self::cardEnd();
 
         self::cardStart(__('Helper functions and the browser API', 'convermetry'));
         ?>
-        <table class="cvm-about-table"><thead><tr><th scope="col"><?php esc_html_e('Call', 'convermetry'); ?></th><th scope="col"><?php esc_html_e('Purpose', 'convermetry'); ?></th></tr></thead><tbody>
+        <table class="cvmtry-about-table"><thead><tr><th scope="col"><?php esc_html_e('Call', 'convermetry'); ?></th><th scope="col"><?php esc_html_e('Purpose', 'convermetry'); ?></th></tr></thead><tbody>
         <tr><td><code>convermetry_submit_form()</code></td><td><?php esc_html_e('Result-aware, synchronous custom-form submission — see above.', 'convermetry'); ?></td></tr>
-        <tr><td><code>cvm_track_event($type, $data)</code></td><td><?php echo wp_kses_post(__('Records a custom server-side analytics event. <code>$type</code> is at most 20 characters of lowercase letters, digits, dashes and underscores; recognized <code>$data</code> keys are the event row\'s own columns and unknown keys are ignored. A <code>form_success</code> event <strong>requires</strong> <code>event_value</code> to be a unique conversion id (8–100 chars of <code>A-Za-z0-9_.:-</code>), so conversion dedup stays consistent.', 'convermetry')); ?></td></tr>
+        <tr><td><code>cvmtry_track_event($type, $data)</code></td><td><?php echo wp_kses_post(__('Records a custom server-side analytics event. <code>$type</code> is at most 20 characters of lowercase letters, digits, dashes and underscores; recognized <code>$data</code> keys are the event row\'s own columns and unknown keys are ignored. A <code>form_success</code> event <strong>requires</strong> <code>event_value</code> to be a unique conversion id (8–100 chars of <code>A-Za-z0-9_.:-</code>), so conversion dedup stays consistent.', 'convermetry')); ?></td></tr>
         <tr><td><code>Convermetry.track(name, { value })</code></td><td><?php echo wp_kses_post(__('Reports a named custom event that <a href="#conversions">goals</a> can match. Only the name — and a numeric <code>value</code> where the matching goal accepts one — is transmitted; an event matching no configured goal is discarded and never stored.', 'convermetry')); ?></td></tr>
         <tr><td><?php echo wp_kses_post(__('<code>convermetry:conversion</code> DOM event', 'convermetry')); ?></td><td><?php echo wp_kses_post(__('The pre-existing custom frontend conversion event, unchanged. Pass a <code>conversion_id</code> in its detail to correlate it with a server-side record.', 'convermetry')); ?></td></tr></tbody></table>
         <?php
-        self::code("cvm_track_event('purchase', ['page_url' => \$url, 'event_value' => '99.00']);
+        self::code("cvmtry_track_event('purchase', ['page_url' => \$url, 'event_value' => '99.00']);
 
 Convermetry.track('appointment_booked');
 Convermetry.track('appointment_booked', { value: 250 });
@@ -2667,16 +2667,10 @@ document.dispatchEvent(new CustomEvent('convermetry:conversion', {
         self::sectionStart('hooks');
 
         /* Every detail panel below is rendered collapsed, which depends on
-         * about.js to open it. With scripting off the toggle is useless, so the
-         * panels are simply shown instead — the page gets long, but nothing
-         * becomes unreachable. */
-        ?>
-        <noscript><style>
-            .cvm-about-hook-toggle { display: none; }
-            .cvm-about-hook-detail[hidden] { display: block; }
-        </style></noscript>
-        <?php
-
+         * about.js to open it. With scripting off the toggle is useless, so
+         * admin-about.css shows the panels instead, keyed off the `no-js` class
+         * WordPress puts on the admin <body> and removes only when scripting
+         * runs — the page gets long, but nothing becomes unreachable. */
         self::cardStart(__('How the hook API behaves', 'convermetry'));
         ?>
         <p><?php
@@ -2693,15 +2687,15 @@ document.dispatchEvent(new CustomEvent('convermetry:conversion', {
         ));
         ?></p>
         <p><?php echo wp_kses_post(__('Each entry below lists its name, type, purpose and signature. <strong>Learn More</strong> expands what every argument actually holds — including the keys of the array ones — plus a runnable example you can paste into an mu-plugin.', 'convermetry')); ?></p>
-        <ul class="cvm-about-features">
+        <ul class="cvmtry-about-features">
         <li><?php echo wp_kses_post(__('<strong>Nothing registered means nothing changes.</strong> With no callbacks, payload bytes, request URLs and headers, delivery ids, signatures, retry schedules, analytics results, admin HTML, REST output, CSV files, and tracker configuration are all exactly what they were. No <code>extensions</code> property appears anywhere until something fills it.', 'convermetry')); ?></li>
         <li><?php echo wp_kses_post(__('<strong>Filters that customize data may see that data; observers may not.</strong> A filter whose job is to change an email body necessarily sees the email body. The observational actions deliberately carry ids, counts, and outcomes — never submitted fields, rendered emails, request or response bodies, signing secrets, credential-bearing URLs, or raw IP addresses. Where an argument does carry personal data, its entry says so.', 'convermetry')); ?></li></ul>
-        <p class="cvm-about-subheading"><?php esc_html_e('Three kinds of hook', 'convermetry'); ?></p>
-        <ul class="cvm-about-features">
+        <p class="cvmtry-about-subheading"><?php esc_html_e('Three kinds of hook', 'convermetry'); ?></p>
+        <ul class="cvmtry-about-features">
         <li><?php echo wp_kses_post(__('<strong>Decision filters</strong> (<code>convermetry_should_*</code>) answer one yes/no question. The data is passed for inspection and nothing you return from them changes it — a gate that could also rewrite a dedupe key or a completion id would be able to silently defeat the guarantees built on them.', 'convermetry')); ?></li>
         <li><?php echo wp_kses_post(__('<strong>Composition filters</strong> shape data on its way out: payloads, URLs, headers, fields, recipients, columns. They run <strong>once per logical delivery, before the request is frozen</strong> — a retry re-sends frozen bytes and re-runs none of them, so a callback added mid-chain cannot reach a delivery already in flight.', 'convermetry')); ?></li>
         <li><?php echo wp_kses_post(__('<strong>Observational actions</strong> report what happened, after it is durably true. They never fire speculatively: a retry action fires once the next attempt is persisted, a success action once the bookkeeping committed.', 'convermetry')); ?></li></ul>
-        <div class="cvm-about-note"><?php echo wp_kses_post(__('<strong>Where to register them.</strong> A theme\'s <code>functions.php</code> loads after <code>plugins_loaded</code>, which is late for the ingestion path. Put anything that must be in place for <em>every</em> request — <code>convermetry_client_ip</code>, <code>convermetry_stored_ip</code>, <code>convermetry_allowed_hosts</code>, <code>convermetry_rate_limits</code>, <code>convermetry_tracked_event</code>, <code>convermetry_should_track_event</code> — in an <strong>mu-plugin</strong>, or in a plugin file that registers at load time. Three filters are <strong>memoized per request</strong> and run only on their first use: <code>convermetry_client_ip</code>, <code>convermetry_allowed_hosts</code> and <code>convermetry_form_providers</code>; registering those later has no effect for the rest of the request. And <strong>do not throw from a callback</strong> — several run while a lease is held or immediately before a network request, where an exception costs the work the hook was announcing.', 'convermetry')); ?></div>
+        <div class="cvmtry-about-note"><?php echo wp_kses_post(__('<strong>Where to register them.</strong> A theme\'s <code>functions.php</code> loads after <code>plugins_loaded</code>, which is late for the ingestion path. Put anything that must be in place for <em>every</em> request — <code>convermetry_client_ip</code>, <code>convermetry_stored_ip</code>, <code>convermetry_allowed_hosts</code>, <code>convermetry_rate_limits</code>, <code>convermetry_tracked_event</code>, <code>convermetry_should_track_event</code> — in an <strong>mu-plugin</strong>, or in a plugin file that registers at load time. Three filters are <strong>memoized per request</strong> and run only on their first use: <code>convermetry_client_ip</code>, <code>convermetry_allowed_hosts</code> and <code>convermetry_form_providers</code>; registering those later has no effect for the rest of the request. And <strong>do not throw from a callback</strong> — several run while a lease is held or immediately before a network request, where an exception costs the work the hook was announcing.', 'convermetry')); ?></div>
         <?php
         self::cardEnd();
 
@@ -2736,7 +2730,7 @@ document.dispatchEvent(new CustomEvent('convermetry:conversion', {
 
         self::cardStart(__('Worked examples', 'convermetry'));
         ?>
-        <p class="cvm-about-subheading"><?php esc_html_e('Submit a custom form', 'convermetry'); ?></p>
+        <p class="cvmtry-about-subheading"><?php esc_html_e('Submit a custom form', 'convermetry'); ?></p>
         <p><?php echo wp_kses_post(__('Fire-and-forget, with background delivery and automatic retries. <code>$fields</code> takes either a list of <code>[\'id\', \'label\', \'value\']</code> descriptors or the historical <code>name =&gt; value</code> map — see <a href="#developer">Developer API</a>.', 'convermetry')); ?></p>
         <?php
         self::code("do_action('convermetry_form_submission',
@@ -2749,7 +2743,7 @@ document.dispatchEvent(new CustomEvent('convermetry:conversion', {
 );");
 
         ?>
-        <p class="cvm-about-subheading"><?php esc_html_e('Add data to every outbound webhook payload', 'convermetry'); ?></p>
+        <p class="cvmtry-about-subheading"><?php esc_html_e('Add data to every outbound webhook payload', 'convermetry'); ?></p>
         <p><?php echo wp_kses_post(__('Runs before the payload is frozen, so retries re-send it unchanged. Keys must be namespaced <code>vendor/thing</code>, and an empty result adds no property at all.', 'convermetry')); ?></p>
         <?php
         self::code("add_filter('convermetry_webhook_payload_extensions', function (array \$extensions, string \$messageType, array \$meta): array {
@@ -2761,7 +2755,7 @@ document.dispatchEvent(new CustomEvent('convermetry:conversion', {
 }, 10, 3);");
 
         ?>
-        <p class="cvm-about-subheading"><?php esc_html_e('Add a header to one endpoint only', 'convermetry'); ?></p>
+        <p class="cvmtry-about-subheading"><?php esc_html_e('Add a header to one endpoint only', 'convermetry'); ?></p>
         <p><?php echo wp_kses_post(__('The context identifies the endpoint without exposing its URL. A callback may not touch the protocol headers — <code>Content-Type</code>, <code>Host</code>, <code>Content-Length</code>, <code>Transfer-Encoding</code>, <code>Connection</code>, <code>User-Agent</code>, <code>Idempotency-Key</code>, <code>X-Convermetry-Signature</code> — which are restored to their pre-filter state.', 'convermetry')); ?></p>
         <?php
         self::code("add_filter('convermetry_webhook_headers', function (array \$headers, array \$context): array {
@@ -2773,7 +2767,7 @@ document.dispatchEvent(new CustomEvent('convermetry:conversion', {
 }, 10, 2);");
 
         ?>
-        <p class="cvm-about-subheading"><?php esc_html_e('Skip recording a submission', 'convermetry'); ?></p>
+        <p class="cvmtry-about-subheading"><?php esc_html_e('Skip recording a submission', 'convermetry'); ?></p>
         <p><?php echo wp_kses_post(__('Runs after normalization, so spam rules can read the fields, and before <strong>any</strong> write — the conversion event, the row, the queue, and the notifications are all skipped. The visitor still sees success: returning a failure would make Elementor\'s synchronous mode reject a valid form.', 'convermetry')); ?></p>
         <?php
         self::code("add_filter('convermetry_should_record_submission', function (bool \$should, string \$formKey, string \$provider, array \$fields): bool {
@@ -2787,7 +2781,7 @@ document.dispatchEvent(new CustomEvent('convermetry:conversion', {
 }, 10, 4);");
 
         ?>
-        <p class="cvm-about-subheading"><?php esc_html_e('Pseudonymize the stored IP address', 'convermetry'); ?></p>
+        <p class="cvmtry-about-subheading"><?php esc_html_e('Pseudonymize the stored IP address', 'convermetry'); ?></p>
         <p><?php echo wp_kses_post(__('<code>convermetry_stored_ip</code> runs after the privacy gates, on the address about to be persisted. It deliberately does not affect the rate-limit identity, which would collapse every visitor into one bucket.', 'convermetry')); ?></p>
         <?php
         self::code("add_filter('convermetry_stored_ip', function (string \$ip): string {
@@ -2798,7 +2792,7 @@ document.dispatchEvent(new CustomEvent('convermetry:conversion', {
 });");
 
         ?>
-        <p class="cvm-about-subheading"><?php esc_html_e('Observe deliveries, and react to a lead outcome', 'convermetry'); ?></p>
+        <p class="cvmtry-about-subheading"><?php esc_html_e('Observe deliveries, and react to a lead outcome', 'convermetry'); ?></p>
         <p><?php echo wp_kses_post(__('Note which action means what: an exhausted <em>analytics</em> chain is resumable, an abandoned <em>form</em> delivery is not. Lead values are exact decimal strings, never floats.', 'convermetry')); ?></p>
         <?php
         self::code("add_action('convermetry_webhook_delivery_abandoned', function (array \$context, string \$reason): void {
@@ -2813,7 +2807,7 @@ add_action('convermetry_lead_updated', function (string \$submissionId, array \$
 }, 10, 5);");
 
         ?>
-        <p class="cvm-about-subheading"><?php esc_html_e('Scope an admin screen to a narrower capability', 'convermetry'); ?></p>
+        <p class="cvmtry-about-subheading"><?php esc_html_e('Scope an admin screen to a narrower capability', 'convermetry'); ?></p>
         <p><?php echo wp_kses_post(__('Applied to menu visibility <strong>and</strong> every handler behind it. Grant deliberately: <code>submissions.export</code> is every lead\'s name and email in one file.', 'convermetry')); ?></p>
         <?php
         self::code("add_filter('convermetry_admin_capability', function (string \$capability, string \$scope): string {
@@ -2848,7 +2842,7 @@ add_action('convermetry_lead_updated', function (string \$submissionId, array \$
         self::code('GET /wp-json/convermetry/v1/deliveries?page=1&per_page=25&status=error&message_type=form_submission
 Authorization: <api-key>');
         ?>
-        <table class="cvm-about-table"><thead><tr><th scope="col"><?php esc_html_e('Parameter', 'convermetry'); ?></th><th scope="col"><?php esc_html_e('Values', 'convermetry'); ?></th></tr></thead><tbody>
+        <table class="cvmtry-about-table"><thead><tr><th scope="col"><?php esc_html_e('Parameter', 'convermetry'); ?></th><th scope="col"><?php esc_html_e('Values', 'convermetry'); ?></th></tr></thead><tbody>
         <tr><td><code>page</code> / <code>per_page</code></td><td><?php echo wp_kses_post(__('Pagination; <code>per_page</code> max 100.', 'convermetry')); ?></td></tr>
         <tr><td><code>status</code></td><td><code>success</code> | <code>error</code></td></tr>
         <tr><td><code>message_type</code></td><td><code>analytics_report</code> | <code>form_submission</code></td></tr>
@@ -2856,8 +2850,8 @@ Authorization: <api-key>');
         <tr><td><code>provider</code></td><td><?php esc_html_e('Form provider key.', 'convermetry'); ?></td></tr>
         <tr><td><code>form_id</code></td><td><?php esc_html_e('Exact form name.', 'convermetry'); ?></td></tr>
         <tr><td><code>after</code></td><td><?php echo wp_kses_post(__('<code>YYYY-MM</code> or <code>YYYY-MM-DD</code>.', 'convermetry')); ?></td></tr></tbody></table>
-        <p><?php echo wp_kses_post(__('Pagination metadata returns in <code>X-WP-Total</code>, <code>X-WP-TotalPages</code> and <code>X-CVM-Page</code> headers. Only a SHA-256 hash of the key is stored — the raw key is shown <strong>once</strong> at generation, and regenerating invalidates the old key immediately. Wrong keys get <code>401</code>, throttled per IP after repeated failures; a disabled API answers <code>403</code>.', 'convermetry')); ?></p>
-        <div class="cvm-about-note"><?php echo wp_kses_post(__('In responses, <code>endpoint_url</code> is <strong>redacted to scheme + host</strong> — webhook URLs frequently embed bearer tokens, and this read-only key must never hand out downstream write credentials. Identify endpoints by <code>endpoint_label</code> or <code>endpoint_key</code>; full URLs stay visible to admins in wp-admin. Intended for <strong>server-to-server</strong> use — never embed the key in public frontend JavaScript.', 'convermetry')); ?></div>
+        <p><?php echo wp_kses_post(__('Pagination metadata returns in <code>X-WP-Total</code>, <code>X-WP-TotalPages</code> and <code>X-CVMTRY-Page</code> headers. Only a SHA-256 hash of the key is stored — the raw key is shown <strong>once</strong> at generation, and regenerating invalidates the old key immediately. Wrong keys get <code>401</code>, throttled per IP after repeated failures; a disabled API answers <code>403</code>.', 'convermetry')); ?></p>
+        <div class="cvmtry-about-note"><?php echo wp_kses_post(__('In responses, <code>endpoint_url</code> is <strong>redacted to scheme + host</strong> — webhook URLs frequently embed bearer tokens, and this read-only key must never hand out downstream write credentials. Identify endpoints by <code>endpoint_label</code> or <code>endpoint_key</code>; full URLs stay visible to admins in wp-admin. Intended for <strong>server-to-server</strong> use — never embed the key in public frontend JavaScript.', 'convermetry')); ?></div>
         <?php
         self::cardEnd();
 
@@ -2875,9 +2869,9 @@ Authorization: <api-key>');
 
         self::cardStart(__('Privacy posture', 'convermetry'));
         ?>
-        <ul class="cvm-about-features">
+        <ul class="cvmtry-about-features">
         <li><?php echo wp_kses_post(__('<strong>Email notifications are opt-in and leave your retention window.</strong> When enabled, each notification is a copy of lead data in a mailbox Convermetry does not control. Deleting a submission cancels anything still queued, but <strong>cannot recall a message already sent</strong>.', 'convermetry')); ?></li>
-        <li><?php echo wp_kses_post(__('<strong>No cookies — but browser storage.</strong> The tracker keeps a random visit id (<code>cvm_session</code>) and the visit\'s attribution (<code>cvm_campaign</code>) in <code>localStorage</code>, and events not yet sent (<code>cvm_pending</code>) in <code>sessionStorage</code>. The visit id rotates after 30 minutes of inactivity. In the EU and UK the rules that govern cookies also apply to this storage.', 'convermetry')); ?></li>
+        <li><?php echo wp_kses_post(__('<strong>No cookies — but browser storage.</strong> The tracker keeps a random visit id (<code>cvmtry_session</code>) and the visit\'s attribution (<code>cvmtry_campaign</code>) in <code>localStorage</code>, and events not yet sent (<code>cvmtry_pending</code>) in <code>sessionStorage</code>. The visit id rotates after 30 minutes of inactivity. In the EU and UK the rules that govern cookies also apply to this storage.', 'convermetry')); ?></li>
         <li><?php echo wp_kses_post(__('Tracked URLs are canonicalized to scheme + host + path — <strong>query strings never reach the database</strong>. Referrers and click/form destinations are likewise stripped; whole <code>mailto:</code>/<code>tel:</code> destinations are kept, because for those links the address <em>is</em> the destination.', 'convermetry')); ?></li>
         <li><?php echo wp_kses_post(__('Campaign values are stored after sanitization, except values containing <code>@</code>, which are dropped as likely email addresses — never put personal data in UTM parameters. Ad-click identifiers store only the parameter <strong>name</strong>; the value never leaves the browser.', 'convermetry')); ?></li>
         <li><?php echo wp_kses_post(__('<strong>Visitor IP addresses are stored by default</strong>, on both write paths: every analytics event and every server-confirmed form submission. Turn it off with <strong>Settings → Tracking → IP addresses</strong>; new rows then record an empty value while existing rows are untouched and age out with retention. User agents are never stored on either path.', 'convermetry')); ?></li>
@@ -2895,8 +2889,8 @@ Authorization: <api-key>');
 
         self::cardStart(__('Consent and WordPress privacy tools', 'convermetry'));
         ?>
-        <ul class="cvm-about-features">
-        <li><?php echo wp_kses_post(__('<strong>Tracking starts on activation.</strong> Convermetry has no consent banner of its own and no consent-plugin integration. Where your site needs consent first, have your consent tool block the <code>cvm-tracker</code> script until it is given, or return <code>false</code> from <a href="#hook-convermetry_should_enqueue_tracker"><code>convermetry_should_enqueue_tracker</code></a> until your consent check passes. Server-confirmed form submissions are still recorded — without analytics context — when the tracker does not run.', 'convermetry')); ?></li>
+        <ul class="cvmtry-about-features">
+        <li><?php echo wp_kses_post(__('<strong>Tracking starts on activation.</strong> Convermetry has no consent banner of its own and no consent-plugin integration. Where your site needs consent first, have your consent tool block the <code>cvmtry-tracker</code> script until it is given, or return <code>false</code> from <a href="#hook-convermetry_should_enqueue_tracker"><code>convermetry_should_enqueue_tracker</code></a> until your consent check passes. Server-confirmed form submissions are still recorded — without analytics context — when the tracker does not run.', 'convermetry')); ?></li>
         <li><?php echo wp_kses_post(__('<strong>Suggested policy text.</strong> Settings → Privacy → Policy Guide carries a Convermetry section generated from the current settings — IP storage, Do Not Track / Global Privacy Control, retention, webhooks and email notifications. WordPress flags the guide when that text changes, so a site that later switches IP storage on is told its policy may be stale. It is a starting point, not legal advice.', 'convermetry')); ?></li>
         <li><?php echo wp_kses_post(__('<strong>Export and erasure.</strong> Tools → Export Personal Data and Tools → Erase Personal Data find the form submissions whose submitted values contain the requested email address <em>exactly</em> — a field that merely mentions the address inside other text is somebody else\'s lead and is left alone. The export includes each submission, its lead history, where it was delivered (destination host only — endpoint URLs often embed secrets), and the analytics of the visit it came from.', 'convermetry')); ?></li>
         <li><?php echo wp_kses_post(__('<strong>What erasure removes.</strong> The submission, through the same path as the Delete button — its queued webhook deliveries, queued notifications and lead history go with it. Activity Log rows for it keep their audit metadata but lose the request and response bodies; logged analytics reports lose that conversion\'s IP address and session id; and the visit\'s analytics events lose their IP address while remaining as anonymous traffic.', 'convermetry')); ?></li>
@@ -2906,14 +2900,14 @@ Authorization: <api-key>');
 
         self::cardStart(__('What is stored, and where', 'convermetry'));
         ?>
-        <table class="cvm-about-table"><thead><tr><th scope="col"><?php esc_html_e('Table', 'convermetry'); ?></th><th scope="col"><?php esc_html_e('Purpose', 'convermetry'); ?></th></tr></thead><tbody>
-        <tr><td><code>cvm_events</code></td><td><?php esc_html_e('One row per visitor interaction — the analytics engine. A unique (batch id, sequence) makes tracker replays idempotent.', 'convermetry'); ?></td></tr>
-        <tr><td><code>cvm_form_submissions</code></td><td><?php echo wp_kses_post(__('One row per server-confirmed submission: identifiers, form identity, page URL and query, IP, sanitized <code>submission_data</code>, the frozen analytics context, the indexed campaign/channel/landing-page columns, the lead outcome columns, and the recorded delivery state.', 'convermetry')); ?></td></tr>
-        <tr><td><code>cvm_delivery_queue</code></td><td><?php esc_html_e('The background form-delivery queue: one row per submission × endpoint, holding the frozen URL, headers and body. Deleted on acknowledgment or abandonment.', 'convermetry'); ?></td></tr>
-        <tr><td><code>cvm_notification_queue</code></td><td><?php echo wp_kses_post(__('The email queue: one row per submission × recipient, carrying <strong>no lead data</strong> — the submission is read at send time.', 'convermetry')); ?></td></tr>
-        <tr><td><code>cvm_webhook_deliveries</code></td><td><?php esc_html_e('The Activity Log: one row per delivery attempt with redacted headers and bodies, capped at 64 KB each.', 'convermetry'); ?></td></tr>
-        <tr><td><code>cvm_goal_completions</code></td><td><?php echo wp_kses_post(__('One row per goal completion. <code>dedupe_key</code> carries a UNIQUE index and is the entire deduplication mechanism.', 'convermetry')); ?></td></tr>
-        <tr><td><code>cvm_lead_events</code></td><td><?php esc_html_e('Lead status-change history: one row per transition, cascaded away when the submission is deleted.', 'convermetry'); ?></td></tr></tbody></table>
+        <table class="cvmtry-about-table"><thead><tr><th scope="col"><?php esc_html_e('Table', 'convermetry'); ?></th><th scope="col"><?php esc_html_e('Purpose', 'convermetry'); ?></th></tr></thead><tbody>
+        <tr><td><code>cvmtry_events</code></td><td><?php esc_html_e('One row per visitor interaction — the analytics engine. A unique (batch id, sequence) makes tracker replays idempotent.', 'convermetry'); ?></td></tr>
+        <tr><td><code>cvmtry_form_submissions</code></td><td><?php echo wp_kses_post(__('One row per server-confirmed submission: identifiers, form identity, page URL and query, IP, sanitized <code>submission_data</code>, the frozen analytics context, the indexed campaign/channel/landing-page columns, the lead outcome columns, and the recorded delivery state.', 'convermetry')); ?></td></tr>
+        <tr><td><code>cvmtry_delivery_queue</code></td><td><?php esc_html_e('The background form-delivery queue: one row per submission × endpoint, holding the frozen URL, headers and body. Deleted on acknowledgment or abandonment.', 'convermetry'); ?></td></tr>
+        <tr><td><code>cvmtry_notification_queue</code></td><td><?php echo wp_kses_post(__('The email queue: one row per submission × recipient, carrying <strong>no lead data</strong> — the submission is read at send time.', 'convermetry')); ?></td></tr>
+        <tr><td><code>cvmtry_webhook_deliveries</code></td><td><?php esc_html_e('The Activity Log: one row per delivery attempt with redacted headers and bodies, capped at 64 KB each.', 'convermetry'); ?></td></tr>
+        <tr><td><code>cvmtry_goal_completions</code></td><td><?php echo wp_kses_post(__('One row per goal completion. <code>dedupe_key</code> carries a UNIQUE index and is the entire deduplication mechanism.', 'convermetry')); ?></td></tr>
+        <tr><td><code>cvmtry_lead_events</code></td><td><?php esc_html_e('Lead status-change history: one row per transition, cascaded away when the submission is deleted.', 'convermetry'); ?></td></tr></tbody></table>
         <p><?php echo wp_kses_post(__('<strong>Schema migrations never run inside a visitor\'s request.</strong> Adding an index is a table rebuild on every engine, so migrations run only in WP-Cron, WP-CLI, or a genuine admin page view, one at a time under a lease. While one is outstanding the Goals and Funnels screens say so plainly rather than querying a column that does not exist yet.', 'convermetry')); ?></p>
         <p><?php echo wp_kses_post(__('<strong>Deactivation preserves everything:</strong> tables and data are kept, analytics retry chains are suspended and resume under their original delivery ids, and queued form deliveries wait for the re-armed worker. <strong>Deleting the plugin</strong> drops all seven tables and deletes every option, transient, rate-limit counter row, and scheduled cron event — per site across a whole multisite network. No trace remains.', 'convermetry')); ?></p>
         <?php
@@ -2922,7 +2916,7 @@ Authorization: <api-key>');
         self::cardStart(__('Watching the unattended work', 'convermetry'));
         ?>
         <p><?php esc_html_e('Retention passes, schema migrations, and queue workers all run without anyone looking. Four observational actions report what they did, so a monitoring integration does not have to infer it from row counts.', 'convermetry'); ?></p>
-        <ul class="cvm-about-features">
+        <ul class="cvmtry-about-features">
         <li><?php echo wp_kses_post(__('<code>convermetry_retention_cleanup_started</code> / <code>_completed</code> — one store begins and finishes deleting past the cutoff. The completion carries how many rows went, whether more remain, and an outcome of <code>completed</code>, <code>truncated</code>, <code>query_failed</code>, or <code>lock_lost</code>. Observational only: a listener cannot cancel a pass, change the cutoff, or extend retention, and Convermetry schedules any follow-up pass itself.', 'convermetry')); ?></li>
         <li><?php echo wp_kses_post(__('<code>convermetry_migration_started</code> / <code>_completed</code> / <code>_failed</code> — a migration pass, with its context (<code>cli</code>, <code>cron</code>, or <code>admin</code>). A failure carries the exception <strong>class name</strong>, never a message: a database error quotes the failing statement. <strong>No SQL is passed to any migration hook</strong>, and a migration that merely has not landed yet is not a failure.', 'convermetry')); ?></li>
         <li><?php echo wp_kses_post(__('<code>convermetry_storage_error</code> — a database operation Convermetry needed <em>verifiably</em> failed. Reserved for real failures: a duplicate <code>INSERT IGNORE</code>, an abandoned notification, or a still-pending migration do not fire it. It never carries SQL, the raw database error, submitted fields, IP addresses, or secrets.', 'convermetry')); ?></li>

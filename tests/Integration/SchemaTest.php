@@ -29,10 +29,10 @@ final class SchemaTest extends IntegrationTestCase
     public static function owners(): array
     {
         return [
-            'events'           => [DatabaseManager::class, 'wp_cvm_events'],
-            'form submissions' => [FormSubmissions::class, 'wp_cvm_form_submissions'],
-            'goal completions' => [GoalCompletions::class, 'wp_cvm_goal_completions'],
-            'lead events'      => [LeadEvents::class, 'wp_cvm_lead_events'],
+            'events'           => [DatabaseManager::class, 'wp_cvmtry_events'],
+            'form submissions' => [FormSubmissions::class, 'wp_cvmtry_form_submissions'],
+            'goal completions' => [GoalCompletions::class, 'wp_cvmtry_goal_completions'],
+            'lead events'      => [LeadEvents::class, 'wp_cvmtry_lead_events'],
         ];
     }
 
@@ -77,7 +77,7 @@ final class SchemaTest extends IntegrationTestCase
     {
         $insert = function (string $dedupe, string $completion): int|false {
             return self::$db->query(self::$db->prepare(
-                'INSERT IGNORE INTO wp_cvm_goal_completions
+                'INSERT IGNORE INTO wp_cvmtry_goal_completions
                  (completion_id, goal_id, definition_hash, dedupe_key, event_uid, session_id, created_at)
                  VALUES (%s, %s, %s, %s, %s, %s, %s)',
                 $completion,
@@ -99,7 +99,7 @@ final class SchemaTest extends IntegrationTestCase
         );
         self::assertSame(1, $insert(str_repeat('2', 32), str_repeat('c', 32)), 'A different key stores.');
 
-        self::assertSame('2', self::$db->get_var('SELECT COUNT(*) FROM wp_cvm_goal_completions'));
+        self::assertSame('2', self::$db->get_var('SELECT COUNT(*) FROM wp_cvmtry_goal_completions'));
     }
 
     /**
@@ -109,7 +109,7 @@ final class SchemaTest extends IntegrationTestCase
     public function testCompletionIdsAreUnique(): void
     {
         $insert = fn(string $dedupe): int|false => self::$db->query(self::$db->prepare(
-            'INSERT IGNORE INTO wp_cvm_goal_completions
+            'INSERT IGNORE INTO wp_cvmtry_goal_completions
              (completion_id, goal_id, definition_hash, dedupe_key, event_uid, session_id, created_at)
              VALUES (%s, %s, %s, %s, %s, %s, %s)',
             str_repeat('f', 32),
@@ -134,7 +134,7 @@ final class SchemaTest extends IntegrationTestCase
         $this->insertSubmission(['submission_id' => 'subA', 'conversion_id' => 'convSHARED']);
 
         $stored = self::$db->query(self::$db->prepare(
-            'INSERT IGNORE INTO wp_cvm_form_submissions (submission_id, conversion_id, created_at)
+            'INSERT IGNORE INTO wp_cvmtry_form_submissions (submission_id, conversion_id, created_at)
              VALUES (%s, %s, %s)',
             'subB',
             'convSHARED',
@@ -142,7 +142,7 @@ final class SchemaTest extends IntegrationTestCase
         ));
 
         self::assertSame(0, $stored);
-        self::assertSame('1', self::$db->get_var('SELECT COUNT(*) FROM wp_cvm_form_submissions'));
+        self::assertSame('1', self::$db->get_var('SELECT COUNT(*) FROM wp_cvmtry_form_submissions'));
     }
 
     /**
@@ -153,7 +153,7 @@ final class SchemaTest extends IntegrationTestCase
     public function testEventBatchesDeduplicateButNullBatchIdsDoNot(): void
     {
         $insertBatched = fn(): int|false => self::$db->query(self::$db->prepare(
-            'INSERT IGNORE INTO wp_cvm_events (event_type, page_url, session_id, batch_id, batch_seq, created_at)
+            'INSERT IGNORE INTO wp_cvmtry_events (event_type, page_url, session_id, batch_id, batch_seq, created_at)
              VALUES (%s, %s, %s, %s, %d, %s)',
             'pageview',
             'https://example.com/',
@@ -167,7 +167,7 @@ final class SchemaTest extends IntegrationTestCase
         self::assertSame(0, $insertBatched(), 'A replayed batch row must be ignored.');
 
         $insertServerSide = fn(): int|false => self::$db->query(self::$db->prepare(
-            'INSERT INTO wp_cvm_events (event_type, page_url, session_id, batch_seq, created_at)
+            'INSERT INTO wp_cvmtry_events (event_type, page_url, session_id, batch_seq, created_at)
              VALUES (%s, %s, %s, %d, %s)',
             'form_success',
             'https://example.com/',
@@ -193,7 +193,7 @@ final class SchemaTest extends IntegrationTestCase
     public function testLeadStatusDefaultsToNewWithoutABackfill(): void
     {
         self::$db->query(self::$db->prepare(
-            'INSERT INTO wp_cvm_form_submissions (submission_id, conversion_id, created_at) VALUES (%s, %s, %s)',
+            'INSERT INTO wp_cvmtry_form_submissions (submission_id, conversion_id, created_at) VALUES (%s, %s, %s)',
             'subDefault',
             'convDefault',
             '2026-08-10 09:00:00'
@@ -201,7 +201,7 @@ final class SchemaTest extends IntegrationTestCase
 
         self::assertSame(
             'new',
-            self::$db->get_var("SELECT lead_status FROM wp_cvm_form_submissions WHERE submission_id = 'subDefault'")
+            self::$db->get_var("SELECT lead_status FROM wp_cvmtry_form_submissions WHERE submission_id = 'subDefault'")
         );
     }
 
@@ -212,14 +212,14 @@ final class SchemaTest extends IntegrationTestCase
     public function testAnUnsetLeadValueIsNullNotZero(): void
     {
         self::$db->query(self::$db->prepare(
-            'INSERT INTO wp_cvm_form_submissions (submission_id, conversion_id, created_at) VALUES (%s, %s, %s)',
+            'INSERT INTO wp_cvmtry_form_submissions (submission_id, conversion_id, created_at) VALUES (%s, %s, %s)',
             'subNull',
             'convNull',
             '2026-08-10 09:00:00'
         ));
 
         self::assertNull(
-            self::$db->get_var("SELECT lead_value FROM wp_cvm_form_submissions WHERE submission_id = 'subNull'")
+            self::$db->get_var("SELECT lead_value FROM wp_cvmtry_form_submissions WHERE submission_id = 'subNull'")
         );
     }
 
@@ -233,7 +233,7 @@ final class SchemaTest extends IntegrationTestCase
 
         self::assertSame(
             '12500.50',
-            self::$db->get_var("SELECT lead_value FROM wp_cvm_form_submissions WHERE submission_id = 'subMoney'")
+            self::$db->get_var("SELECT lead_value FROM wp_cvmtry_form_submissions WHERE submission_id = 'subMoney'")
         );
     }
 
@@ -253,7 +253,7 @@ final class SchemaTest extends IntegrationTestCase
 
         self::assertSame(
             '20.00',
-            self::$db->get_var('SELECT SUM(lead_value) FROM wp_cvm_form_submissions'),
+            self::$db->get_var('SELECT SUM(lead_value) FROM wp_cvmtry_form_submissions'),
             'A DECIMAL sum must be exact; a float column would drift here.'
         );
     }
@@ -264,8 +264,8 @@ final class SchemaTest extends IntegrationTestCase
      */
     public function testFormKeyIsPresentAndIndexed(): void
     {
-        self::assertContains('form_key', $this->columnsOn('wp_cvm_events'));
-        self::assertContains('form_type_date', $this->indexesOn('wp_cvm_events'));
-        self::assertContains('session_type_id', $this->indexesOn('wp_cvm_events'));
+        self::assertContains('form_key', $this->columnsOn('wp_cvmtry_events'));
+        self::assertContains('form_type_date', $this->indexesOn('wp_cvmtry_events'));
+        self::assertContains('session_type_id', $this->indexesOn('wp_cvmtry_events'));
     }
 }

@@ -12,7 +12,7 @@ declare(strict_types=1);
 
 require __DIR__ . '/wp-boot.php';
 
-cvm_wp_boot();
+cvmtry_wp_boot();
 
 require_once ABSPATH . 'wp-admin/includes/plugin.php';
 

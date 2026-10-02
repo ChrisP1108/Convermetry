@@ -5,6 +5,68 @@ All notable changes to Convermetry are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 1.0.1
+
+Addresses the WordPress.org pre-review of 1.0.0, which was never publicly
+released.
+
+### Changed
+
+- **Prefix.** Every plugin-owned identifier uses the six-character `cvmtry`
+  prefix: options, transients and their cache keys, the seven tables
+  (`{$wpdb->prefix}cvmtry_*`), cron hooks, constants (`CVMTRY_VERSION`,
+  `CVMTRY_PLUGIN_FILE`, `CVMTRY_PLUGIN_DIR`, `CVMTRY_PLUGIN_URL`), script and
+  style handles, localized script globals, AJAX actions, nonce actions and
+  fields, request parameters, CSS classes and custom properties, HTML ids,
+  `data-cvmtry-*` attributes, the `cvmtry:log-deleted` DOM event, browser storage
+  keys, the hidden correlation fields the tracker adds to forms, the
+  `X-CVMTRY-Page` REST response header, and the global helper
+  `cvmtry_track_event()`. The `convermetry_*` hooks, `convermetry_submit_form()`,
+  the `Convermetry\` namespace and the `convermetry` text domain are unchanged.
+  There is no migration: settings and data stored by 1.0.0 are not read.
+- **No inline script or style blocks.** The About screen's no-JavaScript rules
+  for the hook reference moved from a `<noscript><style>` block into
+  `admin-about.css`, keyed off the `no-js` class WordPress puts on the admin
+  `<body>`. The confirmation prompts on Remove (Goals, Funnels) and Clear All
+  (Activity Log, Submissions) moved from inline `onclick`/`onsubmit` handlers to
+  a `data-cvmtry-confirm` attribute read by the new `admin-confirm.js`, which is
+  registered on Convermetry screens and loaded only as a dependency of the
+  scripts that need it.
+- **PHP version notice.** Shown only to users who can activate plugins, and
+  only on the Dashboard and Plugins screens.
+- `Extensions::attach()` dispatches only `convermetry_`-prefixed hooks; any
+  other name is refused with `_doing_it_wrong()`.
+
+### Security and SQL
+
+- Report queries in `Reports`, `LeadReports`, `GoalReports` and
+  `FormEngagementReport` bind table and column names with `%i` and the lead
+  status lists as values, instead of interpolating them. The goal and
+  friction-point filters are a single prepared statement each
+  (`(%s = '' OR goal_id = %s)`) rather than a WHERE clause assembled in PHP.
+- `Reports::hasEvents()` and `GoalReports::lastSeen()` passed unprepared SQL to
+  `ReportQuery`, whose contract is prepared SQL only; both are now prepared.
+- Display-only request parameters (reporting periods, the submission search
+  deep link, saved/cleared notice flags, screen detection) are unslashed and
+  sanitized where read, with an annotation naming the nonce-verified handler
+  that produced each flag.
+- Direct database calls on the plugin's own tables carry a per-call annotation
+  stating why the call is direct and uncached (custom table, queue claim,
+  options-table lease, retention delete, and so on). No caching was added:
+  queue, lock and delivery-state reads must be live, and the admin screens show
+  current data. See `docs/plugin-check-1.0.1.md`.
+
+### Tests
+
+- Integration coverage for the rewritten report queries: goal breakdown for all
+  goals and for one, the zero-filled daily series, last-seen per goal,
+  friction points for one form, lead summary, top campaigns (with orphan
+  conversions), keyword drilldown, landing pages and `hasEvents()`.
+- Unit coverage that the confirm script is registered but never enqueued
+  directly, that every screen with a destructive action depends on it, that no
+  admin source prints an inline script, style or event handler, and that
+  `Extensions::attach()` refuses unprefixed hooks.
+
 ## 1.0.0
 
 First release prepared for the WordPress.org plugin directory.
@@ -54,10 +116,10 @@ First release prepared for the WordPress.org plugin directory.
   the form submit. The message is now JSON-encoded, so the confirmation shows.
 - The About page and README pointed to a "Settings → Privacy" section that does
   not exist; the IP address toggle is under Settings → Tracking.
-- **Uninstall left one option behind.** `cvm_webhook_state_version`, written by
+- **Uninstall left one option behind.** `cvmtry_webhook_state_version`, written by
   the analytics dispatcher's state migration, was missing from `uninstall.php`'s
   list, so deleting the plugin did not remove every trace as documented. The
-  end-to-end uninstall test now asserts that no `cvm_` option or transient
+  end-to-end uninstall test now asserts that no `cvmtry_` option or transient
   survives, rather than checking a sample.
 - **Ninja Forms leads arrived without their visit and campaign.** Ninja Forms 3
   posts one `formData` JSON document built from its own models, not the
@@ -83,7 +145,7 @@ First release prepared for the WordPress.org plugin directory.
   starts and attempts now carry the same key the server records. Ninja Forms
   submits without a native `submit` event, so its Attempts column stays empty.
 - The Analytics screen's "Other Events" card said it counted custom events
-  recorded via `cvm_track_event()`; it counts every type not shown in its own
+  recorded via `cvmtry_track_event()`; it counts every type not shown in its own
   card (form views, form starts, validation errors and custom events). The
   description now says so.
 - The top label of the daily page-view chart's Y-axis was cut in half by the
@@ -129,12 +191,12 @@ First release prepared for the WordPress.org plugin directory.
 
 - **Session attribution reaches Bricks submissions** through Bricks' own
   documented `bricks/form/submit` event: the three correlation values
-  (`cvm_conversion_id`, `cvm_session_id`, `cvm_context`) are set on the prepared
+  (`cvmtry_conversion_id`, `cvmtry_session_id`, `cvmtry_context`) are set on the prepared
   `event.detail.formData` as top-level entries, never as `form-field-<id>`
   values. `bricks/form/success` records the confirmed conversion under **the
   same token the server received**, and `bricks/form/error` records a
   `form_error` without ever reading Bricks' response body. Bricks form tags also
-  carry a server-rendered `data-cvm-form-key` matching the server-side identity.
+  carry a server-rendered `data-cvmtry-form-key` matching the server-side identity.
 
 ### Changed
 
@@ -191,9 +253,9 @@ First release prepared for the WordPress.org plugin directory.
 - **Session attribution now reaches Atomic submissions.** Atomic's frontend
   does not serialize the `<form>` — Elementor hand-builds its own request — so
   a hidden input would be silently dropped. The tracker now attaches
-  `cvm_conversion_id`, `cvm_session_id`, and `cvm_context` directly to that
+  `cvmtry_conversion_id`, `cvmtry_session_id`, and `cvmtry_context` directly to that
   request as top-level fields (never as submitted form data), gated by the
-  same same-origin and `data-cvm-ignore` rules every other form already
+  same same-origin and `data-cvmtry-ignore` rules every other form already
   follows.
 
 - Two new "Go Further with Goals and Funnels" cards on the Home page's Getting
@@ -227,9 +289,9 @@ First release prepared for the WordPress.org plugin directory.
 - **A Convermetry admin design system** (`assets/css/admin-ui.css`): design
   tokens plus the components built on them — cards, buttons, status pills,
   grids, icon tiles, typography, flow diagrams. Every selector is scoped under
-  `.cvm-ui` and the classes are prefixed `cvm-ui-`, so it cannot affect a screen
-  that has not opted in and does not collide with the existing `.cvm-card` /
-  `.cvm-badge` styles the other screens still use. Fonts are system stacks; no
+  `.cvmtry-ui` and the classes are prefixed `cvmtry-ui-`, so it cannot affect a screen
+  that has not opted in and does not collide with the existing `.cvmtry-card` /
+  `.cvmtry-badge` styles the other screens still use. Fonts are system stacks; no
   external font or framework is loaded.
 
 - `Convermetry\Admin\Icons`, a small catalogue of inline SVGs. Every icon is
@@ -265,7 +327,7 @@ First release prepared for the WordPress.org plugin directory.
 
 - **`assets/css/admin.css` was split into one stylesheet per admin page**
   (`assets/css/admin-<page>.css`), plus `assets/css/admin-common.css` for the
-  `cvm-*` component classes two or more pages still share (cards, the toggle
+  `cvmtry-*` component classes two or more pages still share (cards, the toggle
   switch, the accordion/pagination list pattern, and so on) — see that file's
   header for the full per-page map. Every property preserved its exact value;
   this is a reorganization, not a restyle, verified by diffing every parsed
@@ -280,13 +342,13 @@ First release prepared for the WordPress.org plugin directory.
 
 - **`assets/css/dashboard.css` renamed to `assets/css/admin-analytics.css`**,
   matching every other screen's `assets/css/admin-<page>.css`. Its style
-  handle changed with it, from `cvm-dashboard` to `cvm-analytics`; the script
+  handle changed with it, from `cvmtry-dashboard` to `cvmtry-analytics`; the script
   handle and `assets/js/dashboard.js` (the chart behavior) are unrelated and
   keep their name.
 
 - **The Analytics period filter ("Last 7/30/90 days") now uses the same
   `.button` / `.button-primary` / `.button-secondary` classes as the Goals and
-  Funnels period filters**, instead of its own `.cvm-period-btn` skin — one
+  Funnels period filters**, instead of its own `.cvmtry-period-btn` skin — one
   button look for "select a reporting period" everywhere it appears, styled
   from `admin-common.css` like every other button on these three screens. The
   retired skin's now-unused CSS (the joined-segment border, the mobile
@@ -475,7 +537,7 @@ identity, and correct delivery-log date filtering.
   path rather than a load-test curiosity: what puts submissions on it is the
   queue table refusing writes for everyone at once.
 
-  Records are now `cvm_queue_repair_<submission id>`, written with a single
+  Records are now `cvmtry_queue_repair_<submission id>`, written with a single
   `INSERT ... ON DUPLICATE KEY UPDATE` against the unique `option_name` index
   and read straight back through `$wpdb` — the same pattern, and the same
   reasoning about option caches, as the rate limiter's per-key counters. Two

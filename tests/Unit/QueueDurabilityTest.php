@@ -232,7 +232,7 @@ final class QueueDurabilityTest extends TestCase
                     return $this->test->readOption($name) === null ? null : $name;
                 }
 
-                if (str_contains($sql, 'wp_cvm_webhook_deliveries')) {
+                if (str_contains($sql, 'wp_cvmtry_webhook_deliveries')) {
                     return (string) $this->test->loggedAttemptCount($sql);
                 }
 
@@ -331,7 +331,7 @@ final class QueueDurabilityTest extends TestCase
             ];
         }
 
-        $this->options['cvm_webhook_settings'] = ['endpoints' => $endpoints, 'shared_secret' => ''];
+        $this->options['cvmtry_webhook_settings'] = ['endpoints' => $endpoints, 'shared_secret' => ''];
     }
 
 
@@ -422,7 +422,7 @@ final class QueueDurabilityTest extends TestCase
      */
     private function seedRecord(string $submissionId, array $refs, int $at): void
     {
-        $name = 'cvm_queue_repair_' . $submissionId;
+        $name = 'cvmtry_queue_repair_' . $submissionId;
 
         $this->optionIds[$name] = ++$this->nextOptionId;
         $this->options[$name]   = (string) json_encode(['at' => $at, 'refs' => $refs]);
@@ -438,8 +438,8 @@ final class QueueDurabilityTest extends TestCase
         $out = [];
 
         foreach (array_keys($this->options) as $name) {
-            if (str_starts_with((string) $name, 'cvm_queue_repair_')) {
-                $out[] = substr((string) $name, strlen('cvm_queue_repair_'));
+            if (str_starts_with((string) $name, 'cvmtry_queue_repair_')) {
+                $out[] = substr((string) $name, strlen('cvmtry_queue_repair_'));
             }
         }
 
@@ -906,9 +906,9 @@ final class QueueDurabilityTest extends TestCase
      */
     public function testAMalformedRecordIsIgnoredRatherThanTrusted(): void
     {
-        $this->options['cvm_queue_repair_sub-1'] = 'not-json-at-all';
-        $this->options['cvm_queue_repair_sub-2'] = (string) json_encode(['at' => time(), 'refs' => [123, '']]);
-        $this->options['cvm_queue_repair_sub-3'] = (string) json_encode(['refs' => ['endpoint-0']]);
+        $this->options['cvmtry_queue_repair_sub-1'] = 'not-json-at-all';
+        $this->options['cvmtry_queue_repair_sub-2'] = (string) json_encode(['at' => time(), 'refs' => [123, '']]);
+        $this->options['cvmtry_queue_repair_sub-3'] = (string) json_encode(['refs' => ['endpoint-0']]);
 
         self::assertSame([], FormDeliveryQueue::pendingRepairFor('sub-1'));
         self::assertSame([], FormDeliveryQueue::pendingRepairFor('sub-2'), 'Non-string references are dropped');

@@ -87,27 +87,31 @@ final class LeadReports
 
         $table = FormSubmissions::tableName();
 
-        $qualified = self::inList(LeadStatus::QUALIFIED);
-        $won       = self::inList(LeadStatus::WON);
-        $excluded  = self::inList(LeadStatus::EXCLUDED_FROM_TOTALS);
-
         // Spam leaves the denominator; everything else stays. An unqualified
         // lead was still a lead the marketing produced, and excluding those
         // would make a channel look better the more poor-quality leads it sent.
+        //
+        // The column is bound as an identifier and the status lists as values,
+        // in the order their placeholders appear.
         $rows = ReportQuery::rows($wpdb->prepare(
-            "SELECT COALESCE(NULLIF({$column}, ''), '(none)') AS label,
+            "SELECT COALESCE(NULLIF(%i, ''), '(none)') AS label,
                     COUNT(*) AS leads,
-                    SUM(CASE WHEN lead_status IN ({$qualified}) THEN 1 ELSE 0 END) AS qualified,
-                    SUM(CASE WHEN lead_status IN ({$won}) THEN 1 ELSE 0 END) AS won
-             FROM {$table}
+                    SUM(CASE WHEN lead_status IN (" . implode(', ', array_fill(0, count(LeadStatus::QUALIFIED), '%s')) . ") THEN 1 ELSE 0 END) AS qualified,
+                    SUM(CASE WHEN lead_status IN (" . implode(', ', array_fill(0, count(LeadStatus::WON), '%s')) . ") THEN 1 ELSE 0 END) AS won
+             FROM %i
              WHERE created_at >= %s AND created_at < %s
-               AND lead_status NOT IN ({$excluded})
+               AND lead_status NOT IN (" . implode(', ', array_fill(0, count(LeadStatus::EXCLUDED_FROM_TOTALS), '%s')) . ")
              GROUP BY label
              ORDER BY leads DESC, label ASC
              LIMIT %d",
-            $start,
-            $end,
-            $limit
+            array_merge(
+                [$column],
+                LeadStatus::QUALIFIED,
+                LeadStatus::WON,
+                [$table, $start, $end],
+                LeadStatus::EXCLUDED_FROM_TOTALS,
+                [$limit]
+            )
         ));
 
         $values = self::valuesByDimension($start, $end, $column);
@@ -144,22 +148,24 @@ final class LeadReports
     {
         global $wpdb;
 
-        $table    = FormSubmissions::tableName();
-        $won      = self::inList(LeadStatus::WON);
-        $excluded = self::inList(LeadStatus::EXCLUDED_FROM_TOTALS);
+        $table = FormSubmissions::tableName();
 
         $rows = ReportQuery::rows($wpdb->prepare(
-            "SELECT COALESCE(NULLIF({$column}, ''), '(none)') AS label,
+            "SELECT COALESCE(NULLIF(%i, ''), '(none)') AS label,
                     lead_currency,
                     SUM(lead_value) AS total_value,
-                    SUM(CASE WHEN lead_status IN ({$won}) THEN lead_value ELSE 0 END) AS won_value
-             FROM {$table}
+                    SUM(CASE WHEN lead_status IN (" . implode(', ', array_fill(0, count(LeadStatus::WON), '%s')) . ") THEN lead_value ELSE 0 END) AS won_value
+             FROM %i
              WHERE created_at >= %s AND created_at < %s
-               AND lead_status NOT IN ({$excluded})
+               AND lead_status NOT IN (" . implode(', ', array_fill(0, count(LeadStatus::EXCLUDED_FROM_TOTALS), '%s')) . ")
                AND lead_value IS NOT NULL
              GROUP BY label, lead_currency",
-            $start,
-            $end
+            array_merge(
+                [$column],
+                LeadStatus::WON,
+                [$table, $start, $end],
+                LeadStatus::EXCLUDED_FROM_TOTALS
+            )
         ));
 
         $out = [];
@@ -189,21 +195,22 @@ final class LeadReports
     {
         global $wpdb;
 
-        $table     = FormSubmissions::tableName();
-        $qualified = self::inList(LeadStatus::QUALIFIED);
-        $won       = self::inList(LeadStatus::WON);
-        $excluded  = self::inList(LeadStatus::EXCLUDED_FROM_TOTALS);
+        $table = FormSubmissions::tableName();
 
         $row = ReportQuery::rows($wpdb->prepare(
             "SELECT COUNT(*) AS leads,
-                    SUM(CASE WHEN lead_status IN ({$qualified}) THEN 1 ELSE 0 END) AS qualified,
-                    SUM(CASE WHEN lead_status IN ({$won}) THEN 1 ELSE 0 END) AS won,
+                    SUM(CASE WHEN lead_status IN (" . implode(', ', array_fill(0, count(LeadStatus::QUALIFIED), '%s')) . ") THEN 1 ELSE 0 END) AS qualified,
+                    SUM(CASE WHEN lead_status IN (" . implode(', ', array_fill(0, count(LeadStatus::WON), '%s')) . ") THEN 1 ELSE 0 END) AS won,
                     SUM(CASE WHEN lead_value IS NOT NULL THEN 1 ELSE 0 END) AS valued
-             FROM {$table}
+             FROM %i
              WHERE created_at >= %s AND created_at < %s
-               AND lead_status NOT IN ({$excluded})",
-            $start,
-            $end
+               AND lead_status NOT IN (" . implode(', ', array_fill(0, count(LeadStatus::EXCLUDED_FROM_TOTALS), '%s')) . ")",
+            array_merge(
+                LeadStatus::QUALIFIED,
+                LeadStatus::WON,
+                [$table, $start, $end],
+                LeadStatus::EXCLUDED_FROM_TOTALS
+            )
         ))[0] ?? [];
 
         $leads     = (int) ($row['leads'] ?? 0);
@@ -246,15 +253,17 @@ final class LeadReports
             "SELECT s.channel,
                     TIMESTAMPDIFF(
                         SECOND,
-                        (SELECT MIN(e.created_at) FROM {$events} AS e
+                        (SELECT MIN(e.created_at) FROM %i AS e
                          WHERE e.event_type = 'pageview' AND e.session_id = s.session_id),
                         s.created_at
                     ) AS lag_seconds
-             FROM {$submissions} AS s
+             FROM %i AS s
              WHERE s.session_id <> ''
                AND s.created_at >= %s AND s.created_at < %s
              ORDER BY s.id DESC
              LIMIT %d",
+            $events,
+            $submissions,
             $start,
             $end,
             self::LAG_SAMPLE_LIMIT
@@ -375,21 +384,6 @@ final class LeadReports
         return $count % 2 === 1
             ? $values[$middle]
             : (int) round(($values[$middle - 1] + $values[$middle]) / 2);
-    }
-
-    /**
-     * A SQL quoted list from a fixed status set.
-     *
-     * Safe by construction: values come from {@see LeadStatus}'s own constants,
-     * never from a request. Building them as literals keeps the surrounding
-     * queries readable and their parameter lists short.
-     *
-     * @param string[] $statuses Status values.
-     * @return string
-     */
-    private static function inList(array $statuses): string
-    {
-        return "'" . implode("', '", array_map('sanitize_key', $statuses)) . "'";
     }
 
     /**

@@ -30,7 +30,7 @@ function test(name, fn) {
 
 /** A hand-built form declared for the custom-form API. */
 function declaredForm(attributes = {}) {
-    return new FakeElement('form', { method: 'post', 'data-cvm-form-key': 'mysite:callback', ...attributes });
+    return new FakeElement('form', { method: 'post', 'data-cvmtry-form-key': 'mysite:callback', ...attributes });
 }
 
 console.log('\nForm lifecycle events — executed against the real tracker source\n');
@@ -71,8 +71,8 @@ test('a Ninja Forms form is keyed from its wrapper', () => {
     assert.equal(submit.form_key, 'ninjaforms:3');
 });
 
-test('a data-cvm-ignore form records no attempt at all', () => {
-    const form = declaredForm({ 'data-cvm-ignore': '' });
+test('a data-cvmtry-ignore form records no attempt at all', () => {
+    const form = declaredForm({ 'data-cvmtry-ignore': '' });
     const harness = bootTracker({ forms: [form] });
 
     harness.document.dispatchEvent({ type: 'submit', target: form });

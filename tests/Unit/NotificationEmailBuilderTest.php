@@ -518,7 +518,7 @@ final class NotificationEmailBuilderTest extends TestCase
         $url = EmailBuilder::detailUrl($this->submission(), $this->siteInfo());
 
         self::assertStringContainsString('page=convermetry-submissions', $url);
-        self::assertStringContainsString('cvm_search=s5f2a9c1b8e0d21f06c5', $url);
+        self::assertStringContainsString('cvmtry_search=s5f2a9c1b8e0d21f06c5', $url);
     }
 
     public function testTheFooterStatesTheRetentionImplication(): void

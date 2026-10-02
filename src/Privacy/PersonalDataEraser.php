@@ -50,7 +50,7 @@ final class PersonalDataEraser
     public const int SUBMISSIONS_PER_PAGE = 20;
 
     /** Transient name prefix for the between-pages cursor. */
-    private const string CURSOR_PREFIX = 'cvm_privacy_erase_';
+    private const string CURSOR_PREFIX = 'cvmtry_privacy_erase_';
 
     /** How long a cursor survives between two page requests. */
     private const int CURSOR_TTL = HOUR_IN_SECONDS;
@@ -142,7 +142,7 @@ final class PersonalDataEraser
     /**
      * Erases one matched submission and its linked data.
      *
-     * @param array<string, mixed> $row A cvm_form_submissions row.
+     * @param array<string, mixed> $row A cvmtry_form_submissions row.
      * @return array{removed: bool, frozen_report: bool, hosts: list<string>}
      */
     public static function eraseSubmission(array $row): array
@@ -209,7 +209,7 @@ final class PersonalDataEraser
             return false;
         }
 
-        $states = get_option('cvm_webhook_retry_state', []);
+        $states = get_option('cvmtry_webhook_retry_state', []);
 
         foreach (is_array($states) ? $states : [] as $state) {
             if (is_array($state) && is_string($state['body'] ?? null) && str_contains($state['body'], $conversionId)) {

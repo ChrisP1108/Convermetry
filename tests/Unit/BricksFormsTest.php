@@ -320,8 +320,8 @@ final class BricksFormsTest extends TestCase
         );
 
         self::assertIsArray($attributes);
-        self::assertSame('bricks:ab12cd', $attributes['_root']['data-cvm-form-key']);
-        self::assertSame('Contact us', $attributes['_root']['data-cvm-form-name']);
+        self::assertSame('bricks:ab12cd', $attributes['_root']['data-cvmtry-form-key']);
+        self::assertSame('Contact us', $attributes['_root']['data-cvmtry-form-name']);
         self::assertSame(['brxe-form'], $attributes['_root']['class'], "Bricks' own attributes survive");
     }
 
@@ -344,7 +344,7 @@ final class BricksFormsTest extends TestCase
                 BricksFormsBridge::PROVIDER_KEY,
                 BricksFormsBridge::nativeId(['formId' => 'ab12cd', 'postId' => 91])
             ),
-            $attributes['_root']['data-cvm-form-key']
+            $attributes['_root']['data-cvmtry-form-key']
         );
     }
 
@@ -358,7 +358,7 @@ final class BricksFormsTest extends TestCase
         $attributes = $this->bridge()->filterRenderAttributes(['_root' => []], '_root', $element);
 
         self::assertIsArray($attributes);
-        self::assertArrayNotHasKey('data-cvm-form-name', $attributes['_root'], 'a name is never invented');
+        self::assertArrayNotHasKey('data-cvmtry-form-name', $attributes['_root'], 'a name is never invented');
     }
 
     public function testEveryOtherElementAndAttributeGroupIsUntouched(): void
@@ -630,16 +630,16 @@ final class BricksFormsTest extends TestCase
                 'g-recaptcha-response' => 'recaptcha-token',
                 'h-captcha-response'   => 'hcaptcha-token',
                 'cf-turnstile-response' => 'turnstile-token',
-                'cvm_conversion_id'    => 'c0123456789abcdef',
-                'cvm_session_id'       => str_repeat('a', 32),
-                'cvm_context'          => '{"utm_source":"newsletter"}',
+                'cvmtry_conversion_id'    => 'c0123456789abcdef',
+                'cvmtry_session_id'       => str_repeat('a', 32),
+                'cvmtry_context'          => '{"utm_source":"newsletter"}',
             ]
         );
 
         $encoded = json_encode($fields, JSON_THROW_ON_ERROR);
 
         self::assertSame(['aaa111'], array_column($fields, 'id'));
-        foreach (['yrnkmt', 'recaptcha-token', 'hcaptcha-token', 'turnstile-token', 'cvm_', 'abc123'] as $leak) {
+        foreach (['yrnkmt', 'recaptcha-token', 'hcaptcha-token', 'turnstile-token', 'cvmtry_', 'abc123'] as $leak) {
             self::assertStringNotContainsString($leak, $encoded);
         }
     }
@@ -649,10 +649,10 @@ final class BricksFormsTest extends TestCase
     {
         $descriptors = BricksFormsBridge::buildFields(
             self::formSettings([
-                ['id' => 'cvm_conversion_id', 'type' => 'hidden'],
+                ['id' => 'cvmtry_conversion_id', 'type' => 'hidden'],
                 ['id' => 'aaa111', 'type' => 'email', 'label' => 'Email'],
             ]),
-            ['form-field-cvm_conversion_id' => 'c123', 'form-field-aaa111' => 'ada@example.test']
+            ['form-field-cvmtry_conversion_id' => 'c123', 'form-field-aaa111' => 'ada@example.test']
         );
 
         $normalized = \Convermetry\Forms\SubmissionFields::normalize($descriptors);

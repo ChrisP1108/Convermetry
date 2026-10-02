@@ -40,7 +40,7 @@ use Convermetry\Support\Retention;
  * starts a clean once-per-session series rather than silently blending two
  * different definitions into one historical metric.
  *
- * source_event_id is the id of the cvm_events row that triggered this
+ * source_event_id is the id of the cvmtry_events row that triggered this
  * completion, and it exists for exactly one reason: FUNNEL ORDERING. Funnel
  * steps establish "did B happen after A?" by comparing event ids, and a goal
  * step has to be comparable to a pageview step on the same scale. Writing a
@@ -57,10 +57,10 @@ use Convermetry\Support\Retention;
 final class GoalCompletions
 {
     /** Table name without the wpdb prefix. */
-    private const string TABLE = 'cvm_goal_completions';
+    private const string TABLE = 'cvmtry_goal_completions';
 
     /** Option key storing the installed schema version. */
-    private const string DB_VERSION_OPTION = 'cvm_goals_db_version';
+    private const string DB_VERSION_OPTION = 'cvmtry_goals_db_version';
 
     /** Current schema version; bump when the CREATE TABLE below changes. */
     private const string DB_VERSION = '1.0.0';
@@ -222,7 +222,7 @@ final class GoalCompletions
      *
      * WHEN THERE IS NO SESSION ID, once-per-session degrades to every-occurrence
      * rather than sharing one key. Analytics events can legitimately arrive
-     * without a session — a server-side cvm_track_event() call, a browser with
+     * without a session — a server-side cvmtry_track_event() call, a browser with
      * storage blocked — and hashing '' as the session would give every such
      * completion for a goal the SAME key, so the site would record exactly one
      * of them, ever. Over-counting a handful of session-less events is
@@ -302,6 +302,7 @@ final class GoalCompletions
         // tuples are built from %s/%d placeholders and literal NULLs only, so
         // every VALUE is bound; only the statement's shape varies with the
         // number of rows and which nullable cells are NULL.
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, PluginCheck.Security.DirectDB.UnescapedDBParameter -- multi-row insert into the custom goal completions table. $placeholders holds only %s/%d/NULL tuples generated from the fixed column list; every value is bound.
         $inserted = $wpdb->query($wpdb->prepare(
             // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared, WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- see the comment above: generated from fixed columns and placeholder tuples, values bound.
             'INSERT IGNORE INTO %i (`' . implode('`, `', $columns) . '`) VALUES ' . implode(', ', $placeholders),
@@ -339,6 +340,7 @@ final class GoalCompletions
         Retention::started('goal_completions', $cutoff);
 
         do {
+            // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- bounded retention delete on the custom goal completions table.
             $deleted = $wpdb->query($wpdb->prepare(
                 'DELETE FROM %i WHERE created_at < %s LIMIT %d',
                 $table,

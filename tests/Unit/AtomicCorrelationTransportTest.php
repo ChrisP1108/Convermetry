@@ -114,13 +114,13 @@ final class AtomicCorrelationTransportTest extends TestCase
 
     /**
      * The same rules every other form on the page is held to: nothing is sent
-     * cross-origin, and data-cvm-ignore means ignore.
+     * cross-origin, and data-cvmtry-ignore means ignore.
      */
     public function testThePrivacyAndSameOriginGatesApplyToAtomicToo(): void
     {
         $code = self::trackerCode();
 
-        self::assertStringContainsString('data-cvm-ignore', $code);
+        self::assertStringContainsString('data-cvmtry-ignore', $code);
         self::assertStringContainsString('location.origin', $code);
         self::assertStringContainsString('inAdminBar(form)', $code);
     }

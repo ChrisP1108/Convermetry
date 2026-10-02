@@ -23,7 +23,7 @@ if (!defined('ABSPATH')) exit;
  *    nothing else, no nested objects, no arbitrary depth.
  *
  * CARRIES PERSONAL DATA. This is the visitor's submitted value, sanitized and
- * with Convermetry's own cvm_* fields already stripped, but otherwise exactly
+ * with Convermetry's own cvmtry_* fields already stripped, but otherwise exactly
  * what they typed.
  *
  * {@see toArray()} produces the wire/storage descriptor. It stays an array on

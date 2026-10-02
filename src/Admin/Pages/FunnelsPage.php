@@ -82,22 +82,22 @@ final class FunnelsPage
         }
 
         wp_enqueue_style(
-            'cvm-funnels',
-            CVM_PLUGIN_URL . 'assets/css/admin-funnels.css',
+            'cvmtry-funnels',
+            CVMTRY_PLUGIN_URL . 'assets/css/admin-funnels.css',
             [AdminAssets::COMMON_HANDLE],
-            CVM_VERSION
+            CVMTRY_VERSION
         );
 
         wp_enqueue_script(
-            'cvm-funnels',
-            CVM_PLUGIN_URL . 'assets/js/funnels.js',
-            ['wp-i18n'],
-            CVM_VERSION,
+            'cvmtry-funnels',
+            CVMTRY_PLUGIN_URL . 'assets/js/funnels.js',
+            ['wp-i18n', AdminAssets::CONFIRM_HANDLE],
+            CVMTRY_VERSION,
             true
         );
-        wp_set_script_translations('cvm-funnels', 'convermetry');
+        wp_set_script_translations('cvmtry-funnels', 'convermetry');
 
-        wp_localize_script('cvm-funnels', 'CVM_FUNNEL', [
+        wp_localize_script('cvmtry-funnels', 'CVMTRY_FUNNEL', [
             'maxSteps'  => FunnelSettings::MAX_STEPS,
             'minSteps'  => FunnelSettings::MIN_STEPS,
             'stepTypes' => self::stepTypeLabels(),
@@ -116,7 +116,7 @@ final class FunnelsPage
      */
     public static function processSave(): void
     {
-        if (!self::isRequest('save_funnel', 'cvm_save_funnel')) {
+        if (!self::isRequest('save_funnel', 'cvmtry_save_funnel')) {
             return;
         }
 
@@ -135,14 +135,14 @@ final class FunnelsPage
         $funnel = FunnelSettings::sanitize($submitted, $existing, gmdate('Y-m-d H:i:s'));
 
         if ($funnel === null) {
-            self::redirect(['cvm_funnel_error' => 'invalid']);
+            self::redirect(['cvmtry_funnel_error' => 'invalid']);
         }
 
         if (!FunnelRepository::save($funnel)) {
-            self::redirect(['cvm_funnel_error' => 'limit']);
+            self::redirect(['cvmtry_funnel_error' => 'limit']);
         }
 
-        self::redirect(['cvm_funnel_saved' => $existing === null ? 'created' : 'updated']);
+        self::redirect(['cvmtry_funnel_saved' => $existing === null ? 'created' : 'updated']);
     }
 
     /**
@@ -152,7 +152,7 @@ final class FunnelsPage
      */
     public static function processDelete(): void
     {
-        if (!self::isRequest('delete_funnel', 'cvm_delete_funnel')) {
+        if (!self::isRequest('delete_funnel', 'cvmtry_delete_funnel')) {
             return;
         }
 
@@ -163,22 +163,22 @@ final class FunnelsPage
             FunnelRepository::softDelete($funnelId, gmdate('Y-m-d H:i:s'));
         }
 
-        self::redirect(['cvm_funnel_saved' => 'deleted']);
+        self::redirect(['cvmtry_funnel_saved' => 'deleted']);
     }
 
     /**
      * Whether the current request is a valid, authorized POST for one action.
      *
-     * @param string $action The cvm_action value.
+     * @param string $action The cvmtry_action value.
      * @param string $nonce  The nonce action name.
      * @return bool
      */
     private static function isRequest(string $action, string $nonce): bool
     {
         return sanitize_text_field(wp_unslash($_SERVER['REQUEST_METHOD'] ?? '')) === 'POST'
-            && sanitize_key(wp_unslash($_POST['cvm_action'] ?? '')) === $action
-            && isset($_POST['cvm_nonce'])
-            && wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['cvm_nonce'])), $nonce)
+            && sanitize_key(wp_unslash($_POST['cvmtry_action'] ?? '')) === $action
+            && isset($_POST['cvmtry_nonce'])
+            && wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['cvmtry_nonce'])), $nonce)
             && Capability::currentUserCan(Capability::FUNNELS_MANAGE);
     }
 
@@ -204,7 +204,8 @@ final class FunnelsPage
      */
     private static function currentPeriod(): int
     {
-        $requested = isset($_GET['period']) ? (int) $_GET['period'] : 30;
+        // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- read-only report filter, kept bookmarkable: it is matched against PERIODS and only chooses the date range displayed.
+        $requested = isset($_GET['period']) ? absint(wp_unslash($_GET['period'])) : 30;
 
         return in_array($requested, self::PERIODS, true) ? $requested : 30;
     }
@@ -223,14 +224,14 @@ final class FunnelsPage
         }
 
         ?>
-        <div class="wrap cvm-wrap cvm-funnels-wrap">
+        <div class="wrap cvmtry-wrap cvmtry-funnels-wrap">
         <h1><?php esc_html_e('Funnels', 'convermetry'); ?></h1>
         <?php
 
         self::renderNotices();
 
         ?>
-        <p class="description cvm-goals-intro"><?php esc_html_e('A funnel measures the path to a conversion in order: how many visitors reached each step, and how many were lost between them. Steps are counted per session and must happen in sequence — a visitor who reaches step three without step two is not counted at step three.', 'convermetry'); ?></p>
+        <p class="description cvmtry-goals-intro"><?php esc_html_e('A funnel measures the path to a conversion in order: how many visitors reached each step, and how many were lost between them. Steps are counted per session and must happen in sequence — a visitor who reaches step three without step two is not counted at step three.', 'convermetry'); ?></p>
         <?php
 
         if (MigrationRunner::isPending()) {
@@ -273,8 +274,10 @@ final class FunnelsPage
      */
     private static function renderNotices(): void
     {
-        $saved = isset($_GET['cvm_funnel_saved']) ? sanitize_key((string) $_GET['cvm_funnel_saved']) : '';
-        $error = isset($_GET['cvm_funnel_error']) ? sanitize_key((string) $_GET['cvm_funnel_error']) : '';
+        // phpcs:disable WordPress.Security.NonceVerification.Recommended -- display-only flags from the redirect after processSave()/processDelete(), which verify their nonce and capability; each only selects one of the fixed notices below.
+        $saved = isset($_GET['cvmtry_funnel_saved']) ? sanitize_key(wp_unslash($_GET['cvmtry_funnel_saved'])) : '';
+        $error = isset($_GET['cvmtry_funnel_error']) ? sanitize_key(wp_unslash($_GET['cvmtry_funnel_error'])) : '';
+        // phpcs:enable WordPress.Security.NonceVerification.Recommended
 
         $message = match ($saved) {
             'created' => __('Funnel created. It reports on activity already recorded, so results appear immediately.', 'convermetry'),
@@ -319,7 +322,7 @@ final class FunnelsPage
     private static function renderPeriodFilter(int $active): void
     {
         ?>
-        <div class="cvm-period-filter">
+        <div class="cvmtry-period-filter">
         <?php
         foreach (self::PERIODS as $days) {
             $url = add_query_arg(
@@ -353,45 +356,43 @@ final class FunnelsPage
     private static function renderFunnel(array $funnel, string $start, string $end): void
     {
         ?>
-        <div class="cvm-funnel">
-        <div class="cvm-funnel-header">
+        <div class="cvmtry-funnel">
+        <div class="cvmtry-funnel-header">
         <h2><?php echo esc_html((string) $funnel['name']); ?></h2>
         <?php
 
         if (empty($funnel['enabled'])) {
             ?>
-            <span class="cvm-status-chip cvm-status-not_sent"><?php esc_html_e('Paused', 'convermetry'); ?></span>
+            <span class="cvmtry-status-chip cvmtry-status-not_sent"><?php esc_html_e('Paused', 'convermetry'); ?></span>
             <?php
         }
 
         ?>
-        <div class="cvm-funnel-actions">
+        <div class="cvmtry-funnel-actions">
         <?php
         printf(
-            '<button type="button" class="button-link cvm-funnel-edit" data-funnel="%s">%s</button> ',
+            '<button type="button" class="button-link cvmtry-funnel-edit" data-funnel="%s">%s</button> ',
             esc_attr((string) wp_json_encode($funnel)),
             esc_html__('Edit', 'convermetry')
         );
 
-        // JSON-encoded so confirm() receives a quoted string literal; printed
-        // bare it was a syntax error, and a throwing onsubmit submits the form
-        // without asking (see GoalsPage::renderRow()).
-        $confirm = (string) wp_json_encode(__('Remove this funnel? Its definition is deleted; no analytics data is affected.', 'convermetry'));
+        // Asked by admin-confirm.js before the form submits.
+        $confirm = __('Remove this funnel? Its definition is deleted; no analytics data is affected.', 'convermetry');
         ?>
-        <form method="post" class="cvm-inline-form" onsubmit="return confirm(<?php echo esc_attr($confirm); ?>);">
+        <form method="post" class="cvmtry-inline-form" data-cvmtry-confirm="<?php echo esc_attr($confirm); ?>">
         <?php
-        wp_nonce_field('cvm_delete_funnel', 'cvm_nonce');
+        wp_nonce_field('cvmtry_delete_funnel', 'cvmtry_nonce');
         ?>
-        <input type="hidden" name="cvm_action" value="delete_funnel">
+        <input type="hidden" name="cvmtry_action" value="delete_funnel">
         <input type="hidden" name="funnel_id" value="<?php echo esc_attr((string) $funnel['funnel_id']); ?>">
-        <button type="submit" class="button-link cvm-btn-danger-link"><?php esc_html_e('Remove', 'convermetry'); ?></button></form></div></div>
+        <button type="submit" class="button-link cvmtry-btn-danger-link"><?php esc_html_e('Remove', 'convermetry'); ?></button></form></div></div>
         <?php
 
         try {
             $report = FunnelReport::compute($funnel, $start, $end);
         } catch (ReportQueryException) {
             ?>
-            <p class="cvm-empty-msg"><?php esc_html_e('This funnel could not be measured — a database query failed.', 'convermetry'); ?></p></div>
+            <p class="cvmtry-empty-msg"><?php esc_html_e('This funnel could not be measured — a database query failed.', 'convermetry'); ?></p></div>
             <?php
 
             return;
@@ -399,7 +400,7 @@ final class FunnelsPage
 
         if ($report['error'] !== '') {
             ?>
-            <p class="cvm-empty-msg"><?php echo esc_html($report['error']); ?></p></div>
+            <p class="cvmtry-empty-msg"><?php echo esc_html($report['error']); ?></p></div>
             <?php
 
             return;
@@ -425,20 +426,20 @@ final class FunnelsPage
 
         if ($entered === 0) {
             ?>
-            <p class="cvm-empty-msg"><?php esc_html_e('No sessions reached the first step during this period, so there is nothing to measure yet. Check that the first step matches a page visitors actually land on.', 'convermetry'); ?></p>
+            <p class="cvmtry-empty-msg"><?php esc_html_e('No sessions reached the first step during this period, so there is nothing to measure yet. Check that the first step matches a page visitors actually land on.', 'convermetry'); ?></p>
             <?php
 
             return;
         }
 
         ?>
-        <div class="cvm-funnel-steps">
+        <div class="cvmtry-funnel-steps">
         <?php
 
         foreach ($steps as $index => $step) {
             if ($index > 0) {
                 printf(
-                    '<div class="cvm-funnel-drop"><span class="cvm-funnel-arrow" aria-hidden="true">&darr;</span> %s</div>',
+                    '<div class="cvmtry-funnel-drop"><span class="cvmtry-funnel-arrow" aria-hidden="true">&darr;</span> %s</div>',
                     esc_html(sprintf(
                         /* translators: 1: percentage of sessions that continued to this step, 2: number of sessions lost. */
                         __('%1$s%% continued · %2$s lost', 'convermetry'),
@@ -453,8 +454,8 @@ final class FunnelsPage
             $sessions = (int) $step['sessions'];
 
             printf(
-                '<div class="cvm-funnel-step"><div class="cvm-funnel-bar" style="width:%s%%"></div>'
-                . '<div class="cvm-funnel-label"><strong>%s</strong><span>%s</span></div></div>',
+                '<div class="cvmtry-funnel-step"><div class="cvmtry-funnel-bar" style="width:%s%%"></div>'
+                . '<div class="cvmtry-funnel-label"><strong>%s</strong><span>%s</span></div></div>',
                 esc_attr((string) $width),
                 esc_html((string) $step['label'] !== ''
                     ? (string) $step['label']
@@ -472,7 +473,7 @@ final class FunnelsPage
         </div>
         <?php
 
-        echo '<p class="description cvm-funnel-summary">' . wp_kses_post(sprintf(
+        echo '<p class="description cvmtry-funnel-summary">' . wp_kses_post(sprintf(
             /* translators: 1: overall conversion percentage, 2: sessions that completed every step, 3: sessions that entered the funnel, 4: hours after the period during which later steps still count. */
             _n(
                 'Overall conversion: <strong>%1$s%%</strong> — %2$s of %3$s sessions that entered this funnel completed every step, in order. Later steps are counted for up to %4$d hour after the period ends, so a visit that started near the edge is not unfairly cut off.',
@@ -495,31 +496,31 @@ final class FunnelsPage
     private static function renderEditor(): void
     {
         ?>
-        <div class="cvm-goal-editor cvm-funnel-editor">
-            <h2 id="cvm-funnel-editor-title"><?php esc_html_e('Add a funnel', 'convermetry'); ?></h2>
+        <div class="cvmtry-goal-editor cvmtry-funnel-editor">
+            <h2 id="cvmtry-funnel-editor-title"><?php esc_html_e('Add a funnel', 'convermetry'); ?></h2>
 
-            <form method="post" class="cvm-funnel-form">
-                <?php wp_nonce_field('cvm_save_funnel', 'cvm_nonce'); ?>
-                <input type="hidden" name="cvm_action" value="save_funnel">
-                <input type="hidden" name="funnel[funnel_id]" value="" class="cvm-funnel-id">
+            <form method="post" class="cvmtry-funnel-form">
+                <?php wp_nonce_field('cvmtry_save_funnel', 'cvmtry_nonce'); ?>
+                <input type="hidden" name="cvmtry_action" value="save_funnel">
+                <input type="hidden" name="funnel[funnel_id]" value="" class="cvmtry-funnel-id">
 
                 <table class="form-table" role="presentation">
                     <tr>
-                        <th scope="row"><label for="cvm-funnel-name"><?php esc_html_e('Name', 'convermetry'); ?></label></th>
+                        <th scope="row"><label for="cvmtry-funnel-name"><?php esc_html_e('Name', 'convermetry'); ?></label></th>
                         <td>
-                            <input type="text" id="cvm-funnel-name" name="funnel[name]" class="regular-text" required
+                            <input type="text" id="cvmtry-funnel-name" name="funnel[name]" class="regular-text" required
                                    maxlength="<?php echo esc_attr((string) FunnelSettings::MAX_NAME_LEN); ?>">
                         </td>
                     </tr>
                     <tr>
                         <th scope="row"><?php esc_html_e('Steps', 'convermetry'); ?></th>
                         <td>
-                            <div class="cvm-funnel-step-rows">
+                            <div class="cvmtry-funnel-step-rows">
                                 <?php for ($i = 0; $i < FunnelSettings::MIN_STEPS; $i++) {
                                     self::renderStepRow($i);
                                 } ?>
                             </div>
-                            <button type="button" class="button button-secondary cvm-funnel-add-step"><?php esc_html_e('Add step', 'convermetry'); ?></button>
+                            <button type="button" class="button button-secondary cvmtry-funnel-add-step"><?php esc_html_e('Add step', 'convermetry'); ?></button>
                             <p class="description">
                                 <?php
                                 echo esc_html(sprintf(
@@ -542,7 +543,7 @@ final class FunnelsPage
 
                 <p class="submit">
                     <button type="submit" class="button button-primary"><?php esc_html_e('Save funnel', 'convermetry'); ?></button>
-                    <button type="button" class="button button-secondary cvm-funnel-cancel" hidden><?php esc_html_e('Cancel', 'convermetry'); ?></button>
+                    <button type="button" class="button button-secondary cvmtry-funnel-cancel" hidden><?php esc_html_e('Cancel', 'convermetry'); ?></button>
                 </p>
             </form>
         </div>
@@ -570,16 +571,16 @@ final class FunnelsPage
         $operatorLabels = self::operatorLabels();
         $goals = self::goalOptions();
         ?>
-        <div class="cvm-funnel-step-row">
-            <span class="cvm-funnel-step-num"><?php echo esc_html((string) ($index + 1)); ?></span>
-            <select class="cvm-step-type" name="funnel[steps][<?php echo esc_attr((string) $index); ?>][type]">
+        <div class="cvmtry-funnel-step-row">
+            <span class="cvmtry-funnel-step-num"><?php echo esc_html((string) ($index + 1)); ?></span>
+            <select class="cvmtry-step-type" name="funnel[steps][<?php echo esc_attr((string) $index); ?>][type]">
                 <?php foreach (self::stepTypeLabels() as $key => $label) { ?>
                     <option value="<?php echo esc_attr($key); ?>"<?php selected($key, 'page'); ?>>
                         <?php echo esc_html($label); ?>
                     </option>
                 <?php } ?>
             </select>
-            <select class="cvm-step-operator" name="funnel[steps][<?php echo esc_attr((string) $index); ?>][operator]">
+            <select class="cvmtry-step-operator" name="funnel[steps][<?php echo esc_attr((string) $index); ?>][operator]">
                 <?php foreach (StepCompiler::PAGE_OPERATORS as $operator) { ?>
                     <option value="<?php echo esc_attr($operator); ?>"<?php selected($operator, 'equals'); ?>>
                         <?php echo esc_html($operatorLabels[$operator]); ?>
@@ -589,7 +590,7 @@ final class FunnelsPage
             <?php /* Not hidden here: without JavaScript the row degrades to
                      showing every control at once, which is noisy but usable.
                      syncRow() hides the irrelevant ones as soon as JS runs. */ ?>
-            <select class="cvm-step-goal">
+            <select class="cvmtry-step-goal">
                 <?php if ($goals === []) { ?>
                     <option value=""><?php esc_html_e('No goals configured yet', 'convermetry'); ?></option>
                 <?php } else {
@@ -598,13 +599,13 @@ final class FunnelsPage
                     <?php }
                 } ?>
             </select>
-            <input type="text" class="cvm-step-value"
+            <input type="text" class="cvmtry-step-value"
                    name="funnel[steps][<?php echo esc_attr((string) $index); ?>][value]"
                    value="" placeholder="/services/">
-            <input type="text" class="cvm-step-label"
+            <input type="text" class="cvmtry-step-label"
                    name="funnel[steps][<?php echo esc_attr((string) $index); ?>][label]"
                    value="" placeholder="<?php esc_attr_e('Label (optional)', 'convermetry'); ?>">
-            <button type="button" class="button-link cvm-btn-danger-link cvm-step-remove"
+            <button type="button" class="button-link cvmtry-btn-danger-link cvmtry-step-remove"
                     aria-label="<?php
                     echo esc_attr(sprintf(
                         /* translators: %d: the funnel step's position. */

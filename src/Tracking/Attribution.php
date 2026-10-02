@@ -50,7 +50,7 @@ final readonly class Attribution
 
     /**
      * Reads attribution out of a sanitized map — a decoded analytics context,
-     * a stored submission row, or the tracker's cvm_context snapshot after
+     * a stored submission row, or the tracker's cvmtry_context snapshot after
      * {@see Correlation} has validated it.
      *
      * Nothing here re-sanitizes: the callers hand over values that have already

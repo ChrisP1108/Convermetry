@@ -66,7 +66,7 @@ final class SubmissionService
      *                                         historical 'name' => value map (what third-party
      *                                         callers still pass). {@see SubmissionFields::normalize()}
      *                                         canonicalizes both and strips Convermetry's internal
-     *                                         cvm_* fields from either.
+     *                                         cvmtry_* fields from either.
      * @param Correlation|null $correlation    Correlation data; null extracts it from the current request.
      * @param bool             $sync           Deliver synchronously and report the real result
      *                                         (no automatic retries) instead of queuing.
@@ -111,7 +111,7 @@ final class SubmissionService
 
         $correlation ??= Correlation::fromCurrentRequest();
 
-        // One normalizer owns the shape, the sanitizing, and the cvm_* strip,
+        // One normalizer owns the shape, the sanitizing, and the cvmtry_* strip,
         // for both the descriptor lists the providers now build and the
         // historical maps third-party callers still pass.
         $submissionData = SubmissionFields::normalize($fields);
@@ -129,7 +129,7 @@ final class SubmissionService
          * here in a way it deliberately is not for the observational actions.
          *
          * A changed result is passed through SubmissionFields::normalize() a
-         * second time, so the descriptor shape and the cvm_* strip still hold
+         * second time, so the descriptor shape and the cvmtry_* strip still hold
          * however the callback reshaped things — Convermetry's own tracking
          * fields can never be reintroduced as submitted data. Returning the
          * array unchanged skips that second pass entirely.
@@ -309,7 +309,7 @@ final class SubmissionService
          * considered — so a listener runs even on a site with no endpoints.
          *
          * $fields CONTAINS PERSONAL DATA: it is the visitor's submitted values,
-         * sanitized and with Convermetry's own cvm_* fields stripped, but
+         * sanitized and with Convermetry's own cvmtry_* fields stripped, but
          * otherwise exactly what they typed. Anything a listener does with it —
          * logging, forwarding, storing — inherits the site's obligations for
          * that data. If you only need to know that a submission happened, use
@@ -706,6 +706,7 @@ final class SubmissionService
     {
         global $wpdb;
 
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- deduplication check on the custom submissions table; it must see the live row.
         $row = $wpdb->get_row(
             $wpdb->prepare(
                 'SELECT submission_id FROM %i WHERE conversion_id = %s',

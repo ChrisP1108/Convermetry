@@ -56,10 +56,10 @@ use Convermetry\Tracking\Channels;
 final class DatabaseManager
 {
     /** Table name without the wpdb prefix. */
-    private const string TABLE = 'cvm_events';
+    private const string TABLE = 'cvmtry_events';
 
     /** Option key storing the installed schema version. */
-    private const string DB_VERSION_OPTION = 'cvm_db_version';
+    private const string DB_VERSION_OPTION = 'cvmtry_db_version';
 
     /** Current schema version; bump when the CREATE TABLE below changes. */
     private const string DB_VERSION = '1.2.0';
@@ -187,6 +187,7 @@ final class DatabaseManager
     {
         global $wpdb;
 
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- schema introspection while a migration decides what to apply.
         $rows = $wpdb->get_col($wpdb->prepare(
             'SHOW INDEX FROM %i WHERE Key_name = %s',
             $table,
@@ -210,6 +211,7 @@ final class DatabaseManager
     {
         global $wpdb;
 
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- schema introspection while a migration decides what to apply.
         $existing = $wpdb->get_col($wpdb->prepare('SHOW COLUMNS FROM %i', $table));
         if (!is_array($existing) || $existing === []) {
             return false;
@@ -303,7 +305,7 @@ final class DatabaseManager
     private const int CLEANUP_TIME_BUDGET = 20;
 
     /** Option key for the cleanup mutex (events-table deletion only — see acquireCleanupLock()). */
-    private const string CLEANUP_LOCK_OPTION = 'cvm_cleanup_lock';
+    private const string CLEANUP_LOCK_OPTION = 'cvmtry_cleanup_lock';
 
     /**
      * Seconds after which the cleanup lock's lease is considered stale and
@@ -318,7 +320,7 @@ final class DatabaseManager
      * lock could not be acquired, or was lost mid-loop, or a DELETE itself
      * failed). Self-perpetuating from there until a run reports 'completed'.
      */
-    public const string CLEANUP_CATCHUP_HOOK = 'cvm_cleanup_old_events_catchup';
+    public const string CLEANUP_CATCHUP_HOOK = 'cvmtry_cleanup_old_events_catchup';
 
     /** Seconds before retrying after a failed lock acquisition. */
     private const int CLEANUP_RETRY_COOLDOWN = 5 * MINUTE_IN_SECONDS;
@@ -359,7 +361,7 @@ final class DatabaseManager
      * from the browser is at-least-once (a batch whose response is lost is
      * replayed), so a replayed batch's rows collide with the originals and
      * are silently skipped instead of double-counting every metric.
-     * Server-side events (cvm_track_event(), form provider hooks) carry no
+     * Server-side events (cvmtry_track_event(), form provider hooks) carry no
      * batch id: batch_id stays NULL, which the unique index never collides
      * on, and a plain INSERT is used so genuine errors are not downgraded to
      * warnings.
@@ -508,6 +510,7 @@ final class DatabaseManager
         // every value is bound — only the row count varies the statement.
         $verb = $batchId !== null ? 'INSERT IGNORE INTO' : 'INSERT INTO';
 
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, PluginCheck.Security.DirectDB.UnescapedDBParameter -- multi-row insert into the custom events table. $verb is one of two literal verbs; the column list and placeholder tuples come from the COLUMNS constant and every value is bound.
         $inserted = $wpdb->query($wpdb->prepare(
             // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared, WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- see the comment above: fixed verb, fixed columns, placeholder tuples, values bound.
             "{$verb} %i ({$columnSql}) VALUES " . implode(', ', array_fill(0, count($prepared), $placeholders)),
@@ -533,7 +536,7 @@ final class DatabaseManager
      * a REPLAY, where the rows already existed and nothing was inserted at all.
      *
      * Server-side events are the one case where insert_id is exact: they carry no
-     * batch id, arrive one at a time (cvm_track_event(), the provider hooks), and
+     * batch id, arrive one at a time (cvmtry_track_event(), the provider hooks), and
      * use a plain INSERT.
      *
      * @param array<int, PreparedEvent> $prepared    Envelopes, keyed by batch position.
@@ -563,6 +566,7 @@ final class DatabaseManager
             return;
         }
 
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- reads back the ids of event rows written in this same request, so it must see them live.
         $rows = $wpdb->get_results(
             $wpdb->prepare(
                 'SELECT id, batch_seq FROM %i WHERE batch_id = %s AND batch_seq IN ('
@@ -618,7 +622,7 @@ final class DatabaseManager
      * Validates, sanitizes, and truncates one event into a storable row.
      *
      * All string fields are cut to their column widths here so every write
-     * path (REST endpoint, cvm_track_event(), the form providers'
+     * path (REST endpoint, cvmtry_track_event(), the form providers'
      * server-confirmed conversions) shares one source of truth for column
      * limits.
      *
@@ -754,6 +758,7 @@ final class DatabaseManager
             return [];
         }
 
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- personal-data export reads the live custom events rows.
         $rows = $wpdb->get_results(
             $wpdb->prepare(
                 'SELECT event_type, page_url, page_title, element_label, target_url, referrer, device,'
@@ -798,6 +803,7 @@ final class DatabaseManager
         $changed = 0;
 
         if ($sessionId !== '') {
+            // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- personal-data erasure write to the plugin's custom events table.
             $result = $wpdb->query($wpdb->prepare(
                 "UPDATE %i SET ip_address = '' WHERE session_id = %s AND ip_address <> ''",
                 self::tableName(),
@@ -809,6 +815,7 @@ final class DatabaseManager
         $time = strtotime($createdAt . ' UTC');
 
         if ($conversionId !== '' && $time !== false) {
+            // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- personal-data erasure write to the plugin's custom events table.
             $result = $wpdb->query($wpdb->prepare(
                 "UPDATE %i SET ip_address = '' WHERE event_type = 'form_success'"
                 . " AND created_at >= %s AND created_at < %s AND event_value = %s AND ip_address <> ''",
@@ -827,7 +834,7 @@ final class DatabaseManager
      * Deletes rows older than the configured retention window, and purges
      * expired rate-limit-counter option rows.
      *
-     * Runs daily via the cvm_cleanup_old_events cron event. The events-table
+     * Runs daily via the cvmtry_cleanup_old_events cron event. The events-table
      * deletion is bounded per invocation (chunk count AND wall-clock time)
      * and runs under a lease-based mutex shared with the catch-up hook.
      * When this run's own bound is hit before the backlog is cleared — or
@@ -933,6 +940,7 @@ final class DatabaseManager
                 return 'lock_lost';
             }
 
+            // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- bounded retention delete on the custom events table.
             $deleted = $wpdb->query($wpdb->prepare(
                 'DELETE FROM %i WHERE created_at < %s LIMIT %d',
                 $table,
@@ -984,10 +992,11 @@ final class DatabaseManager
         $deadline = microtime(true) + self::CLEANUP_TIME_BUDGET;
 
         for ($chunk = 0; $chunk < self::CLEANUP_RATE_LIMIT_MAX_CHUNKS; $chunk++) {
+            // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- bounded cleanup of the plugin's own rate-limit counter rows in the options table.
             $deleted = $wpdb->query($wpdb->prepare(
                 'DELETE FROM %i WHERE option_name LIKE %s LIMIT %d',
                 $wpdb->options,
-                $wpdb->esc_like('cvm_rl_') . '%',
+                $wpdb->esc_like('cvmtry_rl_') . '%',
                 self::CLEANUP_RATE_LIMIT_CHUNK
             ));
 
@@ -1037,6 +1046,7 @@ final class DatabaseManager
             return $token;
         }
 
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- lease row in the options table, read and written through $wpdb so the claim stays atomic and never enters the option cache.
         $held = (string) $wpdb->get_var($wpdb->prepare(
             'SELECT option_value FROM %i WHERE option_name = %s',
             $wpdb->options,
@@ -1054,6 +1064,7 @@ final class DatabaseManager
             return null;
         }
 
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery -- lease row in the options table, read and written through $wpdb so the claim stays atomic and never enters the option cache.
         $wpdb->query($wpdb->prepare(
             'DELETE FROM %i WHERE option_name = %s AND option_value = %s',
             $wpdb->options,
@@ -1080,6 +1091,7 @@ final class DatabaseManager
     {
         global $wpdb;
 
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery -- lease row in the options table, read and written through $wpdb so the claim stays atomic and never enters the option cache.
         $inserted = $wpdb->query($wpdb->prepare(
             "INSERT IGNORE INTO %i (option_name, option_value, autoload) VALUES (%s, %s, 'off')",
             $wpdb->options,
@@ -1109,6 +1121,7 @@ final class DatabaseManager
     {
         global $wpdb;
 
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery -- lease row in the options table, read and written through $wpdb so the claim stays atomic and never enters the option cache.
         $updated = $wpdb->query($wpdb->prepare(
             'UPDATE %i SET option_value = %s WHERE option_name = %s AND option_value LIKE %s',
             $wpdb->options,
@@ -1135,6 +1148,7 @@ final class DatabaseManager
     {
         global $wpdb;
 
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery -- lease row in the options table, read and written through $wpdb so the claim stays atomic and never enters the option cache.
         $wpdb->query($wpdb->prepare(
             'DELETE FROM %i WHERE option_name = %s AND option_value LIKE %s',
             $wpdb->options,

@@ -51,4 +51,4 @@ curl -A "Mozilla/5.0 … Chrome/120.0 Safari/537.36" \
 
 The user-agent matters: Google serves woff2 only to a browser that says it
 supports it. Take the `latin` and `latin-ext` URLs from the response, save them
-under the names above, and bump `CVM_VERSION` so the cache busts.
+under the names above, and bump `CVMTRY_VERSION` so the cache busts.

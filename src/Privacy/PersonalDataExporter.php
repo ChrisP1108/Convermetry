@@ -89,7 +89,7 @@ final class PersonalDataExporter
     /**
      * Every export item for one matched submission row.
      *
-     * @param array<string, mixed> $row A cvm_form_submissions row.
+     * @param array<string, mixed> $row A cvmtry_form_submissions row.
      * @return list<array<string, mixed>>
      */
     public static function itemsFor(array $row): array
@@ -177,7 +177,7 @@ final class PersonalDataExporter
     /**
      * The submission item: what was submitted, where, and with what context.
      *
-     * @param array<string, mixed> $row A cvm_form_submissions row.
+     * @param array<string, mixed> $row A cvmtry_form_submissions row.
      * @return array<string, mixed>
      */
     private static function submissionItem(array $row): array

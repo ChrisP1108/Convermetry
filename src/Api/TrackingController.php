@@ -67,10 +67,10 @@ final class TrackingController
     private const int RATE_LIMIT_WINDOW = 60;
 
     /** Object-cache group for rate-limit counters. */
-    private const string CACHE_GROUP = 'cvm_rate_limit';
+    private const string CACHE_GROUP = 'cvmtry_rate_limit';
 
     /** Transient flagging that the site-wide rate limit was hit (read by the dashboard). */
-    public const string RATE_LIMITED_FLAG = 'cvm_rate_limited_at';
+    public const string RATE_LIMITED_FLAG = 'cvmtry_rate_limited_at';
 
     /** @var string[] Campaign parameters extracted from attributed events into dedicated columns. */
     private const array CAMPAIGN_PARAMS = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_id', 'utm_term', 'utm_content'];
@@ -589,11 +589,11 @@ final class TrackingController
         // charging the global budget for already-rejected requests would let
         // a single flooding IP burn through the entire site-wide allowance
         // and block legitimate visitors for the rest of the window.
-        if ($ip !== '' && !self::chargeBucket('cvm_rl_' . md5($ip), $events, $limits['per_ip'])) {
+        if ($ip !== '' && !self::chargeBucket('cvmtry_rl_' . md5($ip), $events, $limits['per_ip'])) {
             return false;
         }
 
-        $siteAllowed = self::chargeBucket('cvm_rl_site', $events, $limits['site_wide']);
+        $siteAllowed = self::chargeBucket('cvmtry_rl_site', $events, $limits['site_wide']);
 
         // Hitting the site-wide cap means legitimate events may be dropped —
         // surface that on the dashboard instead of failing silently.
@@ -701,6 +701,7 @@ final class TrackingController
         // These rows are written directly (never through get_option/
         // update_option) so they bypass — and can never pollute — WordPress's
         // option caches.
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- atomic rate-limit counter row in the options table; an upsert get_option()/update_option() cannot make atomic, read back uncached.
         $charged = $wpdb->query($wpdb->prepare(
             "INSERT INTO %i (option_name, option_value, autoload)
              VALUES (%s, CONCAT(FLOOR(UNIX_TIMESTAMP() / %d), '|', %d), 'off')
@@ -737,6 +738,7 @@ final class TrackingController
             return false;
         }
 
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- atomic rate-limit counter row in the options table; an upsert get_option()/update_option() cannot make atomic, read back uncached.
         $value = $wpdb->get_var($wpdb->prepare(
             "SELECT option_value FROM %i WHERE option_name = %s",
             $wpdb->options,
