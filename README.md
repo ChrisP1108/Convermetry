@@ -22,7 +22,7 @@ Was the lead successfully delivered to external systems?
 
 Convermetry works standalone — full analytics dashboard, form integrations, and webhook delivery inside one WordPress install — and is architected so a future Convermetry SaaS can receive `analytics_report` and `form_submission` messages from many installations, keyed by a shared, versioned payload schema.
 
-- **Version:** 1.0.1
+- **Version:** 1.0.2
 - **Requires WordPress:** 6.3+
 - **Requires PHP:** 8.3+
 - **License:** GPL-2.0-or-later
@@ -118,7 +118,7 @@ queue, and works on a site with no webhook endpoints configured.
 
 ### Analytics
 
-For a selectable 7/30/90-day period (UTC calendar days, clamped to the retention window with an explanatory notice when clamped): summary cards (Page Views, Clicks, Form Submit Attempts, Confirmed Conversions, **Server-Confirmed Submissions**, Hovers, Scroll Milestones, Other Events), an accessible daily page-view chart (single-Tab-stop keyboard navigation, touch/mouse tooltips, visible axes, data-table fallback, horizontal scroll for dense periods), and collapsible sections:
+For a selectable 7/30/90-day period (UTC calendar days, clamped to the retention window with an explanatory notice when clamped; period links carry a short-lived nonce for the read-only filter, so an expired bookmarked link shows the last 30 days with a notice, and the Goals and Funnels screens work the same way): summary cards (Page Views, Clicks, Form Submit Attempts, Confirmed Conversions, **Server-Confirmed Submissions**, Hovers, Scroll Milestones, Other Events), an accessible daily page-view chart (single-Tab-stop keyboard navigation, touch/mouse tooltips, visible axes, data-table fallback, horizontal scroll for dense periods), and collapsible sections:
 
 | Section | Reports |
 |---|---|
@@ -1120,7 +1120,7 @@ Every outbound message shares one versioned envelope:
 {
     "schema_version": "1.0 | 2.0",
     "source": "convermetry",
-    "plugin_version": "1.0.1",
+    "plugin_version": "1.0.2",
     "message_type": "analytics_report | form_submission",
     "website_info": { },
     "generated_at": "2026-08-22T14:00:00+00:00",
@@ -1148,7 +1148,7 @@ Every outbound message shares one versioned envelope:
 {
     "schema_version": "1.1",
     "source": "convermetry",
-    "plugin_version": "1.0.1",
+    "plugin_version": "1.0.2",
     "message_type": "analytics_report",
     "website_info": {
         "name": "Example Financial", "url": "https://example.com", "domain": "example.com",
@@ -1268,7 +1268,7 @@ Every outbound message shares one versioned envelope:
 {
     "schema_version": "2.0",
     "source": "convermetry",
-    "plugin_version": "1.0.1",
+    "plugin_version": "1.0.2",
     "message_type": "form_submission",
     "website_info": {
         "name": "Example Financial", "url": "https://example.com", "domain": "example.com",
@@ -1895,7 +1895,7 @@ directory. The icon and banners are drawn from the plugin's own logo mark,
 colors and bundled Play font; the screenshots come from a test site filled with
 fictional data (`www.example.com`, documentation-range IP addresses).
 
-**Plugin Check.** `docs/plugin-check-1.0.1.md` records what the official Plugin
+**Plugin Check.** `docs/plugin-check-1.0.2.md` records what the official Plugin
 Check tool still reports against the release ZIP and why each finding stands.
 
 ---
@@ -1944,6 +1944,7 @@ composer lint              # php -l over every PHP file
 composer test              # unit suite — pure logic, no WordPress, no database
 composer test:js           # the tracker's form handlers, executed under Node
 composer test:integration  # the real queries against a real MySQL server
+composer test:wordpress    # a real WordPress: activation, cron, delivery, admin handlers
 ```
 
 The **unit** suite is deliberately database-free. There is no hand-rolled `$wpdb` mock anywhere in it: a mock only ever proves the test author's model of MySQL, and a green "delete cascade" built on one would make an unverified erasure guarantee look verified.
@@ -1965,6 +1966,8 @@ composer test:integration
 What it covers: the DDL producing exactly the columns and indexes each migration verifies; the UNIQUE constraints genuinely deduplicating under `INSERT IGNORE`; the generated funnel SQL including ordering, cross-table goal steps, and the eight-step cap; the abandonment query's correlated `NOT EXISTS`; per-currency lead grouping; the corrected backfill sentinel; and the lead-history cascade.
 
 What it does not cover: there is no WordPress in it, so `dbDelta`, cron, REST, and the provider hooks stay on the manual checklist.
+
+The **WordPress** suite (`tests/WordPress`) installs a real WordPress into a throwaway database, activates the plugin, and covers what the other two cannot: `dbDelta`, REST registration, WP-Cron delivering to a local receiver, privacy tools, uninstall — and every admin request handler. `AdminRequestHandlersTest` drives each admin-post and AJAX action through the hook WordPress calls it on, with WordPress's own nonces, users and roles, and attacks each one with a missing, invalid, expired, other-action, other-user and array-valued nonce, a role without the scope, and the wrong method, asserting that nothing it could have changed did. `wp_die()`, the JSON responses and redirects throw rather than return, so code after a refusal cannot run in the test any more than in production. It skips itself when `CVMTRY_WP_DIR` is unset; see `tests/WordPress/bootstrap.php` for the variables. **The database is dropped and reinstalled on every run.**
 
 ---
 

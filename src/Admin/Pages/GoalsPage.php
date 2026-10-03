@@ -6,7 +6,9 @@ namespace Convermetry\Admin\Pages;
 if (!defined('ABSPATH')) exit;
 
 use Convermetry\Admin\AdminAssets;
+use Convermetry\Admin\AdminRequest;
 use Convermetry\Admin\Capability;
+use Convermetry\Admin\ReportPeriod;
 use Convermetry\Analytics\GoalReports;
 use Convermetry\Analytics\ReportQueryException;
 use Convermetry\Database\MigrationRunner;
@@ -44,16 +46,28 @@ final class GoalsPage
     /** Periods (in days) offered by the filter. */
     private const array PERIODS = [7, 30, 90];
 
+    /** admin-post action, and nonce action, for creating or updating a goal. */
+    public const string SAVE_ACTION = 'cvmtry_save_goal';
+
+    /** admin-post action, and nonce action, for removing a goal. */
+    public const string DELETE_ACTION = 'cvmtry_delete_goal';
+
+    /** Nonce action for the read-only period filter; authorizes nothing else. */
+    public const string PERIOD_NONCE = 'cvmtry_goals_period';
+
     /**
      * Registers menu and request hooks.
+     *
+     * The handlers hang off admin_post_{action}, so WordPress only calls them
+     * for their own form — ordinary admin page loads never reach them.
      *
      * @return void
      */
     public static function init(): void
     {
         add_action('admin_menu', [self::class, 'addMenu']);
-        add_action('admin_init', [self::class, 'processSave']);
-        add_action('admin_init', [self::class, 'processDelete']);
+        add_action('admin_post_' . self::SAVE_ACTION, [self::class, 'processSave']);
+        add_action('admin_post_' . self::DELETE_ACTION, [self::class, 'processDelete']);
         add_action('admin_enqueue_scripts', [self::class, 'enqueueAssets']);
     }
 
@@ -109,30 +123,47 @@ final class GoalsPage
     // ── Request handlers ─────────────────────────────────────────────────────
 
     /**
-     * Creates or updates a goal from a nonce-protected POST.
+     * Creates or updates a goal (admin_post_cvmtry_save_goal).
      *
-     * @return void
+     * @return never
      */
-    public static function processSave(): void
+    public static function processSave(): never
     {
-        if (!self::isRequest('save_goal', 'cvmtry_save_goal')) {
-            return;
+        // 1. Method: only the editor form's POST.
+        if (!AdminRequest::isPost()) {
+            AdminRequest::deny(__('Goals can only be saved from the Goals screen.', 'convermetry'), 405);
         }
 
-        // phpcs:disable WordPress.Security.NonceVerification.Missing, WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- the nonce was verified by self::isRequest() above; every field is sanitized by GoalSettings::sanitize() below.
-        $submitted = isset($_POST['goal']) && is_array($_POST['goal'])
-            ? wp_unslash($_POST['goal'])
-            : [];
-        // phpcs:enable WordPress.Security.NonceVerification.Missing, WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
+        // 2. Capability: the scope that grants this screen.
+        if (!current_user_can(Capability::required(Capability::GOALS_MANAGE))) {
+            AdminRequest::deny(AdminRequest::forbiddenMessage());
+        }
+
+        // 3. Nonce present, as one string.
+        if (!isset($_POST['cvmtry_nonce']) || !is_string($_POST['cvmtry_nonce'])) {
+            AdminRequest::deny(AdminRequest::expiredMessage());
+        }
+
+        // 4. Nonce issued for saving a goal.
+        if (!wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['cvmtry_nonce'])), self::SAVE_ACTION)) {
+            AdminRequest::deny(AdminRequest::expiredMessage());
+        }
+
+        // 5. Input: the goal fields, each sanitized by GoalSettings::sanitize().
+        if (!isset($_POST['goal']) || !is_array($_POST['goal'])) {
+            self::redirect(['cvmtry_goal_error' => 'invalid']);
+        }
+
+        // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- each field is type-checked and sanitized by GoalSettings::sanitize() below.
+        $submitted = wp_unslash($_POST['goal']);
 
         // The stored goal is looked up by the id in the POST, but the id is
         // never taken FROM the POST into the saved record — GoalSettings keeps
         // whatever the stored goal already had. Otherwise editing one goal could
         // be made to overwrite another's identity, and with it that goal's
         // entire completion history.
-        $existing = GoalSettings::isValidId((string) ($submitted['goal_id'] ?? ''))
-            ? GoalRepository::find((string) $submitted['goal_id'])
-            : null;
+        $postedId = is_string($submitted['goal_id'] ?? null) ? sanitize_text_field($submitted['goal_id']) : '';
+        $existing = GoalSettings::isValidId($postedId) ? GoalRepository::find($postedId) : null;
 
         $goal = GoalSettings::sanitize($submitted, $existing, gmdate('Y-m-d H:i:s'));
 
@@ -150,68 +181,90 @@ final class GoalsPage
     }
 
     /**
-     * Soft-deletes a goal from a nonce-protected POST.
+     * Soft-deletes a goal (admin_post_cvmtry_delete_goal).
      *
-     * @return void
+     * @return never
      */
-    public static function processDelete(): void
+    public static function processDelete(): never
     {
-        if (!self::isRequest('delete_goal', 'cvmtry_delete_goal')) {
-            return;
+        // 1. Method: only the Remove form's POST.
+        if (!AdminRequest::isPost()) {
+            AdminRequest::deny(__('Goals can only be removed from the Goals screen.', 'convermetry'), 405);
         }
 
-        // phpcs:ignore WordPress.Security.NonceVerification.Missing -- verified by self::isRequest() above.
-        $goalId = sanitize_text_field(wp_unslash((string) ($_POST['goal_id'] ?? '')));
-
-        if (GoalSettings::isValidId($goalId)) {
-            GoalRepository::softDelete($goalId, gmdate('Y-m-d H:i:s'));
+        // 2. Capability: the scope that grants this screen.
+        if (!current_user_can(Capability::required(Capability::GOALS_MANAGE))) {
+            AdminRequest::deny(AdminRequest::forbiddenMessage());
         }
+
+        // 3. Nonce present, as one string.
+        if (!isset($_POST['cvmtry_nonce']) || !is_string($_POST['cvmtry_nonce'])) {
+            AdminRequest::deny(AdminRequest::expiredMessage());
+        }
+
+        // 4. Nonce issued for removing a goal — a save nonce does not qualify.
+        if (!wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['cvmtry_nonce'])), self::DELETE_ACTION)) {
+            AdminRequest::deny(AdminRequest::expiredMessage());
+        }
+
+        // 5. Input: one well-formed goal id.
+        $goalId = isset($_POST['goal_id']) && is_string($_POST['goal_id'])
+            ? sanitize_text_field(wp_unslash($_POST['goal_id']))
+            : '';
+
+        if (!GoalSettings::isValidId($goalId)) {
+            self::redirect(['cvmtry_goal_error' => 'missing']);
+        }
+
+        GoalRepository::softDelete($goalId, gmdate('Y-m-d H:i:s'));
 
         self::redirect(['cvmtry_goal_saved' => 'deleted']);
     }
 
     /**
-     * Whether the current request is a valid, authorized POST for one action.
-     *
-     * @param string $action The cvmtry_action value.
-     * @param string $nonce  The nonce action name.
-     * @return bool
-     */
-    private static function isRequest(string $action, string $nonce): bool
-    {
-        return sanitize_text_field(wp_unslash($_SERVER['REQUEST_METHOD'] ?? '')) === 'POST'
-            && sanitize_key(wp_unslash($_POST['cvmtry_action'] ?? '')) === $action
-            && isset($_POST['cvmtry_nonce'])
-            && wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['cvmtry_nonce'])), $nonce)
-            && Capability::currentUserCan(Capability::GOALS_MANAGE);
-    }
-
-    /**
-     * Redirects back to this page with a notice flag, preserving the period.
+     * Redirects back to this page with a notice flag, keeping the period the
+     * form was posted from (with a fresh filter nonce).
      *
      * @param array<string, string> $args Query arguments to add.
      * @return never
      */
     private static function redirect(array $args): never
     {
-        wp_safe_redirect(add_query_arg(
-            array_merge(['page' => self::MENU_SLUG, 'period' => (string) self::currentPeriod()], $args),
-            self_admin_url('admin.php')
-        ));
+        wp_safe_redirect(self::pageUrl(array_merge(self::currentPeriod()->carryArgs(self::PERIOD_NONCE), $args)));
         exit;
     }
 
     /**
-     * The selected reporting period in days.
+     * This screen's URL with extra query arguments.
      *
-     * @return int
+     * @param array<string, string> $args Query arguments.
+     * @return string
      */
-    private static function currentPeriod(): int
+    private static function pageUrl(array $args = []): string
     {
-        // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- read-only report filter, kept bookmarkable: it is matched against PERIODS and only chooses the date range displayed.
-        $requested = isset($_GET['period']) ? absint(wp_unslash($_GET['period'])) : 30;
+        return add_query_arg(array_merge(['page' => self::MENU_SLUG], $args), self_admin_url('admin.php'));
+    }
 
-        return in_array($requested, self::PERIODS, true) ? $requested : 30;
+    /**
+     * Where the editor and Remove forms post: admin-post.php, carrying the
+     * current period so the redirect afterwards returns to it.
+     *
+     * @return string
+     */
+    private static function formAction(): string
+    {
+        return add_query_arg(self::currentPeriod()->carryArgs(self::PERIOD_NONCE), admin_url('admin-post.php'));
+    }
+
+    /**
+     * The selected reporting period. A supplied period is accepted only with
+     * this screen's filter nonce; see {@see ReportPeriod}.
+     *
+     * @return ReportPeriod
+     */
+    private static function currentPeriod(): ReportPeriod
+    {
+        return ReportPeriod::fromRequest(self::PERIOD_NONCE, self::PERIODS);
     }
 
     // ── Rendering ────────────────────────────────────────────────────────────
@@ -253,8 +306,14 @@ final class GoalsPage
         $period = self::currentPeriod();
         $goals  = GoalRepository::visible();
 
-        self::renderPeriodFilter($period);
-        self::renderList($goals, $period);
+        if ($period->refused) {
+            ?>
+            <div class="notice notice-warning inline"><p><?php echo esc_html(ReportPeriod::refusedMessage()); ?></p></div>
+            <?php
+        }
+
+        self::renderPeriodFilter($period->days);
+        self::renderList($goals, $period->days);
         self::renderEditor();
 
         ?>
@@ -294,6 +353,7 @@ final class GoalsPage
                 __('You have reached the limit of %d goals. Remove one you no longer need to add another.', 'convermetry'),
                 GoalSettings::MAX_GOALS
             ),
+            'missing' => __('That goal could not be found. It may already have been removed.', 'convermetry'),
             default   => '',
         };
 
@@ -400,10 +460,7 @@ final class GoalsPage
         <div class="cvmtry-period-filter">
         <?php
         foreach (self::PERIODS as $days) {
-            $url = add_query_arg(
-                ['page' => self::MENU_SLUG, 'period' => (string) $days],
-                self_admin_url('admin.php')
-            );
+            $url = self::pageUrl(ReportPeriod::queryArgs(self::PERIOD_NONCE, $days));
             printf(
                 '<a href="%s" class="button %s">%s</a> ',
                 esc_url($url),
@@ -551,11 +608,11 @@ final class GoalsPage
         // Asked by admin-confirm.js before the form submits.
         $confirm = __('Remove this goal? Its past completions are kept and still appear in reports for earlier periods.', 'convermetry');
         ?>
-        <form method="post" class="cvmtry-inline-form" data-cvmtry-confirm="<?php echo esc_attr($confirm); ?>">
+        <form method="post" action="<?php echo esc_url(self::formAction()); ?>" class="cvmtry-inline-form" data-cvmtry-confirm="<?php echo esc_attr($confirm); ?>">
         <?php
-        wp_nonce_field('cvmtry_delete_goal', 'cvmtry_nonce');
+        wp_nonce_field(self::DELETE_ACTION, 'cvmtry_nonce');
         ?>
-        <input type="hidden" name="cvmtry_action" value="delete_goal">
+        <input type="hidden" name="action" value="<?php echo esc_attr(self::DELETE_ACTION); ?>">
         <input type="hidden" name="goal_id" value="<?php echo esc_attr($goalId); ?>">
         <button type="submit" class="button-link cvmtry-btn-danger-link"><?php esc_html_e('Remove', 'convermetry'); ?></button></form></td></tr>
         <?php
@@ -623,9 +680,9 @@ final class GoalsPage
         <div class="cvmtry-goal-editor">
             <h2 id="cvmtry-goal-editor-title"><?php esc_html_e('Add a goal', 'convermetry'); ?></h2>
 
-            <form method="post" class="cvmtry-goal-form">
-                <?php wp_nonce_field('cvmtry_save_goal', 'cvmtry_nonce'); ?>
-                <input type="hidden" name="cvmtry_action" value="save_goal">
+            <form method="post" action="<?php echo esc_url(self::formAction()); ?>" class="cvmtry-goal-form">
+                <?php wp_nonce_field(self::SAVE_ACTION, 'cvmtry_nonce'); ?>
+                <input type="hidden" name="action" value="<?php echo esc_attr(self::SAVE_ACTION); ?>">
                 <input type="hidden" name="goal[goal_id]" value="" class="cvmtry-goal-id">
 
                 <table class="form-table" role="presentation">

@@ -6,6 +6,7 @@ namespace Convermetry\Admin\Pages;
 if (!defined('ABSPATH')) exit;
 
 use Convermetry\Admin\AdminAssets;
+use Convermetry\Admin\AdminRequest;
 use Convermetry\Admin\Capability;
 use Convermetry\Api\DeliveryLogController;
 use Convermetry\Settings\Options;
@@ -39,16 +40,31 @@ final class ActivityLogPage
     /** Rows fetched per database round-trip while streaming an export. */
     private const int EXPORT_CHUNK = 200;
 
+    /** admin-post action, and nonce action, for Clear All Logs. */
+    public const string CLEAR_ACTION = 'cvmtry_clear_activity_logs';
+
+    /** admin-post action, and nonce action, for the CSV export link. */
+    public const string EXPORT_CSV_ACTION = 'cvmtry_activity_export_csv';
+
+    /** admin-post action, and nonce action, for the JSON export link. */
+    public const string EXPORT_JSON_ACTION = 'cvmtry_activity_export_json';
+
     /**
      * Registers menu, asset, action, and AJAX hooks.
+     *
+     * Clear and export hang off admin_post_{action}, so WordPress only calls
+     * them for their own form or link — ordinary admin page loads never reach
+     * them. Each export format is its own action, so its nonce action is fixed
+     * before any other input is read.
      *
      * @return void
      */
     public static function init(): void
     {
         add_action('admin_menu', [self::class, 'addMenu']);
-        add_action('admin_init', [self::class, 'processClearLogs']);
-        add_action('admin_init', [self::class, 'processExport']);
+        add_action('admin_post_' . self::CLEAR_ACTION, [self::class, 'processClearLogs']);
+        add_action('admin_post_' . self::EXPORT_CSV_ACTION, [self::class, 'processExportCsv']);
+        add_action('admin_post_' . self::EXPORT_JSON_ACTION, [self::class, 'processExportJson']);
         add_action('admin_enqueue_scripts', [self::class, 'enqueueAssets']);
 
         add_action('wp_ajax_cvmtry_get_activity_logs', [self::class, 'handleGetLogsAjax']);
@@ -113,24 +129,34 @@ final class ActivityLogPage
     }
 
     /**
-     * Clears all stored delivery logs if a valid nonce-protected POST is
-     * detected, then redirects back with a notice flag.
+     * Clears all stored delivery logs (admin_post_cvmtry_clear_activity_logs),
+     * then redirects back with a notice flag.
      *
-     * @return void
+     * @return never
      */
-    public static function processClearLogs(): void
+    public static function processClearLogs(): never
     {
-        if (
-            sanitize_text_field(wp_unslash($_SERVER['REQUEST_METHOD'] ?? '')) !== 'POST' ||
-            !isset($_POST['cvmtry_action']) ||
-            sanitize_key(wp_unslash($_POST['cvmtry_action'])) !== 'clear_activity_logs' ||
-            !isset($_POST['cvmtry_clear_nonce']) ||
-            !wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['cvmtry_clear_nonce'])), 'cvmtry_clear_activity_logs') ||
-            !Capability::currentUserCan(Capability::ACTIVITY_MANAGE)
-        ) {
-            return;
+        // 1. Method: only the Clear All Logs form's POST.
+        if (!AdminRequest::isPost()) {
+            AdminRequest::deny(__('The Activity Log can only be cleared from the Activity Log screen.', 'convermetry'), 405);
         }
 
+        // 2. Capability: deleting log entries, not merely viewing them.
+        if (!current_user_can(Capability::required(Capability::ACTIVITY_MANAGE))) {
+            AdminRequest::deny(AdminRequest::forbiddenMessage());
+        }
+
+        // 3. Nonce present, as one string.
+        if (!isset($_POST['cvmtry_clear_nonce']) || !is_string($_POST['cvmtry_clear_nonce'])) {
+            AdminRequest::deny(AdminRequest::expiredMessage());
+        }
+
+        // 4. Nonce issued for clearing the log.
+        if (!wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['cvmtry_clear_nonce'])), self::CLEAR_ACTION)) {
+            AdminRequest::deny(AdminRequest::expiredMessage());
+        }
+
+        // 5. No further input: the action takes no parameters.
         DeliveryLog::clearLogs();
 
         wp_safe_redirect(
@@ -140,35 +166,65 @@ final class ActivityLogPage
     }
 
     /**
-     * Streams a CSV or JSON file download when a valid export link is followed.
+     * Streams every log row as CSV (admin_post_cvmtry_activity_export_csv).
      *
-     * @return void
+     * @return never
      */
-    public static function processExport(): void
+    public static function processExportCsv(): never
     {
-        if (!isset($_GET['cvmtry_export']) || !Capability::currentUserCan(Capability::ACTIVITY_VIEW)) {
-            return;
+        // 1. Method: export links are followed, never posted.
+        if (!AdminRequest::isGet()) {
+            AdminRequest::deny(__('Exports are downloaded from the Activity Log screen.', 'convermetry'), 405);
         }
 
-        // Only act on this plugin's page so the shared query var can never
-        // hijack another admin screen.
-        if (!isset($_GET['page']) || $_GET['page'] !== self::MENU_SLUG) {
-            return;
+        // 2. Capability: the export holds every row the screen can show.
+        if (!current_user_can(Capability::required(Capability::ACTIVITY_VIEW))) {
+            AdminRequest::deny(AdminRequest::forbiddenMessage());
         }
 
-        $type = sanitize_key((string) $_GET['cvmtry_export']);
-        if ($type !== 'csv' && $type !== 'json') {
-            return;
+        // 3. Nonce present, as one string.
+        if (!isset($_GET['_wpnonce']) || !is_string($_GET['_wpnonce'])) {
+            AdminRequest::deny(__('Invalid or expired export link.', 'convermetry'));
         }
 
-        if (
-            !isset($_GET['_wpnonce']) ||
-            !wp_verify_nonce(sanitize_text_field(wp_unslash($_GET['_wpnonce'])), 'cvmtry_export_' . $type)
-        ) {
-            wp_die(esc_html__('Invalid or expired export link.', 'convermetry'), '', ['response' => 403]);
+        // 4. Nonce issued for the CSV export — no other link's nonce opens it.
+        if (!wp_verify_nonce(sanitize_text_field(wp_unslash($_GET['_wpnonce'])), self::EXPORT_CSV_ACTION)) {
+            AdminRequest::deny(__('Invalid or expired export link.', 'convermetry'));
         }
 
-        $type === 'csv' ? self::exportCsv() : self::exportJson();
+        // 5. No further input: the export always covers the whole log.
+        self::exportCsv();
+    }
+
+    /**
+     * Streams every log row as JSON (admin_post_cvmtry_activity_export_json).
+     *
+     * @return never
+     */
+    public static function processExportJson(): never
+    {
+        // 1. Method: export links are followed, never posted.
+        if (!AdminRequest::isGet()) {
+            AdminRequest::deny(__('Exports are downloaded from the Activity Log screen.', 'convermetry'), 405);
+        }
+
+        // 2. Capability: the export holds every row the screen can show.
+        if (!current_user_can(Capability::required(Capability::ACTIVITY_VIEW))) {
+            AdminRequest::deny(AdminRequest::forbiddenMessage());
+        }
+
+        // 3. Nonce present, as one string.
+        if (!isset($_GET['_wpnonce']) || !is_string($_GET['_wpnonce'])) {
+            AdminRequest::deny(__('Invalid or expired export link.', 'convermetry'));
+        }
+
+        // 4. Nonce issued for the JSON export — no other link's nonce opens it.
+        if (!wp_verify_nonce(sanitize_text_field(wp_unslash($_GET['_wpnonce'])), self::EXPORT_JSON_ACTION)) {
+            AdminRequest::deny(__('Invalid or expired export link.', 'convermetry'));
+        }
+
+        // 5. No further input: the export always covers the whole log.
+        self::exportJson();
     }
 
     /**
@@ -183,34 +239,38 @@ final class ActivityLogPage
      */
     public static function handleGetLogsAjax(): never
     {
-        if (
-            !isset($_POST['nonce']) ||
-            !wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['nonce'])), 'cvmtry_get_activity_logs') ||
-            !Capability::currentUserCan(Capability::ACTIVITY_VIEW)
-        ) {
-            wp_send_json_error(['message' => __('Unauthorized.', 'convermetry')]);
+        // 1. Method: the list is fetched by POST.
+        if (!AdminRequest::isPost()) {
+            AdminRequest::denyAjax(__('Invalid request.', 'convermetry'), 405);
         }
 
-        $perPage = Pagination::perPage(isset($_POST['per_page']) ? intval(wp_unslash($_POST['per_page'])) : Pagination::DEFAULT_PER_PAGE);
+        // 2. Capability: viewing the log.
+        if (!current_user_can(Capability::required(Capability::ACTIVITY_VIEW))) {
+            AdminRequest::denyAjax(AdminRequest::forbiddenMessage());
+        }
 
-        $status = sanitize_key((string) ($_POST['status'] ?? ''));
+        // 3. Nonce present, as one string.
+        if (!isset($_POST['nonce']) || !is_string($_POST['nonce'])) {
+            AdminRequest::denyAjax(AdminRequest::expiredMessage());
+        }
 
-        $filters = [
-            'status'       => in_array($status, ['success', 'error'], true) ? $status : '',
-            'year'         => sanitize_text_field(wp_unslash($_POST['filter_year'] ?? '')),
-            'month'        => sanitize_text_field(wp_unslash($_POST['filter_month'] ?? '')),
-            'search'       => sanitize_text_field(wp_unslash($_POST['search'] ?? '')),
-            'endpoint'     => esc_url_raw(wp_unslash($_POST['endpoint'] ?? '')),
-            'message_type' => sanitize_key((string) ($_POST['message_type'] ?? '')),
-            'provider'     => sanitize_key((string) ($_POST['provider'] ?? '')),
-            'form_name'    => sanitize_text_field(wp_unslash($_POST['form_name'] ?? '')),
-        ];
+        // 4. Nonce issued for listing the log.
+        if (!wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['nonce'])), 'cvmtry_get_activity_logs')) {
+            AdminRequest::denyAjax(AdminRequest::expiredMessage());
+        }
+
+        // 5. Input: paging and filters, each read as one scalar — an
+        // array-valued field is treated as absent rather than cast.
+        $requestedPage = AdminRequest::positiveId(sanitize_text_field(AdminRequest::scalar($_POST, 'page')));
+        $requestedSize = AdminRequest::positiveId(sanitize_text_field(AdminRequest::scalar($_POST, 'per_page')));
+        $perPage       = Pagination::perPage($requestedSize > 0 ? $requestedSize : Pagination::DEFAULT_PER_PAGE);
+        $filters       = self::filtersFromRequest($_POST);
 
         // Clamped BEFORE the query — see Pagination::resolve(). Without it,
         // deleting the last row on the last page left this screen showing
         // "Showing 11-10 of 10" with no navigation to get back.
         $total  = DeliveryLog::getLogCount($filters);
-        $paging = Pagination::resolve(isset($_POST['page']) ? intval(wp_unslash($_POST['page'])) : 1, $perPage, $total);
+        $paging = Pagination::resolve($requestedPage > 0 ? $requestedPage : 1, $perPage, $total);
 
         $page       = $paging['page'];
         $totalPages = $paging['totalPages'];
@@ -237,23 +297,62 @@ final class ActivityLogPage
     }
 
     /**
+     * Sanitizes the list filters out of the (nonce-verified) AJAX request.
+     *
+     * @param array<string, mixed> $src The request array.
+     * @return array{status: string, year: string, month: string, search: string, endpoint: string, message_type: string, provider: string, form_name: string}
+     */
+    private static function filtersFromRequest(array $src): array
+    {
+        $status = sanitize_key(AdminRequest::scalar($src, 'status'));
+
+        return [
+            'status'       => in_array($status, ['success', 'error'], true) ? $status : '',
+            'year'         => sanitize_text_field(AdminRequest::scalar($src, 'filter_year')),
+            'month'        => sanitize_text_field(AdminRequest::scalar($src, 'filter_month')),
+            'search'       => sanitize_text_field(AdminRequest::scalar($src, 'search')),
+            'endpoint'     => esc_url_raw(AdminRequest::scalar($src, 'endpoint')),
+            'message_type' => sanitize_key(AdminRequest::scalar($src, 'message_type')),
+            'provider'     => sanitize_key(AdminRequest::scalar($src, 'provider')),
+            'form_name'    => sanitize_text_field(AdminRequest::scalar($src, 'form_name')),
+        ];
+    }
+
+    /**
      * AJAX handler that deletes a single log entry.
      *
      * @return never
      */
     public static function handleDeleteLogAjax(): never
     {
-        if (
-            !isset($_POST['nonce']) ||
-            !wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['nonce'])), 'cvmtry_delete_activity_log') ||
-            !Capability::currentUserCan(Capability::ACTIVITY_MANAGE)
-        ) {
-            wp_send_json_error(['message' => __('Unauthorized.', 'convermetry')]);
+        // 1. Method: deletes are POSTed.
+        if (!AdminRequest::isPost()) {
+            AdminRequest::denyAjax(__('Invalid request.', 'convermetry'), 405);
         }
 
-        $id = isset($_POST['log_id']) ? intval(wp_unslash($_POST['log_id'])) : 0;
-        if ($id <= 0) {
-            wp_send_json_error(['message' => __('Invalid log id.', 'convermetry')]);
+        // 2. Capability: deleting log entries, not merely viewing them.
+        if (!current_user_can(Capability::required(Capability::ACTIVITY_MANAGE))) {
+            AdminRequest::denyAjax(AdminRequest::forbiddenMessage());
+        }
+
+        // 3. Nonce present, as one string.
+        if (!isset($_POST['nonce']) || !is_string($_POST['nonce'])) {
+            AdminRequest::denyAjax(AdminRequest::expiredMessage());
+        }
+
+        // 4. Nonce issued for deleting a log entry.
+        if (!wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['nonce'])), 'cvmtry_delete_activity_log')) {
+            AdminRequest::denyAjax(AdminRequest::expiredMessage());
+        }
+
+        // 5. Input: one positive row id. ['5'] or '5abc' is refused, not
+        // coerced — intval() would have turned an array into row 1.
+        $id = isset($_POST['log_id']) && is_string($_POST['log_id'])
+            ? AdminRequest::positiveId(sanitize_text_field(wp_unslash($_POST['log_id'])))
+            : 0;
+
+        if ($id === 0) {
+            AdminRequest::denyAjax(__('Invalid log id.', 'convermetry'), 400);
         }
 
         DeliveryLog::deleteLog($id);
@@ -271,15 +370,37 @@ final class ActivityLogPage
      */
     public static function handleApiToggleAjax(): never
     {
-        if (
-            !isset($_POST['nonce']) ||
-            !wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['nonce'])), 'cvmtry_toggle_delivery_api') ||
-            !Capability::currentUserCan(Capability::API_MANAGE)
-        ) {
-            wp_send_json_error(['message' => __('Unauthorized.', 'convermetry')]);
+        // 1. Method: the toggle POSTs.
+        if (!AdminRequest::isPost()) {
+            AdminRequest::denyAjax(__('Invalid request.', 'convermetry'), 405);
         }
 
-        $active = isset($_POST['active']) && $_POST['active'] === '1';
+        // 2. Capability: managing the API and its credentials.
+        if (!current_user_can(Capability::required(Capability::API_MANAGE))) {
+            AdminRequest::denyAjax(AdminRequest::forbiddenMessage());
+        }
+
+        // 3. Nonce present, as one string.
+        if (!isset($_POST['nonce']) || !is_string($_POST['nonce'])) {
+            AdminRequest::denyAjax(AdminRequest::expiredMessage());
+        }
+
+        // 4. Nonce issued for toggling the API.
+        if (!wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['nonce'])), 'cvmtry_toggle_delivery_api')) {
+            AdminRequest::denyAjax(AdminRequest::expiredMessage());
+        }
+
+        // 5. Input: exactly '1' or '0'. Anything else changes nothing, so a
+        // malformed request can neither disable the API nor mint a key.
+        $requested = isset($_POST['active']) && is_string($_POST['active'])
+            ? sanitize_key(wp_unslash($_POST['active']))
+            : '';
+
+        if ($requested !== '1' && $requested !== '0') {
+            AdminRequest::denyAjax(__('Invalid request.', 'convermetry'), 400);
+        }
+
+        $active = $requested === '1';
         DeliveryLogController::setActive($active);
 
         $key = '';
@@ -297,14 +418,28 @@ final class ActivityLogPage
      */
     public static function handleApiRegenKeyAjax(): never
     {
-        if (
-            !isset($_POST['nonce']) ||
-            !wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['nonce'])), 'cvmtry_regen_delivery_api_key') ||
-            !Capability::currentUserCan(Capability::API_MANAGE)
-        ) {
-            wp_send_json_error(['message' => __('Unauthorized.', 'convermetry')]);
+        // 1. Method: regeneration POSTs.
+        if (!AdminRequest::isPost()) {
+            AdminRequest::denyAjax(__('Invalid request.', 'convermetry'), 405);
         }
 
+        // 2. Capability: managing the API and its credentials.
+        if (!current_user_can(Capability::required(Capability::API_MANAGE))) {
+            AdminRequest::denyAjax(AdminRequest::forbiddenMessage());
+        }
+
+        // 3. Nonce present, as one string.
+        if (!isset($_POST['nonce']) || !is_string($_POST['nonce'])) {
+            AdminRequest::denyAjax(AdminRequest::expiredMessage());
+        }
+
+        // 4. Nonce issued for regenerating the key — the toggle's nonce does
+        // not qualify.
+        if (!wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['nonce'])), 'cvmtry_regen_delivery_api_key')) {
+            AdminRequest::denyAjax(AdminRequest::expiredMessage());
+        }
+
+        // 5. No input: a new key replaces the old one's hash.
         wp_send_json_success(['key' => DeliveryLogController::generateKey()]);
     }
 
@@ -402,9 +537,9 @@ final class ActivityLogPage
             </div>
 
             <div class="cvmtry-delivery-toolbar">
-                <form method="post" action="" class="cvmtry-clear-form">
-                    <?php wp_nonce_field('cvmtry_clear_activity_logs', 'cvmtry_clear_nonce'); ?>
-                    <input type="hidden" name="cvmtry_action" value="clear_activity_logs">
+                <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>" class="cvmtry-clear-form">
+                    <?php wp_nonce_field(self::CLEAR_ACTION, 'cvmtry_clear_nonce'); ?>
+                    <input type="hidden" name="action" value="<?php echo esc_attr(self::CLEAR_ACTION); ?>">
                     <button
                         type="submit"
                         class="button button-secondary cvmtry-btn-danger"
@@ -417,13 +552,13 @@ final class ActivityLogPage
                 <?php if ($totalAll > 0): ?>
                     <div class="cvmtry-export-buttons">
                         <a
-                            href="<?php echo esc_url(wp_nonce_url(add_query_arg(['page' => self::MENU_SLUG, 'cvmtry_export' => 'csv'], self_admin_url('admin.php')), 'cvmtry_export_csv')); ?>"
+                            href="<?php echo esc_url(self::exportUrl(self::EXPORT_CSV_ACTION)); ?>"
                             class="button button-secondary"
                         >
                             <?php esc_html_e('Export All To CSV', 'convermetry'); ?>
                         </a>
                         <a
-                            href="<?php echo esc_url(wp_nonce_url(add_query_arg(['page' => self::MENU_SLUG, 'cvmtry_export' => 'json'], self_admin_url('admin.php')), 'cvmtry_export_json')); ?>"
+                            href="<?php echo esc_url(self::exportUrl(self::EXPORT_JSON_ACTION)); ?>"
                             class="button button-secondary"
                         >
                             <?php esc_html_e('Export All To JSON', 'convermetry'); ?>
@@ -458,6 +593,24 @@ final class ActivityLogPage
 
         </div>
         <?php
+    }
+
+    /**
+     * A nonce-carrying export link for one format.
+     *
+     * Built with add_query_arg() rather than wp_nonce_url(), which
+     * HTML-encodes its result and is meant for direct output; this value is
+     * escaped once, where it is printed.
+     *
+     * @param string $action The export's admin-post and nonce action.
+     * @return string
+     */
+    private static function exportUrl(string $action): string
+    {
+        return add_query_arg(
+            ['action' => $action, '_wpnonce' => wp_create_nonce($action)],
+            admin_url('admin-post.php')
+        );
     }
 
     /**

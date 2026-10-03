@@ -5,6 +5,90 @@ All notable changes to Convermetry are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 1.0.2
+
+Addresses the WordPress.org manual review of 1.0.1.
+
+### Security
+
+- **Admin request handlers.** Every admin-post and AJAX handler now checks, as
+  separate guards in its own body and in this order: the HTTP method, the
+  capability for its own scope (`current_user_can(Capability::required(…))`),
+  that its nonce is present as a single string, and `wp_verify_nonce()` against
+  its own action — before it reads any other input or touches any data. The
+  shared `GoalsPage::isRequest()`, `FunnelsPage::isRequest()` and
+  `SubmissionsPage::authorize()` helpers, and the compound conditions that
+  mixed these checks with request detection, are gone.
+- **No request handling on `admin_init`.** Goals and Funnels save/remove,
+  Activity Log and Submissions Clear All, every CSV/JSON export, and Discard on
+  a pending webhook retry are registered on their own `admin_post_{action}`
+  hooks, so ordinary admin page loads never reach them. Each export format is
+  its own action with its own nonce (`cvmtry_activity_export_csv`,
+  `cvmtry_activity_export_json`, `cvmtry_submissions_export_csv`,
+  `cvmtry_submissions_export_csv_filtered`).
+- **Typed input.** Request values are type-checked before they are cast or
+  sanitized; an array where a scalar belongs is refused, never cast. Row ids
+  are parsed digits-only: `intval()` turned an array-valued `submission_row` or
+  `log_id` into row 1. The deliveries API toggle accepts only `'1'` or `'0'`,
+  so a malformed request can neither disable the API nor mint a key.
+- **AJAX refusals** keep the `{success: false, data: {message}}` shape the admin
+  scripts read and now carry an HTTP status: 403 for a capability or nonce
+  failure, 400 for invalid input, 405 for the wrong method.
+- **Reporting period.** Period links on Analytics, Goals and Funnels carry a
+  nonce for that screen's read-only filter action (`ReportPeriod`). A supplied
+  period is used only with that nonce and only when it is one of the offered
+  values; otherwise the last 30 days are shown with a notice. The filter nonce
+  authorizes nothing else, and no save or delete nonce is accepted for it. The
+  Goals and Funnels forms and their redirects carry the period with a fresh
+  filter nonce.
+- **Webhook settings** are validated by `WebhookSettingsInput`: every field's
+  type, then each field for its meaning — URLs through `esc_url_raw()` and
+  `wp_http_validate_url()` (HTTPS unless the development filter allows HTTP),
+  labels as display text, signing secrets verbatim but free of control
+  characters. A rejected endpoint is reported as its position, a reason code
+  and a sanitized, length-bounded excerpt; the URL as typed is no longer stored
+  in the transient behind the notice. A request that is not the shape the form
+  posts (an array where text belongs, a missing endpoint list, an unknown
+  interval) stores nothing instead of resetting endpoints and headers.
+  Endpoint ids are still accepted only for configured endpoints, once each.
+- **Custom headers and query parameters** (Webhooks and Forms) are validated
+  rather than run through `sanitize_text_field()`, which stripped `%XX`
+  sequences and tag-like text from credentials. A header name must be an
+  RFC 9110 token; no name or value may contain a control character. Invalid
+  rows are counted in a notice and not saved.
+- **Form keys** in the Notifications and Forms saves are validated and kept
+  verbatim (`FormProviderRegistry::validFormKey()`), so an identity with spaces
+  or capitals is never rewritten. A malformed Notifications submission is
+  refused whole; a malformed Forms block is skipped, which leaves that form's
+  stored settings untouched. Rules for forms not shown on the page are kept.
+- **Settings.** A field posted in a shape the form never sends keeps its stored
+  value (`(int)` of an array clamped retention to 7 days). `options.php` now
+  requires the `settings.manage` scope for this group instead of always
+  `manage_options`.
+
+### Fixed
+
+- **Discard** on a pending analytics retry removes it again. The link names a
+  chain by md5 of its URL while the state map is keyed by the endpoint's
+  durable id, so the chain was never found and the screen reported success.
+- Removing an endpoint block on the Webhooks screen renamed every field of the
+  blocks after it except the hidden id, so the next save gave the following
+  endpoint a new identity and stranded its retry state.
+
+### Tests
+
+- `tests/WordPress/AdminRequestHandlersTest` (real WordPress): every handler
+  refused for a missing, invalid, expired, other-action (including the period
+  filter's), other-user's and array-valued nonce, for a role without the scope,
+  and for the wrong method — each asserting that no option, table row, lead,
+  API key, retry chain, email or HTTP request changed. Scope distinctions,
+  successful requests, array-valued ids, rejected URLs with markup and control
+  characters, malformed payloads, credential round-trips, endpoint identity,
+  per-form settings, and the period links and redirects. `wp_die()`, the JSON
+  responses and redirects are modelled as termination.
+- `tests/Unit/AdminInputValidationTest`: the header, query, form-key,
+  notification and webhook validators and the period filter.
+
 ## 1.0.1
 
 Addresses the WordPress.org pre-review of 1.0.0, which was never publicly

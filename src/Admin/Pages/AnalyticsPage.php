@@ -7,6 +7,7 @@ if (!defined('ABSPATH')) exit;
 
 use Convermetry\Admin\AdminAssets;
 use Convermetry\Admin\Capability;
+use Convermetry\Admin\ReportPeriod;
 use Convermetry\Analytics\AnalyticsSectionRegistry;
 use Convermetry\Analytics\GoalReports;
 use Convermetry\Analytics\LeadReports;
@@ -50,6 +51,9 @@ final class AnalyticsPage
 
     /** @var int[] Periods (in days) selectable in the dashboard filter. */
     private const array PERIODS = [7, 30, 90];
+
+    /** Nonce action for the read-only period filter; authorizes nothing else. */
+    public const string PERIOD_NONCE = 'cvmtry_analytics_period';
 
     /**
      * Registers the admin menu and asset hooks.
@@ -128,7 +132,8 @@ final class AnalyticsPage
             return;
         }
 
-        $days = self::currentPeriod();
+        $selected = self::currentPeriod();
+        $days     = $selected->days;
 
         // Clamped to the configured retention window: querying/displaying
         // the full nominal period when retention is shorter would silently
@@ -167,6 +172,13 @@ final class AnalyticsPage
         <?php
 
         self::maybeRenderRateLimitNotice();
+
+        if ($selected->refused) {
+            ?>
+            <div class="notice notice-warning inline"><p><?php echo esc_html(ReportPeriod::refusedMessage()); ?></p></div>
+            <?php
+        }
+
         self::maybeRenderRetentionNotice($days);
         self::renderPeriodFilter($days, $effectiveDays);
 
@@ -381,16 +393,15 @@ final class AnalyticsPage
     }
 
     /**
-     * Returns the validated period (in days) from the request, defaulting to 30.
+     * The selected reporting period. A supplied period is accepted only with
+     * this screen's filter nonce and only when it is one of {@see periods()};
+     * see {@see ReportPeriod}.
      *
-     * @return int
+     * @return ReportPeriod
      */
-    private static function currentPeriod(): int
+    private static function currentPeriod(): ReportPeriod
     {
-        // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- read-only report filter, kept bookmarkable: it is matched against a fixed list and only chooses the date range displayed.
-        $days = isset($_GET['period']) ? absint(wp_unslash($_GET['period'])) : 30;
-
-        return in_array($days, self::periods(), true) ? $days : 30;
+        return ReportPeriod::fromRequest(self::PERIOD_NONCE, self::periods());
     }
 
     /**
@@ -469,7 +480,7 @@ final class AnalyticsPage
 
         foreach (self::periods() as $days) {
             $url = add_query_arg(
-                ['page' => self::MENU_SLUG, 'period' => $days],
+                array_merge(['page' => self::MENU_SLUG], ReportPeriod::queryArgs(self::PERIOD_NONCE, $days)),
                 self_admin_url('admin.php')
             );
 

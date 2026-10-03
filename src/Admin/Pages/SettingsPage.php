@@ -43,6 +43,23 @@ final class SettingsPage
         add_action('admin_menu', [self::class, 'addMenu']);
         add_action('admin_init', [self::class, 'registerSettings']);
         add_action('admin_enqueue_scripts', [self::class, 'enqueueAssets']);
+
+        // options.php verifies this group's nonce and then requires the
+        // manage_options capability unless told otherwise. Without this, a
+        // site that delegates settings.manage could open the screen but never
+        // save it.
+        add_filter('option_page_capability_' . self::OPTION_GROUP, [self::class, 'saveCapability']);
+    }
+
+    /**
+     * The capability options.php requires to save this screen's settings
+     * group: the same settings.manage scope that shows the screen.
+     *
+     * @return string
+     */
+    public static function saveCapability(): string
+    {
+        return Capability::required(Capability::SETTINGS_MANAGE);
     }
 
     /**
@@ -104,33 +121,102 @@ final class SettingsPage
      * Numeric fields are clamped to the same ranges {@see Options} enforces
      * on read, so what is stored is always exactly what will be used.
      *
+     * A field that arrives in a shape the form never posts — an array where a
+     * number or text belongs — keeps its CURRENT value rather than being cast.
+     * The cast was not harmless: (int) of an array is 1, which the clamp turned
+     * into a 7-day retention period, and the next cleanup would have deleted
+     * everything older.
+     *
      * @param mixed $input Raw value from the settings form.
      * @return array<string, mixed>
      */
     public static function sanitize(mixed $input): array
     {
-        $input = is_array($input) ? $input : [];
-        $out   = Options::defaults();
+        $current = Options::all();
 
-        foreach (Options::EVENT_TYPES as $type) {
-            $out['track_' . $type] = !empty($input['track_' . $type]);
+        if (!is_array($input)) {
+            return $current;
         }
 
-        $out['exclude_logged_in']   = !empty($input['exclude_logged_in']);
-        $out['respect_dnt']         = !empty($input['respect_dnt']);
-        $out['retention_days']      = min(365, max(7, (int) ($input['retention_days'] ?? 90)));
-        $out['hover_dwell_ms']      = min(10000, max(200, (int) ($input['hover_dwell_ms'] ?? 800)));
-        $out['log_submission_data'] = !empty($input['log_submission_data']);
-        $out['store_ip_address']    = !empty($input['store_ip_address']);
-        $out['goals_enabled']       = !empty($input['goals_enabled']);
+        $out = Options::defaults();
+
+        foreach (Options::EVENT_TYPES as $type) {
+            $out['track_' . $type] = self::toggle($input, 'track_' . $type, $current);
+        }
+
+        $out['exclude_logged_in']   = self::toggle($input, 'exclude_logged_in', $current);
+        $out['respect_dnt']         = self::toggle($input, 'respect_dnt', $current);
+        $out['retention_days']      = self::number($input, 'retention_days', $current, 7, 365);
+        $out['hover_dwell_ms']      = self::number($input, 'hover_dwell_ms', $current, 200, 10000);
+        $out['log_submission_data'] = self::toggle($input, 'log_submission_data', $current);
+        $out['store_ip_address']    = self::toggle($input, 'store_ip_address', $current);
+        $out['goals_enabled']       = self::toggle($input, 'goals_enabled', $current);
         $out['lead_currency']       = self::sanitizeCurrency($input['lead_currency'] ?? '');
 
-        $out['client_first_name'] = mb_substr(sanitize_text_field((string) ($input['client_first_name'] ?? '')), 0, 190);
-        $out['client_last_name']  = mb_substr(sanitize_text_field((string) ($input['client_last_name'] ?? '')), 0, 190);
-        $out['client_id']         = mb_substr(sanitize_text_field((string) ($input['client_id'] ?? '')), 0, 190);
-        $out['website_id']        = mb_substr(sanitize_text_field((string) ($input['website_id'] ?? '')), 0, 190);
+        foreach (['client_first_name', 'client_last_name', 'client_id', 'website_id'] as $field) {
+            $out[$field] = self::text($input, $field, $current);
+        }
 
         return $out;
+    }
+
+    /**
+     * A checkbox: on when posted with a value, off when absent, unchanged
+     * when posted in a shape the form never sends.
+     *
+     * @param array<array-key, mixed> $input   The submitted settings.
+     * @param string                  $field   Field name.
+     * @param array<string, mixed>    $current The stored settings.
+     * @return bool
+     */
+    private static function toggle(array $input, string $field, array $current): bool
+    {
+        if (!isset($input[$field])) {
+            return false;
+        }
+
+        return is_scalar($input[$field]) ? !empty($input[$field]) : !empty($current[$field]);
+    }
+
+    /**
+     * A whole number clamped to its range, or the stored value when what was
+     * posted is not a number at all.
+     *
+     * @param array<array-key, mixed> $input   The submitted settings.
+     * @param string                  $field   Field name.
+     * @param array<string, mixed>    $current The stored settings.
+     * @param int                     $min     Smallest allowed value.
+     * @param int                     $max     Largest allowed value.
+     * @return int
+     */
+    private static function number(array $input, string $field, array $current, int $min, int $max): int
+    {
+        $raw = $input[$field] ?? null;
+
+        $value = is_int($raw) || (is_string($raw) && preg_match('/^\s*-?[0-9]{1,9}\s*$/', $raw) === 1)
+            ? (int) $raw
+            : (int) $current[$field];
+
+        return min($max, max($min, $value));
+    }
+
+    /**
+     * Plain text, bounded, or the stored value when what was posted is not text.
+     *
+     * @param array<array-key, mixed> $input   The submitted settings.
+     * @param string                  $field   Field name.
+     * @param array<string, mixed>    $current The stored settings.
+     * @return string
+     */
+    private static function text(array $input, string $field, array $current): string
+    {
+        $raw = $input[$field] ?? '';
+
+        if (!is_string($raw)) {
+            return is_string($current[$field] ?? null) ? $current[$field] : '';
+        }
+
+        return mb_substr(sanitize_text_field($raw), 0, 190);
     }
 
     /**

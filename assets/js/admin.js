@@ -223,7 +223,11 @@
                 title.textContent = sprintf(__('Endpoint %d', 'convermetry'), idx + 1);
             }
 
-            [['url', '.cvmtry-webhook-url-input'], ['label', '.cvmtry-webhook-label-input'], ['secret', '.cvmtry-webhook-secret-input']]
+            // The hidden id input is renamed with the rest of its block. Left
+            // behind, removing a block above it paired this endpoint's URL with
+            // a neighbour's index and posted it without its id, so the save
+            // minted a new one and stranded the retry state keyed by the old.
+            [['id', '.cvmtry-webhook-id-input'], ['url', '.cvmtry-webhook-url-input'], ['label', '.cvmtry-webhook-label-input'], ['secret', '.cvmtry-webhook-secret-input']]
                 .forEach(function (pair) {
                     const input = block.querySelector(pair[1]);
                     if (input) {

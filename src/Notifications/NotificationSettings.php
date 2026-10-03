@@ -5,6 +5,7 @@ namespace Convermetry\Notifications;
 
 if (!defined('ABSPATH')) exit;
 
+use Convermetry\Forms\FormProviderRegistry;
 use Convermetry\Settings\Options;
 
 /**
@@ -41,6 +42,57 @@ final class NotificationSettings
 
     /** Snapshot format version, so an older queued row can be read forward. */
     public const int SNAPSHOT_VERSION = 1;
+
+    /** The checkbox fields of the settings form; each is absent or "1". */
+    private const array TOGGLES = ['enabled', 'include_fields', 'include_analytics', 'include_journey', 'include_ip'];
+
+    /**
+     * Validates the SHAPE of the Notifications form as posted, then sanitizes it.
+     *
+     * Returns null when the submission is not the shape that screen posts: a
+     * text field arriving as an array, a scope or per-form rule outside the
+     * fixed set, a rule map that is not a map. Such a request is refused as a
+     * whole rather than sanitized into defaults — saving it would switch
+     * notifications off, empty the recipient list and drop every rule the
+     * malformed request happened to omit, which is a reset nobody asked for.
+     *
+     * @param mixed $raw The unslashed cvmtry_notifications POST value.
+     * @return array<string, mixed>|null The sanitized settings, or null when malformed.
+     */
+    public static function fromSubmission(mixed $raw): ?array
+    {
+        if (!is_array($raw)) {
+            return null;
+        }
+
+        if (!is_string($raw['recipients'] ?? null) || !is_string($raw['subject'] ?? null)) {
+            return null;
+        }
+
+        if (!in_array($raw['scope'] ?? null, self::SCOPES, true)) {
+            return null;
+        }
+
+        foreach (self::TOGGLES as $toggle) {
+            if (isset($raw[$toggle]) && !is_string($raw[$toggle])) {
+                return null;
+            }
+        }
+
+        if (isset($raw['forms'])) {
+            if (!is_array($raw['forms'])) {
+                return null;
+            }
+
+            foreach ($raw['forms'] as $rule) {
+                if (!in_array($rule, self::FORM_RULES, true)) {
+                    return null;
+                }
+            }
+        }
+
+        return self::sanitize($raw);
+    }
 
     /**
      * Sanitizes a submitted settings array into the canonical stored shape.
@@ -151,9 +203,12 @@ final class NotificationSettings
      * absence of a rule, and persisting one row per form ever discovered would
      * grow the option without adding information.
      *
-     * Keys pass through sanitize_text_field(), not sanitize_key(): a form key
-     * is "provider:identity", and Elementor keys by the form's NAME, which may
-     * contain spaces and capitals.
+     * Keys are VALIDATED, not rewritten — see
+     * {@see FormProviderRegistry::validFormKey()}. A form key is
+     * "provider:identity", and the identity may be a form's display name with
+     * spaces and capitals; sanitize_key() or sanitize_text_field() would store
+     * the rule under a key that never matches the form again. A key that is
+     * not a form key is dropped.
      *
      * @param mixed $raw Submitted formKey => rule map.
      * @return array<string, string>
@@ -166,14 +221,14 @@ final class NotificationSettings
 
         $out = [];
         foreach ($raw as $formKey => $rule) {
-            if (!is_scalar($rule)) {
+            if (!is_string($rule)) {
                 continue;
             }
 
-            $key  = sanitize_text_field((string) $formKey);
-            $rule = sanitize_key((string) $rule);
+            $key  = FormProviderRegistry::validFormKey($formKey);
+            $rule = sanitize_key($rule);
 
-            if ($key === '' || !str_contains($key, ':')) {
+            if ($key === '') {
                 continue;
             }
             if ($rule !== 'enabled' && $rule !== 'disabled') {

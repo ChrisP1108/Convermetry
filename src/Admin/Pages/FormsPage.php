@@ -6,6 +6,7 @@ namespace Convermetry\Admin\Pages;
 if (!defined('ABSPATH')) exit;
 
 use Convermetry\Admin\AdminAssets;
+use Convermetry\Admin\AdminRequest;
 use Convermetry\Admin\Capability;
 use Convermetry\Analytics\FormEngagementReport;
 use Convermetry\Analytics\ReportQueryException;
@@ -14,6 +15,7 @@ use Convermetry\Forms\Atomic\AtomicFormsBridge;
 use Convermetry\Forms\Bricks\BricksFormsBridge;
 use Convermetry\Forms\FormProviderRegistry;
 use Convermetry\Forms\FormSettings;
+use Convermetry\Support\KeyValuePairs;
 
 /**
  * The "Convermetry → Forms" admin page.
@@ -42,6 +44,9 @@ final class FormsPage
 
     /** admin-post action name for saving the page. */
     private const string SAVE_ACTION = 'cvmtry_save_forms';
+
+    /** Per-user transient prefix for what the last save skipped or refused. */
+    private const string SKIPPED_TRANSIENT = 'cvmtry_forms_skipped_';
 
     private static ?FormProviderRegistry $registry = null;
 
@@ -108,58 +113,84 @@ final class FormsPage
     }
 
     /**
-     * Validates and persists the per-form configuration POST.
+     * Validates and persists the per-form configuration POST
+     * (admin_post_cvmtry_save_forms).
      *
      * Only forms actually rendered on the saving page (listed in
      * cvmtry_rendered_forms) are written; configuration for every other form —
      * e.g. forms of a temporarily deactivated provider — is preserved
      * untouched.
      *
-     * @return void
+     * @return never
      */
-    public static function handleSave(): void
+    public static function handleSave(): never
     {
-        if (
-            !Capability::currentUserCan(Capability::FORMS_MANAGE)
-            || !isset($_POST['cvmtry_forms_nonce'])
-            || !wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['cvmtry_forms_nonce'])), self::SAVE_ACTION)
-        ) {
-            wp_die(esc_html__('Invalid request.', 'convermetry'), '', ['response' => 403]);
+        // 1. Method: only the settings form's POST.
+        if (!AdminRequest::isPost()) {
+            AdminRequest::deny(__('Form settings can only be saved from the Forms screen.', 'convermetry'), 405);
         }
 
-        // phpcs:disable WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- sanitized field by field in the loop below and by FormSettings.
-        $rawForms = isset($_POST['cvmtry_forms']) && is_array($_POST['cvmtry_forms'])
-            ? wp_unslash($_POST['cvmtry_forms'])
-            : [];
-        // phpcs:enable WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
+        // 2. Capability: per-form configuration.
+        if (!current_user_can(Capability::required(Capability::FORMS_MANAGE))) {
+            AdminRequest::deny(AdminRequest::forbiddenMessage());
+        }
+
+        // 3. Nonce present, as one string.
+        if (!isset($_POST['cvmtry_forms_nonce']) || !is_string($_POST['cvmtry_forms_nonce'])) {
+            AdminRequest::deny(AdminRequest::expiredMessage());
+        }
+
+        // 4. Nonce issued for saving form settings.
+        if (!wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['cvmtry_forms_nonce'])), self::SAVE_ACTION)) {
+            AdminRequest::deny(AdminRequest::expiredMessage());
+        }
+
+        // 5. Input: one block per listed form. Absent when no form was
+        // discovered, in which case nothing is written.
+        $rawForms = [];
+        if (isset($_POST['cvmtry_forms'])) {
+            if (!is_array($_POST['cvmtry_forms'])) {
+                wp_safe_redirect(add_query_arg(
+                    ['page' => self::MENU_SLUG, 'cvmtry_error' => 'malformed'],
+                    self_admin_url('admin.php')
+                ));
+                exit;
+            }
+
+            // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- unslashed once here; sanitizeFormBlock() type-checks every field and validates or sanitizes each for its meaning.
+            $rawForms = wp_unslash($_POST['cvmtry_forms']);
+        }
 
         $configs  = [];
         $rendered = [];
+        $skipped  = 0;
+        $pairs    = 0;
 
         foreach ($rawForms as $entry) {
-            if (!is_array($entry)) {
+            $block = self::sanitizeFormBlock($entry);
+
+            // A block that is not the shape this page posts is skipped as a
+            // whole. Because only rendered keys are written, skipping it
+            // leaves that form's stored configuration exactly as it was.
+            if ($block === null) {
+                $skipped++;
                 continue;
             }
 
-            // The real form key travels as a value (field names are hashed) —
-            // provider keys and form names can contain characters PHP mangles
-            // in top-level field names.
-            $formKey = sanitize_text_field((string) ($entry['key'] ?? ''));
-            if ($formKey === '' || !str_contains($formKey, ':')) {
-                continue;
-            }
-
-            $rendered[]        = $formKey;
-            $configs[$formKey] = [
-                'form_id'             => mb_substr(sanitize_text_field((string) ($entry['form_id'] ?? '')), 0, 191),
-                'excluded'            => !empty($entry['excluded']),
-                'include_page_params' => !empty($entry['include_page_params']),
-                'query_params'        => self::sanitizePairs($entry['query_params'] ?? null),
-                'headers'             => self::sanitizePairs($entry['headers'] ?? null),
-            ];
+            $rendered[]             = $block['key'];
+            $configs[$block['key']] = $block['config'];
+            $pairs                 += $block['rejected_pairs'];
         }
 
         FormSettings::saveRendered($configs, $rendered);
+
+        if ($skipped > 0 || $pairs > 0) {
+            set_transient(
+                self::SKIPPED_TRANSIENT . get_current_user_id(),
+                ['forms' => $skipped, 'pairs' => $pairs],
+                MINUTE_IN_SECONDS
+            );
+        }
 
         wp_safe_redirect(add_query_arg(
             ['page' => self::MENU_SLUG, 'cvmtry_saved' => '1'],
@@ -169,35 +200,52 @@ final class FormsPage
     }
 
     /**
-     * Sanitizes a posted key/value pair list.
+     * Validates one posted form block.
      *
-     * @param mixed $raw Raw (already unslashed) POST value.
-     * @return array<int, array{key: string, value: string}>
+     * The real form key travels as a value (field names are hashed) because
+     * provider keys and form names can contain characters PHP mangles in
+     * top-level field names. It is validated, never rewritten — see
+     * {@see FormProviderRegistry::validFormKey()}.
+     *
+     * @param mixed $entry One unslashed cvmtry_forms[...] block.
+     * @return array{key: string, config: array{form_id: string, excluded: bool, include_page_params: bool, query_params: list<array{key: string, value: string}>, headers: list<array{key: string, value: string}>}, rejected_pairs: int}|null
+     *         Null when the block is malformed and must not be written.
      */
-    private static function sanitizePairs(mixed $raw): array
+    private static function sanitizeFormBlock(mixed $entry): ?array
     {
-        if (!is_array($raw)) {
-            return [];
+        if (!is_array($entry)) {
+            return null;
         }
 
-        $out = [];
-        foreach ($raw as $pair) {
-            if (!is_array($pair)) {
-                continue;
+        foreach (['key', 'form_id', 'excluded', 'include_page_params'] as $field) {
+            if (isset($entry[$field]) && !is_string($entry[$field])) {
+                return null;
             }
-
-            $key = sanitize_text_field((string) ($pair['key'] ?? ''));
-            if ($key === '') {
-                continue;
-            }
-
-            $out[] = [
-                'key'   => $key,
-                'value' => sanitize_text_field((string) ($pair['value'] ?? '')),
-            ];
         }
 
-        return $out;
+        $formKey = FormProviderRegistry::validFormKey($entry['key'] ?? '');
+        if ($formKey === '') {
+            return null;
+        }
+
+        $query   = KeyValuePairs::fromQueryInput($entry['query_params'] ?? null);
+        $headers = KeyValuePairs::fromHeaderInput($entry['headers'] ?? null);
+
+        if ($query['malformed'] || $headers['malformed']) {
+            return null;
+        }
+
+        return [
+            'key'            => $formKey,
+            'config'         => [
+                'form_id'             => mb_substr(sanitize_text_field((string) ($entry['form_id'] ?? '')), 0, 191),
+                'excluded'            => !empty($entry['excluded']),
+                'include_page_params' => !empty($entry['include_page_params']),
+                'query_params'        => $query['pairs'],
+                'headers'             => $headers['pairs'],
+            ],
+            'rejected_pairs' => $query['rejected'] + $headers['rejected'],
+        ];
     }
 
     /**
@@ -207,14 +255,73 @@ final class FormsPage
      */
     public static function maybeShowNotices(): void
     {
-        // phpcs:disable WordPress.Security.NonceVerification.Recommended -- display-only: identifies this screen and reads the flag from the redirect after handleSave(), which verifies its nonce and capability.
-        $page  = isset($_GET['page']) ? sanitize_key(wp_unslash($_GET['page'])) : '';
-        $saved = isset($_GET['cvmtry_saved']) && sanitize_key(wp_unslash($_GET['cvmtry_saved'])) === '1';
+        // phpcs:disable WordPress.Security.NonceVerification.Recommended -- display-only: identifies this screen and reads the flags from the redirect after handleSave(), which verifies its nonce and capability; each flag is compared with a fixed value and only selects one of the fixed notices below.
+        $page      = isset($_GET['page']) ? sanitize_key(wp_unslash($_GET['page'])) : '';
+        $saved     = isset($_GET['cvmtry_saved']) && sanitize_key(wp_unslash($_GET['cvmtry_saved'])) === '1';
+        $malformed = isset($_GET['cvmtry_error']) && sanitize_key(wp_unslash($_GET['cvmtry_error'])) === 'malformed';
         // phpcs:enable WordPress.Security.NonceVerification.Recommended
 
-        if ($page === self::MENU_SLUG && $saved) {
+        if ($page !== self::MENU_SLUG) {
+            return;
+        }
+
+        if ($malformed) {
             ?>
-            <div class="notice notice-success is-dismissible"><p><?php esc_html_e('Form settings saved.', 'convermetry'); ?></p></div>
+            <div class="notice notice-error is-dismissible"><p><?php esc_html_e('Form settings were not saved: the submitted form was malformed, so the stored settings were left unchanged. Reload this page and try again.', 'convermetry'); ?></p></div>
+            <?php
+        }
+
+        if (!$saved) {
+            return;
+        }
+
+        ?>
+        <div class="notice notice-success is-dismissible"><p><?php esc_html_e('Form settings saved.', 'convermetry'); ?></p></div>
+        <?php
+
+        $transient = self::SKIPPED_TRANSIENT . get_current_user_id();
+        $stored    = get_transient($transient);
+
+        if (!is_array($stored)) {
+            return;
+        }
+
+        delete_transient($transient);
+
+        $forms = is_int($stored['forms'] ?? null) ? $stored['forms'] : 0;
+        $pairs = is_int($stored['pairs'] ?? null) ? $stored['pairs'] : 0;
+
+        if ($forms > 0) {
+            ?>
+            <div class="notice notice-warning"><p><?php
+            echo esc_html(sprintf(
+                /* translators: %d: number of forms whose settings were left unchanged. */
+                _n(
+                    'The settings of %d form were left unchanged because what was submitted for it was malformed. Reload this page and try again.',
+                    'The settings of %d forms were left unchanged because what was submitted for them was malformed. Reload this page and try again.',
+                    $forms,
+                    'convermetry'
+                ),
+                $forms
+            ));
+            ?></p></div>
+            <?php
+        }
+
+        if ($pairs > 0) {
+            ?>
+            <div class="notice notice-warning"><p><?php
+            echo esc_html(sprintf(
+                /* translators: %d: number of header or query-parameter rows that were not saved. */
+                _n(
+                    '%d header or query-parameter row was not saved. A header name may contain only letters, digits, hyphens and a few other punctuation marks (no spaces or colons), and no name or value may contain line breaks or other control characters.',
+                    '%d header or query-parameter rows were not saved. A header name may contain only letters, digits, hyphens and a few other punctuation marks (no spaces or colons), and no name or value may contain line breaks or other control characters.',
+                    $pairs,
+                    'convermetry'
+                ),
+                $pairs
+            ));
+            ?></p></div>
             <?php
         }
     }

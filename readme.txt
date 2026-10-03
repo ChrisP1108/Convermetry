@@ -4,7 +4,7 @@ Tags: analytics, lead tracking, utm, webhooks, forms
 Requires at least: 6.3
 Tested up to: 7.1
 Requires PHP: 8.3
-Stable tag: 1.0.1
+Stable tag: 1.0.2
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -153,6 +153,14 @@ Deactivating stops tracking and scheduled tasks but keeps your data. Deleting th
 
 == Changelog ==
 
+= 1.0.2 =
+* Security: every admin form, link and AJAX action checks the request method, the user's capability and its own nonce as separate steps before reading any input. Saves, deletions, exports and retry discards run only on their own admin-post actions, never on ordinary admin page loads.
+* Security: webhook URLs, labels, signing secrets, custom headers and query parameters are validated field by field. A rejected URL is reported without storing what was typed, and a malformed submission no longer resets saved settings.
+* Security: reporting-period links on Analytics, Goals and Funnels carry their own nonce; an expired link shows the last 30 days with a notice.
+* Fix: Discard on a pending analytics retry now removes it.
+* Fix: removing an endpoint on the Webhooks screen no longer gives the next endpoint a new identity when saved.
+* Fix: a site that delegates the Settings screen with the `convermetry_admin_capability` filter can now save it.
+
 = 1.0.1 =
 * Changed: every plugin-owned name now uses the `cvmtry` prefix — stored options, database tables, scheduled events, script and style handles, CSS classes, `data-cvmtry-*` attributes, browser storage keys and the `cvmtry_track_event()` helper. Public `convermetry_*` hooks and functions are unchanged.
 * Changed: the About screen's hook reference and the confirmation prompts for Remove and Clear All now run entirely from enqueued scripts and stylesheets; no inline script or style blocks are printed.
@@ -170,6 +178,9 @@ Deactivating stops tracking and scheduled tasks but keeps your data. Deleting th
 * Changed: first public release on WordPress.org. Earlier 0.x versions were distributed privately; their full history is in CHANGELOG.md, included with the plugin.
 
 == Upgrade Notice ==
+
+= 1.0.2 =
+Security hardening of admin requests and settings validation. No settings or data change on upgrade; custom header names that are not valid HTTP are reported the next time the page is saved.
 
 = 1.0.1 =
 Renames the plugin's stored settings, tables and scheduled events to the `cvmtry` prefix. Settings and data saved by 1.0.0 are not carried over.

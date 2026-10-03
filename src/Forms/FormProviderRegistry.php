@@ -291,6 +291,45 @@ final class FormProviderRegistry
     }
 
     /**
+     * Validates a form key that arrived in an admin request.
+     *
+     * Returns the key UNCHANGED when it has the shape {@see formKey()}
+     * produces, or '' when it does not. Validation rather than sanitization,
+     * on purpose: the key is an identity that must match byte for byte what
+     * the provider reports at submission time, and the identity half may be a
+     * form's display name, with spaces, capitals and punctuation. sanitize_key()
+     * would lowercase it and strip the spaces; sanitize_text_field() would
+     * collapse runs of whitespace and strip %XX sequences. Either produces a
+     * different key, and a rule stored under it would silently never apply.
+     *
+     * What is refused: anything but a string, invalid UTF-8, any control
+     * character, a provider half that is not a provider key ([a-z0-9_]), an
+     * empty identity, or an implausible length. Wherever a key is printed it
+     * is escaped for its context.
+     *
+     * @param mixed $raw Candidate key.
+     * @return string
+     */
+    public static function validFormKey(mixed $raw): string
+    {
+        if (!is_string($raw) || $raw === '' || strlen($raw) > 512) {
+            return '';
+        }
+
+        if (!mb_check_encoding($raw, 'UTF-8') || preg_match('/[\x00-\x1F\x7F]/', $raw) === 1) {
+            return '';
+        }
+
+        $parts = explode(':', $raw, 2);
+
+        if (count($parts) !== 2 || preg_match('/^[a-z0-9_]{1,64}$/', $parts[0]) !== 1 || trim($parts[1]) === '') {
+            return '';
+        }
+
+        return $raw;
+    }
+
+    /**
      * The key a form's settings were stored under BEFORE its provider changed
      * identity, or '' when that provider never re-keyed.
      *

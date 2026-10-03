@@ -6,6 +6,7 @@ namespace Convermetry\Admin\Pages;
 if (!defined('ABSPATH')) exit;
 
 use Convermetry\Admin\AdminAssets;
+use Convermetry\Admin\AdminRequest;
 use Convermetry\Admin\Capability;
 use Convermetry\Forms\FormProviderRegistry;
 use Convermetry\Notifications\EmailBuilder;
@@ -106,46 +107,70 @@ final class NotificationsPage
     }
 
     /**
-     * Validates and persists the notification settings POST.
+     * Validates and persists the notification settings POST
+     * (admin_post_cvmtry_save_notifications).
      *
      * Per-form rules follow the Forms page's merge contract: only forms
      * actually rendered in this request are replaced, so a provider that is
      * temporarily deactivated (or a form discovery missed) keeps its stored
      * rule instead of being silently wiped by an unrelated save.
      *
-     * @return void
+     * @return never
      */
-    public static function handleSave(): void
+    public static function handleSave(): never
     {
-        if (
-            !Capability::currentUserCan(Capability::NOTIFICATIONS_MANAGE)
-            || !isset($_POST['cvmtry_notifications_nonce'])
-            || !wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['cvmtry_notifications_nonce'])), self::SAVE_ACTION)
-        ) {
-            wp_die(esc_html__('Invalid request.', 'convermetry'), '', ['response' => 403]);
+        // 1. Method: only the settings form's POST.
+        if (!AdminRequest::isPost()) {
+            AdminRequest::deny(__('Notification settings can only be saved from the Notifications screen.', 'convermetry'), 405);
         }
 
-        // phpcs:disable WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- sanitized field by field by NotificationSettings::sanitize() below.
-        $raw = isset($_POST['cvmtry_notifications']) && is_array($_POST['cvmtry_notifications'])
-            ? wp_unslash($_POST['cvmtry_notifications'])
-            : [];
-        // phpcs:enable WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
+        // 2. Capability: recipients and what they are sent.
+        if (!current_user_can(Capability::required(Capability::NOTIFICATIONS_MANAGE))) {
+            AdminRequest::deny(AdminRequest::forbiddenMessage());
+        }
 
-        // array_values(): the POST indices carry no meaning — mergeFormRules()
-        // only walks the values — and keeping them made this an array<string>
-        // where a list<string> was declared.
-        $rendered = isset($_POST['cvmtry_rendered_forms']) && is_array($_POST['cvmtry_rendered_forms'])
-            ? array_values(array_map(
-                static fn(mixed $key): string => sanitize_text_field((string) $key),
-                // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- each element is sanitized by the callback above.
-                wp_unslash($_POST['cvmtry_rendered_forms'])
-            ))
-            : [];
+        // 3. Nonce present, as one string.
+        if (!isset($_POST['cvmtry_notifications_nonce']) || !is_string($_POST['cvmtry_notifications_nonce'])) {
+            AdminRequest::deny(AdminRequest::expiredMessage());
+        }
 
-        $clean = NotificationSettings::sanitize($raw);
+        // 4. Nonce issued for saving notification settings — the queue
+        // form's nonce shares the field name but not the action.
+        if (!wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['cvmtry_notifications_nonce'])), self::SAVE_ACTION)) {
+            AdminRequest::deny(AdminRequest::expiredMessage());
+        }
+
+        // 5. Input: the settings, shape-checked then sanitized field by field.
+        // A malformed request changes nothing rather than resetting whatever
+        // it happened to omit.
+        if (!isset($_POST['cvmtry_notifications']) || !is_array($_POST['cvmtry_notifications'])) {
+            self::redirectMalformed();
+        }
+
+        // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- unslashed once here; NotificationSettings::fromSubmission() type-checks every field and sanitizes each for its meaning (emails, subject text, fixed sets).
+        $clean = NotificationSettings::fromSubmission(wp_unslash($_POST['cvmtry_notifications']));
+
+        if ($clean === null) {
+            self::redirectMalformed();
+        }
+
+        // The forms this page listed. Absent when no form was discovered.
+        $rendered = [];
+        if (isset($_POST['cvmtry_rendered_forms'])) {
+            if (!is_array($_POST['cvmtry_rendered_forms'])) {
+                self::redirectMalformed();
+            }
+
+            // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- unslashed once here; each element is type-checked and validated as a form key by renderedFormKeys().
+            $rendered = self::renderedFormKeys(wp_unslash($_POST['cvmtry_rendered_forms']));
+
+            if ($rendered === null) {
+                self::redirectMalformed();
+            }
+        }
 
         $clean['forms'] = self::mergeFormRules(
-            NotificationSettings::sanitizeFormRules($raw['forms'] ?? []),
+            is_array($clean['forms'] ?? null) ? $clean['forms'] : [],
             $rendered
         );
 
@@ -161,10 +186,54 @@ final class NotificationsPage
     }
 
     /**
+     * The form keys a save listed as rendered.
+     *
+     * Each key is validated, never rewritten — a form key's identity half
+     * can be a display name with spaces and capitals, and a rewritten key
+     * would never match its form again (see
+     * {@see FormProviderRegistry::validFormKey()}). A string that is not a
+     * form key is skipped; it names no form, so skipping it touches nothing.
+     *
+     * @param array<array-key, mixed> $raw The unslashed cvmtry_rendered_forms list.
+     * @return list<string>|null Null when an element is not a string at all.
+     */
+    private static function renderedFormKeys(array $raw): ?array
+    {
+        $keys = [];
+
+        foreach ($raw as $candidate) {
+            if (!is_string($candidate)) {
+                return null;
+            }
+
+            $key = FormProviderRegistry::validFormKey($candidate);
+            if ($key !== '') {
+                $keys[] = $key;
+            }
+        }
+
+        return $keys;
+    }
+
+    /**
+     * Returns to the screen with the "not saved" notice, storing nothing.
+     *
+     * @return never
+     */
+    private static function redirectMalformed(): never
+    {
+        wp_safe_redirect(add_query_arg(
+            ['page' => self::MENU_SLUG, 'cvmtry_error' => 'malformed'],
+            self_admin_url('admin.php')
+        ));
+        exit;
+    }
+
+    /**
      * Replaces rules only for the forms this page actually rendered.
      *
      * @param array<string, string> $submitted Sanitized rules from the POST.
-     * @param list<string>          $rendered  Form keys shown on the saving page.
+     * @param list<string>          $rendered  Validated form keys shown on the saving page.
      * @return array<string, string>
      */
     private static function mergeFormRules(array $submitted, array $rendered): array
@@ -173,10 +242,6 @@ final class NotificationsPage
         $merged = is_array($stored) ? NotificationSettings::sanitizeFormRules($stored) : [];
 
         foreach ($rendered as $formKey) {
-            if ($formKey === '') {
-                continue;
-            }
-
             // 'inherit' is the absence of a rule, so a form returned to
             // inherit is removed rather than stored.
             if (isset($submitted[$formKey])) {
@@ -190,24 +255,39 @@ final class NotificationsPage
     }
 
     /**
-     * Discards every queued notification.
+     * Discards every queued notification
+     * (admin_post_cvmtry_cancel_notifications).
      *
      * The queue does not pause when the master switch is turned off — already
      * queued messages send under the settings frozen when the lead arrived.
      * This is the explicit escape hatch for an admin who wants them dropped.
      *
-     * @return void
+     * @return never
      */
-    public static function handleCancelQueued(): void
+    public static function handleCancelQueued(): never
     {
-        if (
-            !Capability::currentUserCan(Capability::NOTIFICATIONS_MANAGE)
-            || !isset($_POST['cvmtry_notifications_nonce'])
-            || !wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['cvmtry_notifications_nonce'])), self::CANCEL_ACTION)
-        ) {
-            wp_die(esc_html__('Invalid request.', 'convermetry'), '', ['response' => 403]);
+        // 1. Method: only the Discard form's POST.
+        if (!AdminRequest::isPost()) {
+            AdminRequest::deny(__('Queued notifications can only be discarded from the Notifications screen.', 'convermetry'), 405);
         }
 
+        // 2. Capability: notification configuration and its queue.
+        if (!current_user_can(Capability::required(Capability::NOTIFICATIONS_MANAGE))) {
+            AdminRequest::deny(AdminRequest::forbiddenMessage());
+        }
+
+        // 3. Nonce present, as one string.
+        if (!isset($_POST['cvmtry_notifications_nonce']) || !is_string($_POST['cvmtry_notifications_nonce'])) {
+            AdminRequest::deny(AdminRequest::expiredMessage());
+        }
+
+        // 4. Nonce issued for discarding the queue — the settings form's
+        // nonce shares the field name but not the action.
+        if (!wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['cvmtry_notifications_nonce'])), self::CANCEL_ACTION)) {
+            AdminRequest::deny(AdminRequest::expiredMessage());
+        }
+
+        // 5. No further input: the action takes no parameters.
         NotificationQueue::cancelAll();
 
         wp_safe_redirect(add_query_arg(
@@ -229,17 +309,34 @@ final class NotificationsPage
      */
     public static function handleTestAjax(): never
     {
-        if (
-            !isset($_POST['nonce'])
-            || !wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['nonce'])), 'cvmtry_test_notification')
-            || !Capability::currentUserCan(Capability::NOTIFICATIONS_MANAGE)
-        ) {
-            wp_send_json_error(['message' => __('Unauthorized.', 'convermetry')]);
+        // 1. Method: the test button POSTs.
+        if (!AdminRequest::isPost()) {
+            AdminRequest::denyAjax(__('Invalid request.', 'convermetry'), 405);
         }
 
-        $recipient = sanitize_email((string) wp_unslash($_POST['recipient'] ?? ''));
+        // 2. Capability: notification configuration.
+        if (!current_user_can(Capability::required(Capability::NOTIFICATIONS_MANAGE))) {
+            AdminRequest::denyAjax(AdminRequest::forbiddenMessage());
+        }
+
+        // 3. Nonce present, as one string.
+        if (!isset($_POST['nonce']) || !is_string($_POST['nonce'])) {
+            AdminRequest::denyAjax(AdminRequest::expiredMessage());
+        }
+
+        // 4. Nonce issued for a test send.
+        if (!wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['nonce'])), 'cvmtry_test_notification')) {
+            AdminRequest::denyAjax(AdminRequest::expiredMessage());
+        }
+
+        // 5. Input: one valid email address, checked before anything is built
+        // or sent.
+        $recipient = isset($_POST['recipient']) && is_string($_POST['recipient'])
+            ? sanitize_email(wp_unslash($_POST['recipient']))
+            : '';
+
         if ($recipient === '' || !is_email($recipient)) {
-            wp_send_json_error(['message' => __('Enter a valid recipient email address first.', 'convermetry')]);
+            AdminRequest::denyAjax(__('Enter a valid recipient email address first.', 'convermetry'), 400);
         }
 
         $settings = Options::notificationAll();
@@ -262,20 +359,27 @@ final class NotificationsPage
     }
 
     /**
-     * Shows saved/cancelled notices and any recent permanent send failure.
+     * Shows saved/cancelled/malformed notices and any recent permanent send failure.
      *
      * @return void
      */
     public static function maybeShowNotices(): void
     {
-        // phpcs:disable WordPress.Security.NonceVerification.Recommended -- display-only: identifies this screen and reads the flags from the redirects after handleSave() and handleCancelQueued(), which verify their nonce and capability.
+        // phpcs:disable WordPress.Security.NonceVerification.Recommended -- display-only: identifies this screen and reads the flags from the redirects after handleSave() and handleCancelQueued(), which verify their nonce and capability; each flag is compared with fixed values and only selects one of the fixed notices below.
         $page      = isset($_GET['page']) ? sanitize_key(wp_unslash($_GET['page'])) : '';
         $saved     = isset($_GET['cvmtry_saved']) && sanitize_key(wp_unslash($_GET['cvmtry_saved'])) === '1';
         $cancelled = isset($_GET['cvmtry_cancelled']) && sanitize_key(wp_unslash($_GET['cvmtry_cancelled'])) === '1';
+        $malformed = isset($_GET['cvmtry_error']) && sanitize_key(wp_unslash($_GET['cvmtry_error'])) === 'malformed';
         // phpcs:enable WordPress.Security.NonceVerification.Recommended
 
         if ($page !== self::MENU_SLUG) {
             return;
+        }
+
+        if ($malformed) {
+            ?>
+            <div class="notice notice-error is-dismissible"><p><?php esc_html_e('Notification settings were not saved: the submitted form was incomplete or malformed, so the stored settings were left unchanged. Reload this page and try again.', 'convermetry'); ?></p></div>
+            <?php
         }
 
         if ($saved) {

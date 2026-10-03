@@ -6,7 +6,9 @@ namespace Convermetry\Admin\Pages;
 if (!defined('ABSPATH')) exit;
 
 use Convermetry\Admin\AdminAssets;
+use Convermetry\Admin\AdminRequest;
 use Convermetry\Admin\Capability;
+use Convermetry\Admin\ReportPeriod;
 use Convermetry\Analytics\FunnelReport;
 use Convermetry\Analytics\ReportQueryException;
 use Convermetry\Database\MigrationRunner;
@@ -39,16 +41,28 @@ final class FunnelsPage
     /** Periods (in days) offered by the filter. */
     private const array PERIODS = [7, 30, 90];
 
+    /** admin-post action, and nonce action, for creating or updating a funnel. */
+    public const string SAVE_ACTION = 'cvmtry_save_funnel';
+
+    /** admin-post action, and nonce action, for removing a funnel. */
+    public const string DELETE_ACTION = 'cvmtry_delete_funnel';
+
+    /** Nonce action for the read-only period filter; authorizes nothing else. */
+    public const string PERIOD_NONCE = 'cvmtry_funnels_period';
+
     /**
      * Registers menu and request hooks.
+     *
+     * The handlers hang off admin_post_{action}, so WordPress only calls them
+     * for their own form — ordinary admin page loads never reach them.
      *
      * @return void
      */
     public static function init(): void
     {
         add_action('admin_menu', [self::class, 'addMenu']);
-        add_action('admin_init', [self::class, 'processSave']);
-        add_action('admin_init', [self::class, 'processDelete']);
+        add_action('admin_post_' . self::SAVE_ACTION, [self::class, 'processSave']);
+        add_action('admin_post_' . self::DELETE_ACTION, [self::class, 'processDelete']);
         add_action('admin_enqueue_scripts', [self::class, 'enqueueAssets']);
     }
 
@@ -110,27 +124,44 @@ final class FunnelsPage
     // ── Request handlers ─────────────────────────────────────────────────────
 
     /**
-     * Creates or updates a funnel from a nonce-protected POST.
+     * Creates or updates a funnel (admin_post_cvmtry_save_funnel).
      *
-     * @return void
+     * @return never
      */
-    public static function processSave(): void
+    public static function processSave(): never
     {
-        if (!self::isRequest('save_funnel', 'cvmtry_save_funnel')) {
-            return;
+        // 1. Method: only the editor form's POST.
+        if (!AdminRequest::isPost()) {
+            AdminRequest::deny(__('Funnels can only be saved from the Funnels screen.', 'convermetry'), 405);
         }
 
-        // phpcs:disable WordPress.Security.NonceVerification.Missing, WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- the nonce was verified by self::isRequest() above; every field is sanitized by FunnelSettings::sanitize() below.
-        $submitted = isset($_POST['funnel']) && is_array($_POST['funnel'])
-            ? wp_unslash($_POST['funnel'])
-            : [];
-        // phpcs:enable WordPress.Security.NonceVerification.Missing, WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
+        // 2. Capability: the scope that grants this screen.
+        if (!current_user_can(Capability::required(Capability::FUNNELS_MANAGE))) {
+            AdminRequest::deny(AdminRequest::forbiddenMessage());
+        }
+
+        // 3. Nonce present, as one string.
+        if (!isset($_POST['cvmtry_nonce']) || !is_string($_POST['cvmtry_nonce'])) {
+            AdminRequest::deny(AdminRequest::expiredMessage());
+        }
+
+        // 4. Nonce issued for saving a funnel.
+        if (!wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['cvmtry_nonce'])), self::SAVE_ACTION)) {
+            AdminRequest::deny(AdminRequest::expiredMessage());
+        }
+
+        // 5. Input: the funnel fields, each sanitized by FunnelSettings::sanitize().
+        if (!isset($_POST['funnel']) || !is_array($_POST['funnel'])) {
+            self::redirect(['cvmtry_funnel_error' => 'invalid']);
+        }
+
+        // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- each field is type-checked and sanitized by FunnelSettings::sanitize() below.
+        $submitted = wp_unslash($_POST['funnel']);
 
         // As with goals: the stored funnel is looked up by the submitted id, but
         // the id is never taken FROM the submission into the saved record.
-        $existing = FunnelSettings::isValidId((string) ($submitted['funnel_id'] ?? ''))
-            ? FunnelRepository::find((string) $submitted['funnel_id'])
-            : null;
+        $postedId = is_string($submitted['funnel_id'] ?? null) ? sanitize_text_field($submitted['funnel_id']) : '';
+        $existing = FunnelSettings::isValidId($postedId) ? FunnelRepository::find($postedId) : null;
 
         $funnel = FunnelSettings::sanitize($submitted, $existing, gmdate('Y-m-d H:i:s'));
 
@@ -146,68 +177,90 @@ final class FunnelsPage
     }
 
     /**
-     * Soft-deletes a funnel from a nonce-protected POST.
+     * Soft-deletes a funnel (admin_post_cvmtry_delete_funnel).
      *
-     * @return void
+     * @return never
      */
-    public static function processDelete(): void
+    public static function processDelete(): never
     {
-        if (!self::isRequest('delete_funnel', 'cvmtry_delete_funnel')) {
-            return;
+        // 1. Method: only the Remove form's POST.
+        if (!AdminRequest::isPost()) {
+            AdminRequest::deny(__('Funnels can only be removed from the Funnels screen.', 'convermetry'), 405);
         }
 
-        // phpcs:ignore WordPress.Security.NonceVerification.Missing -- verified by self::isRequest() above.
-        $funnelId = sanitize_text_field(wp_unslash((string) ($_POST['funnel_id'] ?? '')));
-
-        if (FunnelSettings::isValidId($funnelId)) {
-            FunnelRepository::softDelete($funnelId, gmdate('Y-m-d H:i:s'));
+        // 2. Capability: the scope that grants this screen.
+        if (!current_user_can(Capability::required(Capability::FUNNELS_MANAGE))) {
+            AdminRequest::deny(AdminRequest::forbiddenMessage());
         }
+
+        // 3. Nonce present, as one string.
+        if (!isset($_POST['cvmtry_nonce']) || !is_string($_POST['cvmtry_nonce'])) {
+            AdminRequest::deny(AdminRequest::expiredMessage());
+        }
+
+        // 4. Nonce issued for removing a funnel — a save nonce does not qualify.
+        if (!wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['cvmtry_nonce'])), self::DELETE_ACTION)) {
+            AdminRequest::deny(AdminRequest::expiredMessage());
+        }
+
+        // 5. Input: one well-formed funnel id.
+        $funnelId = isset($_POST['funnel_id']) && is_string($_POST['funnel_id'])
+            ? sanitize_text_field(wp_unslash($_POST['funnel_id']))
+            : '';
+
+        if (!FunnelSettings::isValidId($funnelId)) {
+            self::redirect(['cvmtry_funnel_error' => 'missing']);
+        }
+
+        FunnelRepository::softDelete($funnelId, gmdate('Y-m-d H:i:s'));
 
         self::redirect(['cvmtry_funnel_saved' => 'deleted']);
     }
 
     /**
-     * Whether the current request is a valid, authorized POST for one action.
-     *
-     * @param string $action The cvmtry_action value.
-     * @param string $nonce  The nonce action name.
-     * @return bool
-     */
-    private static function isRequest(string $action, string $nonce): bool
-    {
-        return sanitize_text_field(wp_unslash($_SERVER['REQUEST_METHOD'] ?? '')) === 'POST'
-            && sanitize_key(wp_unslash($_POST['cvmtry_action'] ?? '')) === $action
-            && isset($_POST['cvmtry_nonce'])
-            && wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['cvmtry_nonce'])), $nonce)
-            && Capability::currentUserCan(Capability::FUNNELS_MANAGE);
-    }
-
-    /**
-     * Redirects back with a notice flag, preserving the period.
+     * Redirects back with a notice flag, keeping the period the form was
+     * posted from (with a fresh filter nonce).
      *
      * @param array<string, string> $args Query arguments.
      * @return never
      */
     private static function redirect(array $args): never
     {
-        wp_safe_redirect(add_query_arg(
-            array_merge(['page' => self::MENU_SLUG, 'period' => (string) self::currentPeriod()], $args),
-            self_admin_url('admin.php')
-        ));
+        wp_safe_redirect(self::pageUrl(array_merge(self::currentPeriod()->carryArgs(self::PERIOD_NONCE), $args)));
         exit;
     }
 
     /**
-     * The selected reporting period in days.
+     * This screen's URL with extra query arguments.
      *
-     * @return int
+     * @param array<string, string> $args Query arguments.
+     * @return string
      */
-    private static function currentPeriod(): int
+    private static function pageUrl(array $args = []): string
     {
-        // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- read-only report filter, kept bookmarkable: it is matched against PERIODS and only chooses the date range displayed.
-        $requested = isset($_GET['period']) ? absint(wp_unslash($_GET['period'])) : 30;
+        return add_query_arg(array_merge(['page' => self::MENU_SLUG], $args), self_admin_url('admin.php'));
+    }
 
-        return in_array($requested, self::PERIODS, true) ? $requested : 30;
+    /**
+     * Where the editor and Remove forms post: admin-post.php, carrying the
+     * current period so the redirect afterwards returns to it.
+     *
+     * @return string
+     */
+    private static function formAction(): string
+    {
+        return add_query_arg(self::currentPeriod()->carryArgs(self::PERIOD_NONCE), admin_url('admin-post.php'));
+    }
+
+    /**
+     * The selected reporting period. A supplied period is accepted only with
+     * this screen's filter nonce; see {@see ReportPeriod}.
+     *
+     * @return ReportPeriod
+     */
+    private static function currentPeriod(): ReportPeriod
+    {
+        return ReportPeriod::fromRequest(self::PERIOD_NONCE, self::PERIODS);
     }
 
     // ── Rendering ────────────────────────────────────────────────────────────
@@ -242,8 +295,15 @@ final class FunnelsPage
             return;
         }
 
-        $period  = self::currentPeriod();
-        $funnels = FunnelRepository::visible();
+        $selected = self::currentPeriod();
+        $period   = $selected->days;
+        $funnels  = FunnelRepository::visible();
+
+        if ($selected->refused) {
+            ?>
+            <div class="notice notice-warning inline"><p><?php echo esc_html(ReportPeriod::refusedMessage()); ?></p></div>
+            <?php
+        }
 
         self::renderPeriodFilter($period);
 
@@ -303,6 +363,7 @@ final class FunnelsPage
                 __('You have reached the limit of %d funnels. Remove one you no longer need to add another.', 'convermetry'),
                 FunnelSettings::MAX_FUNNELS
             ),
+            'missing' => __('That funnel could not be found. It may already have been removed.', 'convermetry'),
             default   => '',
         };
 
@@ -325,10 +386,7 @@ final class FunnelsPage
         <div class="cvmtry-period-filter">
         <?php
         foreach (self::PERIODS as $days) {
-            $url = add_query_arg(
-                ['page' => self::MENU_SLUG, 'period' => (string) $days],
-                self_admin_url('admin.php')
-            );
+            $url = self::pageUrl(ReportPeriod::queryArgs(self::PERIOD_NONCE, $days));
             printf(
                 '<a href="%s" class="button %s">%s</a> ',
                 esc_url($url),
@@ -379,11 +437,11 @@ final class FunnelsPage
         // Asked by admin-confirm.js before the form submits.
         $confirm = __('Remove this funnel? Its definition is deleted; no analytics data is affected.', 'convermetry');
         ?>
-        <form method="post" class="cvmtry-inline-form" data-cvmtry-confirm="<?php echo esc_attr($confirm); ?>">
+        <form method="post" action="<?php echo esc_url(self::formAction()); ?>" class="cvmtry-inline-form" data-cvmtry-confirm="<?php echo esc_attr($confirm); ?>">
         <?php
-        wp_nonce_field('cvmtry_delete_funnel', 'cvmtry_nonce');
+        wp_nonce_field(self::DELETE_ACTION, 'cvmtry_nonce');
         ?>
-        <input type="hidden" name="cvmtry_action" value="delete_funnel">
+        <input type="hidden" name="action" value="<?php echo esc_attr(self::DELETE_ACTION); ?>">
         <input type="hidden" name="funnel_id" value="<?php echo esc_attr((string) $funnel['funnel_id']); ?>">
         <button type="submit" class="button-link cvmtry-btn-danger-link"><?php esc_html_e('Remove', 'convermetry'); ?></button></form></div></div>
         <?php
@@ -499,9 +557,9 @@ final class FunnelsPage
         <div class="cvmtry-goal-editor cvmtry-funnel-editor">
             <h2 id="cvmtry-funnel-editor-title"><?php esc_html_e('Add a funnel', 'convermetry'); ?></h2>
 
-            <form method="post" class="cvmtry-funnel-form">
-                <?php wp_nonce_field('cvmtry_save_funnel', 'cvmtry_nonce'); ?>
-                <input type="hidden" name="cvmtry_action" value="save_funnel">
+            <form method="post" action="<?php echo esc_url(self::formAction()); ?>" class="cvmtry-funnel-form">
+                <?php wp_nonce_field(self::SAVE_ACTION, 'cvmtry_nonce'); ?>
+                <input type="hidden" name="action" value="<?php echo esc_attr(self::SAVE_ACTION); ?>">
                 <input type="hidden" name="funnel[funnel_id]" value="" class="cvmtry-funnel-id">
 
                 <table class="form-table" role="presentation">

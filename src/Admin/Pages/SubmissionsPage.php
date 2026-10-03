@@ -6,6 +6,7 @@ namespace Convermetry\Admin\Pages;
 if (!defined('ABSPATH')) exit;
 
 use Convermetry\Admin\AdminAssets;
+use Convermetry\Admin\AdminRequest;
 use Convermetry\Admin\Capability;
 use Convermetry\Analytics\SubmissionContext;
 use Convermetry\Database\FormSubmissions;
@@ -54,6 +55,15 @@ final class SubmissionsPage
     /** Filter values the delivery-status dropdown accepts. */
     private const array STATES = ['delivered', 'partial', 'failed', 'pending', 'not_sent'];
 
+    /** admin-post action, and nonce action, for Clear All Submissions. */
+    public const string CLEAR_ACTION = 'cvmtry_clear_submissions';
+
+    /** admin-post action, and nonce action, for exporting every submission. */
+    public const string EXPORT_ALL_ACTION = 'cvmtry_submissions_export_csv';
+
+    /** admin-post action, and nonce action, for exporting the filtered list. */
+    public const string EXPORT_FILTERED_ACTION = 'cvmtry_submissions_export_csv_filtered';
+
     /**
      * Registers menu, asset, action, and AJAX hooks.
      *
@@ -62,8 +72,9 @@ final class SubmissionsPage
     public static function init(): void
     {
         add_action('admin_menu', [self::class, 'addMenu']);
-        add_action('admin_init', [self::class, 'processClearSubmissions']);
-        add_action('admin_init', [self::class, 'processExport']);
+        add_action('admin_post_' . self::CLEAR_ACTION, [self::class, 'processClearSubmissions']);
+        add_action('admin_post_' . self::EXPORT_ALL_ACTION, [self::class, 'processExportAll']);
+        add_action('admin_post_' . self::EXPORT_FILTERED_ACTION, [self::class, 'processExportFiltered']);
         add_action('admin_enqueue_scripts', [self::class, 'enqueueAssets']);
 
         add_action('wp_ajax_cvmtry_get_submissions', [self::class, 'handleGetSubmissionsAjax']);
@@ -122,50 +133,99 @@ final class SubmissionsPage
 
         wp_localize_script('cvmtry-submissions', 'CVMTRY_SUB', [
             'ajaxUrl'      => admin_url('admin-ajax.php'),
-            // Seeds the list's search box from the URL, so a deep link can
-            // open one submission. Notification emails link here with the
-            // submission id, and buildWhereClause() matches submission_id
-            // exactly — without this the link would silently open the full,
-            // unfiltered list, which is worse than no link at all.
-            // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- read-only deep link: it only pre-fills the search box; rows are fetched by the nonce-verified, capability-checked cvmtry_get_submissions action.
-            'initialSearch' => isset($_GET['cvmtry_search']) ? sanitize_text_field(wp_unslash($_GET['cvmtry_search'])) : '',
+            'initialSearch' => self::deepLinkSearch(),
             'listNonce'    => wp_create_nonce('cvmtry_get_submissions'),
             'detailNonce'  => wp_create_nonce('cvmtry_get_submission_detail'),
             'deleteNonce'  => wp_create_nonce('cvmtry_delete_submission'),
             'leadNonce'    => wp_create_nonce('cvmtry_update_lead'),
             'leadStatuses' => LeadStatus::labels(),
             'monthNames'   => AdminAssets::monthNames(),
-            'exportBase'   => wp_nonce_url(
-                add_query_arg(
-                    ['page' => self::MENU_SLUG, 'cvmtry_export' => 'csv_filtered'],
-                    self_admin_url('admin.php')
-                ),
-                'cvmtry_submissions_export_csv_filtered'
-            ),
+            'exportBase'   => self::exportUrl(self::EXPORT_FILTERED_ACTION),
         ]);
+    }
+
+    /**
+     * The submission id a notification email's deep link asks to open, or ''.
+     *
+     * Seeds the list's search box from the URL. Notification emails link here
+     * with the submission id, and buildWhereClause() matches submission_id
+     * exactly — without this the link would silently open the full,
+     * unfiltered list, which is worse than no link at all.
+     *
+     * This one value is read without a nonce, deliberately: the link is
+     * written into an email by WP-Cron and opened later by whichever
+     * recipient follows it, and a nonce is bound to one logged-in user's
+     * session, so no nonce in that link could ever verify. It is accepted only
+     * in the shape of a submission id, it only pre-fills the search box, and
+     * it reads nothing by itself: rows are fetched by the cvmtry_get_submissions
+     * AJAX action, which verifies its own nonce and the submissions.view
+     * capability.
+     *
+     * @return string
+     */
+    private static function deepLinkSearch(): string
+    {
+        // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- email deep link (see above): validated to the submission-id shape, display-only, and every row read is nonce- and capability-checked.
+        if (!isset($_GET['cvmtry_search']) || !is_string($_GET['cvmtry_search'])) {
+            return '';
+        }
+
+        // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- as above.
+        $search = sanitize_text_field(wp_unslash($_GET['cvmtry_search']));
+
+        return preg_match('/^[A-Za-z0-9_-]{1,64}$/', $search) === 1 ? $search : '';
+    }
+
+    /**
+     * A nonce-carrying export link.
+     *
+     * Built with add_query_arg() rather than wp_nonce_url(), which
+     * HTML-encodes its result and is meant for direct output; this value is
+     * escaped once where it is printed, or handed to the script as data.
+     *
+     * @param string $action The export's admin-post and nonce action.
+     * @return string
+     */
+    private static function exportUrl(string $action): string
+    {
+        return add_query_arg(
+            ['action' => $action, '_wpnonce' => wp_create_nonce($action)],
+            admin_url('admin-post.php')
+        );
     }
 
     // ── Request handlers ─────────────────────────────────────────────────────
 
     /**
-     * Deletes every stored submission if a valid nonce-protected POST is
-     * detected, then redirects back with a notice flag.
+     * Deletes every stored submission (admin_post_cvmtry_clear_submissions),
+     * then redirects back with a notice flag.
      *
-     * @return void
+     * @return never
      */
-    public static function processClearSubmissions(): void
+    public static function processClearSubmissions(): never
     {
-        if (
-            sanitize_text_field(wp_unslash($_SERVER['REQUEST_METHOD'] ?? '')) !== 'POST' ||
-            !isset($_POST['cvmtry_action']) ||
-            sanitize_key(wp_unslash($_POST['cvmtry_action'])) !== 'clear_submissions' ||
-            !isset($_POST['cvmtry_clear_nonce']) ||
-            !wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['cvmtry_clear_nonce'])), 'cvmtry_clear_submissions') ||
-            !Capability::currentUserCan(Capability::SUBMISSIONS_DELETE)
-        ) {
-            return;
+        // 1. Method: only the Clear All Submissions form's POST.
+        if (!AdminRequest::isPost()) {
+            AdminRequest::deny(__('Submissions can only be cleared from the Submissions screen.', 'convermetry'), 405);
         }
 
+        // 2. Capability: deleting submissions — viewing or exporting them is
+        // not enough.
+        if (!current_user_can(Capability::required(Capability::SUBMISSIONS_DELETE))) {
+            AdminRequest::deny(AdminRequest::forbiddenMessage());
+        }
+
+        // 3. Nonce present, as one string.
+        if (!isset($_POST['cvmtry_clear_nonce']) || !is_string($_POST['cvmtry_clear_nonce'])) {
+            AdminRequest::deny(AdminRequest::expiredMessage());
+        }
+
+        // 4. Nonce issued for clearing submissions.
+        if (!wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['cvmtry_clear_nonce'])), self::CLEAR_ACTION)) {
+            AdminRequest::deny(AdminRequest::expiredMessage());
+        }
+
+        // 5. No further input: the action takes no parameters.
         FormSubmissions::clearAll();
 
         wp_safe_redirect(
@@ -175,45 +235,69 @@ final class SubmissionsPage
     }
 
     /**
-     * Streams a CSV file download when a valid export link is followed.
+     * Streams every submission as CSV (admin_post_cvmtry_submissions_export_csv).
      *
-     * Two variants: 'csv' exports every submission, 'csv_filtered' exports
-     * only those matching the filters carried in the query string (the JS
-     * keeps that link in sync with what is on screen).
-     *
-     * @return void
+     * @return never
      */
-    public static function processExport(): void
+    public static function processExportAll(): never
     {
-        if (!isset($_GET['cvmtry_export']) || !Capability::currentUserCan(Capability::SUBMISSIONS_EXPORT)) {
-            return;
+        // 1. Method: export links are followed, never posted.
+        if (!AdminRequest::isGet()) {
+            AdminRequest::deny(__('Exports are downloaded from the Submissions screen.', 'convermetry'), 405);
         }
 
-        // Only act on this plugin's page so the shared query var can never
-        // hijack another admin screen.
-        if (!isset($_GET['page']) || $_GET['page'] !== self::MENU_SLUG) {
-            return;
+        // 2. Capability: bulk export of lead data is a scope of its own.
+        if (!current_user_can(Capability::required(Capability::SUBMISSIONS_EXPORT))) {
+            AdminRequest::deny(AdminRequest::forbiddenMessage());
         }
 
-        $type = sanitize_key((string) $_GET['cvmtry_export']);
-        if ($type !== 'csv' && $type !== 'csv_filtered') {
-            return;
+        // 3. Nonce present, as one string.
+        if (!isset($_GET['_wpnonce']) || !is_string($_GET['_wpnonce'])) {
+            AdminRequest::deny(__('Invalid or expired export link.', 'convermetry'));
         }
 
-        if (
-            !isset($_GET['_wpnonce']) ||
-            !wp_verify_nonce(
-                sanitize_text_field(wp_unslash($_GET['_wpnonce'])),
-                'cvmtry_submissions_export_' . $type
-            )
-        ) {
-            wp_die(esc_html__('Invalid or expired export link.', 'convermetry'), '', ['response' => 403]);
+        // 4. Nonce issued for the full export — the filtered link's nonce
+        // does not open it.
+        if (!wp_verify_nonce(sanitize_text_field(wp_unslash($_GET['_wpnonce'])), self::EXPORT_ALL_ACTION)) {
+            AdminRequest::deny(__('Invalid or expired export link.', 'convermetry'));
         }
 
-        // The filtered export re-sanitizes the query string through the exact
-        // code path the AJAX list uses, so the file can never contain rows the
-        // screen would have excluded.
-        self::exportCsv($type === 'csv_filtered' ? self::filtersFromRequest($_GET) : []);
+        // 5. No further input: the export covers every submission.
+        self::exportCsv([]);
+    }
+
+    /**
+     * Streams the submissions matching the list's filters as CSV
+     * (admin_post_cvmtry_submissions_export_csv_filtered).
+     *
+     * @return never
+     */
+    public static function processExportFiltered(): never
+    {
+        // 1. Method: export links are followed, never posted.
+        if (!AdminRequest::isGet()) {
+            AdminRequest::deny(__('Exports are downloaded from the Submissions screen.', 'convermetry'), 405);
+        }
+
+        // 2. Capability: bulk export of lead data is a scope of its own.
+        if (!current_user_can(Capability::required(Capability::SUBMISSIONS_EXPORT))) {
+            AdminRequest::deny(AdminRequest::forbiddenMessage());
+        }
+
+        // 3. Nonce present, as one string.
+        if (!isset($_GET['_wpnonce']) || !is_string($_GET['_wpnonce'])) {
+            AdminRequest::deny(__('Invalid or expired export link.', 'convermetry'));
+        }
+
+        // 4. Nonce issued for the filtered export.
+        if (!wp_verify_nonce(sanitize_text_field(wp_unslash($_GET['_wpnonce'])), self::EXPORT_FILTERED_ACTION)) {
+            AdminRequest::deny(__('Invalid or expired export link.', 'convermetry'));
+        }
+
+        // 5. Input: the filters, re-sanitized through the exact code path the
+        // AJAX list uses, so the file can never contain rows the screen would
+        // have excluded.
+        self::exportCsv(self::filtersFromRequest($_GET));
     }
 
     /**
@@ -226,17 +310,35 @@ final class SubmissionsPage
      */
     public static function handleGetSubmissionsAjax(): never
     {
-        self::authorize('cvmtry_get_submissions', Capability::SUBMISSIONS_VIEW);
+        // 1. Method: the list is fetched by POST.
+        if (!AdminRequest::isPost()) {
+            AdminRequest::denyAjax(__('Invalid request.', 'convermetry'), 405);
+        }
 
-        // phpcs:disable WordPress.Security.NonceVerification.Missing -- verified by self::authorize() above.
-        $perPage = Pagination::perPage(isset($_POST['per_page']) ? intval(wp_unslash($_POST['per_page'])) : Pagination::DEFAULT_PER_PAGE);
+        // 2. Capability: reading submissions.
+        if (!current_user_can(Capability::required(Capability::SUBMISSIONS_VIEW))) {
+            AdminRequest::denyAjax(AdminRequest::forbiddenMessage());
+        }
 
-        $filters = self::filtersFromRequest($_POST);
+        // 3. Nonce present, as one string.
+        if (!isset($_POST['nonce']) || !is_string($_POST['nonce'])) {
+            AdminRequest::denyAjax(AdminRequest::expiredMessage());
+        }
+
+        // 4. Nonce issued for listing submissions.
+        if (!wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['nonce'])), 'cvmtry_get_submissions')) {
+            AdminRequest::denyAjax(AdminRequest::expiredMessage());
+        }
+
+        // 5. Input: paging and filters, each read as one scalar.
+        $requestedPage = AdminRequest::positiveId(sanitize_text_field(AdminRequest::scalar($_POST, 'page')));
+        $requestedSize = AdminRequest::positiveId(sanitize_text_field(AdminRequest::scalar($_POST, 'per_page')));
+        $perPage       = Pagination::perPage($requestedSize > 0 ? $requestedSize : Pagination::DEFAULT_PER_PAGE);
+        $filters       = self::filtersFromRequest($_POST);
 
         // Clamped BEFORE the query — see Pagination::resolve().
         $total  = FormSubmissions::getCount($filters);
-        $paging = Pagination::resolve(isset($_POST['page']) ? intval(wp_unslash($_POST['page'])) : 1, $perPage, $total);
-        // phpcs:enable WordPress.Security.NonceVerification.Missing
+        $paging = Pagination::resolve($requestedPage > 0 ? $requestedPage : 1, $perPage, $total);
 
         $page       = $paging['page'];
         $totalPages = $paging['totalPages'];
@@ -273,11 +375,36 @@ final class SubmissionsPage
      */
     public static function handleGetDetailAjax(): never
     {
-        self::authorize('cvmtry_get_submission_detail', Capability::SUBMISSIONS_VIEW);
+        // 1. Method: the detail is fetched by POST.
+        if (!AdminRequest::isPost()) {
+            AdminRequest::denyAjax(__('Invalid request.', 'convermetry'), 405);
+        }
 
-        // phpcs:ignore WordPress.Security.NonceVerification.Missing -- verified by self::authorize() above.
-        $id  = isset($_POST['submission_row']) ? intval(wp_unslash($_POST['submission_row'])) : 0;
-        $row = $id > 0 ? FormSubmissions::get($id) : null;
+        // 2. Capability: reading submissions — the detail holds the answers.
+        if (!current_user_can(Capability::required(Capability::SUBMISSIONS_VIEW))) {
+            AdminRequest::denyAjax(AdminRequest::forbiddenMessage());
+        }
+
+        // 3. Nonce present, as one string.
+        if (!isset($_POST['nonce']) || !is_string($_POST['nonce'])) {
+            AdminRequest::denyAjax(AdminRequest::expiredMessage());
+        }
+
+        // 4. Nonce issued for reading one submission.
+        if (!wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['nonce'])), 'cvmtry_get_submission_detail')) {
+            AdminRequest::denyAjax(AdminRequest::expiredMessage());
+        }
+
+        // 5. Input: one positive row id, refused rather than coerced.
+        $id = isset($_POST['submission_row']) && is_string($_POST['submission_row'])
+            ? AdminRequest::positiveId(sanitize_text_field(wp_unslash($_POST['submission_row'])))
+            : 0;
+
+        if ($id === 0) {
+            AdminRequest::denyAjax(__('Invalid submission id.', 'convermetry'), 400);
+        }
+
+        $row = FormSubmissions::get($id);
 
         if ($row === null) {
             wp_send_json_error(['message' => __('That submission no longer exists.', 'convermetry')]);
@@ -302,12 +429,34 @@ final class SubmissionsPage
      */
     public static function handleDeleteAjax(): never
     {
-        self::authorize('cvmtry_delete_submission', Capability::SUBMISSIONS_DELETE);
+        // 1. Method: deletes are POSTed.
+        if (!AdminRequest::isPost()) {
+            AdminRequest::denyAjax(__('Invalid request.', 'convermetry'), 405);
+        }
 
-        // phpcs:ignore WordPress.Security.NonceVerification.Missing -- verified by self::authorize() above.
-        $id = isset($_POST['submission_row']) ? intval(wp_unslash($_POST['submission_row'])) : 0;
-        if ($id <= 0) {
-            wp_send_json_error(['message' => __('Invalid submission id.', 'convermetry')]);
+        // 2. Capability: deleting submissions — viewing them is not enough.
+        if (!current_user_can(Capability::required(Capability::SUBMISSIONS_DELETE))) {
+            AdminRequest::denyAjax(AdminRequest::forbiddenMessage());
+        }
+
+        // 3. Nonce present, as one string.
+        if (!isset($_POST['nonce']) || !is_string($_POST['nonce'])) {
+            AdminRequest::denyAjax(AdminRequest::expiredMessage());
+        }
+
+        // 4. Nonce issued for deleting a submission.
+        if (!wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['nonce'])), 'cvmtry_delete_submission')) {
+            AdminRequest::denyAjax(AdminRequest::expiredMessage());
+        }
+
+        // 5. Input: one positive row id. ['5'] or '5abc' is refused, not
+        // coerced — intval() would have turned an array into row 1.
+        $id = isset($_POST['submission_row']) && is_string($_POST['submission_row'])
+            ? AdminRequest::positiveId(sanitize_text_field(wp_unslash($_POST['submission_row'])))
+            : 0;
+
+        if ($id === 0) {
+            AdminRequest::denyAjax(__('Invalid submission id.', 'convermetry'), 400);
         }
 
         FormSubmissions::deleteSubmission($id);
@@ -326,22 +475,53 @@ final class SubmissionsPage
      */
     public static function handleUpdateLeadAjax(): never
     {
-        self::authorize('cvmtry_update_lead', Capability::LEADS_EDIT);
-
-        // phpcs:disable WordPress.Security.NonceVerification.Missing -- verified by self::authorize() above.
-        $submissionId = sanitize_text_field(wp_unslash((string) ($_POST['submission_id'] ?? '')));
-        if ($submissionId === '') {
-            wp_send_json_error(['message' => __('Invalid submission id.', 'convermetry')]);
+        // 1. Method: lead updates are POSTed.
+        if (!AdminRequest::isPost()) {
+            AdminRequest::denyAjax(__('Invalid request.', 'convermetry'), 405);
         }
 
-        $status = array_key_exists('lead_status', $_POST)
-            ? sanitize_key((string) wp_unslash($_POST['lead_status']))
-            : null;
+        // 2. Capability: editing a lead's status or value.
+        if (!current_user_can(Capability::required(Capability::LEADS_EDIT))) {
+            AdminRequest::denyAjax(AdminRequest::forbiddenMessage());
+        }
 
-        $value = array_key_exists('lead_value', $_POST)
-            ? sanitize_text_field((string) wp_unslash($_POST['lead_value']))
-            : null;
-        // phpcs:enable WordPress.Security.NonceVerification.Missing
+        // 3. Nonce present, as one string.
+        if (!isset($_POST['nonce']) || !is_string($_POST['nonce'])) {
+            AdminRequest::denyAjax(AdminRequest::expiredMessage());
+        }
+
+        // 4. Nonce issued for updating a lead.
+        if (!wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['nonce'])), 'cvmtry_update_lead')) {
+            AdminRequest::denyAjax(AdminRequest::expiredMessage());
+        }
+
+        // 5. Input: a submission id, plus whichever of status and value was
+        // sent — each as one string. An array in any of them is refused.
+        $submissionId = isset($_POST['submission_id']) && is_string($_POST['submission_id'])
+            ? sanitize_text_field(wp_unslash($_POST['submission_id']))
+            : '';
+
+        if ($submissionId === '') {
+            AdminRequest::denyAjax(__('Invalid submission id.', 'convermetry'), 400);
+        }
+
+        $status = null;
+        if (isset($_POST['lead_status'])) {
+            if (!is_string($_POST['lead_status'])) {
+                AdminRequest::denyAjax(__('Invalid request.', 'convermetry'), 400);
+            }
+
+            $status = sanitize_key(wp_unslash($_POST['lead_status']));
+        }
+
+        $value = null;
+        if (isset($_POST['lead_value'])) {
+            if (!is_string($_POST['lead_value'])) {
+                AdminRequest::denyAjax(__('Invalid request.', 'convermetry'), 400);
+            }
+
+            $value = sanitize_text_field(wp_unslash($_POST['lead_value']));
+        }
 
         $result = LeadService::update($submissionId, $status, $value, get_current_user_id());
 
@@ -359,30 +539,6 @@ final class SubmissionsPage
     }
 
     /**
-     * Shared nonce + capability guard for every AJAX action on this page.
-     *
-     * The scope is a parameter rather than a constant because these four
-     * actions are not equally privileged: two of them read, one deletes a
-     * submission outright, and one writes a lead's commercial value. Sharing a
-     * single capability here would have made the scope split on the rest of the
-     * page decorative.
-     *
-     * @param string $action The action name the nonce was created for.
-     * @param string $scope  The {@see Capability} scope this action needs.
-     * @return void
-     */
-    private static function authorize(string $action, string $scope): void
-    {
-        if (
-            !isset($_POST['nonce']) ||
-            !wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['nonce'])), $action) ||
-            !Capability::currentUserCan($scope)
-        ) {
-            wp_send_json_error(['message' => __('Unauthorized.', 'convermetry')]);
-        }
-    }
-
-    /**
      * Sanitizes the filter set out of a request array ($_POST for AJAX,
      * $_GET for the filtered export), so both paths agree by construction.
      *
@@ -391,41 +547,26 @@ final class SubmissionsPage
      */
     private static function filtersFromRequest(array $src): array
     {
-        // Every value is read through scalarParam(): a request is free to send
-        // ?channel[]=x, and casting that array to string would emit a PHP
-        // warning and filter on the literal "Array".
-        $status = sanitize_key(self::scalarParam($src, 'delivery_status'));
+        // Every value is read through AdminRequest::scalar(): a request is
+        // free to send ?channel[]=x, and casting that array to string would
+        // emit a PHP warning and filter on the literal "Array".
+        $status = sanitize_key(AdminRequest::scalar($src, 'delivery_status'));
 
-        $leadStatus = sanitize_key(self::scalarParam($src, 'lead_status'));
-        $hasValue   = sanitize_key(self::scalarParam($src, 'has_value'));
+        $leadStatus = sanitize_key(AdminRequest::scalar($src, 'lead_status'));
+        $hasValue   = sanitize_key(AdminRequest::scalar($src, 'has_value'));
 
         return [
-            'year'            => sanitize_text_field(self::scalarParam($src, 'filter_year')),
-            'month'           => sanitize_text_field(self::scalarParam($src, 'filter_month')),
-            'provider'        => sanitize_key(self::scalarParam($src, 'provider')),
-            'form_name'       => sanitize_text_field(self::scalarParam($src, 'form_name')),
-            'channel'         => sanitize_text_field(self::scalarParam($src, 'channel')),
-            'campaign'        => sanitize_text_field(self::scalarParam($src, 'campaign')),
-            'search'          => sanitize_text_field(self::scalarParam($src, 'search')),
+            'year'            => sanitize_text_field(AdminRequest::scalar($src, 'filter_year')),
+            'month'           => sanitize_text_field(AdminRequest::scalar($src, 'filter_month')),
+            'provider'        => sanitize_key(AdminRequest::scalar($src, 'provider')),
+            'form_name'       => sanitize_text_field(AdminRequest::scalar($src, 'form_name')),
+            'channel'         => sanitize_text_field(AdminRequest::scalar($src, 'channel')),
+            'campaign'        => sanitize_text_field(AdminRequest::scalar($src, 'campaign')),
+            'search'          => sanitize_text_field(AdminRequest::scalar($src, 'search')),
             'delivery_status' => in_array($status, self::STATES, true) ? $status : '',
             'lead_status'     => LeadStatus::isValid($leadStatus) ? $leadStatus : '',
             'has_value'       => in_array($hasValue, ['yes', 'no'], true) ? $hasValue : '',
         ];
-    }
-
-    /**
-     * Reads one unslashed scalar value out of a request array, treating any
-     * non-scalar (an array from `?key[]=…`) as absent.
-     *
-     * @param array<string, mixed> $src Raw request array.
-     * @param string               $key Parameter name.
-     * @return string
-     */
-    private static function scalarParam(array $src, string $key): string
-    {
-        $value = $src[$key] ?? '';
-
-        return is_scalar($value) ? (string) wp_unslash($value) : '';
     }
 
     // ── Delivery status ──────────────────────────────────────────────────────
@@ -627,9 +768,9 @@ final class SubmissionsPage
             </div>
 
             <div class="cvmtry-delivery-toolbar">
-                <form method="post" action="" class="cvmtry-clear-form">
-                    <?php wp_nonce_field('cvmtry_clear_submissions', 'cvmtry_clear_nonce'); ?>
-                    <input type="hidden" name="cvmtry_action" value="clear_submissions">
+                <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>" class="cvmtry-clear-form">
+                    <?php wp_nonce_field(self::CLEAR_ACTION, 'cvmtry_clear_nonce'); ?>
+                    <input type="hidden" name="action" value="<?php echo esc_attr(self::CLEAR_ACTION); ?>">
                     <button
                         type="submit"
                         class="button button-secondary cvmtry-btn-danger"
@@ -644,7 +785,7 @@ final class SubmissionsPage
                     <div class="cvmtry-export-buttons">
                         <a href="#" class="button button-secondary cvmtry-export-filtered"><?php esc_html_e('Export Current Filters', 'convermetry'); ?></a>
                         <a
-                            href="<?php echo esc_url(wp_nonce_url(add_query_arg(['page' => self::MENU_SLUG, 'cvmtry_export' => 'csv'], self_admin_url('admin.php')), 'cvmtry_submissions_export_csv')); ?>"
+                            href="<?php echo esc_url(self::exportUrl(self::EXPORT_ALL_ACTION)); ?>"
                             class="button button-secondary"
                         >
                             <?php esc_html_e('Export All To CSV', 'convermetry'); ?>

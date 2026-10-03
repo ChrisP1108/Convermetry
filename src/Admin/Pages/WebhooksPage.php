@@ -6,9 +6,11 @@ namespace Convermetry\Admin\Pages;
 if (!defined('ABSPATH')) exit;
 
 use Convermetry\Admin\AdminAssets;
+use Convermetry\Admin\AdminRequest;
 use Convermetry\Admin\Capability;
 use Convermetry\Settings\Options;
 use Convermetry\Settings\WebhookEndpoint;
+use Convermetry\Settings\WebhookSettingsInput;
 use Convermetry\Webhook\AnalyticsDispatcher;
 use Convermetry\Webhook\FormDeliveryQueue;
 
@@ -44,8 +46,11 @@ final class WebhooksPage
     /** admin-post action name for saving the page. */
     private const string SAVE_ACTION = 'cvmtry_save_webhooks';
 
-    /** Admin action name for discarding one pending analytics retry. */
+    /** admin-post action, and nonce action, for discarding one pending analytics retry. */
     private const string DISCARD_ACTION = 'cvmtry_discard_retry';
+
+    /** Per-user transient prefix for what the last save refused (structured, never raw input). */
+    private const string REJECTED_TRANSIENT = 'cvmtry_webhook_rejected_';
 
     /**
      * Registers menu, save, discard, notice, asset, and AJAX hooks.
@@ -56,7 +61,7 @@ final class WebhooksPage
     {
         add_action('admin_menu', [self::class, 'addMenu']);
         add_action('admin_post_' . self::SAVE_ACTION, [self::class, 'handleSave']);
-        add_action('admin_init', [self::class, 'handleDiscardRetry']);
+        add_action('admin_post_' . self::DISCARD_ACTION, [self::class, 'handleDiscardRetry']);
         add_action('admin_notices', [self::class, 'maybeShowNotices']);
         add_action('admin_enqueue_scripts', [self::class, 'enqueueAssets']);
         add_action('wp_ajax_cvmtry_test_webhook', [self::class, 'handleTestAjax']);
@@ -115,19 +120,36 @@ final class WebhooksPage
     }
 
     /**
-     * Validates and persists the webhook settings POST.
+     * Validates and persists the webhook settings POST
+     * (admin_post_cvmtry_save_webhooks).
      *
-     * @return void
+     * @return never
      */
-    public static function handleSave(): void
+    public static function handleSave(): never
     {
-        if (
-            !Capability::currentUserCan(Capability::WEBHOOKS_MANAGE)
-            || !isset($_POST['cvmtry_webhooks_nonce'])
-            || !wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['cvmtry_webhooks_nonce'])), self::SAVE_ACTION)
-        ) {
-            wp_die(esc_html__('Invalid request.', 'convermetry'), '', ['response' => 403]);
+        // 1. Method: only the settings form's POST.
+        if (!AdminRequest::isPost()) {
+            AdminRequest::deny(__('Webhook settings can only be saved from the Webhooks screen.', 'convermetry'), 405);
         }
+
+        // 2. Capability: endpoints and their signing secrets.
+        if (!current_user_can(Capability::required(Capability::WEBHOOKS_MANAGE))) {
+            AdminRequest::deny(AdminRequest::forbiddenMessage());
+        }
+
+        // 3. Nonce present, as one string.
+        if (!isset($_POST['cvmtry_webhooks_nonce']) || !is_string($_POST['cvmtry_webhooks_nonce'])) {
+            AdminRequest::deny(AdminRequest::expiredMessage());
+        }
+
+        // 4. Nonce issued for saving webhook settings.
+        if (!wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['cvmtry_webhooks_nonce'])), self::SAVE_ACTION)) {
+            AdminRequest::deny(AdminRequest::expiredMessage());
+        }
+
+        // 5. Input. Each field is unslashed exactly once, here, and handed to
+        // WebhookSettingsInput, which checks its type and validates and
+        // sanitizes it for its meaning before anything is stored.
 
         /**
          * Filters whether plain-HTTP webhook endpoints may be saved.
@@ -139,16 +161,8 @@ final class WebhooksPage
          * @param bool $allow Whether http:// endpoint URLs are accepted.
          */
         $allowInsecure = (bool) apply_filters('convermetry_allow_insecure_webhooks', false);
-        $schemes       = $allowInsecure ? ['http', 'https'] : ['https'];
-
-        $rejected  = [];
-        $endpoints = [];
-        $seen      = [];
 
         // Only ids that are ALREADY configured may be carried through a save.
-        // A posted id that matches nothing is discarded and the row is treated
-        // as new, so a hand-crafted POST cannot graft one endpoint's identity
-        // (and therefore its signing secret and retry chain) onto another.
         $knownIds = [];
         foreach (Options::endpoints() as $configured) {
             if ($configured->id !== '') {
@@ -156,82 +170,48 @@ final class WebhooksPage
             }
         }
 
-        $claimedIds = [];
-
-        // phpcs:disable WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- every field is validated or sanitized in the loop below.
-        $rawEndpoints = isset($_POST['cvmtry_webhooks']) && is_array($_POST['cvmtry_webhooks'])
-            ? wp_unslash($_POST['cvmtry_webhooks'])
-            : [];
+        // phpcs:disable WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- unslashed once here; WebhookSettingsInput::sanitize() type-checks every field and validates and sanitizes each for its meaning before anything is stored.
+        $input = WebhookSettingsInput::sanitize(
+            [
+                'endpoints'           => isset($_POST['cvmtry_webhooks']) ? wp_unslash($_POST['cvmtry_webhooks']) : null,
+                'active'              => isset($_POST['cvmtry_webhook_active']) ? wp_unslash($_POST['cvmtry_webhook_active']) : null,
+                'interval'            => isset($_POST['cvmtry_interval']) ? wp_unslash($_POST['cvmtry_interval']) : null,
+                'shared_secret'       => isset($_POST['cvmtry_shared_secret']) ? wp_unslash($_POST['cvmtry_shared_secret']) : null,
+                'backfill'            => isset($_POST['cvmtry_backfill']) ? wp_unslash($_POST['cvmtry_backfill']) : null,
+                'global_headers'      => isset($_POST['cvmtry_global_headers']) ? wp_unslash($_POST['cvmtry_global_headers']) : null,
+                'global_query'        => isset($_POST['cvmtry_global_query']) ? wp_unslash($_POST['cvmtry_global_query']) : null,
+                'include_page_params' => isset($_POST['cvmtry_include_page_params']) ? wp_unslash($_POST['cvmtry_include_page_params']) : null,
+                'failure_mode'        => isset($_POST['cvmtry_failure_mode']) ? wp_unslash($_POST['cvmtry_failure_mode']) : null,
+            ],
+            $knownIds,
+            $allowInsecure
+        );
         // phpcs:enable WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
 
-        foreach ($rawEndpoints as $entry) {
-            if (!is_array($entry)) {
-                continue;
-            }
-
-            $rawUrl = trim((string) ($entry['url'] ?? ''));
-            if ($rawUrl === '') {
-                continue;
-            }
-
-            if (!$allowInsecure && stripos($rawUrl, 'http://') === 0) {
-                $rejected[] = $rawUrl;
-                continue;
-            }
-
-            $url = esc_url_raw($rawUrl, $schemes);
-            if ($url === '' || !wp_http_validate_url($url) || isset($seen[$url])) {
-                if ($url === '' || !wp_http_validate_url($url)) {
-                    $rejected[] = $rawUrl;
-                }
-                continue;
-            }
-
-            $postedId = trim((string) ($entry['id'] ?? ''));
-            $id       = ($postedId !== '' && isset($knownIds[$postedId]) && !isset($claimedIds[$postedId]))
-                ? $postedId
-                : '';
-
-            if ($id !== '') {
-                $claimedIds[$id] = true;
-            }
-
-            $seen[$url]  = true;
-            $endpoints[] = [
-                'id'        => $id,
-                'url'       => $url,
-                'label'     => mb_substr(sanitize_text_field((string) ($entry['label'] ?? '')), 0, 100),
-                'secret'    => mb_substr(sanitize_text_field((string) ($entry['secret'] ?? '')), 0, 190),
-                'analytics' => !empty($entry['analytics']),
-                'forms'     => !empty($entry['forms']),
-            ];
+        // A request that is not the shape this form posts changes nothing.
+        if ($input['malformed']) {
+            wp_safe_redirect(add_query_arg(
+                ['page' => self::MENU_SLUG, 'cvmtry_error' => 'malformed'],
+                self_admin_url('admin.php')
+            ));
+            exit;
         }
 
-        $interval = sanitize_key((string) ($_POST['cvmtry_interval'] ?? 'daily'));
-
-        $settings = [
-            'active'              => !empty($_POST['cvmtry_webhook_active']) && $endpoints !== [],
-            'endpoints'           => $endpoints,
-            'interval'            => in_array($interval, Options::INTERVALS, true) ? $interval : 'daily',
-            'shared_secret'       => mb_substr(sanitize_text_field(wp_unslash($_POST['cvmtry_shared_secret'] ?? '')), 0, 190),
-            'backfill'            => !empty($_POST['cvmtry_backfill']),
-            // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized, WordPress.Security.ValidatedSanitizedInput.MissingUnslash -- sanitizePairs() unslashes and sanitizes every key and value.
-            'global_headers'      => self::sanitizePairs($_POST['cvmtry_global_headers'] ?? null),
-            // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized, WordPress.Security.ValidatedSanitizedInput.MissingUnslash -- sanitizePairs() unslashes and sanitizes every key and value.
-            'global_query'        => self::sanitizePairs($_POST['cvmtry_global_query'] ?? null),
-            'include_page_params' => !empty($_POST['cvmtry_include_page_params']),
-            'failure_mode'        => sanitize_key(wp_unslash($_POST['cvmtry_failure_mode'] ?? '')) === 'show_error' ? 'show_error' : 'background',
-        ];
-
-        update_option(Options::WEBHOOK_OPTION_KEY, $settings);
+        update_option(Options::WEBHOOK_OPTION_KEY, $input['settings']);
 
         // Newly added rows were stored with an empty id; mint one for each.
         // Existing ids came through the form untouched and are never
         // regenerated, so a routine save cannot strand state keyed by them.
         Options::ensureEndpointIds();
 
-        if ($rejected !== []) {
-            set_transient('cvmtry_webhook_rejected_' . get_current_user_id(), $rejected, MINUTE_IN_SECONDS);
+        // Structured only — a position, a reason code and a sanitized,
+        // bounded excerpt. The URL as typed is never stored.
+        if ($input['rejected'] !== [] || $input['rejected_pairs'] > 0) {
+            set_transient(
+                self::REJECTED_TRANSIENT . get_current_user_id(),
+                ['endpoints' => $input['rejected'], 'pairs' => $input['rejected_pairs']],
+                MINUTE_IN_SECONDS
+            );
         }
 
         wp_safe_redirect(add_query_arg(
@@ -242,60 +222,47 @@ final class WebhooksPage
     }
 
     /**
-     * Sanitizes a posted key/value pair list.
+     * Handles the "Discard" link on a pending analytics webhook retry
+     * (admin_post_cvmtry_discard_retry).
      *
-     * @param mixed $raw Raw POST value.
-     * @return array<int, array{key: string, value: string}>
+     * @return never
      */
-    private static function sanitizePairs(mixed $raw): array
+    public static function handleDiscardRetry(): never
     {
-        if (!is_array($raw)) {
-            return [];
+        // 1. Method: the Discard link is followed.
+        if (!AdminRequest::isGet()) {
+            AdminRequest::deny(__('Retries can only be discarded from the Webhooks screen.', 'convermetry'), 405);
         }
 
-        $out = [];
-        foreach (wp_unslash($raw) as $pair) {
-            if (!is_array($pair)) {
-                continue;
-            }
-
-            $key = sanitize_text_field((string) ($pair['key'] ?? ''));
-            if ($key === '') {
-                continue;
-            }
-
-            $out[] = [
-                'key'   => $key,
-                'value' => sanitize_text_field((string) ($pair['value'] ?? '')),
-            ];
+        // 2. Capability: endpoints and their delivery state.
+        if (!current_user_can(Capability::required(Capability::WEBHOOKS_MANAGE))) {
+            AdminRequest::deny(AdminRequest::forbiddenMessage());
         }
 
-        return $out;
-    }
-
-    /**
-     * Handles the "Discard" action on a pending analytics webhook retry.
-     *
-     * @return void
-     */
-    public static function handleDiscardRetry(): void
-    {
-        if (
-            empty($_GET['action']) ||
-            $_GET['action'] !== self::DISCARD_ACTION ||
-            empty($_GET['cvmtry_retry']) ||
-            empty($_GET['cvmtry_nonce']) ||
-            !wp_verify_nonce(sanitize_text_field(wp_unslash($_GET['cvmtry_nonce'])), self::DISCARD_ACTION) ||
-            !Capability::currentUserCan(Capability::WEBHOOKS_MANAGE)
-        ) {
-            return;
+        // 3. Nonce present, as one string.
+        if (!isset($_GET['cvmtry_nonce']) || !is_string($_GET['cvmtry_nonce'])) {
+            AdminRequest::deny(AdminRequest::expiredMessage());
         }
 
-        $key  = sanitize_key(wp_unslash($_GET['cvmtry_retry']));
+        // 4. Nonce issued for discarding a retry.
+        if (!wp_verify_nonce(sanitize_text_field(wp_unslash($_GET['cvmtry_nonce'])), self::DISCARD_ACTION)) {
+            AdminRequest::deny(AdminRequest::expiredMessage());
+        }
+
+        // 5. Input: the retry's key, an md5 of its endpoint URL.
+        $key = isset($_GET['cvmtry_retry']) && is_string($_GET['cvmtry_retry'])
+            ? sanitize_key(wp_unslash($_GET['cvmtry_retry']))
+            : '';
+
+        if (preg_match('/^[a-f0-9]{32}$/', $key) !== 1) {
+            AdminRequest::deny(__('That retry could not be found.', 'convermetry'), 400);
+        }
+
         $done = AnalyticsDispatcher::discardRetry($key);
 
-        wp_safe_redirect(self_admin_url(
-            'admin.php?page=' . self::MENU_SLUG . '&cvmtry_retry_discarded=' . ($done ? '1' : 'busy')
+        wp_safe_redirect(add_query_arg(
+            ['page' => self::MENU_SLUG, 'cvmtry_retry_discarded' => $done ? '1' : 'busy'],
+            self_admin_url('admin.php')
         ));
         exit;
     }
@@ -313,46 +280,66 @@ final class WebhooksPage
      */
     public static function handleTestAjax(): never
     {
-        if (
-            !isset($_POST['nonce']) ||
-            !wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['nonce'])), 'cvmtry_test_webhook') ||
-            !Capability::currentUserCan(Capability::WEBHOOKS_MANAGE)
-        ) {
-            wp_send_json_error(['message' => __('Unauthorized.', 'convermetry')]);
+        // 1. Method: the test button POSTs.
+        if (!AdminRequest::isPost()) {
+            AdminRequest::denyAjax(__('Invalid request.', 'convermetry'), 405);
         }
 
-        $rawUrl = isset($_POST['url']) && is_string($_POST['url'])
+        // 2. Capability: endpoints — a test sends a request to one.
+        if (!current_user_can(Capability::required(Capability::WEBHOOKS_MANAGE))) {
+            AdminRequest::denyAjax(AdminRequest::forbiddenMessage());
+        }
+
+        // 3. Nonce present, as one string.
+        if (!isset($_POST['nonce']) || !is_string($_POST['nonce'])) {
+            AdminRequest::denyAjax(AdminRequest::expiredMessage());
+        }
+
+        // 4. Nonce issued for testing an endpoint.
+        if (!wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['nonce'])), 'cvmtry_test_webhook')) {
+            AdminRequest::denyAjax(AdminRequest::expiredMessage());
+        }
+
+        // 5. Input: which payload, and one URL that passes the same checks a
+        // saved endpoint must — before any request is made.
+        $type = 'analytics';
+        if (isset($_POST['type'])) {
+            $type = is_string($_POST['type']) ? sanitize_key(wp_unslash($_POST['type'])) : '';
+        }
+
+        if ($type !== 'analytics' && $type !== 'form') {
+            AdminRequest::denyAjax(__('Invalid request.', 'convermetry'), 400);
+        }
+
+        $url = isset($_POST['url']) && is_string($_POST['url'])
             ? trim(esc_url_raw(wp_unslash($_POST['url'])))
             : '';
-        $type   = sanitize_key((string) ($_POST['type'] ?? 'analytics'));
 
+        /** This filter is documented in WebhooksPage::handleSave(). */
         $allowInsecure = (bool) apply_filters('convermetry_allow_insecure_webhooks', false);
 
-        if (
-            $rawUrl === ''
-            || !wp_http_validate_url($rawUrl)
-            || (!$allowInsecure && stripos($rawUrl, 'https://') !== 0)
-        ) {
-            wp_send_json_error(['message' => __('Enter a valid HTTPS endpoint URL first.', 'convermetry')]);
+        if ($url === '' || !wp_http_validate_url($url) || (!$allowInsecure && stripos($url, 'https://') !== 0)) {
+            AdminRequest::denyAjax(__('Enter a valid HTTPS endpoint URL first.', 'convermetry'), 400);
         }
 
         $result = $type === 'form'
-            ? FormDeliveryQueue::testEndpoint($rawUrl)
-            : AnalyticsDispatcher::testEndpoint($rawUrl);
+            ? FormDeliveryQueue::testEndpoint($url)
+            : AnalyticsDispatcher::testEndpoint($url);
 
         wp_send_json_success($result);
     }
 
     /**
-     * Shows the saved / rejected-endpoint / retry-discarded notices.
+     * Shows the saved / malformed / rejected-endpoint / retry-discarded notices.
      *
      * @return void
      */
     public static function maybeShowNotices(): void
     {
-        // phpcs:disable WordPress.Security.NonceVerification.Recommended -- display-only: identifies this screen and reads the flags from the redirects after handleSave() and handleDiscardRetry(), which verify their nonce and capability.
+        // phpcs:disable WordPress.Security.NonceVerification.Recommended -- display-only: identifies this screen and reads the flags from the redirects after handleSave() and handleDiscardRetry(), which verify their nonce and capability; each flag is compared with fixed values and only selects one of the fixed notices below.
         $page      = isset($_GET['page']) ? sanitize_key(wp_unslash($_GET['page'])) : '';
         $saved     = isset($_GET['cvmtry_saved']) && sanitize_key(wp_unslash($_GET['cvmtry_saved'])) === '1';
+        $error     = isset($_GET['cvmtry_error']) ? sanitize_key(wp_unslash($_GET['cvmtry_error'])) : '';
         $discarded = isset($_GET['cvmtry_retry_discarded']) ? sanitize_key(wp_unslash($_GET['cvmtry_retry_discarded'])) : '';
         // phpcs:enable WordPress.Security.NonceVerification.Recommended
 
@@ -360,27 +347,18 @@ final class WebhooksPage
             return;
         }
 
+        if ($error === 'malformed') {
+            ?>
+            <div class="notice notice-error is-dismissible"><p><?php esc_html_e('Webhook settings were not saved: the submitted form was incomplete or malformed, so the stored settings were left unchanged. Reload this page and try again.', 'convermetry'); ?></p></div>
+            <?php
+        }
+
         if ($saved) {
             ?>
             <div class="notice notice-success is-dismissible"><p><?php esc_html_e('Webhook settings saved.', 'convermetry'); ?></p></div>
             <?php
 
-            $rejected = get_transient('cvmtry_webhook_rejected_' . get_current_user_id());
-            if (is_array($rejected) && $rejected !== []) {
-                delete_transient('cvmtry_webhook_rejected_' . get_current_user_id());
-                foreach ($rejected as $url) {
-                    ?>
-                    <div class="notice notice-warning"><p><?php
-                    echo wp_kses_post(sprintf(
-                        /* translators: 1: the rejected endpoint URL, 2: the name of a PHP filter. */
-                        __('Endpoint %1$s was not saved: endpoints must be valid HTTPS URLs. (Development setups can allow HTTP via the %2$s filter.)', 'convermetry'),
-                        '<code>' . esc_html((string) $url) . '</code>',
-                        '<code>convermetry_allow_insecure_webhooks</code>'
-                    ));
-                    ?></p></div>
-                    <?php
-                }
-            }
+            self::renderRejectedNotices();
         }
 
         if ($discarded !== '') {
@@ -393,6 +371,72 @@ final class WebhooksPage
                 <div class="notice notice-success is-dismissible"><p><?php esc_html_e('The pending retry was discarded. The endpoint\'s next scheduled delivery will cover that window\'s data again under a new delivery id.', 'convermetry'); ?></p></div>
                 <?php
             }
+        }
+    }
+
+    /**
+     * One warning per endpoint the last save refused, and one for refused
+     * header or query rows, read once from the per-user transient.
+     *
+     * The transient holds only what handleSave() put there — a position, a
+     * reason code and an already sanitized, bounded excerpt — and each part is
+     * re-checked here and escaped for its context on output.
+     *
+     * @return void
+     */
+    private static function renderRejectedNotices(): void
+    {
+        $transient = self::REJECTED_TRANSIENT . get_current_user_id();
+        $stored    = get_transient($transient);
+
+        if (!is_array($stored)) {
+            return;
+        }
+
+        delete_transient($transient);
+
+        $endpoints = is_array($stored['endpoints'] ?? null) ? $stored['endpoints'] : [];
+
+        foreach ($endpoints as $entry) {
+            if (!is_array($entry) || !is_int($entry['row'] ?? null) || !is_string($entry['display'] ?? null)) {
+                continue;
+            }
+
+            $message = ($entry['reason'] ?? '') === WebhookSettingsInput::REASON_INSECURE
+                /* translators: 1: the endpoint's position in the list, 2: an excerpt of the rejected URL, 3: the name of a PHP filter. */
+                ? __('Endpoint %1$d (%2$s) was not saved: endpoints must use HTTPS. (Development setups can allow HTTP via the %3$s filter.)', 'convermetry')
+                /* translators: 1: the endpoint's position in the list, 2: an excerpt of the rejected URL, 3: the name of a PHP filter. */
+                : __('Endpoint %1$d (%2$s) was not saved: it is not a valid HTTPS URL that this site is allowed to send to. (Development setups can allow HTTP via the %3$s filter.)', 'convermetry');
+
+            ?>
+            <div class="notice notice-warning"><p><?php
+            echo wp_kses_post(sprintf(
+                $message,
+                $entry['row'],
+                '<code>' . esc_html(mb_substr($entry['display'], 0, WebhookSettingsInput::MAX_DISPLAY_LEN)) . '</code>',
+                '<code>convermetry_allow_insecure_webhooks</code>'
+            ));
+            ?></p></div>
+            <?php
+        }
+
+        $pairs = is_int($stored['pairs'] ?? null) ? $stored['pairs'] : 0;
+
+        if ($pairs > 0) {
+            ?>
+            <div class="notice notice-warning"><p><?php
+            echo esc_html(sprintf(
+                /* translators: %d: number of header or query-parameter rows that were not saved. */
+                _n(
+                    '%d header or query-parameter row was not saved. A header name may contain only letters, digits, hyphens and a few other punctuation marks (no spaces or colons), and no name or value may contain line breaks or other control characters.',
+                    '%d header or query-parameter rows were not saved. A header name may contain only letters, digits, hyphens and a few other punctuation marks (no spaces or colons), and no name or value may contain line breaks or other control characters.',
+                    $pairs,
+                    'convermetry'
+                ),
+                $pairs
+            ));
+            ?></p></div>
+            <?php
         }
     }
 
@@ -586,7 +630,7 @@ final class WebhooksPage
         // that are keyed by it. Rows added in the browser post no id and are
         // assigned one by Options::ensureEndpointIds() after the save.
         ?>
-        <input type="hidden" name="cvmtry_webhooks[<?php echo esc_attr((string) $index); ?>][id]" value="<?php echo esc_attr($id); ?>">
+        <input type="hidden" class="cvmtry-webhook-id-input" name="cvmtry_webhooks[<?php echo esc_attr((string) $index); ?>][id]" value="<?php echo esc_attr($id); ?>">
         <div class="cvmtry-webhook-block-header">
         <strong class="cvmtry-webhook-block-title"><?php
         echo esc_html(sprintf(
@@ -704,13 +748,13 @@ final class WebhooksPage
                 $line = __('Retry %1$d of %2$d to %3$s — next attempt as soon as WP-Cron next runs. <a href="%4$s">Discard this retry</a>', 'convermetry');
             }
 
-            $discardUrl = wp_nonce_url(
-                add_query_arg(
-                    ['page' => self::MENU_SLUG, 'action' => self::DISCARD_ACTION, 'cvmtry_retry' => md5($url)],
-                    self_admin_url('admin.php')
-                ),
-                self::DISCARD_ACTION,
-                'cvmtry_nonce'
+            $discardUrl = add_query_arg(
+                [
+                    'action'       => self::DISCARD_ACTION,
+                    'cvmtry_retry' => md5($url),
+                    'cvmtry_nonce' => wp_create_nonce(self::DISCARD_ACTION),
+                ],
+                admin_url('admin-post.php')
             );
 
             echo '<li>' . wp_kses_post(sprintf(

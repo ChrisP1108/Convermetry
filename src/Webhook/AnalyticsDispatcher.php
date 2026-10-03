@@ -630,7 +630,15 @@ final class AnalyticsDispatcher
      * discarded window's data again, just under a NEW delivery_id. Runs
      * under the dispatch mutex like every other retry-state mutation.
      *
-     * @param string $urlKey md5 of the endpoint URL (as keyed in the state map).
+     * The Webhooks screen identifies a chain by md5 of its endpoint URL, which
+     * is what it can compute from the summary it renders. The state map is
+     * keyed by the endpoint's DURABLE id ({@see stateKeyFor()}) — md5(url) is
+     * only the legacy key — so a chain matches when either its key or the md5
+     * of its URL is the one requested. Matching the key alone meant Discard
+     * reported success for every configured endpoint while the retry stayed
+     * queued.
+     *
+     * @param string $urlKey md5 of the endpoint URL, or a state-map key.
      * @return bool True when done; false when the dispatch lock was busy.
      */
     public static function discardRetry(string $urlKey): bool
@@ -642,7 +650,7 @@ final class AnalyticsDispatcher
 
         try {
             foreach (self::getRetryStates() as $key => $state) {
-                if ($key === $urlKey) {
+                if ($key === $urlKey || ($state->url !== '' && md5($state->url) === $urlKey)) {
                     self::clearRetryByKey($key, $state->url);
                     break;
                 }

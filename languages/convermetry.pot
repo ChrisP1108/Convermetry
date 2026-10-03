@@ -2,14 +2,14 @@
 # This file is distributed under the GPL-2.0-or-later.
 msgid ""
 msgstr ""
-"Project-Id-Version: Convermetry 1.0.1\n"
-"Report-Msgid-Bugs-To: https://wordpress.org/support/plugin/convermetry/\n"
+"Project-Id-Version: Convermetry 1.0.2\n"
+"Report-Msgid-Bugs-To: https://wordpress.org/support/plugin/convermetry\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"POT-Creation-Date: 2026-10-02T01:44:27+00:00\n"
+"POT-Creation-Date: 2026-10-03T04:15:30+00:00\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "X-Generator: WP-CLI 2.12.0\n"
 "X-Domain: convermetry\n"
@@ -35,6 +35,18 @@ msgstr ""
 msgid "<strong>Convermetry</strong> requires PHP 8.3 or higher. Your server is running PHP %s. Please contact your host to upgrade PHP before activating this plugin."
 msgstr ""
 
+#: src/Admin/AdminRequest.php:56
+msgid "Request refused"
+msgstr ""
+
+#: src/Admin/AdminRequest.php:87
+msgid "This page has expired. Reload it and try again."
+msgstr ""
+
+#: src/Admin/AdminRequest.php:97
+msgid "Sorry, you are not allowed to do that."
+msgstr ""
+
 #. translators: %d: number of days the session count covers.
 #: src/Admin/HomeStatus.php:128
 #, php-format
@@ -47,8 +59,8 @@ msgstr[1] ""
 #: src/Admin/Pages/AboutPage.php:1870
 #: src/Admin/Pages/AboutPage.php:2124
 #: src/Admin/Pages/HomePage.php:511
-#: src/Admin/Pages/SubmissionsPage.php:85
-#: src/Admin/Pages/SubmissionsPage.php:576
+#: src/Admin/Pages/SubmissionsPage.php:96
+#: src/Admin/Pages/SubmissionsPage.php:717
 msgid "Submissions"
 msgstr ""
 
@@ -134,7 +146,7 @@ msgid "Every tracked interaction type is switched off under Settings, so no webs
 msgstr ""
 
 #: src/Admin/HomeStatus.php:281
-#: src/Admin/Pages/FormsPage.php:422
+#: src/Admin/Pages/FormsPage.php:529
 msgid "Unavailable"
 msgstr ""
 
@@ -152,12 +164,12 @@ msgstr ""
 
 #: src/Admin/HomeStatus.php:298
 #: src/Admin/HomeStatus.php:336
-#: src/Admin/Pages/ActivityLogPage.php:358
-#: src/Admin/Pages/FormsPage.php:422
-#: src/Admin/Pages/FunnelsPage.php:539
-#: src/Admin/Pages/WebhooksPage.php:445
+#: src/Admin/Pages/ActivityLogPage.php:493
+#: src/Admin/Pages/FormsPage.php:529
+#: src/Admin/Pages/FunnelsPage.php:597
+#: src/Admin/Pages/WebhooksPage.php:489
 #: assets/js/activity-log.js:517
-#: assets/js/admin.js:335
+#: assets/js/admin.js:339
 msgid "Active"
 msgstr ""
 
@@ -213,8 +225,8 @@ msgstr ""
 #: src/Admin/HomeStatus.php:442
 #: src/Admin/HomeStatus.php:460
 #: src/Admin/HomeStatus.php:521
-#: src/Admin/Pages/FunnelsPage.php:366
-#: src/Admin/Pages/GoalsPage.php:511
+#: src/Admin/Pages/FunnelsPage.php:424
+#: src/Admin/Pages/GoalsPage.php:568
 msgid "Paused"
 msgstr ""
 
@@ -252,9 +264,9 @@ msgstr[1] ""
 #: src/Admin/HomeStatus.php:458
 #: src/Admin/HomeStatus.php:475
 #: src/Admin/Pages/AboutPage.php:1985
-#: src/Admin/Pages/AnalyticsPage.php:236
-#: src/Admin/Pages/GoalsPage.php:102
-#: src/Admin/Pages/GoalsPage.php:232
+#: src/Admin/Pages/AnalyticsPage.php:248
+#: src/Admin/Pages/GoalsPage.php:116
+#: src/Admin/Pages/GoalsPage.php:285
 #: src/Admin/Pages/HomePage.php:518
 msgid "Goals"
 msgstr ""
@@ -296,8 +308,8 @@ msgstr[1] ""
 #: src/Admin/HomeStatus.php:519
 #: src/Admin/HomeStatus.php:536
 #: src/Admin/Pages/AboutPage.php:2004
-#: src/Admin/Pages/FunnelsPage.php:65
-#: src/Admin/Pages/FunnelsPage.php:228
+#: src/Admin/Pages/FunnelsPage.php:79
+#: src/Admin/Pages/FunnelsPage.php:281
 #: src/Admin/Pages/HomePage.php:525
 msgid "Funnels"
 msgstr ""
@@ -376,7 +388,7 @@ msgid "%s ago"
 msgstr ""
 
 #: src/Admin/Pages/AboutPage.php:39
-#: src/Admin/Pages/AnalyticsPage.php:175
+#: src/Admin/Pages/AnalyticsPage.php:187
 msgid "Overview"
 msgstr ""
 
@@ -386,20 +398,20 @@ msgstr ""
 
 #: src/Admin/Pages/AboutPage.php:41
 #: src/Admin/Pages/AboutPage.php:71
-#: src/Admin/Pages/SettingsPage.php:256
+#: src/Admin/Pages/SettingsPage.php:342
 msgid "Tracking"
 msgstr ""
 
 #: src/Admin/Pages/AboutPage.php:42
-#: src/Admin/Pages/AnalyticsPage.php:254
-#: src/Admin/Pages/AnalyticsPage.php:1313
-#: src/Admin/Pages/AnalyticsPage.php:1353
-#: src/Admin/Pages/AnalyticsPage.php:1387
+#: src/Admin/Pages/AnalyticsPage.php:266
+#: src/Admin/Pages/AnalyticsPage.php:1324
+#: src/Admin/Pages/AnalyticsPage.php:1364
+#: src/Admin/Pages/AnalyticsPage.php:1398
 msgid "Conversions"
 msgstr ""
 
 #: src/Admin/Pages/AboutPage.php:43
-#: src/Admin/Pages/FormsPage.php:74
+#: src/Admin/Pages/FormsPage.php:79
 msgid "Forms"
 msgstr ""
 
@@ -408,7 +420,7 @@ msgid "Identifiers"
 msgstr ""
 
 #: src/Admin/Pages/AboutPage.php:45
-#: src/Admin/Pages/WebhooksPage.php:75
+#: src/Admin/Pages/WebhooksPage.php:80
 msgid "Webhooks"
 msgstr ""
 
@@ -418,9 +430,9 @@ msgstr ""
 
 #: src/Admin/Pages/AboutPage.php:47
 #: src/Admin/Pages/AboutPage.php:87
-#: src/Admin/Pages/NotificationsPage.php:73
-#: src/Admin/Pages/NotificationsPage.php:386
-#: src/Admin/Pages/NotificationsPage.php:466
+#: src/Admin/Pages/NotificationsPage.php:74
+#: src/Admin/Pages/NotificationsPage.php:490
+#: src/Admin/Pages/NotificationsPage.php:570
 msgid "Notifications"
 msgstr ""
 
@@ -441,7 +453,7 @@ msgid "Privacy & data"
 msgstr ""
 
 #: src/Admin/Pages/AboutPage.php:67
-#: src/Admin/Pages/SubmissionsPage.php:946
+#: src/Admin/Pages/SubmissionsPage.php:1087
 msgid "Webhook delivery"
 msgstr ""
 
@@ -454,7 +466,7 @@ msgid "The ingestion path is the plugin's hottest code. These hooks run inside i
 msgstr ""
 
 #: src/Admin/Pages/AboutPage.php:75
-#: src/Admin/Pages/AnalyticsPage.php:75
+#: src/Admin/Pages/AnalyticsPage.php:79
 #: src/Admin/Pages/HomePage.php:504
 msgid "Analytics"
 msgstr ""
@@ -1609,10 +1621,10 @@ msgid "These two are easy to confuse, and they answer different questions. Clear
 msgstr ""
 
 #: src/Admin/Pages/AboutPage.php:1870
-#: src/Admin/Pages/ActivityLogPage.php:70
-#: src/Admin/Pages/ActivityLogPage.php:335
+#: src/Admin/Pages/ActivityLogPage.php:86
+#: src/Admin/Pages/ActivityLogPage.php:470
 #: src/Admin/Pages/HomePage.php:532
-#: src/Admin/Pages/WebhooksPage.php:555
+#: src/Admin/Pages/WebhooksPage.php:599
 msgid "Activity Log"
 msgstr ""
 
@@ -1662,12 +1674,12 @@ msgid "Cleared by"
 msgstr ""
 
 #: src/Admin/Pages/AboutPage.php:1874
-#: src/Admin/Pages/SubmissionsPage.php:639
+#: src/Admin/Pages/SubmissionsPage.php:780
 msgid "Clear All Submissions"
 msgstr ""
 
 #: src/Admin/Pages/AboutPage.php:1874
-#: src/Admin/Pages/ActivityLogPage.php:413
+#: src/Admin/Pages/ActivityLogPage.php:548
 msgid "Clear All Logs"
 msgstr ""
 
@@ -1710,7 +1722,7 @@ msgstr ""
 #: src/Admin/Pages/AboutPage.php:1893
 #: src/Admin/Pages/AboutPage.php:2146
 #: src/Admin/Pages/AboutPage.php:2444
-#: src/Admin/Pages/NotificationsPage.php:449
+#: src/Admin/Pages/NotificationsPage.php:553
 msgid "Scope"
 msgstr ""
 
@@ -1781,8 +1793,8 @@ msgstr ""
 #: src/Admin/Pages/AboutPage.php:1925
 #: src/Admin/Pages/AboutPage.php:2381
 #: src/Admin/Pages/AboutPage.php:2572
-#: src/Admin/Pages/AnalyticsPage.php:1258
-#: src/Admin/Pages/FormsPage.php:347
+#: src/Admin/Pages/AnalyticsPage.php:1269
+#: src/Admin/Pages/FormsPage.php:454
 msgid "Type"
 msgstr ""
 
@@ -1944,7 +1956,7 @@ msgid "Rules"
 msgstr ""
 
 #: src/Admin/Pages/AboutPage.php:1995
-#: src/Admin/Pages/GoalsPage.php:646
+#: src/Admin/Pages/GoalsPage.php:703
 msgid "Reaching a page"
 msgstr ""
 
@@ -1953,7 +1965,7 @@ msgid "is exactly · contains · starts with · ends with. A path (<code>/thank-
 msgstr ""
 
 #: src/Admin/Pages/AboutPage.php:1996
-#: src/Admin/Pages/GoalsPage.php:645
+#: src/Admin/Pages/GoalsPage.php:702
 msgid "A click"
 msgstr ""
 
@@ -2022,11 +2034,11 @@ msgid "Evidence"
 msgstr ""
 
 #: src/Admin/Pages/AboutPage.php:2036
-#: src/Admin/Pages/AnalyticsPage.php:1152
-#: src/Admin/Pages/AnalyticsPage.php:1312
-#: src/Admin/Pages/AnalyticsPage.php:1352
-#: src/Admin/Pages/AnalyticsPage.php:1386
-#: src/Admin/Pages/FormsPage.php:274
+#: src/Admin/Pages/AnalyticsPage.php:1163
+#: src/Admin/Pages/AnalyticsPage.php:1323
+#: src/Admin/Pages/AnalyticsPage.php:1363
+#: src/Admin/Pages/AnalyticsPage.php:1397
+#: src/Admin/Pages/FormsPage.php:381
 msgid "Views"
 msgstr ""
 
@@ -2042,7 +2054,7 @@ msgid "browser-observed"
 msgstr ""
 
 #: src/Admin/Pages/AboutPage.php:2037
-#: src/Admin/Pages/FormsPage.php:275
+#: src/Admin/Pages/FormsPage.php:382
 msgid "Started"
 msgstr ""
 
@@ -2051,8 +2063,8 @@ msgid "<strong>sessions</strong> in which someone began filling it in"
 msgstr ""
 
 #: src/Admin/Pages/AboutPage.php:2038
-#: src/Admin/Pages/AnalyticsPage.php:1233
-#: src/Admin/Pages/FormsPage.php:276
+#: src/Admin/Pages/AnalyticsPage.php:1244
+#: src/Admin/Pages/FormsPage.php:383
 msgid "Attempts"
 msgstr ""
 
@@ -2061,7 +2073,7 @@ msgid "<strong>raw submit presses</strong> — one visitor fighting a validation
 msgstr ""
 
 #: src/Admin/Pages/AboutPage.php:2039
-#: src/Admin/Pages/FormsPage.php:277
+#: src/Admin/Pages/FormsPage.php:384
 msgid "Successful"
 msgstr ""
 
@@ -2074,7 +2086,7 @@ msgid "server-confirmed"
 msgstr ""
 
 #: src/Admin/Pages/AboutPage.php:2040
-#: src/Admin/Pages/FormsPage.php:278
+#: src/Admin/Pages/FormsPage.php:385
 msgid "Abandoned"
 msgstr ""
 
@@ -2111,10 +2123,10 @@ msgid "Set both on the <strong>Submissions</strong> detail panel; both are filte
 msgstr ""
 
 #: src/Admin/Pages/AboutPage.php:2060
-#: src/Admin/Pages/FormsPage.php:645
-#: src/Admin/Pages/FunnelsPage.php:537
-#: src/Admin/Pages/GoalsPage.php:710
-#: src/Admin/Pages/SubmissionsPage.php:1026
+#: src/Admin/Pages/FormsPage.php:752
+#: src/Admin/Pages/FunnelsPage.php:595
+#: src/Admin/Pages/GoalsPage.php:767
+#: src/Admin/Pages/SubmissionsPage.php:1167
 msgid "Status"
 msgstr ""
 
@@ -2187,8 +2199,8 @@ msgstr ""
 
 #: src/Admin/Pages/AboutPage.php:2093
 #: src/Admin/Pages/AboutPage.php:2387
-#: src/Admin/Pages/NotificationsPage.php:466
-#: src/Admin/Pages/SubmissionsPage.php:825
+#: src/Admin/Pages/NotificationsPage.php:570
+#: src/Admin/Pages/SubmissionsPage.php:966
 #: src/Notifications/EmailBuilder.php:117
 msgid "Provider"
 msgstr ""
@@ -2282,7 +2294,7 @@ msgid "Setting"
 msgstr ""
 
 #: src/Admin/Pages/AboutPage.php:2110
-#: src/Admin/Pages/FormsPage.php:641
+#: src/Admin/Pages/FormsPage.php:748
 msgid "Native Form ID"
 msgstr ""
 
@@ -2291,7 +2303,7 @@ msgid "The provider's own identity (read-only)."
 msgstr ""
 
 #: src/Admin/Pages/AboutPage.php:2111
-#: src/Admin/Pages/FormsPage.php:642
+#: src/Admin/Pages/FormsPage.php:749
 msgid "Custom/External Form ID"
 msgstr ""
 
@@ -2316,7 +2328,7 @@ msgid "Per-form override of the global setting."
 msgstr ""
 
 #: src/Admin/Pages/AboutPage.php:2114
-#: src/Admin/Pages/FormsPage.php:666
+#: src/Admin/Pages/FormsPage.php:773
 msgid "URL Query Parameters"
 msgstr ""
 
@@ -2325,7 +2337,7 @@ msgid "Per-form parameters, appended to outbound webhook URLs."
 msgstr ""
 
 #: src/Admin/Pages/AboutPage.php:2115
-#: src/Admin/Pages/FormsPage.php:671
+#: src/Admin/Pages/FormsPage.php:778
 msgid "Request Headers"
 msgstr ""
 
@@ -2414,7 +2426,7 @@ msgid "Endpoint configuration"
 msgstr ""
 
 #: src/Admin/Pages/AboutPage.php:2184
-#: src/Admin/Pages/FormsPage.php:347
+#: src/Admin/Pages/FormsPage.php:454
 msgid "Field"
 msgstr ""
 
@@ -2567,7 +2579,7 @@ msgstr ""
 #: src/Admin/Pages/AboutPage.php:2381
 #: src/Admin/Pages/AboutPage.php:2515
 #: src/Admin/Pages/AboutPage.php:2537
-#: src/Admin/Pages/FormsPage.php:697
+#: src/Admin/Pages/FormsPage.php:804
 #: assets/js/admin.js:55
 msgid "Key"
 msgstr ""
@@ -2715,7 +2727,7 @@ msgstr ""
 
 #: src/Admin/Pages/AboutPage.php:2438
 #: src/Admin/Pages/HomePage.php:539
-#: src/Admin/Pages/SettingsPage.php:58
+#: src/Admin/Pages/SettingsPage.php:75
 msgid "Settings"
 msgstr ""
 
@@ -2750,7 +2762,7 @@ msgid "One address per line. Validated, deduplicated case-insensitively, capped 
 msgstr ""
 
 #: src/Admin/Pages/AboutPage.php:2443
-#: src/Admin/Pages/NotificationsPage.php:399
+#: src/Admin/Pages/NotificationsPage.php:503
 msgid "Subject"
 msgstr ""
 
@@ -2767,8 +2779,8 @@ msgid "<em>Every form</em> notifies unless a form is switched off; <em>Only sele
 msgstr ""
 
 #: src/Admin/Pages/AboutPage.php:2445
-#: src/Admin/Pages/NotificationsPage.php:420
-#: src/Admin/Pages/SubmissionsPage.php:915
+#: src/Admin/Pages/NotificationsPage.php:524
+#: src/Admin/Pages/SubmissionsPage.php:1056
 #: src/Notifications/EmailBuilder.php:125
 msgid "Submitted fields"
 msgstr ""
@@ -2783,7 +2795,7 @@ msgid "The visitor's answers, as label/value rows."
 msgstr ""
 
 #: src/Admin/Pages/AboutPage.php:2446
-#: src/Admin/Pages/NotificationsPage.php:424
+#: src/Admin/Pages/NotificationsPage.php:528
 msgid "Analytics summary"
 msgstr ""
 
@@ -2792,8 +2804,8 @@ msgid "Channel, UTM source/medium/campaign, landing page, conversion page, devic
 msgstr ""
 
 #: src/Admin/Pages/AboutPage.php:2447
-#: src/Admin/Pages/NotificationsPage.php:428
-#: src/Admin/Pages/SubmissionsPage.php:904
+#: src/Admin/Pages/NotificationsPage.php:532
+#: src/Admin/Pages/SubmissionsPage.php:1045
 msgid "Visitor journey"
 msgstr ""
 
@@ -2802,8 +2814,8 @@ msgid "The pages this visitor viewed — browsing history for an identifiable pe
 msgstr ""
 
 #: src/Admin/Pages/AboutPage.php:2448
-#: src/Admin/Pages/NotificationsPage.php:432
-#: src/Admin/Pages/SubmissionsPage.php:859
+#: src/Admin/Pages/NotificationsPage.php:536
+#: src/Admin/Pages/SubmissionsPage.php:1000
 #: src/Notifications/EmailBuilder.php:144
 #: src/Privacy/PersonalDataExporter.php:169
 #: src/Privacy/PersonalDataExporter.php:196
@@ -2875,7 +2887,7 @@ msgid "Result-aware"
 msgstr ""
 
 #: src/Admin/Pages/AboutPage.php:2484
-#: src/Admin/Pages/NotificationsPage.php:385
+#: src/Admin/Pages/NotificationsPage.php:489
 #: assets/js/submissions.js:88
 msgid "Delivery"
 msgstr ""
@@ -3544,326 +3556,348 @@ msgstr ""
 msgid "<code>convermetry_settings_saved</code> — a settings section was written, listening on WordPress's own option-write hooks so it fires on a real write only (never for a form submitted without edits) and catches CLI and migration writers too. <strong>Key names only, never values</strong>: two sections hold signing secrets and token-bearing endpoint URLs."
 msgstr ""
 
-#: src/Admin/Pages/ActivityLogPage.php:69
+#: src/Admin/Pages/ActivityLogPage.php:85
 msgid "Convermetry Activity Log"
 msgstr ""
 
-#: src/Admin/Pages/ActivityLogPage.php:168
-#: src/Admin/Pages/SubmissionsPage.php:210
+#: src/Admin/Pages/ActivityLogPage.php:141
+msgid "The Activity Log can only be cleared from the Activity Log screen."
+msgstr ""
+
+#: src/Admin/Pages/ActivityLogPage.php:177
+#: src/Admin/Pages/ActivityLogPage.php:208
+msgid "Exports are downloaded from the Activity Log screen."
+msgstr ""
+
+#: src/Admin/Pages/ActivityLogPage.php:187
+#: src/Admin/Pages/ActivityLogPage.php:192
+#: src/Admin/Pages/ActivityLogPage.php:218
+#: src/Admin/Pages/ActivityLogPage.php:223
+#: src/Admin/Pages/SubmissionsPage.php:256
+#: src/Admin/Pages/SubmissionsPage.php:262
+#: src/Admin/Pages/SubmissionsPage.php:289
+#: src/Admin/Pages/SubmissionsPage.php:294
 msgid "Invalid or expired export link."
 msgstr ""
 
-#: src/Admin/Pages/ActivityLogPage.php:191
-#: src/Admin/Pages/ActivityLogPage.php:251
-#: src/Admin/Pages/ActivityLogPage.php:279
-#: src/Admin/Pages/ActivityLogPage.php:305
-#: src/Admin/Pages/NotificationsPage.php:237
-#: src/Admin/Pages/SubmissionsPage.php:381
-#: src/Admin/Pages/WebhooksPage.php:321
-msgid "Unauthorized."
+#: src/Admin/Pages/ActivityLogPage.php:244
+#: src/Admin/Pages/ActivityLogPage.php:330
+#: src/Admin/Pages/ActivityLogPage.php:375
+#: src/Admin/Pages/ActivityLogPage.php:400
+#: src/Admin/Pages/ActivityLogPage.php:423
+#: src/Admin/Pages/NotificationsPage.php:314
+#: src/Admin/Pages/SubmissionsPage.php:315
+#: src/Admin/Pages/SubmissionsPage.php:380
+#: src/Admin/Pages/SubmissionsPage.php:434
+#: src/Admin/Pages/SubmissionsPage.php:480
+#: src/Admin/Pages/SubmissionsPage.php:511
+#: src/Admin/Pages/SubmissionsPage.php:520
+#: src/Admin/Pages/WebhooksPage.php:285
+#: src/Admin/Pages/WebhooksPage.php:311
+msgid "Invalid request."
 msgstr ""
 
-#: src/Admin/Pages/ActivityLogPage.php:256
+#: src/Admin/Pages/ActivityLogPage.php:355
 msgid "Invalid log id."
 msgstr ""
 
-#: src/Admin/Pages/ActivityLogPage.php:338
+#: src/Admin/Pages/ActivityLogPage.php:473
 msgid "All activity logs have been cleared."
 msgstr ""
 
-#: src/Admin/Pages/ActivityLogPage.php:343
+#: src/Admin/Pages/ActivityLogPage.php:478
 msgid "Deliveries API"
 msgstr ""
 
-#: src/Admin/Pages/ActivityLogPage.php:345
+#: src/Admin/Pages/ActivityLogPage.php:480
 msgid "Enable a read-only REST endpoint that returns activity log data as JSON, with <code>status</code>, <code>message_type</code>, <code>endpoint</code>, <code>provider</code>, and <code>form_id</code> filters. Pass the API key as the <code>Authorization</code> header on every request. This API is intended for <strong>server-to-server</strong> use — never embed the key in public frontend JavaScript, where any visitor could read it."
 msgstr ""
 
-#: src/Admin/Pages/ActivityLogPage.php:349
+#: src/Admin/Pages/ActivityLogPage.php:484
 msgid "Toggle Deliveries API active state"
 msgstr ""
 
-#: src/Admin/Pages/ActivityLogPage.php:358
-#: src/Admin/Pages/WebhooksPage.php:445
+#: src/Admin/Pages/ActivityLogPage.php:493
+#: src/Admin/Pages/WebhooksPage.php:489
 #: assets/js/activity-log.js:517
-#: assets/js/admin.js:335
+#: assets/js/admin.js:339
 msgid "Inactive"
 msgstr ""
 
-#: src/Admin/Pages/ActivityLogPage.php:365
+#: src/Admin/Pages/ActivityLogPage.php:500
 msgid "Endpoint"
 msgstr ""
 
-#: src/Admin/Pages/ActivityLogPage.php:371
+#: src/Admin/Pages/ActivityLogPage.php:506
 msgid "API Key"
 msgstr ""
 
-#: src/Admin/Pages/ActivityLogPage.php:374
+#: src/Admin/Pages/ActivityLogPage.php:509
 msgid "(no key generated yet)"
 msgstr ""
 
-#: src/Admin/Pages/ActivityLogPage.php:375
+#: src/Admin/Pages/ActivityLogPage.php:510
 msgid "Copy"
 msgstr ""
 
-#: src/Admin/Pages/ActivityLogPage.php:376
+#: src/Admin/Pages/ActivityLogPage.php:511
 msgid "Regenerate"
 msgstr ""
 
-#: src/Admin/Pages/ActivityLogPage.php:379
+#: src/Admin/Pages/ActivityLogPage.php:514
 msgid "Only a hash of the key is stored, so the key is shown <strong>once</strong> — right after it is generated. Copy it then; if it is lost, regenerate a new one (any integrations using the old key stop working)."
 msgstr ""
 
 #. translators: %d: retention period in days.
-#: src/Admin/Pages/ActivityLogPage.php:392
+#: src/Admin/Pages/ActivityLogPage.php:527
 #, php-format
 msgid "<strong>Log retention policy:</strong> Entries older than %d day are automatically removed daily. The retention period is shared with the analytics data and can be changed under <strong>Settings</strong>."
 msgid_plural "<strong>Log retention policy:</strong> Entries older than %d days are automatically removed daily. The retention period is shared with the analytics data and can be changed under <strong>Settings</strong>."
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/Admin/Pages/ActivityLogPage.php:411
+#: src/Admin/Pages/ActivityLogPage.php:546
 msgid "Are you sure you want to clear all activity logs? This cannot be undone."
 msgstr ""
 
-#: src/Admin/Pages/ActivityLogPage.php:423
-#: src/Admin/Pages/SubmissionsPage.php:650
+#: src/Admin/Pages/ActivityLogPage.php:558
+#: src/Admin/Pages/SubmissionsPage.php:791
 msgid "Export All To CSV"
 msgstr ""
 
-#: src/Admin/Pages/ActivityLogPage.php:429
+#: src/Admin/Pages/ActivityLogPage.php:564
 msgid "Export All To JSON"
 msgstr ""
 
-#: src/Admin/Pages/ActivityLogPage.php:438
+#: src/Admin/Pages/ActivityLogPage.php:573
 msgid "Successful Deliveries"
 msgstr ""
 
-#: src/Admin/Pages/ActivityLogPage.php:450
+#: src/Admin/Pages/ActivityLogPage.php:585
 msgid "Failed Deliveries"
 msgstr ""
 
-#: src/Admin/Pages/ActivityLogPage.php:474
+#: src/Admin/Pages/ActivityLogPage.php:627
 #: src/Admin/Pages/HomePage.php:81
 msgid "Form Submission"
 msgstr ""
 
-#: src/Admin/Pages/ActivityLogPage.php:474
+#: src/Admin/Pages/ActivityLogPage.php:627
 msgid "Analytics Report"
 msgstr ""
 
 #. translators: %s: message type, "Form Submission" or "Analytics Report".
-#: src/Admin/Pages/ActivityLogPage.php:478
+#: src/Admin/Pages/ActivityLogPage.php:631
 #, php-format
 msgid "%s · Test"
 msgstr ""
 
 #. translators: 1: message type, 2: attempt number, 3: maximum attempts.
-#: src/Admin/Pages/ActivityLogPage.php:481
+#: src/Admin/Pages/ActivityLogPage.php:634
 #, php-format
 msgid "%1$s · Retry %2$d/%3$d"
 msgstr ""
 
 #. translators: %s: message type, "Form Submission" or "Analytics Report".
-#: src/Admin/Pages/ActivityLogPage.php:487
+#: src/Admin/Pages/ActivityLogPage.php:640
 #, php-format
 msgid "%s · Immediate"
 msgstr ""
 
 #. translators: %s: message type, "Form Submission" or "Analytics Report".
-#: src/Admin/Pages/ActivityLogPage.php:489
+#: src/Admin/Pages/ActivityLogPage.php:642
 #, php-format
 msgid "%s · Scheduled"
 msgstr ""
 
-#: src/Admin/Pages/ActivityLogPage.php:503
+#: src/Admin/Pages/ActivityLogPage.php:656
 msgid "Error"
 msgstr ""
 
-#: src/Admin/Pages/ActivityLogPage.php:503
+#: src/Admin/Pages/ActivityLogPage.php:656
 msgid "Success"
 msgstr ""
 
 #. translators: %s: date and time in UTC.
-#: src/Admin/Pages/ActivityLogPage.php:548
-#: src/Admin/Pages/AnalyticsPage.php:1455
-#: src/Admin/Pages/SubmissionsPage.php:831
+#: src/Admin/Pages/ActivityLogPage.php:701
+#: src/Admin/Pages/AnalyticsPage.php:1466
+#: src/Admin/Pages/SubmissionsPage.php:972
 #, php-format
 msgid "%s UTC"
 msgstr ""
 
 #. translators: %s: the Activity Log entry's numeric id.
-#: src/Admin/Pages/ActivityLogPage.php:562
+#: src/Admin/Pages/ActivityLogPage.php:715
 #, php-format
 msgid "Delete log entry %s"
 msgstr ""
 
-#: src/Admin/Pages/ActivityLogPage.php:563
+#: src/Admin/Pages/ActivityLogPage.php:716
 #: assets/js/activity-log.js:178
 #: assets/js/activity-log.js:183
 msgid "Delete"
 msgstr ""
 
-#: src/Admin/Pages/ActivityLogPage.php:568
+#: src/Admin/Pages/ActivityLogPage.php:721
 msgid "Endpoint:"
 msgstr ""
 
-#: src/Admin/Pages/ActivityLogPage.php:574
+#: src/Admin/Pages/ActivityLogPage.php:727
 msgid "Request URL:"
 msgstr ""
 
-#: src/Admin/Pages/ActivityLogPage.php:580
+#: src/Admin/Pages/ActivityLogPage.php:733
 msgid "Delivery ID:"
 msgstr ""
 
-#: src/Admin/Pages/ActivityLogPage.php:586
+#: src/Admin/Pages/ActivityLogPage.php:739
 msgid "Submission ID:"
 msgstr ""
 
-#: src/Admin/Pages/ActivityLogPage.php:588
+#: src/Admin/Pages/ActivityLogPage.php:741
 msgid "Conversion ID:"
 msgstr ""
 
-#: src/Admin/Pages/ActivityLogPage.php:595
+#: src/Admin/Pages/ActivityLogPage.php:748
 msgid "Provider:"
 msgstr ""
 
-#: src/Admin/Pages/ActivityLogPage.php:597
+#: src/Admin/Pages/ActivityLogPage.php:750
 msgid "Form:"
 msgstr ""
 
-#: src/Admin/Pages/ActivityLogPage.php:604
+#: src/Admin/Pages/ActivityLogPage.php:757
 msgid "Error:"
 msgstr ""
 
-#: src/Admin/Pages/ActivityLogPage.php:610
+#: src/Admin/Pages/ActivityLogPage.php:763
 msgid "Request headers (sensitive values redacted)"
 msgstr ""
 
-#: src/Admin/Pages/ActivityLogPage.php:616
+#: src/Admin/Pages/ActivityLogPage.php:769
 msgid "Payload:"
 msgstr ""
 
-#: src/Admin/Pages/ActivityLogPage.php:622
+#: src/Admin/Pages/ActivityLogPage.php:775
 msgid "Response:"
 msgstr ""
 
-#: src/Admin/Pages/AnalyticsPage.php:74
-#: src/Admin/Pages/AnalyticsPage.php:166
+#: src/Admin/Pages/AnalyticsPage.php:78
+#: src/Admin/Pages/AnalyticsPage.php:171
 msgid "Convermetry Analytics"
 msgstr ""
 
-#: src/Admin/Pages/AnalyticsPage.php:191
+#: src/Admin/Pages/AnalyticsPage.php:203
 msgid "Expand all sections"
 msgstr ""
 
-#: src/Admin/Pages/AnalyticsPage.php:192
+#: src/Admin/Pages/AnalyticsPage.php:204
 msgid "Collapse all sections"
 msgstr ""
 
-#: src/Admin/Pages/AnalyticsPage.php:193
+#: src/Admin/Pages/AnalyticsPage.php:205
 msgid "Print / Save as PDF"
 msgstr ""
 
-#: src/Admin/Pages/AnalyticsPage.php:196
-#: src/Admin/Pages/AnalyticsPage.php:1350
-#: src/Admin/Pages/SubmissionsPage.php:843
+#: src/Admin/Pages/AnalyticsPage.php:208
+#: src/Admin/Pages/AnalyticsPage.php:1361
+#: src/Admin/Pages/SubmissionsPage.php:984
 msgid "Content"
 msgstr ""
 
-#: src/Admin/Pages/AnalyticsPage.php:196
+#: src/Admin/Pages/AnalyticsPage.php:208
 msgid "Which pages draw traffic and where visitors arrive."
 msgstr ""
 
-#: src/Admin/Pages/AnalyticsPage.php:207
+#: src/Admin/Pages/AnalyticsPage.php:219
 msgid "Engagement"
 msgstr ""
 
-#: src/Admin/Pages/AnalyticsPage.php:207
+#: src/Admin/Pages/AnalyticsPage.php:219
 msgid "How visitors interact with your pages: clicks, form activity, and attention."
 msgstr ""
 
-#: src/Admin/Pages/AnalyticsPage.php:219
+#: src/Admin/Pages/AnalyticsPage.php:231
 msgid "Acquisition"
 msgstr ""
 
-#: src/Admin/Pages/AnalyticsPage.php:219
+#: src/Admin/Pages/AnalyticsPage.php:231
 msgid "Where traffic comes from: referrers, campaigns, and marketing channels."
 msgstr ""
 
-#: src/Admin/Pages/AnalyticsPage.php:232
-#: src/Admin/Pages/AnalyticsPage.php:1407
-#: src/Admin/Pages/AnalyticsPage.php:1421
+#: src/Admin/Pages/AnalyticsPage.php:244
+#: src/Admin/Pages/AnalyticsPage.php:1418
+#: src/Admin/Pages/AnalyticsPage.php:1432
 msgid "Devices"
 msgstr ""
 
-#: src/Admin/Pages/AnalyticsPage.php:232
+#: src/Admin/Pages/AnalyticsPage.php:244
 msgid "Mobile versus desktop share of page views."
 msgstr ""
 
-#: src/Admin/Pages/AnalyticsPage.php:236
+#: src/Admin/Pages/AnalyticsPage.php:248
 msgid "Important visitor actions other than form submissions — phone taps, downloads, booking clicks, pricing-page visits."
 msgstr ""
 
-#: src/Admin/Pages/AnalyticsPage.php:240
+#: src/Admin/Pages/AnalyticsPage.php:252
 msgid "Lead outcomes"
 msgstr ""
 
-#: src/Admin/Pages/AnalyticsPage.php:240
+#: src/Admin/Pages/AnalyticsPage.php:252
 msgid "What the leads were actually worth. Counted by the date each lead arrived, with its status as it stands right now."
 msgstr ""
 
-#: src/Admin/Pages/AnalyticsPage.php:244
+#: src/Admin/Pages/AnalyticsPage.php:256
 msgid "Leads by Channel"
 msgstr ""
 
-#: src/Admin/Pages/AnalyticsPage.php:245
+#: src/Admin/Pages/AnalyticsPage.php:257
 msgid "Leads by Campaign"
 msgstr ""
 
-#: src/Admin/Pages/AnalyticsPage.php:246
+#: src/Admin/Pages/AnalyticsPage.php:258
 msgid "Landing Page Performance"
 msgstr ""
 
-#: src/Admin/Pages/AnalyticsPage.php:247
+#: src/Admin/Pages/AnalyticsPage.php:259
 msgid "Leads by Form"
 msgstr ""
 
-#: src/Admin/Pages/AnalyticsPage.php:254
+#: src/Admin/Pages/AnalyticsPage.php:266
 msgid "Individual confirmed conversions with their campaign attribution — server-confirmed submissions carry their provider and form identity."
 msgstr ""
 
-#: src/Admin/Pages/AnalyticsPage.php:258
+#: src/Admin/Pages/AnalyticsPage.php:270
 msgid "Recent Activity"
 msgstr ""
 
 #. translators: 1: UTC date and time the limit was first hit, 2: the name of a PHP filter.
-#: src/Admin/Pages/AnalyticsPage.php:349
+#: src/Admin/Pages/AnalyticsPage.php:361
 #, php-format
 msgid "<strong>Convermetry:</strong> The site-wide event rate limit was reached in the last 24 hours (first at %1$s UTC), so some visitor events were not recorded. If this is legitimate traffic rather than a flood, raise the limits with the %2$s filter."
 msgstr ""
 
 #. translators: 1: selected period in days, 2: retention window in days.
-#: src/Admin/Pages/AnalyticsPage.php:375
+#: src/Admin/Pages/AnalyticsPage.php:387
 #, php-format
 msgid "<strong>Convermetry:</strong> The selected %1$d-day period is longer than the configured data retention window (%2$d days), so events older than %2$d days have already been deleted and cannot appear below. Choose a shorter period, or raise <strong>Data retention</strong> in Settings."
 msgstr ""
 
-#: src/Admin/Pages/AnalyticsPage.php:462
-#: src/Admin/Pages/AnalyticsPage.php:463
-#: src/Admin/Pages/AnalyticsPage.php:715
-#: src/Admin/Pages/AnalyticsPage.php:779
+#: src/Admin/Pages/AnalyticsPage.php:473
+#: src/Admin/Pages/AnalyticsPage.php:474
+#: src/Admin/Pages/AnalyticsPage.php:726
+#: src/Admin/Pages/AnalyticsPage.php:790
 msgid "M j, Y"
 msgstr ""
 
-#: src/Admin/Pages/AnalyticsPage.php:467
+#: src/Admin/Pages/AnalyticsPage.php:478
 msgid "Reporting period"
 msgstr ""
 
 #. translators: %d: number of days in the reporting period.
-#: src/Admin/Pages/AnalyticsPage.php:486
-#: src/Admin/Pages/FunnelsPage.php:338
-#: src/Admin/Pages/GoalsPage.php:413
+#: src/Admin/Pages/AnalyticsPage.php:497
+#: src/Admin/Pages/FunnelsPage.php:396
+#: src/Admin/Pages/GoalsPage.php:470
 #, php-format
 msgid "Last %d day"
 msgid_plural "Last %d days"
@@ -3871,13 +3905,13 @@ msgstr[0] ""
 msgstr[1] ""
 
 #. translators: 1: first date of the period, 2: last date of the period.
-#: src/Admin/Pages/AnalyticsPage.php:498
+#: src/Admin/Pages/AnalyticsPage.php:509
 #, php-format
 msgid "%1$s – %2$s. Dates are UTC; the current day is still collecting data."
 msgstr ""
 
 #. translators: %d: number of days in the reporting period.
-#: src/Admin/Pages/AnalyticsPage.php:509
+#: src/Admin/Pages/AnalyticsPage.php:520
 #, php-format
 msgid "last %d day"
 msgid_plural "last %d days"
@@ -3885,114 +3919,114 @@ msgstr[0] ""
 msgstr[1] ""
 
 #. translators: 1: selected number of days, 2: number of days actually shown after the retention limit.
-#: src/Admin/Pages/AnalyticsPage.php:511
+#: src/Admin/Pages/AnalyticsPage.php:522
 #, php-format
 msgid "last %1$d days selected; %2$d days shown per data retention"
 msgstr ""
 
 #. translators: 1: site name, 2: first date, 3: last date, 4: period description, 5: generation date and time, 6: site timezone.
-#: src/Admin/Pages/AnalyticsPage.php:516
+#: src/Admin/Pages/AnalyticsPage.php:527
 #, php-format
 msgid "%1$s — Convermetry analytics report · %2$s – %3$s (UTC, %4$s; the final day was still collecting when generated) · Generated %5$s (%6$s)"
 msgstr ""
 
-#: src/Admin/Pages/AnalyticsPage.php:546
-#: src/Admin/Pages/AnalyticsPage.php:773
-#: src/Admin/Pages/AnalyticsPage.php:1425
+#: src/Admin/Pages/AnalyticsPage.php:557
+#: src/Admin/Pages/AnalyticsPage.php:784
+#: src/Admin/Pages/AnalyticsPage.php:1436
 msgid "Page Views"
 msgstr ""
 
-#: src/Admin/Pages/AnalyticsPage.php:547
-#: src/Admin/Pages/AnalyticsPage.php:1203
+#: src/Admin/Pages/AnalyticsPage.php:558
+#: src/Admin/Pages/AnalyticsPage.php:1214
 msgid "Clicks"
 msgstr ""
 
-#: src/Admin/Pages/AnalyticsPage.php:548
+#: src/Admin/Pages/AnalyticsPage.php:559
 msgid "Form Submit Attempts"
 msgstr ""
 
-#: src/Admin/Pages/AnalyticsPage.php:548
+#: src/Admin/Pages/AnalyticsPage.php:559
 msgid "Counted when a form is submitted, before the server confirms success."
 msgstr ""
 
-#: src/Admin/Pages/AnalyticsPage.php:549
+#: src/Admin/Pages/AnalyticsPage.php:560
 msgid "Confirmed Conversions"
 msgstr ""
 
-#: src/Admin/Pages/AnalyticsPage.php:549
+#: src/Admin/Pages/AnalyticsPage.php:560
 msgid "Unique conversions, deduplicated across frontend and server detection."
 msgstr ""
 
-#: src/Admin/Pages/AnalyticsPage.php:550
-#: src/Admin/Pages/AnalyticsPage.php:1259
+#: src/Admin/Pages/AnalyticsPage.php:561
+#: src/Admin/Pages/AnalyticsPage.php:1270
 msgid "Hovers"
 msgstr ""
 
-#: src/Admin/Pages/AnalyticsPage.php:551
+#: src/Admin/Pages/AnalyticsPage.php:562
 msgid "Scroll Milestones"
 msgstr ""
 
-#: src/Admin/Pages/AnalyticsPage.php:551
+#: src/Admin/Pages/AnalyticsPage.php:562
 msgid "Times visitors reached 50% or 100% of a page."
 msgstr ""
 
-#: src/Admin/Pages/AnalyticsPage.php:568
+#: src/Admin/Pages/AnalyticsPage.php:579
 msgid "Server-Confirmed Submissions"
 msgstr ""
 
-#: src/Admin/Pages/AnalyticsPage.php:569
+#: src/Admin/Pages/AnalyticsPage.php:580
 msgid "Submissions a form plugin's server-side hook confirmed — the authoritative lead count."
 msgstr ""
 
-#: src/Admin/Pages/AnalyticsPage.php:575
+#: src/Admin/Pages/AnalyticsPage.php:586
 msgid "Other Events"
 msgstr ""
 
-#: src/Admin/Pages/AnalyticsPage.php:575
+#: src/Admin/Pages/AnalyticsPage.php:586
 msgid "Event types not shown above, such as form views, form starts, validation errors and custom events."
 msgstr ""
 
-#: src/Admin/Pages/AnalyticsPage.php:656
+#: src/Admin/Pages/AnalyticsPage.php:667
 msgid "— (no completed days yet)"
 msgstr ""
 
-#: src/Admin/Pages/AnalyticsPage.php:668
+#: src/Admin/Pages/AnalyticsPage.php:679
 msgid "Daily Page Views"
 msgstr ""
 
 #. translators: %s: total page views in the period.
-#: src/Admin/Pages/AnalyticsPage.php:672
+#: src/Admin/Pages/AnalyticsPage.php:683
 #, php-format
 msgid "Total: <strong>%s</strong>"
 msgstr ""
 
 #. translators: %s: average page views per completed day.
-#: src/Admin/Pages/AnalyticsPage.php:676
+#: src/Admin/Pages/AnalyticsPage.php:687
 #, php-format
 msgid "Avg per completed day: <strong>%s</strong>"
 msgstr ""
 
 #. translators: 1: date of the busiest day, 2: page views on that day.
-#: src/Admin/Pages/AnalyticsPage.php:684
+#: src/Admin/Pages/AnalyticsPage.php:695
 #, php-format
 msgid "Busiest day: <strong>%1$s (%2$s)</strong>"
 msgstr ""
 
-#: src/Admin/Pages/AnalyticsPage.php:685
-#: src/Admin/Pages/AnalyticsPage.php:756
+#: src/Admin/Pages/AnalyticsPage.php:696
+#: src/Admin/Pages/AnalyticsPage.php:767
 msgid "M j"
 msgstr ""
 
-#: src/Admin/Pages/AnalyticsPage.php:692
+#: src/Admin/Pages/AnalyticsPage.php:703
 msgid "Today (still collecting)"
 msgstr ""
 
-#: src/Admin/Pages/AnalyticsPage.php:711
+#: src/Admin/Pages/AnalyticsPage.php:722
 msgid "Daily page views: one button per day, oldest first"
 msgstr ""
 
 #. translators: 1: date, 2: number of page views.
-#: src/Admin/Pages/AnalyticsPage.php:721
+#: src/Admin/Pages/AnalyticsPage.php:732
 #, php-format
 msgid "%1$s: %2$s page view (today, still collecting)"
 msgid_plural "%1$s: %2$s page views (today, still collecting)"
@@ -4000,22 +4034,22 @@ msgstr[0] ""
 msgstr[1] ""
 
 #. translators: 1: date, 2: number of page views.
-#: src/Admin/Pages/AnalyticsPage.php:727
+#: src/Admin/Pages/AnalyticsPage.php:738
 #, php-format
 msgid "%1$s: %2$s page view"
 msgid_plural "%1$s: %2$s page views"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/Admin/Pages/AnalyticsPage.php:769
+#: src/Admin/Pages/AnalyticsPage.php:780
 msgid "View data table"
 msgstr ""
 
-#: src/Admin/Pages/AnalyticsPage.php:772
+#: src/Admin/Pages/AnalyticsPage.php:783
 msgid "Daily page views for the selected period"
 msgstr ""
 
-#: src/Admin/Pages/AnalyticsPage.php:773
+#: src/Admin/Pages/AnalyticsPage.php:784
 #: src/Privacy/PersonalDataExporter.php:108
 #: src/Privacy/PersonalDataExporter.php:124
 #: src/Privacy/PersonalDataExporter.php:141
@@ -4024,510 +4058,528 @@ msgstr ""
 msgid "Date"
 msgstr ""
 
-#: src/Admin/Pages/AnalyticsPage.php:779
+#: src/Admin/Pages/AnalyticsPage.php:790
 msgid "(today, partial)"
 msgstr ""
 
-#: src/Admin/Pages/AnalyticsPage.php:957
+#: src/Admin/Pages/AnalyticsPage.php:968
 msgid "This section could not be loaded due to a database error. Your data is safe — try refreshing shortly, or check your site's PHP error log if this continues."
 msgstr ""
 
-#: src/Admin/Pages/AnalyticsPage.php:1003
+#: src/Admin/Pages/AnalyticsPage.php:1014
 msgid "(external link, opens in a new tab)"
 msgstr ""
 
-#: src/Admin/Pages/AnalyticsPage.php:1004
+#: src/Admin/Pages/AnalyticsPage.php:1015
 msgid "(opens in a new tab)"
 msgstr ""
 
-#: src/Admin/Pages/AnalyticsPage.php:1129
+#: src/Admin/Pages/AnalyticsPage.php:1140
 msgid "Page View"
 msgstr ""
 
-#: src/Admin/Pages/AnalyticsPage.php:1130
+#: src/Admin/Pages/AnalyticsPage.php:1141
 #: src/Privacy/PersonalDataExporter.php:322
 msgid "Click"
 msgstr ""
 
-#: src/Admin/Pages/AnalyticsPage.php:1131
+#: src/Admin/Pages/AnalyticsPage.php:1142
 msgid "Form Submit Attempt"
 msgstr ""
 
-#: src/Admin/Pages/AnalyticsPage.php:1132
+#: src/Admin/Pages/AnalyticsPage.php:1143
 msgid "Confirmed Conversion"
 msgstr ""
 
-#: src/Admin/Pages/AnalyticsPage.php:1133
+#: src/Admin/Pages/AnalyticsPage.php:1144
 #: src/Privacy/PersonalDataExporter.php:323
 msgid "Hover"
 msgstr ""
 
-#: src/Admin/Pages/AnalyticsPage.php:1134
+#: src/Admin/Pages/AnalyticsPage.php:1145
 msgid "Scroll Milestone"
 msgstr ""
 
-#: src/Admin/Pages/AnalyticsPage.php:1144
-#: src/Admin/Pages/AnalyticsPage.php:1148
+#: src/Admin/Pages/AnalyticsPage.php:1155
+#: src/Admin/Pages/AnalyticsPage.php:1159
 msgid "Top Pages"
 msgstr ""
 
-#: src/Admin/Pages/AnalyticsPage.php:1149
+#: src/Admin/Pages/AnalyticsPage.php:1160
 msgid "The most-viewed pages (up to 10 shown). Sessions group one visit within a 30-minute inactivity window."
 msgstr ""
 
-#: src/Admin/Pages/AnalyticsPage.php:1151
-#: src/Admin/Pages/AnalyticsPage.php:1232
-#: src/Admin/Pages/AnalyticsPage.php:1475
-#: src/Admin/Pages/AnalyticsPage.php:1708
+#: src/Admin/Pages/AnalyticsPage.php:1162
+#: src/Admin/Pages/AnalyticsPage.php:1243
+#: src/Admin/Pages/AnalyticsPage.php:1486
+#: src/Admin/Pages/AnalyticsPage.php:1719
 #: src/Privacy/PersonalDataExporter.php:159
 #: src/Privacy/PersonalDataExporter.php:195
 #: assets/js/submissions.js:84
 msgid "Page"
 msgstr ""
 
-#: src/Admin/Pages/AnalyticsPage.php:1153
-#: src/Admin/Pages/AnalyticsPage.php:1178
-#: src/Admin/Pages/AnalyticsPage.php:1311
-#: src/Admin/Pages/AnalyticsPage.php:1351
-#: src/Admin/Pages/AnalyticsPage.php:1385
-#: src/Admin/Pages/AnalyticsPage.php:1520
-#: src/Admin/Pages/FormsPage.php:348
-#: src/Admin/Pages/GoalsPage.php:463
+#: src/Admin/Pages/AnalyticsPage.php:1164
+#: src/Admin/Pages/AnalyticsPage.php:1189
+#: src/Admin/Pages/AnalyticsPage.php:1322
+#: src/Admin/Pages/AnalyticsPage.php:1362
+#: src/Admin/Pages/AnalyticsPage.php:1396
+#: src/Admin/Pages/AnalyticsPage.php:1531
+#: src/Admin/Pages/FormsPage.php:455
+#: src/Admin/Pages/GoalsPage.php:520
 msgid "Sessions"
 msgstr ""
 
-#: src/Admin/Pages/AnalyticsPage.php:1160
-#: src/Admin/Pages/AnalyticsPage.php:1429
+#: src/Admin/Pages/AnalyticsPage.php:1171
+#: src/Admin/Pages/AnalyticsPage.php:1440
 msgid "No page views recorded in this period."
 msgstr ""
 
-#: src/Admin/Pages/AnalyticsPage.php:1170
-#: src/Admin/Pages/AnalyticsPage.php:1174
+#: src/Admin/Pages/AnalyticsPage.php:1181
+#: src/Admin/Pages/AnalyticsPage.php:1185
 msgid "Top Landing Pages"
 msgstr ""
 
-#: src/Admin/Pages/AnalyticsPage.php:1175
+#: src/Admin/Pages/AnalyticsPage.php:1186
 msgid "The first page of each session that started in this period — where visitors actually arrive. Up to 10 shown."
 msgstr ""
 
-#: src/Admin/Pages/AnalyticsPage.php:1177
-#: src/Admin/Pages/AnalyticsPage.php:1568
+#: src/Admin/Pages/AnalyticsPage.php:1188
+#: src/Admin/Pages/AnalyticsPage.php:1579
 #: src/Admin/Pages/HomePage.php:80
 msgid "Landing Page"
 msgstr ""
 
-#: src/Admin/Pages/AnalyticsPage.php:1184
+#: src/Admin/Pages/AnalyticsPage.php:1195
 msgid "No sessions recorded in this period."
 msgstr ""
 
-#: src/Admin/Pages/AnalyticsPage.php:1194
-#: src/Admin/Pages/AnalyticsPage.php:1198
+#: src/Admin/Pages/AnalyticsPage.php:1205
+#: src/Admin/Pages/AnalyticsPage.php:1209
 msgid "Top Clicked Elements"
 msgstr ""
 
-#: src/Admin/Pages/AnalyticsPage.php:1199
+#: src/Admin/Pages/AnalyticsPage.php:1210
 msgid "The links and buttons visitors click most (up to 10 shown)."
 msgstr ""
 
-#: src/Admin/Pages/AnalyticsPage.php:1201
-#: src/Admin/Pages/AnalyticsPage.php:1257
+#: src/Admin/Pages/AnalyticsPage.php:1212
+#: src/Admin/Pages/AnalyticsPage.php:1268
 #: src/Privacy/PersonalDataExporter.php:161
 msgid "Element"
 msgstr ""
 
-#: src/Admin/Pages/AnalyticsPage.php:1202
+#: src/Admin/Pages/AnalyticsPage.php:1213
 #: src/Privacy/PersonalDataExporter.php:125
 #: src/Privacy/PersonalDataExporter.php:142
 msgid "Destination"
 msgstr ""
 
 #. translators: %s: HTML tag name of the clicked element, such as "a" or "button".
-#: src/Admin/Pages/AnalyticsPage.php:1208
+#: src/Admin/Pages/AnalyticsPage.php:1219
 #, php-format
 msgid "(unlabeled %s)"
 msgstr ""
 
-#: src/Admin/Pages/AnalyticsPage.php:1214
+#: src/Admin/Pages/AnalyticsPage.php:1225
 msgid "No clicks recorded in this period."
 msgstr ""
 
-#: src/Admin/Pages/AnalyticsPage.php:1224
-#: src/Admin/Pages/AnalyticsPage.php:1228
+#: src/Admin/Pages/AnalyticsPage.php:1235
+#: src/Admin/Pages/AnalyticsPage.php:1239
 msgid "Top Form Submit Attempts"
 msgstr ""
 
-#: src/Admin/Pages/AnalyticsPage.php:1229
+#: src/Admin/Pages/AnalyticsPage.php:1240
 msgid "Counted when a visitor submits the form — success is not confirmed (see Confirmed Conversions). Up to 10 shown."
 msgstr ""
 
-#: src/Admin/Pages/AnalyticsPage.php:1231
-#: src/Admin/Pages/AnalyticsPage.php:1471
-#: src/Admin/Pages/AnalyticsPage.php:1569
-#: src/Admin/Pages/FormsPage.php:271
-#: src/Admin/Pages/NotificationsPage.php:466
-#: src/Admin/Pages/SubmissionsPage.php:888
+#: src/Admin/Pages/AnalyticsPage.php:1242
+#: src/Admin/Pages/AnalyticsPage.php:1482
+#: src/Admin/Pages/AnalyticsPage.php:1580
+#: src/Admin/Pages/FormsPage.php:378
+#: src/Admin/Pages/NotificationsPage.php:570
+#: src/Admin/Pages/SubmissionsPage.php:1029
 #: src/Notifications/EmailBuilder.php:116
 #: src/Privacy/PersonalDataExporter.php:193
 #: assets/js/submissions.js:83
 msgid "Form"
 msgstr ""
 
-#: src/Admin/Pages/AnalyticsPage.php:1236
-#: src/Admin/Pages/SubmissionsPage.php:714
+#: src/Admin/Pages/AnalyticsPage.php:1247
+#: src/Admin/Pages/SubmissionsPage.php:855
 msgid "(unnamed form)"
 msgstr ""
 
-#: src/Admin/Pages/AnalyticsPage.php:1240
+#: src/Admin/Pages/AnalyticsPage.php:1251
 msgid "No form submissions recorded in this period."
 msgstr ""
 
-#: src/Admin/Pages/AnalyticsPage.php:1250
-#: src/Admin/Pages/AnalyticsPage.php:1254
+#: src/Admin/Pages/AnalyticsPage.php:1261
+#: src/Admin/Pages/AnalyticsPage.php:1265
 msgid "Most Hovered Elements"
 msgstr ""
 
-#: src/Admin/Pages/AnalyticsPage.php:1255
+#: src/Admin/Pages/AnalyticsPage.php:1266
 msgid "Elements the pointer rested on — where visitor attention lingers before (or without) a click. Up to 10 shown."
 msgstr ""
 
-#: src/Admin/Pages/AnalyticsPage.php:1262
+#: src/Admin/Pages/AnalyticsPage.php:1273
 msgid "(unlabeled element)"
 msgstr ""
 
-#: src/Admin/Pages/AnalyticsPage.php:1266
+#: src/Admin/Pages/AnalyticsPage.php:1277
 msgid "No hover activity recorded in this period."
 msgstr ""
 
-#: src/Admin/Pages/AnalyticsPage.php:1276
-#: src/Admin/Pages/AnalyticsPage.php:1280
+#: src/Admin/Pages/AnalyticsPage.php:1287
+#: src/Admin/Pages/AnalyticsPage.php:1291
 msgid "Top Referrers"
 msgstr ""
 
-#: src/Admin/Pages/AnalyticsPage.php:1281
+#: src/Admin/Pages/AnalyticsPage.php:1292
 msgid "The external pages that sent this site the most traffic (up to 10 shown)."
 msgstr ""
 
-#: src/Admin/Pages/AnalyticsPage.php:1283
+#: src/Admin/Pages/AnalyticsPage.php:1294
 msgid "Referring Page"
 msgstr ""
 
-#: src/Admin/Pages/AnalyticsPage.php:1284
+#: src/Admin/Pages/AnalyticsPage.php:1295
 msgid "Pageviews"
 msgstr ""
 
-#: src/Admin/Pages/AnalyticsPage.php:1290
+#: src/Admin/Pages/AnalyticsPage.php:1301
 msgid "No external referrers recorded in this period."
 msgstr ""
 
-#: src/Admin/Pages/AnalyticsPage.php:1300
-#: src/Admin/Pages/AnalyticsPage.php:1304
+#: src/Admin/Pages/AnalyticsPage.php:1311
+#: src/Admin/Pages/AnalyticsPage.php:1315
 msgid "Campaigns"
 msgstr ""
 
-#: src/Admin/Pages/AnalyticsPage.php:1305
+#: src/Admin/Pages/AnalyticsPage.php:1316
 msgid "Session-attributed performance of utm-tagged visits (up to 10 shown, ranked by views, plus any campaigns that converted without a same-period pageview). Conv. rate is the share of sessions with at least one conversion."
 msgstr ""
 
-#: src/Admin/Pages/AnalyticsPage.php:1307
-#: src/Admin/Pages/AnalyticsPage.php:1345
-#: src/Admin/Pages/AnalyticsPage.php:1472
-#: src/Admin/Pages/SubmissionsPage.php:838
+#: src/Admin/Pages/AnalyticsPage.php:1318
+#: src/Admin/Pages/AnalyticsPage.php:1356
+#: src/Admin/Pages/AnalyticsPage.php:1483
+#: src/Admin/Pages/SubmissionsPage.php:979
 #: assets/js/submissions.js:85
 msgid "Source"
 msgstr ""
 
-#: src/Admin/Pages/AnalyticsPage.php:1308
-#: src/Admin/Pages/AnalyticsPage.php:1346
-#: src/Admin/Pages/SubmissionsPage.php:839
+#: src/Admin/Pages/AnalyticsPage.php:1319
+#: src/Admin/Pages/AnalyticsPage.php:1357
+#: src/Admin/Pages/SubmissionsPage.php:980
 msgid "Medium"
 msgstr ""
 
-#: src/Admin/Pages/AnalyticsPage.php:1309
-#: src/Admin/Pages/AnalyticsPage.php:1347
-#: src/Admin/Pages/AnalyticsPage.php:1474
-#: src/Admin/Pages/AnalyticsPage.php:1567
-#: src/Admin/Pages/SubmissionsPage.php:840
+#: src/Admin/Pages/AnalyticsPage.php:1320
+#: src/Admin/Pages/AnalyticsPage.php:1358
+#: src/Admin/Pages/AnalyticsPage.php:1485
+#: src/Admin/Pages/AnalyticsPage.php:1578
+#: src/Admin/Pages/SubmissionsPage.php:981
 #: assets/js/submissions.js:86
 msgid "Campaign"
 msgstr ""
 
-#: src/Admin/Pages/AnalyticsPage.php:1310
-#: src/Admin/Pages/AnalyticsPage.php:1348
+#: src/Admin/Pages/AnalyticsPage.php:1321
+#: src/Admin/Pages/AnalyticsPage.php:1359
 msgid "ID"
 msgstr ""
 
-#: src/Admin/Pages/AnalyticsPage.php:1314
-#: src/Admin/Pages/AnalyticsPage.php:1388
+#: src/Admin/Pages/AnalyticsPage.php:1325
+#: src/Admin/Pages/AnalyticsPage.php:1399
 msgid "Conv. Rate"
 msgstr ""
 
-#: src/Admin/Pages/AnalyticsPage.php:1326
+#: src/Admin/Pages/AnalyticsPage.php:1337
 msgid "No campaign-tagged (utm) visits recorded in this period."
 msgstr ""
 
-#: src/Admin/Pages/AnalyticsPage.php:1338
-#: src/Admin/Pages/AnalyticsPage.php:1342
+#: src/Admin/Pages/AnalyticsPage.php:1349
+#: src/Admin/Pages/AnalyticsPage.php:1353
 msgid "Campaign Terms & Content"
 msgstr ""
 
-#: src/Admin/Pages/AnalyticsPage.php:1343
+#: src/Admin/Pages/AnalyticsPage.php:1354
 msgid "Keyword (utm_term) and creative (utm_content) performance, with campaign context. Up to 10 shown."
 msgstr ""
 
-#: src/Admin/Pages/AnalyticsPage.php:1349
-#: src/Admin/Pages/SubmissionsPage.php:842
+#: src/Admin/Pages/AnalyticsPage.php:1360
+#: src/Admin/Pages/SubmissionsPage.php:983
 msgid "Term"
 msgstr ""
 
-#: src/Admin/Pages/AnalyticsPage.php:1366
+#: src/Admin/Pages/AnalyticsPage.php:1377
 msgid "No visits carrying utm_term or utm_content tags were recorded in this period. Campaigns that never tag keywords or creatives simply don't appear here."
 msgstr ""
 
-#: src/Admin/Pages/AnalyticsPage.php:1377
-#: src/Admin/Pages/AnalyticsPage.php:1381
+#: src/Admin/Pages/AnalyticsPage.php:1388
+#: src/Admin/Pages/AnalyticsPage.php:1392
 msgid "Channels"
 msgstr ""
 
-#: src/Admin/Pages/AnalyticsPage.php:1382
+#: src/Admin/Pages/AnalyticsPage.php:1393
 msgid "Sessions and conversions per marketing channel, classified as events arrive. Conv. rate is the share of sessions with at least one conversion."
 msgstr ""
 
-#: src/Admin/Pages/AnalyticsPage.php:1384
-#: src/Admin/Pages/AnalyticsPage.php:1473
-#: src/Admin/Pages/AnalyticsPage.php:1566
-#: src/Admin/Pages/SubmissionsPage.php:837
+#: src/Admin/Pages/AnalyticsPage.php:1395
+#: src/Admin/Pages/AnalyticsPage.php:1484
+#: src/Admin/Pages/AnalyticsPage.php:1577
+#: src/Admin/Pages/SubmissionsPage.php:978
 #: src/Notifications/EmailBuilder.php:226
 msgid "Channel"
 msgstr ""
 
-#: src/Admin/Pages/AnalyticsPage.php:1397
+#: src/Admin/Pages/AnalyticsPage.php:1408
 msgid "No channel data recorded in this period. Channels are classified as new events arrive, so this fills in from the moment of installation onward."
 msgstr ""
 
-#: src/Admin/Pages/AnalyticsPage.php:1424
-#: src/Admin/Pages/AnalyticsPage.php:1710
-#: src/Admin/Pages/SubmissionsPage.php:847
+#: src/Admin/Pages/AnalyticsPage.php:1435
+#: src/Admin/Pages/AnalyticsPage.php:1721
+#: src/Admin/Pages/SubmissionsPage.php:988
 #: src/Notifications/EmailBuilder.php:231
 #: src/Privacy/PersonalDataExporter.php:164
 #: src/Privacy/PersonalDataExporter.php:219
 msgid "Device"
 msgstr ""
 
-#: src/Admin/Pages/AnalyticsPage.php:1426
-#: src/Admin/Pages/AnalyticsPage.php:1624
+#: src/Admin/Pages/AnalyticsPage.php:1437
+#: src/Admin/Pages/AnalyticsPage.php:1635
 msgid "Share"
 msgstr ""
 
-#: src/Admin/Pages/AnalyticsPage.php:1441
-#: src/Admin/Pages/AnalyticsPage.php:1467
+#: src/Admin/Pages/AnalyticsPage.php:1452
+#: src/Admin/Pages/AnalyticsPage.php:1478
 msgid "Recent Conversions"
 msgstr ""
 
-#: src/Admin/Pages/AnalyticsPage.php:1457
+#: src/Admin/Pages/AnalyticsPage.php:1468
 msgid "Frontend"
 msgstr ""
 
-#: src/Admin/Pages/AnalyticsPage.php:1468
+#: src/Admin/Pages/AnalyticsPage.php:1479
 msgid "The latest confirmed conversions in this period (up to 15 shown), deduplicated by conversion id. \"Frontend\" rows were detected by the tracker only; provider rows were confirmed server-side. IP is blank when IP storage is off in Settings, or for a visitor whose Do Not Track / Global Privacy Control signal is honored."
 msgstr ""
 
-#: src/Admin/Pages/AnalyticsPage.php:1470
+#: src/Admin/Pages/AnalyticsPage.php:1481
 msgid "When (UTC)"
 msgstr ""
 
-#: src/Admin/Pages/AnalyticsPage.php:1476
+#: src/Admin/Pages/AnalyticsPage.php:1487
 msgid "IP"
 msgstr ""
 
-#: src/Admin/Pages/AnalyticsPage.php:1477
-#: src/Admin/Pages/SubmissionsPage.php:833
+#: src/Admin/Pages/AnalyticsPage.php:1488
+#: src/Admin/Pages/SubmissionsPage.php:974
 msgid "Conversion ID"
 msgstr ""
 
-#: src/Admin/Pages/AnalyticsPage.php:1480
+#: src/Admin/Pages/AnalyticsPage.php:1491
 msgid "No confirmed conversions recorded in this period."
 msgstr ""
 
-#: src/Admin/Pages/AnalyticsPage.php:1498
-#: src/Admin/Pages/AnalyticsPage.php:1515
+#: src/Admin/Pages/AnalyticsPage.php:1509
+#: src/Admin/Pages/AnalyticsPage.php:1526
 msgid "Goal Completions"
 msgstr ""
 
-#: src/Admin/Pages/AnalyticsPage.php:1516
+#: src/Admin/Pages/AnalyticsPage.php:1527
 msgid "A goal counting once per visit can never exceed 100% — its rate is the share of sessions that completed it. Configure goals under Convermetry → Goals."
 msgstr ""
 
-#: src/Admin/Pages/AnalyticsPage.php:1518
-#: src/Admin/Pages/GoalsPage.php:461
+#: src/Admin/Pages/AnalyticsPage.php:1529
+#: src/Admin/Pages/GoalsPage.php:518
 msgid "Goal"
 msgstr ""
 
-#: src/Admin/Pages/AnalyticsPage.php:1519
-#: src/Admin/Pages/GoalsPage.php:462
+#: src/Admin/Pages/AnalyticsPage.php:1530
+#: src/Admin/Pages/GoalsPage.php:519
 msgid "Completions"
 msgstr ""
 
-#: src/Admin/Pages/AnalyticsPage.php:1521
-#: src/Admin/Pages/GoalsPage.php:464
+#: src/Admin/Pages/AnalyticsPage.php:1532
+#: src/Admin/Pages/GoalsPage.php:521
 msgid "Rate"
 msgstr ""
 
-#: src/Admin/Pages/AnalyticsPage.php:1522
-#: src/Admin/Pages/FormsPage.php:698
-#: src/Admin/Pages/GoalsPage.php:465
-#: src/Admin/Pages/GoalsPage.php:685
-#: src/Admin/Pages/SubmissionsPage.php:1041
-#: src/Admin/Pages/WebhooksPage.php:662
+#: src/Admin/Pages/AnalyticsPage.php:1533
+#: src/Admin/Pages/FormsPage.php:805
+#: src/Admin/Pages/GoalsPage.php:522
+#: src/Admin/Pages/GoalsPage.php:742
+#: src/Admin/Pages/SubmissionsPage.php:1182
+#: src/Admin/Pages/WebhooksPage.php:706
 #: src/Privacy/PersonalDataExporter.php:111
 #: assets/js/admin.js:62
 msgid "Value"
 msgstr ""
 
-#: src/Admin/Pages/AnalyticsPage.php:1525
+#: src/Admin/Pages/AnalyticsPage.php:1536
 msgid "No goal completions in this period. Goals are configured under Convermetry → Goals."
 msgstr ""
 
-#: src/Admin/Pages/AnalyticsPage.php:1563
+#: src/Admin/Pages/AnalyticsPage.php:1574
 msgid "Attributed Lead Value is the total recorded against these leads — not revenue, and not ROI: Convermetry has no ad-spend data. Currencies are listed separately rather than added together."
 msgstr ""
 
-#: src/Admin/Pages/AnalyticsPage.php:1571
-#: src/Admin/Pages/AnalyticsPage.php:1623
+#: src/Admin/Pages/AnalyticsPage.php:1582
+#: src/Admin/Pages/AnalyticsPage.php:1634
 msgid "Leads"
 msgstr ""
 
-#: src/Admin/Pages/AnalyticsPage.php:1572
+#: src/Admin/Pages/AnalyticsPage.php:1583
 msgid "Qualified"
 msgstr ""
 
-#: src/Admin/Pages/AnalyticsPage.php:1573
+#: src/Admin/Pages/AnalyticsPage.php:1584
 msgid "Won"
 msgstr ""
 
-#: src/Admin/Pages/AnalyticsPage.php:1574
+#: src/Admin/Pages/AnalyticsPage.php:1585
 msgid "Qual. Rate"
 msgstr ""
 
-#: src/Admin/Pages/AnalyticsPage.php:1575
+#: src/Admin/Pages/AnalyticsPage.php:1586
 msgid "Attributed Lead Value"
 msgstr ""
 
-#: src/Admin/Pages/AnalyticsPage.php:1578
+#: src/Admin/Pages/AnalyticsPage.php:1589
 msgid "No leads recorded in this period."
 msgstr ""
 
-#: src/Admin/Pages/AnalyticsPage.php:1592
-#: src/Admin/Pages/AnalyticsPage.php:1619
+#: src/Admin/Pages/AnalyticsPage.php:1603
+#: src/Admin/Pages/AnalyticsPage.php:1630
 msgid "Time to Lead"
 msgstr ""
 
 #. translators: %s: marketing channel name.
-#: src/Admin/Pages/AnalyticsPage.php:1610
+#: src/Admin/Pages/AnalyticsPage.php:1621
 #, php-format
 msgid "%s — median"
 msgstr ""
 
-#: src/Admin/Pages/AnalyticsPage.php:1620
+#: src/Admin/Pages/AnalyticsPage.php:1631
 msgid "Measured from the first page view of the session that converted, so a visitor who researched over several visits is measured from their final one — Convermetry keeps no persistent visitor identity across sessions. Medians rather than averages: one lead that took three weeks would drag an average past every real experience of the site."
 msgstr ""
 
-#: src/Admin/Pages/AnalyticsPage.php:1622
+#: src/Admin/Pages/AnalyticsPage.php:1633
 msgid "Time to convert"
 msgstr ""
 
-#: src/Admin/Pages/AnalyticsPage.php:1627
+#: src/Admin/Pages/AnalyticsPage.php:1638
 msgid "No conversions with a measurable session start in this period."
 msgstr ""
 
 #. translators: %s: number of seconds.
-#: src/Admin/Pages/AnalyticsPage.php:1664
+#: src/Admin/Pages/AnalyticsPage.php:1675
 #, php-format
 msgid "%ss"
 msgstr ""
 
 #. translators: %s: number of minutes.
-#: src/Admin/Pages/AnalyticsPage.php:1666
+#: src/Admin/Pages/AnalyticsPage.php:1677
 #, php-format
 msgid "%s min"
 msgstr ""
 
 #. translators: %s: number of hours, possibly fractional.
-#: src/Admin/Pages/AnalyticsPage.php:1668
+#: src/Admin/Pages/AnalyticsPage.php:1679
 #, php-format
 msgid "%s hrs"
 msgstr ""
 
 #. translators: %s: number of days, possibly fractional.
-#: src/Admin/Pages/AnalyticsPage.php:1670
+#: src/Admin/Pages/AnalyticsPage.php:1681
 #, php-format
 msgid "%s days"
 msgstr ""
 
-#: src/Admin/Pages/AnalyticsPage.php:1676
-#: src/Admin/Pages/AnalyticsPage.php:1699
+#: src/Admin/Pages/AnalyticsPage.php:1687
+#: src/Admin/Pages/AnalyticsPage.php:1710
 msgid "Latest Events"
 msgstr ""
 
 #. translators: %s: the site's timezone.
-#: src/Admin/Pages/AnalyticsPage.php:1702
+#: src/Admin/Pages/AnalyticsPage.php:1713
 #, php-format
 msgid "The latest 15 events, independent of the selected reporting period. Times are shown in the site timezone (%s)."
 msgstr ""
 
-#: src/Admin/Pages/AnalyticsPage.php:1706
+#: src/Admin/Pages/AnalyticsPage.php:1717
 msgid "When"
 msgstr ""
 
-#: src/Admin/Pages/AnalyticsPage.php:1707
+#: src/Admin/Pages/AnalyticsPage.php:1718
 msgid "Event"
 msgstr ""
 
-#: src/Admin/Pages/AnalyticsPage.php:1709
+#: src/Admin/Pages/AnalyticsPage.php:1720
 msgid "Detail"
 msgstr ""
 
-#: src/Admin/Pages/AnalyticsPage.php:1713
+#: src/Admin/Pages/AnalyticsPage.php:1724
 msgid "No events recorded yet. Visit the site's frontend to start collecting data."
 msgstr ""
 
-#: src/Admin/Pages/FormsPage.php:73
-#: src/Admin/Pages/FormsPage.php:402
+#: src/Admin/Pages/FormsPage.php:78
+#: src/Admin/Pages/FormsPage.php:509
 msgid "Convermetry Forms"
 msgstr ""
 
-#: src/Admin/Pages/FormsPage.php:127
-#: src/Admin/Pages/NotificationsPage.php:125
-#: src/Admin/Pages/NotificationsPage.php:208
-#: src/Admin/Pages/WebhooksPage.php:129
-msgid "Invalid request."
+#: src/Admin/Pages/FormsPage.php:130
+msgid "Form settings can only be saved from the Forms screen."
 msgstr ""
 
-#: src/Admin/Pages/FormsPage.php:217
-msgid "Form settings saved."
-msgstr ""
-
-#: src/Admin/Pages/FormsPage.php:260
-msgid "Engagement & abandonment"
-msgstr ""
-
-#: src/Admin/Pages/FormsPage.php:261
-msgid "The last 30 days. <strong>Views</strong>, <strong>Started</strong> and <strong>Abandoned</strong> count sessions and are observed in the visitor's browser; <strong>Attempts</strong> counts individual submit presses; <strong>Successful</strong> counts submissions your form plugin confirmed on the server. A completion rate above 100% is not an error — it means people are submitting with JavaScript blocked, so the browser-observed columns are undercounting."
-msgstr ""
-
-#: src/Admin/Pages/FormsPage.php:266
-msgid "No form engagement recorded yet. Form view, start, and validation-error tracking are switched on under <strong>Settings → Tracking</strong>. Elementor forms are not included here — see the note below."
+#: src/Admin/Pages/FormsPage.php:270
+msgid "Form settings were not saved: the submitted form was malformed, so the stored settings were left unchanged. Reload this page and try again."
 msgstr ""
 
 #: src/Admin/Pages/FormsPage.php:279
+msgid "Form settings saved."
+msgstr ""
+
+#. translators: %d: number of forms whose settings were left unchanged.
+#: src/Admin/Pages/FormsPage.php:299
+#, php-format
+msgid "The settings of %d form were left unchanged because what was submitted for it was malformed. Reload this page and try again."
+msgid_plural "The settings of %d forms were left unchanged because what was submitted for them was malformed. Reload this page and try again."
+msgstr[0] ""
+msgstr[1] ""
+
+#. translators: %d: number of header or query-parameter rows that were not saved.
+#: src/Admin/Pages/FormsPage.php:316
+#: src/Admin/Pages/WebhooksPage.php:430
+#, php-format
+msgid "%d header or query-parameter row was not saved. A header name may contain only letters, digits, hyphens and a few other punctuation marks (no spaces or colons), and no name or value may contain line breaks or other control characters."
+msgid_plural "%d header or query-parameter rows were not saved. A header name may contain only letters, digits, hyphens and a few other punctuation marks (no spaces or colons), and no name or value may contain line breaks or other control characters."
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/Admin/Pages/FormsPage.php:367
+msgid "Engagement & abandonment"
+msgstr ""
+
+#: src/Admin/Pages/FormsPage.php:368
+msgid "The last 30 days. <strong>Views</strong>, <strong>Started</strong> and <strong>Abandoned</strong> count sessions and are observed in the visitor's browser; <strong>Attempts</strong> counts individual submit presses; <strong>Successful</strong> counts submissions your form plugin confirmed on the server. A completion rate above 100% is not an error — it means people are submitting with JavaScript blocked, so the browser-observed columns are undercounting."
+msgstr ""
+
+#: src/Admin/Pages/FormsPage.php:373
+msgid "No form engagement recorded yet. Form view, start, and validation-error tracking are switched on under <strong>Settings → Tracking</strong>. Elementor forms are not included here — see the note below."
+msgstr ""
+
+#: src/Admin/Pages/FormsPage.php:386
 msgid "Start Rate"
 msgstr ""
 
-#: src/Admin/Pages/FormsPage.php:280
+#: src/Admin/Pages/FormsPage.php:387
 msgid "Completion Rate"
 msgstr ""
 
 #. translators: %d: number of form starts not yet completed or abandoned.
-#: src/Admin/Pages/FormsPage.php:299
+#: src/Admin/Pages/FormsPage.php:406
 #, php-format
 msgid "%d still in progress"
 msgid_plural "%d still in progress"
@@ -4535,86 +4587,86 @@ msgstr[0] ""
 msgstr[1] ""
 
 #. translators: %d: minutes after which an unfinished form start counts as abandoned.
-#: src/Admin/Pages/FormsPage.php:332
+#: src/Admin/Pages/FormsPage.php:439
 #, php-format
 msgid "A start counts as abandoned once %d minute passes with no confirmed submission — anything more recent is shown as still in progress rather than being counted against you."
 msgid_plural "A start counts as abandoned once %d minutes pass with no confirmed submission — anything more recent is shown as still in progress rather than being counted against you."
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/Admin/Pages/FormsPage.php:344
+#: src/Admin/Pages/FormsPage.php:451
 msgid "Most common friction points"
 msgstr ""
 
-#: src/Admin/Pages/FormsPage.php:345
+#: src/Admin/Pages/FormsPage.php:452
 msgid "Which fields fail validation most often. Convermetry records the field's name, its type, and which check failed — <strong>never what the visitor typed</strong>."
 msgstr ""
 
-#: src/Admin/Pages/FormsPage.php:347
+#: src/Admin/Pages/FormsPage.php:454
 msgid "Problem"
 msgstr ""
 
-#: src/Admin/Pages/FormsPage.php:348
+#: src/Admin/Pages/FormsPage.php:455
 msgid "Errors"
 msgstr ""
 
-#: src/Admin/Pages/FormsPage.php:368
+#: src/Admin/Pages/FormsPage.php:475
 msgid "<strong>Elementor forms are not included above.</strong> Elementor identifies a form by its display name on the server while exposing a widget id in the browser, so the two cannot be matched reliably — and an engagement figure attributed to the wrong form is worse than none. Elementor submissions are recorded and attributed normally everywhere else in Convermetry."
 msgstr ""
 
-#: src/Admin/Pages/FormsPage.php:381
+#: src/Admin/Pages/FormsPage.php:488
 msgid "Left empty"
 msgstr ""
 
-#: src/Admin/Pages/FormsPage.php:382
+#: src/Admin/Pages/FormsPage.php:489
 msgid "Wrong format (e.g. not an email address)"
 msgstr ""
 
-#: src/Admin/Pages/FormsPage.php:383
+#: src/Admin/Pages/FormsPage.php:490
 msgid "Did not match the expected pattern"
 msgstr ""
 
-#: src/Admin/Pages/FormsPage.php:384
+#: src/Admin/Pages/FormsPage.php:491
 msgid "Too short"
 msgstr ""
 
-#: src/Admin/Pages/FormsPage.php:385
+#: src/Admin/Pages/FormsPage.php:492
 msgid "Too long"
 msgstr ""
 
-#: src/Admin/Pages/FormsPage.php:386
+#: src/Admin/Pages/FormsPage.php:493
 msgid "Outside the allowed range"
 msgstr ""
 
-#: src/Admin/Pages/FormsPage.php:387
+#: src/Admin/Pages/FormsPage.php:494
 msgid "Not an allowed increment"
 msgstr ""
 
-#: src/Admin/Pages/FormsPage.php:388
+#: src/Admin/Pages/FormsPage.php:495
 msgid "Invalid"
 msgstr ""
 
-#: src/Admin/Pages/FormsPage.php:403
+#: src/Admin/Pages/FormsPage.php:510
 msgid "Convermetry automatically detects supported form plugins and discovers their forms. Detected forms are <strong>included by default</strong> — a new form starts recording conversions and delivering webhooks without any setup. Exclude a form to stop processing it; its configuration is preserved and restored when re-enabled. <strong>Builder forms that run an explicit action list are the exception</strong> — Elementor Atomic forms and Bricks Builder forms only run the actions you choose in their own editor, so each one needs the Convermetry action added before anything is captured. Both are listed here as soon as they are found, whether or not that action has been added; the notices below say what to do."
 msgstr ""
 
-#: src/Admin/Pages/FormsPage.php:434
+#: src/Admin/Pages/FormsPage.php:541
 msgid "No supported form plugin or builder is currently active. Install and activate Elementor Pro, Bricks Builder, Gravity Forms, WPForms, Contact Form 7, or Fluent Forms — or integrate a custom form with <code>convermetry_submit_form()</code> (see the About page)."
 msgstr ""
 
-#: src/Admin/Pages/FormsPage.php:459
+#: src/Admin/Pages/FormsPage.php:566
 msgid "Search forms"
 msgstr ""
 
-#: src/Admin/Pages/FormsPage.php:460
+#: src/Admin/Pages/FormsPage.php:567
 msgid "Search by form name or ID…"
 msgstr ""
 
-#: src/Admin/Pages/FormsPage.php:461
+#: src/Admin/Pages/FormsPage.php:568
 msgid "Filter by provider"
 msgstr ""
 
-#: src/Admin/Pages/FormsPage.php:462
+#: src/Admin/Pages/FormsPage.php:569
 #: assets/js/activity-log.js:241
 #: assets/js/activity-log.js:246
 #: assets/js/activity-log.js:370
@@ -4623,192 +4675,204 @@ msgstr ""
 msgid "All Providers"
 msgstr ""
 
-#: src/Admin/Pages/FormsPage.php:471
+#: src/Admin/Pages/FormsPage.php:578
 msgid "Filter by state"
 msgstr ""
 
-#: src/Admin/Pages/FormsPage.php:472
+#: src/Admin/Pages/FormsPage.php:579
 msgid "All States"
 msgstr ""
 
-#: src/Admin/Pages/FormsPage.php:472
-#: src/Admin/Pages/FormsPage.php:637
-#: assets/js/admin.js:406
+#: src/Admin/Pages/FormsPage.php:579
+#: src/Admin/Pages/FormsPage.php:744
+#: assets/js/admin.js:410
 msgid "Included"
 msgstr ""
 
-#: src/Admin/Pages/FormsPage.php:472
-#: src/Admin/Pages/FormsPage.php:637
-#: assets/js/admin.js:406
+#: src/Admin/Pages/FormsPage.php:579
+#: src/Admin/Pages/FormsPage.php:744
+#: assets/js/admin.js:410
 msgid "Excluded"
 msgstr ""
 
 #. translators: 1: number of forms currently shown, 2: total number of forms.
-#: src/Admin/Pages/FormsPage.php:477
+#: src/Admin/Pages/FormsPage.php:584
 #, php-format
 msgid "%1$s of %2$d form shown"
 msgid_plural "%1$s of %2$d forms shown"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/Admin/Pages/FormsPage.php:487
+#: src/Admin/Pages/FormsPage.php:594
 msgid "No forms were discovered yet. Create a form in one of the active providers and revisit this page."
 msgstr ""
 
-#: src/Admin/Pages/FormsPage.php:499
+#: src/Admin/Pages/FormsPage.php:606
 msgid "Save Form Settings"
 msgstr ""
 
-#: src/Admin/Pages/FormsPage.php:542
+#: src/Admin/Pages/FormsPage.php:649
 msgid "<strong>Elementor Atomic forms require one extra step.</strong> Open the form in the Elementor editor, select the Atomic form element, add <strong>Convermetry</strong> under <strong>Actions after submit</strong>, and save or update the page or template. Convermetry captures submissions from that form once the action is enabled — submissions made before then are not recorded and cannot be recovered. <strong>Classic Elementor forms are captured automatically</strong> and need none of this."
 msgstr ""
 
-#: src/Admin/Pages/FormsPage.php:543
+#: src/Admin/Pages/FormsPage.php:650
 msgid "Atomic forms below are listed as soon as Convermetry finds them in your Elementor content, which happens whether or not the action has been added. Marking one <strong>Included</strong> here does not add the action for you, and Convermetry cannot tell from the outside which forms have it."
 msgstr ""
 
-#: src/Admin/Pages/FormsPage.php:575
+#: src/Admin/Pages/FormsPage.php:682
 msgid "<strong>Bricks Builder forms require one extra step.</strong> Open the page or template in Bricks, select the <strong>Form</strong> element, tick <strong>Convermetry</strong> under <strong>Actions after successful form submit</strong>, and save. Convermetry captures submissions from that form once the action is selected — submissions made before then are not recorded and cannot be recovered."
 msgstr ""
 
-#: src/Admin/Pages/FormsPage.php:576
+#: src/Admin/Pages/FormsPage.php:683
 msgid "Bricks forms below are listed as soon as Convermetry finds them in your Bricks content, which happens whether or not the action has been selected. Marking one <strong>Included</strong> here does not select the action for you, and Convermetry cannot tell from the outside which forms have it."
 msgstr ""
 
-#: src/Admin/Pages/FormsPage.php:577
+#: src/Admin/Pages/FormsPage.php:684
 msgid "Each Bricks form is identified by its <strong>element ID</strong>, so one form used in a header, footer, popup or reusable template keeps a single configuration across every page it appears on. Two limits are worth knowing: a form placed inside a Bricks <strong>component</strong> is not listed here (Bricks stores component definitions outside page content), and <strong>password</strong> fields are never recorded, exported, emailed or delivered. Only the native Bricks Form element is supported; third-party Bricks form add-ons are not."
 msgstr ""
 
 #. translators: 1: installed Bricks version, 2: minimum Bricks version Convermetry supports.
-#: src/Admin/Pages/FormsPage.php:600
+#: src/Admin/Pages/FormsPage.php:707
 #, php-format
 msgid "<strong>Bricks %1$s is installed, but Convermetry needs Bricks %2$s or newer.</strong> Named custom form actions arrived in that release; on an older Bricks the Convermetry action could be selected in the editor but would never run. Update Bricks to capture its form submissions."
 msgstr ""
 
-#: src/Admin/Pages/FormsPage.php:644
+#: src/Admin/Pages/FormsPage.php:751
 msgid "Sent as <code>form_id</code> in webhook payloads for this form. Leave blank to use the native form ID."
 msgstr ""
 
-#: src/Admin/Pages/FormsPage.php:647
+#: src/Admin/Pages/FormsPage.php:754
 msgid "Exclude this form"
 msgstr ""
 
-#: src/Admin/Pages/FormsPage.php:648
+#: src/Admin/Pages/FormsPage.php:755
 msgid "Excluded forms are not recorded or delivered. Their configuration is preserved."
 msgstr ""
 
-#: src/Admin/Pages/FormsPage.php:652
+#: src/Admin/Pages/FormsPage.php:759
 msgid "<br><strong>Atomic form:</strong> leaving this included does not switch capture on by itself — this form also needs <strong>Convermetry</strong> added under <strong>Actions after submit</strong> in the Elementor editor."
 msgstr ""
 
-#: src/Admin/Pages/FormsPage.php:658
+#: src/Admin/Pages/FormsPage.php:765
 msgid "<br><strong>Bricks form:</strong> leaving this included does not switch capture on by itself — this form also needs <strong>Convermetry</strong> ticked under <strong>Actions after successful form submit</strong> in Bricks."
 msgstr ""
 
-#: src/Admin/Pages/FormsPage.php:663
+#: src/Admin/Pages/FormsPage.php:770
 msgid "Page URL parameters"
 msgstr ""
 
-#: src/Admin/Pages/FormsPage.php:665
+#: src/Admin/Pages/FormsPage.php:772
 msgid "Include page URL parameters for this form (regardless of the global setting)"
 msgstr ""
 
-#: src/Admin/Pages/FormsPage.php:666
+#: src/Admin/Pages/FormsPage.php:773
 msgid "(this form only — highest precedence)"
 msgstr ""
 
-#: src/Admin/Pages/FormsPage.php:671
+#: src/Admin/Pages/FormsPage.php:778
 msgid "(this form only)"
 msgstr ""
 
-#: src/Admin/Pages/FormsPage.php:699
-#: src/Admin/Pages/WebhooksPage.php:663
+#: src/Admin/Pages/FormsPage.php:806
+#: src/Admin/Pages/WebhooksPage.php:707
 #: assets/js/admin.js:69
 msgid "Remove this row"
 msgstr ""
 
-#: src/Admin/Pages/FormsPage.php:699
-#: src/Admin/Pages/FunnelsPage.php:388
-#: src/Admin/Pages/FunnelsPage.php:615
-#: src/Admin/Pages/GoalsPage.php:560
-#: src/Admin/Pages/WebhooksPage.php:607
-#: src/Admin/Pages/WebhooksPage.php:663
+#: src/Admin/Pages/FormsPage.php:806
+#: src/Admin/Pages/FunnelsPage.php:446
+#: src/Admin/Pages/FunnelsPage.php:673
+#: src/Admin/Pages/GoalsPage.php:617
+#: src/Admin/Pages/WebhooksPage.php:651
+#: src/Admin/Pages/WebhooksPage.php:707
 #: assets/js/admin.js:68
 #: assets/js/admin.js:162
 #: assets/js/funnels.js:118
 msgid "Remove"
 msgstr ""
 
-#: src/Admin/Pages/FormsPage.php:705
-#: src/Admin/Pages/WebhooksPage.php:669
+#: src/Admin/Pages/FormsPage.php:812
+#: src/Admin/Pages/WebhooksPage.php:713
 msgid "+ Add"
 msgstr ""
 
-#: src/Admin/Pages/FunnelsPage.php:64
+#: src/Admin/Pages/FunnelsPage.php:78
 msgid "Convermetry Funnels"
 msgstr ""
 
-#: src/Admin/Pages/FunnelsPage.php:234
+#: src/Admin/Pages/FunnelsPage.php:135
+msgid "Funnels can only be saved from the Funnels screen."
+msgstr ""
+
+#: src/Admin/Pages/FunnelsPage.php:188
+msgid "Funnels can only be removed from the Funnels screen."
+msgstr ""
+
+#: src/Admin/Pages/FunnelsPage.php:287
 msgid "A funnel measures the path to a conversion in order: how many visitors reached each step, and how many were lost between them. Steps are counted per session and must happen in sequence — a visitor who reaches step three without step two is not counted at step three."
 msgstr ""
 
-#: src/Admin/Pages/FunnelsPage.php:239
+#: src/Admin/Pages/FunnelsPage.php:292
 msgid "<strong>Preparing.</strong> Convermetry is still applying a database update from the last plugin upgrade. Funnels will become available as soon as it finishes."
 msgstr ""
 
-#: src/Admin/Pages/FunnelsPage.php:252
+#: src/Admin/Pages/FunnelsPage.php:312
 msgid "No funnels yet. A good first one is three steps: the page a campaign lands on, the form being started, and the submission being confirmed — that alone usually shows whether the problem is traffic, the page, or the form."
 msgstr ""
 
-#: src/Admin/Pages/FunnelsPage.php:283
+#: src/Admin/Pages/FunnelsPage.php:343
 msgid "Funnel created. It reports on activity already recorded, so results appear immediately."
 msgstr ""
 
-#: src/Admin/Pages/FunnelsPage.php:284
+#: src/Admin/Pages/FunnelsPage.php:344
 msgid "Funnel updated."
 msgstr ""
 
-#: src/Admin/Pages/FunnelsPage.php:285
+#: src/Admin/Pages/FunnelsPage.php:345
 msgid "Funnel removed."
 msgstr ""
 
 #. translators: %d: minimum number of steps in a funnel.
-#: src/Admin/Pages/FunnelsPage.php:298
+#: src/Admin/Pages/FunnelsPage.php:358
 #, php-format
 msgid "That funnel could not be saved. It needs a name and at least %d fully configured steps — a page step needs a path, and a goal step needs a goal."
 msgstr ""
 
 #. translators: %d: the maximum number of funnels.
-#: src/Admin/Pages/FunnelsPage.php:303
+#: src/Admin/Pages/FunnelsPage.php:363
 #, php-format
 msgid "You have reached the limit of %d funnels. Remove one you no longer need to add another."
 msgstr ""
 
-#: src/Admin/Pages/FunnelsPage.php:376
-#: src/Admin/Pages/GoalsPage.php:548
+#: src/Admin/Pages/FunnelsPage.php:366
+msgid "That funnel could not be found. It may already have been removed."
+msgstr ""
+
+#: src/Admin/Pages/FunnelsPage.php:434
+#: src/Admin/Pages/GoalsPage.php:605
 msgid "Edit"
 msgstr ""
 
-#: src/Admin/Pages/FunnelsPage.php:380
+#: src/Admin/Pages/FunnelsPage.php:438
 msgid "Remove this funnel? Its definition is deleted; no analytics data is affected."
 msgstr ""
 
-#: src/Admin/Pages/FunnelsPage.php:395
+#: src/Admin/Pages/FunnelsPage.php:453
 msgid "This funnel could not be measured — a database query failed."
 msgstr ""
 
-#: src/Admin/Pages/FunnelsPage.php:429
+#: src/Admin/Pages/FunnelsPage.php:487
 msgid "No sessions reached the first step during this period, so there is nothing to measure yet. Check that the first step matches a page visitors actually land on."
 msgstr ""
 
 #. translators: 1: percentage of sessions that continued to this step, 2: number of sessions lost.
-#: src/Admin/Pages/FunnelsPage.php:445
+#: src/Admin/Pages/FunnelsPage.php:503
 #, php-format
 msgid "%1$s%% continued · %2$s lost"
 msgstr ""
 
 #. translators: 1: number of sessions that reached the step, 2: percentage of funnel entrants.
-#: src/Admin/Pages/FunnelsPage.php:465
+#: src/Admin/Pages/FunnelsPage.php:523
 #, php-format
 msgid "%1$s session · %2$s%% of entrants"
 msgid_plural "%1$s sessions · %2$s%% of entrants"
@@ -4816,381 +4880,393 @@ msgstr[0] ""
 msgstr[1] ""
 
 #. translators: 1: overall conversion percentage, 2: sessions that completed every step, 3: sessions that entered the funnel, 4: hours after the period during which later steps still count.
-#: src/Admin/Pages/FunnelsPage.php:478
+#: src/Admin/Pages/FunnelsPage.php:536
 #, php-format
 msgid "Overall conversion: <strong>%1$s%%</strong> — %2$s of %3$s sessions that entered this funnel completed every step, in order. Later steps are counted for up to %4$d hour after the period ends, so a visit that started near the edge is not unfairly cut off."
 msgid_plural "Overall conversion: <strong>%1$s%%</strong> — %2$s of %3$s sessions that entered this funnel completed every step, in order. Later steps are counted for up to %4$d hours after the period ends, so a visit that started near the edge is not unfairly cut off."
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/Admin/Pages/FunnelsPage.php:500
+#: src/Admin/Pages/FunnelsPage.php:558
 #: assets/js/funnels.js:227
 msgid "Add a funnel"
 msgstr ""
 
-#: src/Admin/Pages/FunnelsPage.php:509
-#: src/Admin/Pages/GoalsPage.php:633
+#: src/Admin/Pages/FunnelsPage.php:567
+#: src/Admin/Pages/GoalsPage.php:690
 msgid "Name"
 msgstr ""
 
-#: src/Admin/Pages/FunnelsPage.php:516
+#: src/Admin/Pages/FunnelsPage.php:574
 msgid "Steps"
 msgstr ""
 
-#: src/Admin/Pages/FunnelsPage.php:523
+#: src/Admin/Pages/FunnelsPage.php:581
 msgid "Add step"
 msgstr ""
 
 #. translators: 1: minimum number of funnel steps, 2: maximum number of funnel steps.
-#: src/Admin/Pages/FunnelsPage.php:528
+#: src/Admin/Pages/FunnelsPage.php:586
 #, php-format
 msgid "Between %1$d and %2$d steps, in the order visitors take them. A form step with no specific form counts any form on the site."
 msgstr ""
 
-#: src/Admin/Pages/FunnelsPage.php:545
+#: src/Admin/Pages/FunnelsPage.php:603
 msgid "Save funnel"
 msgstr ""
 
-#: src/Admin/Pages/FunnelsPage.php:546
-#: src/Admin/Pages/GoalsPage.php:719
+#: src/Admin/Pages/FunnelsPage.php:604
+#: src/Admin/Pages/GoalsPage.php:776
 msgid "Cancel"
 msgstr ""
 
-#: src/Admin/Pages/FunnelsPage.php:595
+#: src/Admin/Pages/FunnelsPage.php:653
 #: assets/js/funnels.js:109
 msgid "No goals configured yet"
 msgstr ""
 
-#: src/Admin/Pages/FunnelsPage.php:607
+#: src/Admin/Pages/FunnelsPage.php:665
 #: assets/js/funnels.js:114
 msgid "Label (optional)"
 msgstr ""
 
 #. translators: %d: the funnel step's position.
-#: src/Admin/Pages/FunnelsPage.php:612
+#: src/Admin/Pages/FunnelsPage.php:670
 #: assets/js/funnels.js:117
 #, php-format,js-format
 msgid "Remove step %d"
 msgstr ""
 
-#: src/Admin/Pages/FunnelsPage.php:628
+#: src/Admin/Pages/FunnelsPage.php:686
 msgid "Visited a page"
 msgstr ""
 
-#: src/Admin/Pages/FunnelsPage.php:629
+#: src/Admin/Pages/FunnelsPage.php:687
 msgid "Completed a goal"
 msgstr ""
 
-#: src/Admin/Pages/FunnelsPage.php:630
+#: src/Admin/Pages/FunnelsPage.php:688
 msgid "Saw a form"
 msgstr ""
 
-#: src/Admin/Pages/FunnelsPage.php:631
+#: src/Admin/Pages/FunnelsPage.php:689
 msgid "Started filling a form"
 msgstr ""
 
-#: src/Admin/Pages/FunnelsPage.php:632
+#: src/Admin/Pages/FunnelsPage.php:690
 msgid "Attempted to submit a form"
 msgstr ""
 
-#: src/Admin/Pages/FunnelsPage.php:633
+#: src/Admin/Pages/FunnelsPage.php:691
 msgid "Submission confirmed by the form plugin"
 msgstr ""
 
-#: src/Admin/Pages/FunnelsPage.php:648
+#: src/Admin/Pages/FunnelsPage.php:706
 msgctxt "funnel step: the page…"
 msgid "is exactly"
 msgstr ""
 
-#: src/Admin/Pages/FunnelsPage.php:649
+#: src/Admin/Pages/FunnelsPage.php:707
 msgctxt "funnel step: the page…"
 msgid "contains"
 msgstr ""
 
-#: src/Admin/Pages/FunnelsPage.php:650
+#: src/Admin/Pages/FunnelsPage.php:708
 msgctxt "funnel step: the page…"
 msgid "starts with"
 msgstr ""
 
-#: src/Admin/Pages/FunnelsPage.php:651
+#: src/Admin/Pages/FunnelsPage.php:709
 msgctxt "funnel step: the page…"
 msgid "ends with"
 msgstr ""
 
-#: src/Admin/Pages/GoalsPage.php:101
+#: src/Admin/Pages/GoalsPage.php:115
 msgid "Convermetry Goals"
 msgstr ""
 
-#: src/Admin/Pages/GoalsPage.php:238
-msgid "A goal is an important visitor action that is not a form submission — a phone number tapped, a PDF opened, a booking link followed, a pricing page reached. Convermetry matches these on the server as activity arrives, so completions carry the same channel and campaign attribution as everything else and can be broken down the same way."
+#: src/Admin/Pages/GoalsPage.php:134
+msgid "Goals can only be saved from the Goals screen."
 msgstr ""
 
-#: src/Admin/Pages/GoalsPage.php:245
-msgid "<strong>Preparing.</strong> Convermetry is still applying a database update from the last plugin upgrade. Goals will become available as soon as it finishes — this page will work normally then, and no data is lost in the meantime."
-msgstr ""
-
-#: src/Admin/Pages/GoalsPage.php:278
-msgid "Goal created. It starts counting from now — completions are not applied retroactively."
-msgstr ""
-
-#: src/Admin/Pages/GoalsPage.php:279
-msgid "Goal updated."
-msgstr ""
-
-#: src/Admin/Pages/GoalsPage.php:280
-msgid "Goal removed. Its past completions are kept and still appear in reports for earlier periods."
+#: src/Admin/Pages/GoalsPage.php:192
+msgid "Goals can only be removed from the Goals screen."
 msgstr ""
 
 #: src/Admin/Pages/GoalsPage.php:291
+msgid "A goal is an important visitor action that is not a form submission — a phone number tapped, a PDF opened, a booking link followed, a pricing page reached. Convermetry matches these on the server as activity arrives, so completions carry the same channel and campaign attribution as everything else and can be broken down the same way."
+msgstr ""
+
+#: src/Admin/Pages/GoalsPage.php:298
+msgid "<strong>Preparing.</strong> Convermetry is still applying a database update from the last plugin upgrade. Goals will become available as soon as it finishes — this page will work normally then, and no data is lost in the meantime."
+msgstr ""
+
+#: src/Admin/Pages/GoalsPage.php:337
+msgid "Goal created. It starts counting from now — completions are not applied retroactively."
+msgstr ""
+
+#: src/Admin/Pages/GoalsPage.php:338
+msgid "Goal updated."
+msgstr ""
+
+#: src/Admin/Pages/GoalsPage.php:339
+msgid "Goal removed. Its past completions are kept and still appear in reports for earlier periods."
+msgstr ""
+
+#: src/Admin/Pages/GoalsPage.php:350
 msgid "That goal could not be saved. A goal needs a name, and every rule except \"phone link\", \"email link\", and \"external link\" needs something to match against."
 msgstr ""
 
 #. translators: %d: the maximum number of goals.
-#: src/Admin/Pages/GoalsPage.php:294
+#: src/Admin/Pages/GoalsPage.php:353
 #, php-format
 msgid "You have reached the limit of %d goals. Remove one you no longer need to add another."
 msgstr ""
 
+#: src/Admin/Pages/GoalsPage.php:356
+msgid "That goal could not be found. It may already have been removed."
+msgstr ""
+
 #. translators: %s: URL of the Convermetry Settings screen.
-#: src/Admin/Pages/GoalsPage.php:326
+#: src/Admin/Pages/GoalsPage.php:386
 #, php-format
 msgid "<strong>Goal matching is switched off.</strong> Goals below are kept but nothing is being recorded. Turn it back on under <a href=\"%s\">Settings → Tracking</a>."
 msgstr ""
 
 #. translators: %s: URL of the Convermetry Settings screen.
-#: src/Admin/Pages/GoalsPage.php:342
+#: src/Admin/Pages/GoalsPage.php:402
 #, php-format
 msgid "You have page and URL goals configured, but <strong>Page views</strong> tracking is switched off in <a href=\"%s\">Settings</a>, so those goals cannot record anything."
 msgstr ""
 
 #. translators: %s: URL of the Convermetry Settings screen.
-#: src/Admin/Pages/GoalsPage.php:344
+#: src/Admin/Pages/GoalsPage.php:404
 #, php-format
 msgid "You have click goals configured, but <strong>Link & button clicks</strong> tracking is switched off in <a href=\"%s\">Settings</a>, so those goals cannot record anything."
 msgstr ""
 
 #. translators: %s: URL of the Convermetry Settings screen.
-#: src/Admin/Pages/GoalsPage.php:346
+#: src/Admin/Pages/GoalsPage.php:406
 #, php-format
 msgid "You have custom event goals configured, but <strong>Custom events</strong> tracking is switched off in <a href=\"%s\">Settings</a>, so those goals cannot record anything."
 msgstr ""
 
 #. translators: 1: number of goal completions not recorded, 2: maximum goals one action may complete.
-#: src/Admin/Pages/GoalsPage.php:380
+#: src/Admin/Pages/GoalsPage.php:440
 #, php-format
 msgid "<strong>Overlapping goals.</strong> %1$d goal completion was not recorded because single visitor actions matched more than %2$d goals at once. Narrow the overlapping rules so each action counts towards the goals you actually want."
 msgid_plural "<strong>Overlapping goals.</strong> %1$d goal completions were not recorded because single visitor actions matched more than %2$d goals at once. Narrow the overlapping rules so each action counts towards the goals you actually want."
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/Admin/Pages/GoalsPage.php:434
+#: src/Admin/Pages/GoalsPage.php:491
 msgid "No goals yet. Add one below — <strong>Phone link clicks</strong> and <strong>Email link clicks</strong> need no configuration beyond a name, and are the quickest way to see whether this is measuring what you expect."
 msgstr ""
 
-#: src/Admin/Pages/GoalsPage.php:448
+#: src/Admin/Pages/GoalsPage.php:505
 msgid "Goal performance could not be loaded — a database query failed. The goals themselves are listed below and are unaffected."
 msgstr ""
 
-#: src/Admin/Pages/GoalsPage.php:461
+#: src/Admin/Pages/GoalsPage.php:518
 msgid "Rule"
 msgstr ""
 
 #. translators: %s: number of sessions in the period.
-#: src/Admin/Pages/GoalsPage.php:481
+#: src/Admin/Pages/GoalsPage.php:538
 #, php-format
 msgid "Rates are the share of sessions in this period that completed the goal (%s session in total). A goal counting once per session can never exceed 100%%."
 msgid_plural "Rates are the share of sessions in this period that completed the goal (%s sessions in total). A goal counting once per session can never exceed 100%%."
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/Admin/Pages/GoalsPage.php:516
+#: src/Admin/Pages/GoalsPage.php:573
 msgid "Once per session"
 msgstr ""
 
-#: src/Admin/Pages/GoalsPage.php:516
+#: src/Admin/Pages/GoalsPage.php:573
 msgid "Every occurrence"
 msgstr ""
 
 #. translators: %s: the monetary value of one goal completion, with currency.
-#: src/Admin/Pages/GoalsPage.php:521
+#: src/Admin/Pages/GoalsPage.php:578
 #, php-format
 msgid "worth %s"
 msgstr ""
 
-#: src/Admin/Pages/GoalsPage.php:552
+#: src/Admin/Pages/GoalsPage.php:609
 msgid "Remove this goal? Its past completions are kept and still appear in reports for earlier periods."
 msgstr ""
 
-#: src/Admin/Pages/GoalsPage.php:568
+#: src/Admin/Pages/GoalsPage.php:625
 msgid "This goal has never recorded a completion. Check that the rule matches what visitors actually do — a URL rule should be the path as it appears in the address bar, such as <code>/thank-you/</code>."
 msgstr ""
 
-#: src/Admin/Pages/GoalsPage.php:591
+#: src/Admin/Pages/GoalsPage.php:648
 msgid "Click on any tel: link"
 msgstr ""
 
-#: src/Admin/Pages/GoalsPage.php:592
+#: src/Admin/Pages/GoalsPage.php:649
 msgid "Click on any mailto: link"
 msgstr ""
 
-#: src/Admin/Pages/GoalsPage.php:593
+#: src/Admin/Pages/GoalsPage.php:650
 msgid "Click leaving this site"
 msgstr ""
 
 #. translators: %s: CSS selector.
-#: src/Admin/Pages/GoalsPage.php:595
+#: src/Admin/Pages/GoalsPage.php:652
 #, php-format
 msgid "Click matching %s"
 msgstr ""
 
 #. translators: %s: link URL or text the click must match.
-#: src/Admin/Pages/GoalsPage.php:597
+#: src/Admin/Pages/GoalsPage.php:654
 #, php-format
 msgid "Click where the link is %s"
 msgstr ""
 
 #. translators: %s: link URL or text the click must contain.
-#: src/Admin/Pages/GoalsPage.php:599
+#: src/Admin/Pages/GoalsPage.php:656
 #, php-format
 msgid "Click where the link contains %s"
 msgstr ""
 
 #. translators: %s: page path.
-#: src/Admin/Pages/GoalsPage.php:605
+#: src/Admin/Pages/GoalsPage.php:662
 #, php-format
 msgid "Page is %s"
 msgstr ""
 
 #. translators: %s: page path prefix.
-#: src/Admin/Pages/GoalsPage.php:607
+#: src/Admin/Pages/GoalsPage.php:664
 #, php-format
 msgid "Page starts with %s"
 msgstr ""
 
 #. translators: %s: page path suffix.
-#: src/Admin/Pages/GoalsPage.php:609
+#: src/Admin/Pages/GoalsPage.php:666
 #, php-format
 msgid "Page ends with %s"
 msgstr ""
 
 #. translators: %s: text the page path must contain.
-#: src/Admin/Pages/GoalsPage.php:611
+#: src/Admin/Pages/GoalsPage.php:668
 #, php-format
 msgid "Page contains %s"
 msgstr ""
 
-#: src/Admin/Pages/GoalsPage.php:624
+#: src/Admin/Pages/GoalsPage.php:681
 #: assets/js/goals.js:142
 msgid "Add a goal"
 msgstr ""
 
-#: src/Admin/Pages/GoalsPage.php:637
+#: src/Admin/Pages/GoalsPage.php:694
 msgid "How this goal appears in reports, e.g. \"Phone number tapped\"."
 msgstr ""
 
-#: src/Admin/Pages/GoalsPage.php:642
+#: src/Admin/Pages/GoalsPage.php:699
 msgid "What counts"
 msgstr ""
 
-#: src/Admin/Pages/GoalsPage.php:647
+#: src/Admin/Pages/GoalsPage.php:704
 msgid "A custom event from your own code"
 msgstr ""
 
-#: src/Admin/Pages/GoalsPage.php:650
+#: src/Admin/Pages/GoalsPage.php:707
 msgid "Matching rule"
 msgstr ""
 
-#: src/Admin/Pages/GoalsPage.php:666
+#: src/Admin/Pages/GoalsPage.php:723
 msgid "For a page, use the path as it appears in the address bar (<code>/thank-you/</code>). Phone, email, and external-link rules need no value."
 msgstr ""
 
-#: src/Admin/Pages/GoalsPage.php:672
+#: src/Admin/Pages/GoalsPage.php:729
 msgid "Counting"
 msgstr ""
 
-#: src/Admin/Pages/GoalsPage.php:676
+#: src/Admin/Pages/GoalsPage.php:733
 msgid "Count once per visit"
 msgstr ""
 
-#: src/Admin/Pages/GoalsPage.php:679
+#: src/Admin/Pages/GoalsPage.php:736
 msgid "On: a visitor who taps the phone number five times counts once — usually what you want for a contact action. Off: every occurrence counts, which suits repeatable actions such as downloads."
 msgstr ""
 
-#: src/Admin/Pages/GoalsPage.php:691
+#: src/Admin/Pages/GoalsPage.php:748
 msgid "Optional. What one completion is worth to you, used to total attributed value. Leave blank if you would rather just count them."
 msgstr ""
 
-#: src/Admin/Pages/GoalsPage.php:697
+#: src/Admin/Pages/GoalsPage.php:754
 msgid "Value from your code"
 msgstr ""
 
-#: src/Admin/Pages/GoalsPage.php:701
+#: src/Admin/Pages/GoalsPage.php:758
 msgid "Use the value passed to <code>Convermetry.track()</code> when one is supplied"
 msgstr ""
 
-#: src/Admin/Pages/GoalsPage.php:704
+#: src/Admin/Pages/GoalsPage.php:761
 msgid "Custom events only. Your code may pass a number, e.g. <code>Convermetry.track('booking', { value: 250 })</code>. Only a numeric value is read — no other data from that call is ever stored."
 msgstr ""
 
-#: src/Admin/Pages/GoalsPage.php:712
+#: src/Admin/Pages/GoalsPage.php:769
 msgid "Actively counting"
 msgstr ""
 
-#: src/Admin/Pages/GoalsPage.php:718
+#: src/Admin/Pages/GoalsPage.php:775
 msgid "Save goal"
 msgstr ""
 
-#: src/Admin/Pages/GoalsPage.php:736
+#: src/Admin/Pages/GoalsPage.php:793
 msgctxt "goal rule: a click…"
 msgid "on a phone number link"
 msgstr ""
 
-#: src/Admin/Pages/GoalsPage.php:737
+#: src/Admin/Pages/GoalsPage.php:794
 msgctxt "goal rule: a click…"
 msgid "on an email link"
 msgstr ""
 
-#: src/Admin/Pages/GoalsPage.php:738
+#: src/Admin/Pages/GoalsPage.php:795
 msgctxt "goal rule: a click…"
 msgid "that leaves this site"
 msgstr ""
 
-#: src/Admin/Pages/GoalsPage.php:739
+#: src/Admin/Pages/GoalsPage.php:796
 msgctxt "goal rule: a click…"
 msgid "where the link contains"
 msgstr ""
 
-#: src/Admin/Pages/GoalsPage.php:740
+#: src/Admin/Pages/GoalsPage.php:797
 msgctxt "goal rule: a click…"
 msgid "where the link is exactly"
 msgstr ""
 
-#: src/Admin/Pages/GoalsPage.php:741
+#: src/Admin/Pages/GoalsPage.php:798
 msgctxt "goal rule: a click…"
 msgid "matching the CSS selector"
 msgstr ""
 
-#: src/Admin/Pages/GoalsPage.php:744
+#: src/Admin/Pages/GoalsPage.php:801
 msgctxt "goal rule: reaching a page…"
 msgid "where the page is exactly"
 msgstr ""
 
-#: src/Admin/Pages/GoalsPage.php:745
+#: src/Admin/Pages/GoalsPage.php:802
 msgctxt "goal rule: reaching a page…"
 msgid "where the page contains"
 msgstr ""
 
-#: src/Admin/Pages/GoalsPage.php:746
+#: src/Admin/Pages/GoalsPage.php:803
 msgctxt "goal rule: reaching a page…"
 msgid "where the page starts with"
 msgstr ""
 
-#: src/Admin/Pages/GoalsPage.php:747
+#: src/Admin/Pages/GoalsPage.php:804
 msgctxt "goal rule: reaching a page…"
 msgid "where the page ends with"
 msgstr ""
 
-#: src/Admin/Pages/GoalsPage.php:750
+#: src/Admin/Pages/GoalsPage.php:807
 msgctxt "goal rule: a custom event…"
 msgid "named"
 msgstr ""
@@ -5467,528 +5543,550 @@ msgstr ""
 msgid "Optional"
 msgstr ""
 
-#: src/Admin/Pages/NotificationsPage.php:72
-#: src/Admin/Pages/NotificationsPage.php:326
+#: src/Admin/Pages/NotificationsPage.php:73
+#: src/Admin/Pages/NotificationsPage.php:430
 msgid "Convermetry Notifications"
 msgstr ""
 
-#: src/Admin/Pages/NotificationsPage.php:242
+#: src/Admin/Pages/NotificationsPage.php:124
+msgid "Notification settings can only be saved from the Notifications screen."
+msgstr ""
+
+#: src/Admin/Pages/NotificationsPage.php:271
+msgid "Queued notifications can only be discarded from the Notifications screen."
+msgstr ""
+
+#: src/Admin/Pages/NotificationsPage.php:339
 msgid "Enter a valid recipient email address first."
 msgstr ""
 
-#: src/Admin/Pages/NotificationsPage.php:259
+#: src/Admin/Pages/NotificationsPage.php:356
 msgid "Handed to your site's mail system. Check the inbox (and spam folder) to confirm it arrived."
 msgstr ""
 
-#: src/Admin/Pages/NotificationsPage.php:260
+#: src/Admin/Pages/NotificationsPage.php:357
 msgid "Your site's mail system rejected the message."
 msgstr ""
 
-#: src/Admin/Pages/NotificationsPage.php:283
+#: src/Admin/Pages/NotificationsPage.php:381
+msgid "Notification settings were not saved: the submitted form was incomplete or malformed, so the stored settings were left unchanged. Reload this page and try again."
+msgstr ""
+
+#: src/Admin/Pages/NotificationsPage.php:387
 msgid "Notification settings saved."
 msgstr ""
 
-#: src/Admin/Pages/NotificationsPage.php:289
+#: src/Admin/Pages/NotificationsPage.php:393
 msgid "Queued notifications discarded."
 msgstr ""
 
-#: src/Admin/Pages/NotificationsPage.php:298
+#: src/Admin/Pages/NotificationsPage.php:402
 msgid "A notification could not be sent."
 msgstr ""
 
 #. translators: 1: recipient email address, 2: the mail system's error message.
-#: src/Admin/Pages/NotificationsPage.php:300
+#: src/Admin/Pages/NotificationsPage.php:404
 #, php-format
 msgid "The last attempt to email %1$s failed and was given up on: %2$s"
 msgstr ""
 
-#: src/Admin/Pages/NotificationsPage.php:301
+#: src/Admin/Pages/NotificationsPage.php:405
 msgid "a recipient"
 msgstr ""
 
-#: src/Admin/Pages/NotificationsPage.php:302
+#: src/Admin/Pages/NotificationsPage.php:406
 msgid "no reason reported"
 msgstr ""
 
-#: src/Admin/Pages/NotificationsPage.php:303
+#: src/Admin/Pages/NotificationsPage.php:407
 msgid "This usually means the site cannot send mail at all — an SMTP plugin normally fixes it."
 msgstr ""
 
-#: src/Admin/Pages/NotificationsPage.php:327
+#: src/Admin/Pages/NotificationsPage.php:431
 msgid "Send an internal email whenever a form submission is recorded, enriched with the analytics context Convermetry already captured for that visitor."
 msgstr ""
 
-#: src/Admin/Pages/NotificationsPage.php:344
+#: src/Admin/Pages/NotificationsPage.php:448
 msgid "Save Notification Settings"
 msgstr ""
 
-#: src/Admin/Pages/NotificationsPage.php:364
+#: src/Admin/Pages/NotificationsPage.php:468
 msgid "Before you switch this on"
 msgstr ""
 
-#: src/Admin/Pages/NotificationsPage.php:365
+#: src/Admin/Pages/NotificationsPage.php:469
 msgid "<strong>Email creates a copy of lead data outside Convermetry's control.</strong> Deleting a submission, or letting retention expire it, cancels any notification still queued — but it cannot recall a message that has already been sent. Those copies live in the recipients' mailboxes under whatever retention policy applies there, not yours."
 msgstr ""
 
-#: src/Admin/Pages/NotificationsPage.php:366
+#: src/Admin/Pages/NotificationsPage.php:470
 msgid "<strong>Your form plugin may already email you.</strong> Most form plugins send their own notification. These are in addition to those, not a replacement — check before you end up with two."
 msgstr ""
 
-#: src/Admin/Pages/NotificationsPage.php:367
+#: src/Admin/Pages/NotificationsPage.php:471
 msgid "<strong>\"Sent\" means handed to your mail system.</strong> Convermetry can tell you that WordPress accepted a message, which is not the same as it reaching an inbox. Nothing here can confirm delivery or detect spam foldering."
 msgstr ""
 
-#: src/Admin/Pages/NotificationsPage.php:368
+#: src/Admin/Pages/NotificationsPage.php:472
 msgid "Notifications are <strong>internal only</strong>. Convermetry never emails the person who submitted the form, and never uses a submitted address as the sender."
 msgstr ""
 
-#: src/Admin/Pages/NotificationsPage.php:369
+#: src/Admin/Pages/NotificationsPage.php:473
 msgid "Convermetry uses <code>wp_mail()</code>, so any SMTP plugin you already run keeps working. It stores no mail credentials of its own."
 msgstr ""
 
-#: src/Admin/Pages/NotificationsPage.php:388
+#: src/Admin/Pages/NotificationsPage.php:492
 msgid "Email me when a form submission is recorded"
 msgstr ""
 
-#: src/Admin/Pages/NotificationsPage.php:389
+#: src/Admin/Pages/NotificationsPage.php:493
 msgid "Off by default. Turning this off stops new notifications; any already queued (at most about two hours' worth) still send with the settings that were active when the lead arrived. Use <em>Discard queued notifications</em> below to drop them instead."
 msgstr ""
 
-#: src/Admin/Pages/NotificationsPage.php:390
+#: src/Admin/Pages/NotificationsPage.php:494
 msgid "Send to"
 msgstr ""
 
 #. translators: %d: maximum number of notification recipients.
-#: src/Admin/Pages/NotificationsPage.php:395
+#: src/Admin/Pages/NotificationsPage.php:499
 #, php-format
 msgid "One address per line (commas and semicolons also work). Invalid addresses and duplicates are removed when you save. Maximum %d. Each recipient gets their own message, so nobody sees who else is on the list."
 msgstr ""
 
-#: src/Admin/Pages/NotificationsPage.php:401
+#: src/Admin/Pages/NotificationsPage.php:505
 msgid "Available placeholders: <code>{site_name}</code>, <code>{form_name}</code>, <code>{provider}</code>, <code>{channel}</code>, <code>{submission_id}</code>, <code>{form_id}</code>, <code>{campaign}</code>, <code>{date}</code>. Anything else is left as literal text."
 msgstr ""
 
-#: src/Admin/Pages/NotificationsPage.php:402
+#: src/Admin/Pages/NotificationsPage.php:506
 msgid "Test"
 msgstr ""
 
-#: src/Admin/Pages/NotificationsPage.php:404
+#: src/Admin/Pages/NotificationsPage.php:508
 msgid "Send test email"
 msgstr ""
 
-#: src/Admin/Pages/NotificationsPage.php:406
+#: src/Admin/Pages/NotificationsPage.php:510
 msgid "Sends a sample built entirely from made-up data. It never reads a real submission, so testing cannot expose a lead."
 msgstr ""
 
-#: src/Admin/Pages/NotificationsPage.php:419
+#: src/Admin/Pages/NotificationsPage.php:523
 msgid "What to include"
 msgstr ""
 
-#: src/Admin/Pages/NotificationsPage.php:422
+#: src/Admin/Pages/NotificationsPage.php:526
 msgid "Include the visitor's answers"
 msgstr ""
 
-#: src/Admin/Pages/NotificationsPage.php:423
+#: src/Admin/Pages/NotificationsPage.php:527
 msgid "Fields that look like credentials — passwords, tokens, API keys, secrets, authorization values — are always left out, even with this on."
 msgstr ""
 
-#: src/Admin/Pages/NotificationsPage.php:426
+#: src/Admin/Pages/NotificationsPage.php:530
 msgid "Include channel, campaign, and session details"
 msgstr ""
 
-#: src/Admin/Pages/NotificationsPage.php:427
+#: src/Admin/Pages/NotificationsPage.php:531
 msgid "Channel, UTM source/medium/campaign, landing page, device, pages viewed, and session start. When a visitor could not be correlated, the email says so explicitly."
 msgstr ""
 
-#: src/Admin/Pages/NotificationsPage.php:430
+#: src/Admin/Pages/NotificationsPage.php:534
 msgid "Include the pages this visitor viewed"
 msgstr ""
 
-#: src/Admin/Pages/NotificationsPage.php:431
+#: src/Admin/Pages/NotificationsPage.php:535
 msgid "<strong>Off by default.</strong> This is browsing history for an identifiable person; mailing it to a shared inbox is a policy decision worth making deliberately."
 msgstr ""
 
-#: src/Admin/Pages/NotificationsPage.php:434
+#: src/Admin/Pages/NotificationsPage.php:538
 msgid "Include the submitter's IP address"
 msgstr ""
 
-#: src/Admin/Pages/NotificationsPage.php:435
+#: src/Admin/Pages/NotificationsPage.php:539
 msgid "<strong>Off by default.</strong> An IP address is personal data in the EU and UK. It is only available at all when IP storage is enabled on the Settings page."
 msgstr ""
 
-#: src/Admin/Pages/NotificationsPage.php:448
+#: src/Admin/Pages/NotificationsPage.php:552
 msgid "Which forms"
 msgstr ""
 
-#: src/Admin/Pages/NotificationsPage.php:451
+#: src/Admin/Pages/NotificationsPage.php:555
 msgid "Every form, except those switched off below"
 msgstr ""
 
-#: src/Admin/Pages/NotificationsPage.php:453
+#: src/Admin/Pages/NotificationsPage.php:557
 msgid "Only the forms switched on below"
 msgstr ""
 
-#: src/Admin/Pages/NotificationsPage.php:460
+#: src/Admin/Pages/NotificationsPage.php:564
 msgid "No forms have been discovered yet. Under <em>Every form</em>, any form that appears later will notify automatically."
 msgstr ""
 
-#: src/Admin/Pages/NotificationsPage.php:482
+#: src/Admin/Pages/NotificationsPage.php:586
 msgid "Use the scope above"
 msgstr ""
 
-#: src/Admin/Pages/NotificationsPage.php:483
+#: src/Admin/Pages/NotificationsPage.php:587
 msgid "Always notify"
 msgstr ""
 
-#: src/Admin/Pages/NotificationsPage.php:484
+#: src/Admin/Pages/NotificationsPage.php:588
 msgid "Never notify"
 msgstr ""
 
-#: src/Admin/Pages/NotificationsPage.php:498
+#: src/Admin/Pages/NotificationsPage.php:602
 msgid "Elementor forms are identified by their <em>name</em>, so renaming an Elementor form resets its rule here to the scope default — the same behaviour as the Forms page."
 msgstr ""
 
-#: src/Admin/Pages/NotificationsPage.php:512
+#: src/Admin/Pages/NotificationsPage.php:616
 msgid "Queue"
 msgstr ""
 
 #. translators: %d: number of queued notification emails.
-#: src/Admin/Pages/NotificationsPage.php:515
+#: src/Admin/Pages/NotificationsPage.php:619
 #, php-format
 msgid "%d notification waiting to be sent."
 msgid_plural "%d notifications waiting to be sent."
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/Admin/Pages/NotificationsPage.php:528
+#: src/Admin/Pages/NotificationsPage.php:632
 msgid "Discard queued notifications"
 msgstr ""
 
-#: src/Admin/Pages/SettingsPage.php:57
-#: src/Admin/Pages/SettingsPage.php:173
+#: src/Admin/Pages/SettingsPage.php:74
+#: src/Admin/Pages/SettingsPage.php:259
 msgid "Convermetry Settings"
 msgstr ""
 
-#: src/Admin/Pages/SettingsPage.php:207
+#: src/Admin/Pages/SettingsPage.php:293
 msgid "Website & Client"
 msgstr ""
 
-#: src/Admin/Pages/SettingsPage.php:208
+#: src/Admin/Pages/SettingsPage.php:294
 msgid "Sent as <code>website_info</code> in every webhook payload — analytics reports and form submissions alike — so downstream systems receiving deliveries from several installs can identify which site and client a payload belongs to. Every key is always present (empty when not configured), giving consumers a predictable schema."
 msgstr ""
 
-#: src/Admin/Pages/SettingsPage.php:210
+#: src/Admin/Pages/SettingsPage.php:296
 msgid "Site name / URL / domain"
 msgstr ""
 
-#: src/Admin/Pages/SettingsPage.php:213
+#: src/Admin/Pages/SettingsPage.php:299
 msgid "Derived automatically — <code>domain</code> is the home URL host with any leading <code>www.</code> removed."
 msgstr ""
 
-#: src/Admin/Pages/SettingsPage.php:214
+#: src/Admin/Pages/SettingsPage.php:300
 msgid "Client First Name"
 msgstr ""
 
-#: src/Admin/Pages/SettingsPage.php:216
+#: src/Admin/Pages/SettingsPage.php:302
 msgid "Client Last Name"
 msgstr ""
 
-#: src/Admin/Pages/SettingsPage.php:218
+#: src/Admin/Pages/SettingsPage.php:304
 msgid "Client ID"
 msgstr ""
 
-#: src/Admin/Pages/SettingsPage.php:218
-#: src/Admin/Pages/SettingsPage.php:221
-#: src/Admin/Pages/WebhooksPage.php:477
+#: src/Admin/Pages/SettingsPage.php:304
+#: src/Admin/Pages/SettingsPage.php:307
+#: src/Admin/Pages/WebhooksPage.php:521
 msgid "(optional)"
 msgstr ""
 
-#: src/Admin/Pages/SettingsPage.php:220
+#: src/Admin/Pages/SettingsPage.php:306
 msgid "Sent as <code>website_info.client.id</code>."
 msgstr ""
 
-#: src/Admin/Pages/SettingsPage.php:221
+#: src/Admin/Pages/SettingsPage.php:307
 msgid "Website ID"
 msgstr ""
 
-#: src/Admin/Pages/SettingsPage.php:223
+#: src/Admin/Pages/SettingsPage.php:309
 msgid "Sent as <code>website_info.id</code>."
 msgstr ""
 
-#: src/Admin/Pages/SettingsPage.php:242
+#: src/Admin/Pages/SettingsPage.php:328
 msgid "Page views"
 msgstr ""
 
-#: src/Admin/Pages/SettingsPage.php:243
+#: src/Admin/Pages/SettingsPage.php:329
 msgid "Link & button clicks"
 msgstr ""
 
-#: src/Admin/Pages/SettingsPage.php:244
+#: src/Admin/Pages/SettingsPage.php:330
 msgid "Form views (a form became visible on screen)"
 msgstr ""
 
-#: src/Admin/Pages/SettingsPage.php:245
+#: src/Admin/Pages/SettingsPage.php:331
 msgid "Form starts (a visitor began filling a form in)"
 msgstr ""
 
-#: src/Admin/Pages/SettingsPage.php:246
+#: src/Admin/Pages/SettingsPage.php:332
 msgid "Form validation errors (which field failed, never what was typed)"
 msgstr ""
 
-#: src/Admin/Pages/SettingsPage.php:247
+#: src/Admin/Pages/SettingsPage.php:333
 msgid "Form submissions (attempts)"
 msgstr ""
 
-#: src/Admin/Pages/SettingsPage.php:248
+#: src/Admin/Pages/SettingsPage.php:334
 msgid "Confirmed form conversions (frontend events and server-confirmed submissions)"
 msgstr ""
 
 #. translators: %s: the JavaScript function name, Convermetry.track().
-#: src/Admin/Pages/SettingsPage.php:250
+#: src/Admin/Pages/SettingsPage.php:336
 #, php-format
 msgid "Custom events sent by your own code via %s"
 msgstr ""
 
-#: src/Admin/Pages/SettingsPage.php:251
+#: src/Admin/Pages/SettingsPage.php:337
 msgid "Mouse hover activity"
 msgstr ""
 
-#: src/Admin/Pages/SettingsPage.php:252
+#: src/Admin/Pages/SettingsPage.php:338
 msgid "Scroll depth milestones (50% and 100%)"
 msgstr ""
 
-#: src/Admin/Pages/SettingsPage.php:258
+#: src/Admin/Pages/SettingsPage.php:344
 msgid "Interactions to track"
 msgstr ""
 
-#: src/Admin/Pages/SettingsPage.php:270
+#: src/Admin/Pages/SettingsPage.php:356
 msgid "Conversion goals"
 msgstr ""
 
-#: src/Admin/Pages/SettingsPage.php:272
+#: src/Admin/Pages/SettingsPage.php:358
 msgid "Match tracked activity against configured goals"
 msgstr ""
 
-#: src/Admin/Pages/SettingsPage.php:273
+#: src/Admin/Pages/SettingsPage.php:359
 msgid "Goals turn ordinary activity — a phone number tapped, a PDF opened, a booking link followed — into counted conversions. Matching runs on the server as events arrive, so turning this off removes that work entirely. Existing goal completions are kept either way; switching it off pauses collection rather than erasing history. Manage goals under <strong>Convermetry → Goals</strong>."
 msgstr ""
 
-#: src/Admin/Pages/SettingsPage.php:274
+#: src/Admin/Pages/SettingsPage.php:360
 msgid "Logged-in users"
 msgstr ""
 
-#: src/Admin/Pages/SettingsPage.php:276
+#: src/Admin/Pages/SettingsPage.php:362
 msgid "Exclude logged-in users from tracking"
 msgstr ""
 
-#: src/Admin/Pages/SettingsPage.php:277
+#: src/Admin/Pages/SettingsPage.php:363
 msgid "Recommended, so admin and editor activity does not skew visitor analytics. Webhook delivery of form submissions is unaffected."
 msgstr ""
 
-#: src/Admin/Pages/SettingsPage.php:278
+#: src/Admin/Pages/SettingsPage.php:364
 msgid "Browser privacy signals"
 msgstr ""
 
-#: src/Admin/Pages/SettingsPage.php:280
+#: src/Admin/Pages/SettingsPage.php:366
 msgid "Honor Do Not Track / Global Privacy Control"
 msgstr ""
 
-#: src/Admin/Pages/SettingsPage.php:281
+#: src/Admin/Pages/SettingsPage.php:367
 msgid "Visitors whose browser sends these signals are not tracked at all — no analytics events are recorded and no analytics context accompanies their form submissions. Enabling this typically reduces recorded traffic. Note DNT/GPC is an opt-out signal, not a consent mechanism."
 msgstr ""
 
-#: src/Admin/Pages/SettingsPage.php:282
+#: src/Admin/Pages/SettingsPage.php:368
 msgid "IP addresses"
 msgstr ""
 
-#: src/Admin/Pages/SettingsPage.php:284
+#: src/Admin/Pages/SettingsPage.php:370
 msgid "Store visitor IP addresses"
 msgstr ""
 
-#: src/Admin/Pages/SettingsPage.php:285
+#: src/Admin/Pages/SettingsPage.php:371
 msgid "On by default. Records the visitor's IP with <strong>every analytics event</strong> (page views, clicks, hovers, scroll milestones, conversions) and with <strong>every server-confirmed form submission</strong> — surfaced in analytics reports and sent as <code>form_submission.ip_address</code> in webhook payloads. Useful for fraud checks, spam review, and CRM deduplication. Turning this off leaves the address empty on new rows; rows already stored are unchanged and age out with the retention window. No IP is ever sent to a geolocation service. Behind a proxy or CDN, map the real address with the <code>convermetry_client_ip</code> filter."
 msgstr ""
 
-#: src/Admin/Pages/SettingsPage.php:286
+#: src/Admin/Pages/SettingsPage.php:372
 msgid "<strong>Privacy note:</strong> in the EU/UK an IP address is personal data. Storing it for general visitor activity — not just leads someone actively submitted — usually needs to be disclosed in your privacy policy and to rest on a lawful basis. When <em>Honor Do Not Track / Global Privacy Control</em> is enabled above, a visitor sending either signal gets no stored IP on either path — their analytics events are not recorded at all, and a form they submit is still delivered but carries an empty address."
 msgstr ""
 
-#: src/Admin/Pages/SettingsPage.php:287
+#: src/Admin/Pages/SettingsPage.php:373
 msgid "Hover dwell time (ms)"
 msgstr ""
 
-#: src/Admin/Pages/SettingsPage.php:289
+#: src/Admin/Pages/SettingsPage.php:375
 msgid "How long the pointer must rest on an element before a hover event is recorded. Add <code>data-cvmtry-hover</code> to any element — images included — to opt it into hover tracking."
 msgstr ""
 
-#: src/Admin/Pages/SettingsPage.php:302
+#: src/Admin/Pages/SettingsPage.php:388
 msgid "Data"
 msgstr ""
 
-#: src/Admin/Pages/SettingsPage.php:304
+#: src/Admin/Pages/SettingsPage.php:390
 msgid "Retention period (days)"
 msgstr ""
 
-#: src/Admin/Pages/SettingsPage.php:306
+#: src/Admin/Pages/SettingsPage.php:392
 msgid "Analytics events, form submission records, goal completions, lead status history, and activity log entries older than this are deleted by a daily cleanup job. Default is 90 days."
 msgstr ""
 
-#: src/Admin/Pages/SettingsPage.php:307
+#: src/Admin/Pages/SettingsPage.php:393
 msgid "Lead value currency"
 msgstr ""
 
-#: src/Admin/Pages/SettingsPage.php:309
+#: src/Admin/Pages/SettingsPage.php:395
 msgid "Three-letter ISO 4217 code (USD, EUR, GBP, AUD…) used when you record a value against a lead on the Submissions screen. The code is <strong>saved onto each lead</strong> at the moment you enter its value, so changing this later never rewrites what is already recorded — and reports total each currency separately rather than adding different currencies together."
 msgstr ""
 
-#: src/Admin/Pages/SettingsPage.php:310
+#: src/Admin/Pages/SettingsPage.php:396
 msgid "Activity Log privacy"
 msgstr ""
 
-#: src/Admin/Pages/SettingsPage.php:312
+#: src/Admin/Pages/SettingsPage.php:398
 msgid "Store form submission data in the Activity Log"
 msgstr ""
 
-#: src/Admin/Pages/SettingsPage.php:313
+#: src/Admin/Pages/SettingsPage.php:399
 msgid "When disabled, the Activity Log records every delivery's metadata but replaces the visitor's field values with a placeholder — useful when compliance rules forbid a second copy of lead data. The payload actually delivered to endpoints is unaffected."
 msgstr ""
 
-#: src/Admin/Pages/SubmissionsPage.php:84
+#: src/Admin/Pages/SubmissionsPage.php:95
 msgid "Convermetry Submissions"
 msgstr ""
 
-#: src/Admin/Pages/SubmissionsPage.php:283
+#: src/Admin/Pages/SubmissionsPage.php:209
+msgid "Submissions can only be cleared from the Submissions screen."
+msgstr ""
+
+#: src/Admin/Pages/SubmissionsPage.php:246
+#: src/Admin/Pages/SubmissionsPage.php:279
+msgid "Exports are downloaded from the Submissions screen."
+msgstr ""
+
+#: src/Admin/Pages/SubmissionsPage.php:404
+#: src/Admin/Pages/SubmissionsPage.php:459
+#: src/Admin/Pages/SubmissionsPage.php:505
+msgid "Invalid submission id."
+msgstr ""
+
+#: src/Admin/Pages/SubmissionsPage.php:410
 #: src/Leads/LeadService.php:63
 msgid "That submission no longer exists."
 msgstr ""
 
-#: src/Admin/Pages/SubmissionsPage.php:310
-#: src/Admin/Pages/SubmissionsPage.php:334
-msgid "Invalid submission id."
-msgstr ""
-
 #. translators: %d: retry attempt number.
-#: src/Admin/Pages/SubmissionsPage.php:522
+#: src/Admin/Pages/SubmissionsPage.php:663
 #, php-format
 msgid "Queued · retry %d"
 msgstr ""
 
-#: src/Admin/Pages/SubmissionsPage.php:523
-#: src/Admin/Pages/SubmissionsPage.php:1155
+#: src/Admin/Pages/SubmissionsPage.php:664
+#: src/Admin/Pages/SubmissionsPage.php:1296
 #: assets/js/submissions.js:592
 msgid "Queued"
 msgstr ""
 
-#: src/Admin/Pages/SubmissionsPage.php:528
+#: src/Admin/Pages/SubmissionsPage.php:669
 msgid "Not sent — no form webhook"
 msgstr ""
 
-#: src/Admin/Pages/SubmissionsPage.php:529
+#: src/Admin/Pages/SubmissionsPage.php:670
 msgid "Not sent — webhooks paused"
 msgstr ""
 
-#: src/Admin/Pages/SubmissionsPage.php:530
-#: src/Admin/Pages/SubmissionsPage.php:685
-#: src/Admin/Pages/SubmissionsPage.php:1407
+#: src/Admin/Pages/SubmissionsPage.php:671
+#: src/Admin/Pages/SubmissionsPage.php:826
+#: src/Admin/Pages/SubmissionsPage.php:1548
 #: assets/js/submissions.js:593
 msgid "Not sent"
 msgstr ""
 
 #. translators: %d: number of endpoints the submission was delivered to.
-#: src/Admin/Pages/SubmissionsPage.php:539
+#: src/Admin/Pages/SubmissionsPage.php:680
 #, php-format
 msgid "Delivered (%d)"
 msgstr ""
 
-#: src/Admin/Pages/SubmissionsPage.php:540
-#: src/Admin/Pages/SubmissionsPage.php:1160
+#: src/Admin/Pages/SubmissionsPage.php:681
+#: src/Admin/Pages/SubmissionsPage.php:1301
 #: src/Privacy/PersonalDataExporter.php:127
 #: assets/js/submissions.js:589
 msgid "Delivered"
 msgstr ""
 
 #. translators: 1: endpoints delivered to, 2: endpoints attempted.
-#: src/Admin/Pages/SubmissionsPage.php:542
+#: src/Admin/Pages/SubmissionsPage.php:683
 #, php-format
 msgid "Partial (%1$d/%2$d)"
 msgstr ""
 
-#: src/Admin/Pages/SubmissionsPage.php:543
-#: src/Admin/Pages/SubmissionsPage.php:1165
+#: src/Admin/Pages/SubmissionsPage.php:684
+#: src/Admin/Pages/SubmissionsPage.php:1306
 #: assets/js/submissions.js:591
 msgid "Failed"
 msgstr ""
 
-#: src/Admin/Pages/SubmissionsPage.php:579
+#: src/Admin/Pages/SubmissionsPage.php:720
 msgid "All submissions have been deleted."
 msgstr ""
 
-#: src/Admin/Pages/SubmissionsPage.php:583
+#: src/Admin/Pages/SubmissionsPage.php:724
 msgid "Every form submission Convermetry confirmed server-side, joined to the analytics session that produced it. Submissions are recorded whether or not a webhook is configured — expand a row to see the form, its attribution, and the visitor's answers."
 msgstr ""
 
 #. translators: %s: URL of the Webhooks screen.
-#: src/Admin/Pages/SubmissionsPage.php:592
+#: src/Admin/Pages/SubmissionsPage.php:733
 #, php-format
 msgid "No webhook endpoint is currently set to receive form submissions, so every row below shows <strong>Not sent</strong>. That is expected — recording and attribution work independently of delivery. Add an endpoint under <a href=\"%s\">Webhooks</a> to forward leads onward."
 msgstr ""
 
 #. translators: %s: URL of the Webhooks screen.
-#: src/Admin/Pages/SubmissionsPage.php:604
+#: src/Admin/Pages/SubmissionsPage.php:745
 #, php-format
 msgid "Webhook delivery is currently <strong>paused</strong>, so new submissions are recorded here but not forwarded. Resume it under <a href=\"%s\">Webhooks</a>; queued deliveries are kept, not discarded."
 msgstr ""
 
 #. translators: %d: retention period in days.
-#: src/Admin/Pages/SubmissionsPage.php:617
+#: src/Admin/Pages/SubmissionsPage.php:758
 #, php-format
 msgid "<strong>Data retention:</strong> Submissions older than %d day are automatically removed daily. The retention period is shared with the analytics data and can be changed under <strong>Settings</strong>. Submissions contain the information visitors typed into your forms — treat exports accordingly."
 msgid_plural "<strong>Data retention:</strong> Submissions older than %d days are automatically removed daily. The retention period is shared with the analytics data and can be changed under <strong>Settings</strong>. Submissions contain the information visitors typed into your forms — treat exports accordingly."
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/Admin/Pages/SubmissionsPage.php:636
+#: src/Admin/Pages/SubmissionsPage.php:777
 msgid "Delete every stored submission? This permanently removes the lead data and cannot be undone. Activity Log entries are not affected."
 msgstr ""
 
-#: src/Admin/Pages/SubmissionsPage.php:645
+#: src/Admin/Pages/SubmissionsPage.php:786
 msgid "Export Current Filters"
 msgstr ""
 
 #. translators: 1: the lead's name or contact, 2: form name, 3: submission date, 4: delivery status.
-#: src/Admin/Pages/SubmissionsPage.php:704
+#: src/Admin/Pages/SubmissionsPage.php:845
 #, php-format
 msgid "Submission from %1$s via %2$s on %3$s — %4$s. Expand for details."
 msgstr ""
 
-#: src/Admin/Pages/SubmissionsPage.php:706
+#: src/Admin/Pages/SubmissionsPage.php:847
 msgid "an unnamed form"
 msgstr ""
 
-#: src/Admin/Pages/SubmissionsPage.php:826
+#: src/Admin/Pages/SubmissionsPage.php:967
 msgid "Form name"
 msgstr ""
 
-#: src/Admin/Pages/SubmissionsPage.php:827
+#: src/Admin/Pages/SubmissionsPage.php:968
 msgid "Form ID"
 msgstr ""
 
-#: src/Admin/Pages/SubmissionsPage.php:828
+#: src/Admin/Pages/SubmissionsPage.php:969
 msgid "Native form ID"
 msgstr ""
 
-#: src/Admin/Pages/SubmissionsPage.php:829
+#: src/Admin/Pages/SubmissionsPage.php:970
 #: src/Notifications/EmailBuilder.php:118
 msgid "Conversion page"
 msgstr ""
 
 #. translators: %s: date and time in UTC.
-#: src/Admin/Pages/SubmissionsPage.php:831
+#: src/Admin/Pages/SubmissionsPage.php:972
 #: src/Privacy/PersonalDataExporter.php:192
 msgid "Submitted"
 msgstr ""
 
-#: src/Admin/Pages/SubmissionsPage.php:832
+#: src/Admin/Pages/SubmissionsPage.php:973
 #: src/Notifications/EmailBuilder.php:119
 #: src/Privacy/PersonalDataExporter.php:107
 #: src/Privacy/PersonalDataExporter.php:123
@@ -5997,126 +6095,126 @@ msgstr ""
 msgid "Submission ID"
 msgstr ""
 
-#: src/Admin/Pages/SubmissionsPage.php:841
+#: src/Admin/Pages/SubmissionsPage.php:982
 msgid "Campaign ID"
 msgstr ""
 
-#: src/Admin/Pages/SubmissionsPage.php:844
+#: src/Admin/Pages/SubmissionsPage.php:985
 msgid "Ad click type"
 msgstr ""
 
-#: src/Admin/Pages/SubmissionsPage.php:845
+#: src/Admin/Pages/SubmissionsPage.php:986
 #: src/Privacy/PersonalDataExporter.php:217
 msgid "Entrance referrer"
 msgstr ""
 
-#: src/Admin/Pages/SubmissionsPage.php:846
+#: src/Admin/Pages/SubmissionsPage.php:987
 #: src/Notifications/EmailBuilder.php:230
 #: src/Privacy/PersonalDataExporter.php:218
 msgid "Landing page"
 msgstr ""
 
-#: src/Admin/Pages/SubmissionsPage.php:848
+#: src/Admin/Pages/SubmissionsPage.php:989
 msgid "Session ID"
 msgstr ""
 
-#: src/Admin/Pages/SubmissionsPage.php:849
+#: src/Admin/Pages/SubmissionsPage.php:990
 msgid "Session started"
 msgstr ""
 
-#: src/Admin/Pages/SubmissionsPage.php:850
+#: src/Admin/Pages/SubmissionsPage.php:991
 #: src/Notifications/EmailBuilder.php:232
 msgid "Pages viewed"
 msgstr ""
 
-#: src/Admin/Pages/SubmissionsPage.php:866
+#: src/Admin/Pages/SubmissionsPage.php:1007
 #: assets/js/submissions.js:306
 msgid "Delete Submission"
 msgstr ""
 
-#: src/Admin/Pages/SubmissionsPage.php:893
+#: src/Admin/Pages/SubmissionsPage.php:1034
 #: src/Notifications/EmailBuilder.php:149
 msgid "Analytics & attribution"
 msgstr ""
 
-#: src/Admin/Pages/SubmissionsPage.php:896
+#: src/Admin/Pages/SubmissionsPage.php:1037
 msgid "No analytics context was captured for this submission — the tracker's correlation fields did not reach the server (JavaScript blocked, tracking disabled, a privacy signal honored, or a server-to-server submission)."
 msgstr ""
 
-#: src/Admin/Pages/SubmissionsPage.php:909
+#: src/Admin/Pages/SubmissionsPage.php:1050
 #: src/Privacy/PersonalDataExporter.php:329
 msgid "Form submitted"
 msgstr ""
 
-#: src/Admin/Pages/SubmissionsPage.php:917
+#: src/Admin/Pages/SubmissionsPage.php:1058
 #: src/Notifications/EmailBuilder.php:127
 msgid "This submission recorded no field values."
 msgstr ""
 
-#: src/Admin/Pages/SubmissionsPage.php:936
+#: src/Admin/Pages/SubmissionsPage.php:1077
 msgid "Page query parameters"
 msgstr ""
 
-#: src/Admin/Pages/SubmissionsPage.php:1008
+#: src/Admin/Pages/SubmissionsPage.php:1149
 msgid "Lead outcome"
 msgstr ""
 
 #. translators: %s: lead status, such as "Qualified".
-#: src/Admin/Pages/SubmissionsPage.php:1015
+#: src/Admin/Pages/SubmissionsPage.php:1156
 #, php-format
 msgid "Status: <strong>%s</strong>"
 msgstr ""
 
 #. translators: %s: ISO currency code, such as USD.
-#: src/Admin/Pages/SubmissionsPage.php:1040
+#: src/Admin/Pages/SubmissionsPage.php:1181
 #, php-format
 msgid "Value (%s)"
 msgstr ""
 
-#: src/Admin/Pages/SubmissionsPage.php:1052
+#: src/Admin/Pages/SubmissionsPage.php:1193
 #: assets/js/submissions.js:243
 #: assets/js/submissions.js:267
 msgid "Save"
 msgstr ""
 
-#: src/Admin/Pages/SubmissionsPage.php:1057
+#: src/Admin/Pages/SubmissionsPage.php:1198
 msgid "Recorded here only — lead outcomes are never sent to webhook endpoints in this version, because a submission's payload is frozen when it is first delivered and could never reflect a change made afterwards. Clear the value field to remove a recorded amount."
 msgstr ""
 
-#: src/Admin/Pages/SubmissionsPage.php:1063
+#: src/Admin/Pages/SubmissionsPage.php:1204
 msgid "History"
 msgstr ""
 
-#: src/Admin/Pages/SubmissionsPage.php:1069
+#: src/Admin/Pages/SubmissionsPage.php:1210
 msgid "someone"
 msgstr ""
 
 #. translators: 1: previous lead status, 2: new lead status.
-#: src/Admin/Pages/SubmissionsPage.php:1073
+#: src/Admin/Pages/SubmissionsPage.php:1214
 #, php-format
 msgid "%1$s → %2$s"
 msgstr ""
 
 #. translators: 1: status change (and value), 2: date, 3: name of the user who made the change.
-#: src/Admin/Pages/SubmissionsPage.php:1084
+#: src/Admin/Pages/SubmissionsPage.php:1225
 #, php-format
 msgid "%1$s · %2$s by %3$s"
 msgstr ""
 
-#: src/Admin/Pages/SubmissionsPage.php:1118
+#: src/Admin/Pages/SubmissionsPage.php:1259
 msgid "Not sent — no webhook endpoint is configured to receive form submissions. The submission is still fully recorded here."
 msgstr ""
 
-#: src/Admin/Pages/SubmissionsPage.php:1121
+#: src/Admin/Pages/SubmissionsPage.php:1262
 msgid "Not sent — webhook delivery is currently paused. The submission is fully recorded here and will not be delivered until delivery is resumed."
 msgstr ""
 
-#: src/Admin/Pages/SubmissionsPage.php:1124
+#: src/Admin/Pages/SubmissionsPage.php:1265
 msgid "No delivery has been attempted for this submission yet."
 msgstr ""
 
 #. translators: %d: number of failed delivery attempts.
-#: src/Admin/Pages/SubmissionsPage.php:1152
+#: src/Admin/Pages/SubmissionsPage.php:1293
 #, php-format
 msgid "Queued · %d failed attempt"
 msgid_plural "Queued · %d failed attempts"
@@ -6124,197 +6222,219 @@ msgstr[0] ""
 msgstr[1] ""
 
 #. translators: %d: HTTP response status code.
-#: src/Admin/Pages/SubmissionsPage.php:1159
+#: src/Admin/Pages/SubmissionsPage.php:1300
 #, php-format
 msgctxt "with an HTTP status code"
 msgid "Delivered (%d)"
 msgstr ""
 
 #. translators: %d: HTTP response status code.
-#: src/Admin/Pages/SubmissionsPage.php:1164
+#: src/Admin/Pages/SubmissionsPage.php:1305
 #, php-format
 msgctxt "with an HTTP status code"
 msgid "Failed (%d)"
 msgstr ""
 
 #. translators: 1: URL of the Activity Log screen, 2: the submission id.
-#: src/Admin/Pages/SubmissionsPage.php:1176
+#: src/Admin/Pages/SubmissionsPage.php:1317
 #, php-format
 msgid "<a href=\"%1$s\">Open the Activity Log</a> and search for %2$s to see every attempt, its payload, and the endpoint's response."
 msgstr ""
 
-#: src/Admin/Pages/SubmissionsPage.php:1556
+#: src/Admin/Pages/SubmissionsPage.php:1697
 msgid "(no contact details)"
 msgstr ""
 
 #. translators: compact date and time format for the Submissions list, see https://www.php.net/manual/datetime.format.php
-#: src/Admin/Pages/SubmissionsPage.php:1611
+#: src/Admin/Pages/SubmissionsPage.php:1752
 msgid "M j, Y H:i"
 msgstr ""
 
-#: src/Admin/Pages/WebhooksPage.php:74
-#: src/Admin/Pages/WebhooksPage.php:429
+#: src/Admin/Pages/WebhooksPage.php:79
+#: src/Admin/Pages/WebhooksPage.php:473
 msgid "Convermetry Webhooks"
 msgstr ""
 
-#: src/Admin/Pages/WebhooksPage.php:336
+#: src/Admin/Pages/WebhooksPage.php:132
+msgid "Webhook settings can only be saved from the Webhooks screen."
+msgstr ""
+
+#: src/Admin/Pages/WebhooksPage.php:234
+msgid "Retries can only be discarded from the Webhooks screen."
+msgstr ""
+
+#: src/Admin/Pages/WebhooksPage.php:258
+msgid "That retry could not be found."
+msgstr ""
+
+#: src/Admin/Pages/WebhooksPage.php:322
 msgid "Enter a valid HTTPS endpoint URL first."
 msgstr ""
 
-#: src/Admin/Pages/WebhooksPage.php:365
+#: src/Admin/Pages/WebhooksPage.php:352
+msgid "Webhook settings were not saved: the submitted form was incomplete or malformed, so the stored settings were left unchanged. Reload this page and try again."
+msgstr ""
+
+#: src/Admin/Pages/WebhooksPage.php:358
 msgid "Webhook settings saved."
 msgstr ""
 
-#. translators: 1: the rejected endpoint URL, 2: the name of a PHP filter.
-#: src/Admin/Pages/WebhooksPage.php:376
-#, php-format
-msgid "Endpoint %1$s was not saved: endpoints must be valid HTTPS URLs. (Development setups can allow HTTP via the %2$s filter.)"
-msgstr ""
-
-#: src/Admin/Pages/WebhooksPage.php:389
+#: src/Admin/Pages/WebhooksPage.php:367
 msgid "A webhook dispatch run is in progress; the retry was not discarded. Try again in a moment."
 msgstr ""
 
-#: src/Admin/Pages/WebhooksPage.php:393
+#: src/Admin/Pages/WebhooksPage.php:371
 msgid "The pending retry was discarded. The endpoint's next scheduled delivery will cover that window's data again under a new delivery id."
 msgstr ""
 
-#: src/Admin/Pages/WebhooksPage.php:440
-msgid "Webhook Status"
+#. translators: 1: the endpoint's position in the list, 2: an excerpt of the rejected URL, 3: the name of a PHP filter.
+#: src/Admin/Pages/WebhooksPage.php:407
+#, php-format
+msgid "Endpoint %1$d (%2$s) was not saved: endpoints must use HTTPS. (Development setups can allow HTTP via the %3$s filter.)"
 msgstr ""
 
-#: src/Admin/Pages/WebhooksPage.php:442
-msgid "Toggle webhook active state"
-msgstr ""
-
-#: src/Admin/Pages/WebhooksPage.php:446
-msgid "When inactive, no new deliveries are sent — scheduled analytics reports pause and newly confirmed form submissions wait in the queue. Saved endpoints and settings are preserved."
-msgstr ""
-
-#: src/Admin/Pages/WebhooksPage.php:452
-msgid "Webhook Endpoints"
-msgstr ""
-
-#: src/Admin/Pages/WebhooksPage.php:453
-msgid "Each endpoint chooses which message types it receives: <strong>Analytics Reports</strong> (aggregated analytics on the schedule below) and/or <strong>Form Submissions</strong> (each confirmed lead, delivered immediately in the background). Endpoints must use HTTPS. Add a label so each endpoint is easy to identify in the Activity Log. Failed deliveries retry automatically — 5m, 30m, 2h, 6h, then 16h after the initial attempt."
-msgstr ""
-
-#: src/Admin/Pages/WebhooksPage.php:469
-msgid "+ Add Endpoint"
-msgstr ""
-
-#: src/Admin/Pages/WebhooksPage.php:475
-msgid "Delivery Settings"
-msgstr ""
-
-#: src/Admin/Pages/WebhooksPage.php:477
-msgid "Shared signing secret"
-msgstr ""
-
-#: src/Admin/Pages/WebhooksPage.php:479
-msgid "When set, every webhook request includes an <code>X-Convermetry-Signature</code> header — <code>sha256=&lt;hex&gt;</code>, the HMAC-SHA256 of the raw JSON body keyed with this secret — so receivers can verify payloads genuinely came from this site. An endpoint block's own signing secret overrides this shared one for that endpoint, so one receiver never learns the key that signs payloads for the others."
-msgstr ""
-
-#: src/Admin/Pages/WebhooksPage.php:480
-msgid "Analytics send interval"
+#. translators: 1: the endpoint's position in the list, 2: an excerpt of the rejected URL, 3: the name of a PHP filter.
+#: src/Admin/Pages/WebhooksPage.php:409
+#, php-format
+msgid "Endpoint %1$d (%2$s) was not saved: it is not a valid HTTPS URL that this site is allowed to send to. (Development setups can allow HTTP via the %3$s filter.)"
 msgstr ""
 
 #: src/Admin/Pages/WebhooksPage.php:484
-msgid "Hourly"
-msgstr ""
-
-#: src/Admin/Pages/WebhooksPage.php:485
-msgid "Twice daily"
+msgid "Webhook Status"
 msgstr ""
 
 #: src/Admin/Pages/WebhooksPage.php:486
-msgid "Daily"
+msgid "Toggle webhook active state"
 msgstr ""
 
-#: src/Admin/Pages/WebhooksPage.php:487
-msgid "Weekly"
+#: src/Admin/Pages/WebhooksPage.php:490
+msgid "When inactive, no new deliveries are sent — scheduled analytics reports pause and newly confirmed form submissions wait in the queue. Saved endpoints and settings are preserved."
 msgstr ""
 
 #: src/Admin/Pages/WebhooksPage.php:496
+msgid "Webhook Endpoints"
+msgstr ""
+
+#: src/Admin/Pages/WebhooksPage.php:497
+msgid "Each endpoint chooses which message types it receives: <strong>Analytics Reports</strong> (aggregated analytics on the schedule below) and/or <strong>Form Submissions</strong> (each confirmed lead, delivered immediately in the background). Endpoints must use HTTPS. Add a label so each endpoint is easy to identify in the Activity Log. Failed deliveries retry automatically — 5m, 30m, 2h, 6h, then 16h after the initial attempt."
+msgstr ""
+
+#: src/Admin/Pages/WebhooksPage.php:513
+msgid "+ Add Endpoint"
+msgstr ""
+
+#: src/Admin/Pages/WebhooksPage.php:519
+msgid "Delivery Settings"
+msgstr ""
+
+#: src/Admin/Pages/WebhooksPage.php:521
+msgid "Shared signing secret"
+msgstr ""
+
+#: src/Admin/Pages/WebhooksPage.php:523
+msgid "When set, every webhook request includes an <code>X-Convermetry-Signature</code> header — <code>sha256=&lt;hex&gt;</code>, the HMAC-SHA256 of the raw JSON body keyed with this secret — so receivers can verify payloads genuinely came from this site. An endpoint block's own signing secret overrides this shared one for that endpoint, so one receiver never learns the key that signs payloads for the others."
+msgstr ""
+
+#: src/Admin/Pages/WebhooksPage.php:524
+msgid "Analytics send interval"
+msgstr ""
+
+#: src/Admin/Pages/WebhooksPage.php:528
+msgid "Hourly"
+msgstr ""
+
+#: src/Admin/Pages/WebhooksPage.php:529
+msgid "Twice daily"
+msgstr ""
+
+#: src/Admin/Pages/WebhooksPage.php:530
+msgid "Daily"
+msgstr ""
+
+#: src/Admin/Pages/WebhooksPage.php:531
+msgid "Weekly"
+msgstr ""
+
+#: src/Admin/Pages/WebhooksPage.php:540
 msgid "Applies to Analytics Reports only — form submissions always deliver immediately. Each site delivers at a random, stable time within the interval (scattered up to 24 hours), so many sites sharing an endpoint don't all send at the same moment."
 msgstr ""
 
 #. translators: 1: UTC date and time of the next analytics send, 2: human-readable time until then, such as "5 mins".
-#: src/Admin/Pages/WebhooksPage.php:504
+#: src/Admin/Pages/WebhooksPage.php:548
 #, php-format
 msgid "Next scheduled send: <strong>%1$s UTC</strong> (in %2$s)."
 msgstr ""
 
 #. translators: %1$s: UTC date and time of the next analytics send.
-#: src/Admin/Pages/WebhooksPage.php:506
+#: src/Admin/Pages/WebhooksPage.php:550
 #, php-format
 msgid "Next scheduled send: <strong>%1$s UTC</strong> (as soon as WP-Cron next runs)."
 msgstr ""
 
-#: src/Admin/Pages/WebhooksPage.php:515
+#: src/Admin/Pages/WebhooksPage.php:559
 msgid "History backfill"
 msgstr ""
 
-#: src/Admin/Pages/WebhooksPage.php:517
+#: src/Admin/Pages/WebhooksPage.php:561
 msgid "Send retained history to new analytics endpoints"
 msgstr ""
 
-#: src/Admin/Pages/WebhooksPage.php:518
+#: src/Admin/Pages/WebhooksPage.php:562
 msgid "When enabled, an endpoint that has never received an analytics delivery starts from the beginning of the retention window instead of one send interval ago. History is delivered in interval-sized windows (up to 10 per scheduled run), so a long backlog is worked off over a few runs."
 msgstr ""
 
-#: src/Admin/Pages/WebhooksPage.php:519
+#: src/Admin/Pages/WebhooksPage.php:563
 msgid "Form delivery failure mode"
 msgstr ""
 
-#: src/Admin/Pages/WebhooksPage.php:521
+#: src/Admin/Pages/WebhooksPage.php:565
 msgid "<strong>Retry in background</strong> (recommended) — the visitor always sees the form's normal success state; failed deliveries retry automatically."
 msgstr ""
 
-#: src/Admin/Pages/WebhooksPage.php:523
+#: src/Admin/Pages/WebhooksPage.php:567
 msgid "<strong>Show error to visitor</strong> — delivery runs during the submission and a failure is reported back to the form (supported for Elementor Pro and Bricks Builder forms; every other provider always uses background delivery). Only a genuinely failed delivery is reported: an excluded form, a submission a filter declined, and a site with no endpoints configured all stay silent. Whether the form then <em>displays</em> an error is the builder's own decision — see the README for what each one does with a failed action."
 msgstr ""
 
-#: src/Admin/Pages/WebhooksPage.php:529
+#: src/Admin/Pages/WebhooksPage.php:573
 msgid "Request Customization"
 msgstr ""
 
-#: src/Admin/Pages/WebhooksPage.php:530
+#: src/Admin/Pages/WebhooksPage.php:574
 msgid "Headers and URL query parameters added to every webhook request. Per-form headers and parameters (configured on the Forms page) are merged after these; when page URL parameters are included, the precedence is: global parameters → page parameters → per-form parameters. Header values that look like credentials are redacted in the Activity Log but sent intact."
 msgstr ""
 
-#: src/Admin/Pages/WebhooksPage.php:531
+#: src/Admin/Pages/WebhooksPage.php:575
 msgid "Global Request Headers"
 msgstr ""
 
-#: src/Admin/Pages/WebhooksPage.php:533
+#: src/Admin/Pages/WebhooksPage.php:577
 msgid "e.g. Authorization"
 msgstr ""
 
-#: src/Admin/Pages/WebhooksPage.php:536
+#: src/Admin/Pages/WebhooksPage.php:580
 msgid "Global URL Query Parameters"
 msgstr ""
 
-#: src/Admin/Pages/WebhooksPage.php:538
+#: src/Admin/Pages/WebhooksPage.php:582
 msgid "e.g. source"
 msgstr ""
 
-#: src/Admin/Pages/WebhooksPage.php:542
+#: src/Admin/Pages/WebhooksPage.php:586
 msgid "Include page URL parameters — query parameters present on the page a form was submitted from (e.g. <code>?utm_source=google&amp;gclid=…</code>) are appended to the webhook URL for that submission."
 msgstr ""
 
-#: src/Admin/Pages/WebhooksPage.php:545
+#: src/Admin/Pages/WebhooksPage.php:589
 msgid "Save Webhook Settings"
 msgstr ""
 
 #. translators: %s: URL of the Activity Log screen.
-#: src/Admin/Pages/WebhooksPage.php:559
+#: src/Admin/Pages/WebhooksPage.php:603
 #, php-format
 msgid "Every delivery attempt — analytics report or form submission, scheduled, immediate, retry, or test — is recorded with its payload and response (sensitive values redacted) on the <a href=\"%s\">Activity Log</a> page."
 msgstr ""
 
 #. translators: %d: the endpoint's position in the list.
-#: src/Admin/Pages/WebhooksPage.php:594
+#: src/Admin/Pages/WebhooksPage.php:638
 #: assets/js/admin.js:159
 #: assets/js/admin.js:223
 #, php-format,js-format
@@ -6322,100 +6442,100 @@ msgid "Endpoint %d"
 msgstr ""
 
 #. translators: %d: the endpoint's position in the list.
-#: src/Admin/Pages/WebhooksPage.php:604
+#: src/Admin/Pages/WebhooksPage.php:648
 #: assets/js/admin.js:161
 #, php-format,js-format
 msgid "Remove endpoint %d"
 msgstr ""
 
 #. translators: %d: the endpoint's position in the list.
-#: src/Admin/Pages/WebhooksPage.php:615
+#: src/Admin/Pages/WebhooksPage.php:659
 #: assets/js/admin.js:169
 #, php-format,js-format
 msgid "Endpoint %d URL"
 msgstr ""
 
-#: src/Admin/Pages/WebhooksPage.php:618
+#: src/Admin/Pages/WebhooksPage.php:662
 #: assets/js/admin.js:174
 msgid "Label (optional — shown in the Activity Log)"
 msgstr ""
 
 #. translators: %d: the endpoint's position in the list.
-#: src/Admin/Pages/WebhooksPage.php:620
+#: src/Admin/Pages/WebhooksPage.php:664
 #: assets/js/admin.js:176
 #, php-format,js-format
 msgid "Endpoint %d label"
 msgstr ""
 
-#: src/Admin/Pages/WebhooksPage.php:623
+#: src/Admin/Pages/WebhooksPage.php:667
 #: assets/js/admin.js:181
 msgid "Signing secret (optional — overrides the shared secret)"
 msgstr ""
 
 #. translators: %d: the endpoint's position in the list.
-#: src/Admin/Pages/WebhooksPage.php:625
+#: src/Admin/Pages/WebhooksPage.php:669
 #: assets/js/admin.js:183
 #, php-format,js-format
 msgid "Endpoint %d signing secret"
 msgstr ""
 
 #. translators: %d: the endpoint's position in the list.
-#: src/Admin/Pages/WebhooksPage.php:630
+#: src/Admin/Pages/WebhooksPage.php:674
 #: assets/js/admin.js:187
 #, php-format,js-format
 msgid "Delivery types for endpoint %d"
 msgstr ""
 
-#: src/Admin/Pages/WebhooksPage.php:633
+#: src/Admin/Pages/WebhooksPage.php:677
 #: assets/js/activity-log.js:366
 #: assets/js/admin.js:189
 msgid "Analytics Reports"
 msgstr ""
 
-#: src/Admin/Pages/WebhooksPage.php:635
+#: src/Admin/Pages/WebhooksPage.php:679
 #: assets/js/activity-log.js:367
 #: assets/js/admin.js:191
 msgid "Form Submissions"
 msgstr ""
 
-#: src/Admin/Pages/WebhooksPage.php:637
+#: src/Admin/Pages/WebhooksPage.php:681
 #: assets/js/admin.js:194
 msgid "Send analytics test"
 msgstr ""
 
-#: src/Admin/Pages/WebhooksPage.php:638
+#: src/Admin/Pages/WebhooksPage.php:682
 #: assets/js/admin.js:195
 msgid "Send form test"
 msgstr ""
 
-#: src/Admin/Pages/WebhooksPage.php:689
+#: src/Admin/Pages/WebhooksPage.php:733
 msgid "Pending analytics delivery retries"
 msgstr ""
 
 #. translators: 1: attempt number, 2: maximum attempts, 3: endpoint URL, 4: URL that discards the retry.
-#: src/Admin/Pages/WebhooksPage.php:698
+#: src/Admin/Pages/WebhooksPage.php:742
 #, php-format
 msgid "Retry %1$d of %2$d to %3$s — next attempt with the next scheduled send (retry chain exhausted; the frozen payload is kept and re-sent first). <a href=\"%4$s\">Discard this retry</a>"
 msgstr ""
 
 #. translators: 1: attempt number, 2: maximum attempts, 3: endpoint URL, 4: URL that discards the retry, 5: human-readable time until the next attempt, such as "5 mins".
-#: src/Admin/Pages/WebhooksPage.php:701
+#: src/Admin/Pages/WebhooksPage.php:745
 #, php-format
 msgid "Retry %1$d of %2$d to %3$s — next attempt in %5$s. <a href=\"%4$s\">Discard this retry</a>"
 msgstr ""
 
 #. translators: 1: attempt number, 2: maximum attempts, 3: endpoint URL, 4: URL that discards the retry.
-#: src/Admin/Pages/WebhooksPage.php:704
+#: src/Admin/Pages/WebhooksPage.php:748
 #, php-format
 msgid "Retry %1$d of %2$d to %3$s — next attempt as soon as WP-Cron next runs. <a href=\"%4$s\">Discard this retry</a>"
 msgstr ""
 
-#: src/Admin/Pages/WebhooksPage.php:728
+#: src/Admin/Pages/WebhooksPage.php:772
 msgid "Discarding a retry drops its frozen payload; the data itself is not lost — the endpoint's next scheduled delivery covers that window again under a new delivery id (a receiver that already processed the frozen delivery would then see that data twice). Frozen retries older than the retention window are discarded automatically."
 msgstr ""
 
 #. translators: %s: number of queued form-submission deliveries.
-#: src/Admin/Pages/WebhooksPage.php:752
+#: src/Admin/Pages/WebhooksPage.php:796
 #, php-format
 msgid "<strong>%s pending form-submission delivery</strong> waiting in the background queue."
 msgid_plural "<strong>%s pending form-submission deliveries</strong> waiting in the background queue."
@@ -6423,16 +6543,24 @@ msgstr[0] ""
 msgstr[1] ""
 
 #. translators: 1: submission id, 2: endpoint URL, 3: attempt number, 4: maximum attempts, 5: human-readable time until the next attempt, such as "5 mins".
-#: src/Admin/Pages/WebhooksPage.php:768
+#: src/Admin/Pages/WebhooksPage.php:812
 #, php-format
 msgid "Submission %1$s → %2$s — attempt %3$d of %4$d, next in %5$s."
 msgstr ""
 
 #. translators: 1: submission id, 2: endpoint URL, 3: attempt number, 4: maximum attempts.
-#: src/Admin/Pages/WebhooksPage.php:770
+#: src/Admin/Pages/WebhooksPage.php:814
 #, php-format
 msgid "Submission %1$s → %2$s — attempt %3$d of %4$d, next as soon as WP-Cron next runs."
 msgstr ""
+
+#. translators: %d: number of days in the default reporting period.
+#: src/Admin/ReportPeriod.php:126
+#, php-format
+msgid "That report link has expired or is not valid, so the last %d day is shown. Choose a period below to change it."
+msgid_plural "That report link has expired or is not valid, so the last %d days are shown. Choose a period below to change it."
+msgstr[0] ""
+msgstr[1] ""
 
 #: src/Analytics/FunnelReport.php:81
 msgid "A funnel needs at least two steps."
@@ -7054,32 +7182,32 @@ msgstr ""
 msgid "Regenerate the API key? Any existing integrations using the current key will stop working until updated. The new key is shown only once — copy it right away."
 msgstr ""
 
-#: assets/js/admin.js:256
+#: assets/js/admin.js:260
 msgid "Enter an endpoint URL first."
 msgstr ""
 
-#: assets/js/admin.js:261
-#: assets/js/admin.js:459
+#: assets/js/admin.js:265
+#: assets/js/admin.js:463
 msgid "Sending…"
 msgstr ""
 
 #. translators: %d: HTTP response status code.
-#: assets/js/admin.js:278
+#: assets/js/admin.js:282
 #, js-format
 msgid "(HTTP %d)"
 msgstr ""
 
-#: assets/js/admin.js:281
-#: assets/js/admin.js:475
+#: assets/js/admin.js:285
+#: assets/js/admin.js:479
 msgid "Test failed."
 msgstr ""
 
-#: assets/js/admin.js:288
-#: assets/js/admin.js:481
+#: assets/js/admin.js:292
+#: assets/js/admin.js:485
 msgid "The test request could not be sent."
 msgstr ""
 
-#: assets/js/admin.js:451
+#: assets/js/admin.js:455
 msgid "Enter a recipient address first."
 msgstr ""
 
