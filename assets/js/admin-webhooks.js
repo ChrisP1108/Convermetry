@@ -1,14 +1,19 @@
 /**
- * Convermetry — Activity Log page.
+ * Convermetry — Webhooks page: the Activity Log section.
  *
  * Detailed webhook delivery visibility:
  * two lazy-loading accordions (successful / failed deliveries) with
  * year/month/endpoint filters, payload search, per-page selection, windowed
  * pagination, per-entry delete, and the Deliveries API toggle/key card.
  *
+ * Everything is scoped to the section element (#cvmtry-activity-log), so the
+ * webhook settings form above it — driven by assets/js/admin.js — is never
+ * touched by a selector here. A user who may not view the log gets neither
+ * the section nor this script.
+ *
  * All data comes from the cvmtry_get_activity_logs (and sibling) AJAX actions;
  * configuration and nonces arrive via the CVMTRY_LOG object localized by
- * ActivityLogPage.
+ * ActivityLogSection.
  */
 (function () {
     'use strict';
@@ -47,8 +52,8 @@
 
     // ── Accordions ────────────────────────────────────────────────────────────
 
-    function initAccordions() {
-        document.querySelectorAll('.cvmtry-accordion-header').forEach(function (header) {
+    function initAccordions(root) {
+        root.querySelectorAll('.cvmtry-accordion-header').forEach(function (header) {
             header.addEventListener('click', function () {
                 const isExpanded = header.getAttribute('aria-expanded') === 'true';
                 const bodyId     = header.getAttribute('aria-controls');
@@ -70,9 +75,11 @@
      * list are injected and the first page is fetched; filter and page changes
      * trigger subsequent fetches. Delete buttons are handled via event
      * delegation and trigger a re-fetch after a successful delete.
+     *
+     * @param {HTMLElement} root The Activity Log section.
      */
-    function initLogLists() {
-        document.querySelectorAll('.cvmtry-accordion').forEach(function (accordion) {
+    function initLogLists(root) {
+        root.querySelectorAll('.cvmtry-accordion').forEach(function (accordion) {
             const header = accordion.querySelector('.cvmtry-accordion-header');
             const body   = accordion.querySelector('.cvmtry-accordion-body');
             if (!header || !body) return;
@@ -172,7 +179,7 @@
                                 if (!isNaN(count) && count > 0) badge.textContent = String(count - 1);
                             }
                             fetchLogs();
-                            document.dispatchEvent(new CustomEvent('cvmtry:log-deleted'));
+                            root.dispatchEvent(new CustomEvent('cvmtry:log-deleted'));
                         } else {
                             btn.disabled    = false;
                             btn.textContent = __('Delete', 'convermetry');
@@ -185,7 +192,7 @@
             });
 
             // Mark stale if the other accordion deletes an entry while closed.
-            document.addEventListener('cvmtry:log-deleted', function () {
+            root.addEventListener('cvmtry:log-deleted', function () {
                 dirty = true;
             });
 
@@ -482,13 +489,18 @@
      * once — from the generate/toggle-on response. revealKey() swaps the
      * masked placeholder for that value and unhides Copy; on the next page
      * load the mask is back and the key is gone for good.
+     *
+     * The card is printed only for users who may manage the API; without it
+     * this returns before wiring anything.
+     *
+     * @param {HTMLElement} root The Activity Log section.
      */
-    function initApiCard() {
-        const toggle   = document.getElementById('cvmtry-delivery-api-toggle');
-        const label    = document.getElementById('cvmtry-api-toggle-label');
-        const section  = document.getElementById('cvmtry-api-key-section');
-        const keyValue = document.getElementById('cvmtry-api-key-value');
-        const copyBtn  = document.querySelector('.cvmtry-copy-key-btn');
+    function initApiCard(root) {
+        const toggle   = root.querySelector('#cvmtry-delivery-api-toggle');
+        const label    = root.querySelector('#cvmtry-api-toggle-label');
+        const section  = root.querySelector('#cvmtry-api-key-section');
+        const keyValue = root.querySelector('#cvmtry-api-key-value');
+        const copyBtn  = root.querySelector('.cvmtry-copy-key-btn');
 
         if (!toggle) return;
 
@@ -545,7 +557,7 @@
             });
         }
 
-        const regenBtn = document.querySelector('.cvmtry-regen-key-btn');
+        const regenBtn = root.querySelector('.cvmtry-regen-key-btn');
         if (regenBtn) {
             regenBtn.addEventListener('click', function () {
                 if (!confirm(__('Regenerate the API key? Any existing integrations using the current key will stop working until updated. The new key is shown only once — copy it right away.', 'convermetry'))) return;
@@ -596,9 +608,19 @@
     // ── Boot ─────────────────────────────────────────────────────────────────
 
     document.addEventListener('DOMContentLoaded', function () {
-        initAccordions();
-        initLogLists();
-        initApiCard();
+        const root = document.getElementById('cvmtry-activity-log');
+
+        // Wired once: a second copy of this script must not attach a second
+        // set of listeners, which would toggle each accordion twice (leaving
+        // it shut) and send every request twice.
+        if (!root || root.dataset.cvmtryLogWired === '1') return;
+        root.dataset.cvmtryLogWired = '1';
+
+        // Order matters: the accordion toggle runs before the log list's own
+        // header listener, which reads the aria-expanded state it just set.
+        initAccordions(root);
+        initLogLists(root);
+        initApiCard(root);
     });
 
 })();

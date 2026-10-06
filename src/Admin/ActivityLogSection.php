@@ -1,13 +1,11 @@
 <?php
 declare(strict_types=1);
 
-namespace Convermetry\Admin\Pages;
+namespace Convermetry\Admin;
 
 if (!defined('ABSPATH')) exit;
 
-use Convermetry\Admin\AdminAssets;
-use Convermetry\Admin\AdminRequest;
-use Convermetry\Admin\Capability;
+use Convermetry\Admin\Pages\WebhooksPage;
 use Convermetry\Api\DeliveryLogController;
 use Convermetry\Settings\Options;
 use Convermetry\Support\Pagination;
@@ -15,7 +13,12 @@ use Convermetry\Webhook\AnalyticsDispatcher;
 use Convermetry\Webhook\DeliveryLog;
 
 /**
- * The "Convermetry → Activity Log" admin page.
+ * The Activity Log: the last section of "Convermetry → Webhooks".
+ *
+ * It used to be a screen of its own (admin.php?page=convermetry-activity).
+ * Delivery attempts are the outcome of the endpoints configured on Webhooks,
+ * so the log now sits under them, at the {@see self::ANCHOR} fragment, and the
+ * old slug redirects there.
  *
  * Detailed visibility into every outbound webhook delivery attempt —
  * analytics reports and form submissions; scheduled, immediate, retry, and
@@ -28,14 +31,31 @@ use Convermetry\Webhook\DeliveryLog;
  *    year/month, message-type, endpoint, provider, and form filters,
  *    debounced payload search, per-page selection, and per-entry delete.
  *
- * Log lists are populated client-side (assets/js/activity-log.js) via the
+ * This class owns the section's markup, its script configuration, and every
+ * AJAX and admin-post handler behind it. {@see WebhooksPage::init()} registers
+ * those handlers once per admin request, whichever screen the request is for,
+ * and {@see WebhooksPage::render()} prints the section.
+ *
+ * Its permissions are its own and are never folded into webhooks.manage, which
+ * also exposes signing secrets: viewing needs activity.view, deleting and
+ * clearing need activity.manage, and the API card needs api.manage. Each
+ * control is printed only for the scope that may use it, and each handler
+ * checks that scope again.
+ *
+ * Log lists are populated client-side (assets/js/admin-webhooks.js) via the
  * cvmtry_get_activity_logs AJAX action; only row counts are fetched on page
  * load. Log data lives in the {@see DeliveryLog} table.
  */
-final class ActivityLogPage
+final class ActivityLogSection
 {
-    /** Menu slug for the submenu page. */
-    public const string MENU_SLUG = 'convermetry-activity';
+    /** The section's id on the Webhooks screen; links open it as a fragment. */
+    public const string ANCHOR = 'cvmtry-activity-log';
+
+    /** Slug of the retired standalone screen. Requests for it are redirected. */
+    public const string LEGACY_SLUG = 'convermetry-activity';
+
+    /** Script handle for assets/js/admin-webhooks.js. */
+    public const string SCRIPT_HANDLE = 'cvmtry-webhooks';
 
     /** Rows fetched per database round-trip while streaming an export. */
     private const int EXPORT_CHUNK = 200;
@@ -49,88 +69,147 @@ final class ActivityLogPage
     /** admin-post action, and nonce action, for the JSON export link. */
     public const string EXPORT_JSON_ACTION = 'cvmtry_activity_export_json';
 
+    /** AJAX action, and nonce action, for one page of the log. */
+    public const string LIST_ACTION = 'cvmtry_get_activity_logs';
+
+    /** AJAX action, and nonce action, for deleting one entry. */
+    public const string DELETE_ACTION = 'cvmtry_delete_activity_log';
+
+    /** AJAX action, and nonce action, for the Deliveries API toggle. */
+    public const string API_TOGGLE_ACTION = 'cvmtry_toggle_delivery_api';
+
+    /** AJAX action, and nonce action, for regenerating the API key. */
+    public const string API_REGEN_ACTION = 'cvmtry_regen_delivery_api_key';
+
     /**
-     * Registers menu, asset, action, and AJAX hooks.
+     * Registers the legacy-screen redirect and the action and AJAX hooks.
+     *
+     * Called from {@see WebhooksPage::init()}, which runs once per admin
+     * request, so each handler is registered exactly once.
      *
      * Clear and export hang off admin_post_{action}, so WordPress only calls
      * them for their own form or link — ordinary admin page loads never reach
      * them. Each export format is its own action, so its nonce action is fixed
      * before any other input is read.
      *
+     * The redirect hangs off admin_menu because the old slug is no longer
+     * registered: wp-admin/includes/menu.php refuses an unregistered page right
+     * after admin_menu, before admin_init ever runs.
+     *
      * @return void
      */
     public static function init(): void
     {
-        add_action('admin_menu', [self::class, 'addMenu']);
+        add_action('admin_menu', [self::class, 'redirectLegacyScreen'], 0);
+
         add_action('admin_post_' . self::CLEAR_ACTION, [self::class, 'processClearLogs']);
         add_action('admin_post_' . self::EXPORT_CSV_ACTION, [self::class, 'processExportCsv']);
         add_action('admin_post_' . self::EXPORT_JSON_ACTION, [self::class, 'processExportJson']);
-        add_action('admin_enqueue_scripts', [self::class, 'enqueueAssets']);
 
-        add_action('wp_ajax_cvmtry_get_activity_logs', [self::class, 'handleGetLogsAjax']);
-        add_action('wp_ajax_cvmtry_delete_activity_log', [self::class, 'handleDeleteLogAjax']);
-        add_action('wp_ajax_cvmtry_toggle_delivery_api', [self::class, 'handleApiToggleAjax']);
-        add_action('wp_ajax_cvmtry_regen_delivery_api_key', [self::class, 'handleApiRegenKeyAjax']);
+        add_action('wp_ajax_' . self::LIST_ACTION, [self::class, 'handleGetLogsAjax']);
+        add_action('wp_ajax_' . self::DELETE_ACTION, [self::class, 'handleDeleteLogAjax']);
+        add_action('wp_ajax_' . self::API_TOGGLE_ACTION, [self::class, 'handleApiToggleAjax']);
+        add_action('wp_ajax_' . self::API_REGEN_ACTION, [self::class, 'handleApiRegenKeyAjax']);
     }
 
     /**
-     * Adds the Activity Log submenu.
+     * The Webhooks screen, opened at this section.
      *
-     * @return void
+     * Built with WordPress's URL helpers, so it follows the site's admin URL
+     * (and self_admin_url()'s network/user variants) rather than a fixed host.
+     *
+     * @param array<string, string> $args Extra query arguments.
+     * @return string
      */
-    public static function addMenu(): void
+    public static function url(array $args = []): string
     {
-        add_submenu_page(
-            HomePage::MENU_SLUG,
-            __('Convermetry Activity Log', 'convermetry'),
-            __('Activity Log', 'convermetry'),
-            Capability::required(Capability::ACTIVITY_VIEW),
-            self::MENU_SLUG,
-            [self::class, 'render']
-        );
+        return add_query_arg(['page' => WebhooksPage::MENU_SLUG] + $args, self_admin_url('admin.php')) . '#' . self::ANCHOR;
     }
 
     /**
-     * Enqueues the page's script on this page only.
+     * Where a request for the retired standalone screen should go, or '' when
+     * it should not be redirected.
      *
-     * @param string $hook The current admin page hook suffix.
+     * Only a user who could open the old screen — activity.view — is sent on.
+     * Anyone else gets WordPress's own refusal for an unknown page, exactly
+     * what they got before, rather than a redirect to a screen that would
+     * refuse them or that has nothing for them.
+     *
+     * @param string $page The requested, sanitized page slug.
+     * @return string
+     */
+    public static function legacyRedirectTarget(string $page): string
+    {
+        if ($page !== self::LEGACY_SLUG || !Capability::currentUserCan(Capability::ACTIVITY_VIEW)) {
+            return '';
+        }
+
+        return self::url();
+    }
+
+    /**
+     * Redirects admin.php?page=convermetry-activity to the Webhooks screen's
+     * Activity Log section (admin_menu, priority 0).
+     *
      * @return void
      */
-    public static function enqueueAssets(string $hook): void
+    public static function redirectLegacyScreen(): void
     {
-        if (!str_contains($hook, self::MENU_SLUG)) {
+        global $pagenow;
+
+        if ($pagenow !== 'admin.php') {
             return;
         }
 
-        wp_enqueue_style(
-            'cvmtry-activity-log',
-            CVMTRY_PLUGIN_URL . 'assets/css/admin-activity-log.css',
-            [AdminAssets::COMMON_HANDLE],
-            CVMTRY_VERSION
-        );
+        // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- read-only routing: the slug is compared with one fixed value and only selects a redirect to a fixed admin URL; nothing is changed.
+        $page = isset($_GET['page']) && is_string($_GET['page']) ? sanitize_key(wp_unslash($_GET['page'])) : '';
 
+        $target = self::legacyRedirectTarget($page);
+        if ($target === '') {
+            return;
+        }
+
+        wp_safe_redirect($target);
+        exit;
+    }
+
+    /**
+     * Enqueues assets/js/admin-webhooks.js and its configuration.
+     *
+     * Called by {@see WebhooksPage::enqueueAssets()} on the Webhooks screen,
+     * for a user who may view the log. A nonce is issued only for an action the
+     * user's scopes allow; every key is always present, so the script's
+     * configuration has one shape.
+     *
+     * @return void
+     */
+    public static function enqueueScript(): void
+    {
         wp_enqueue_script(
-            'cvmtry-activity-log',
-            CVMTRY_PLUGIN_URL . 'assets/js/activity-log.js',
+            self::SCRIPT_HANDLE,
+            CVMTRY_PLUGIN_URL . 'assets/js/admin-webhooks.js',
             ['wp-i18n', AdminAssets::CONFIRM_HANDLE],
             CVMTRY_VERSION,
             true
         );
-        wp_set_script_translations('cvmtry-activity-log', 'convermetry');
+        wp_set_script_translations(self::SCRIPT_HANDLE, 'convermetry');
 
-        wp_localize_script('cvmtry-activity-log', 'CVMTRY_LOG', [
+        $canDelete = Capability::currentUserCan(Capability::ACTIVITY_MANAGE);
+        $canApi    = Capability::currentUserCan(Capability::API_MANAGE);
+
+        wp_localize_script(self::SCRIPT_HANDLE, 'CVMTRY_LOG', [
             'ajaxUrl'        => admin_url('admin-ajax.php'),
-            'logsNonce'      => wp_create_nonce('cvmtry_get_activity_logs'),
-            'deleteNonce'    => wp_create_nonce('cvmtry_delete_activity_log'),
-            'apiToggleNonce' => wp_create_nonce('cvmtry_toggle_delivery_api'),
-            'apiRegenNonce'  => wp_create_nonce('cvmtry_regen_delivery_api_key'),
+            'logsNonce'      => wp_create_nonce(self::LIST_ACTION),
+            'deleteNonce'    => $canDelete ? wp_create_nonce(self::DELETE_ACTION) : '',
+            'apiToggleNonce' => $canApi ? wp_create_nonce(self::API_TOGGLE_ACTION) : '',
+            'apiRegenNonce'  => $canApi ? wp_create_nonce(self::API_REGEN_ACTION) : '',
             'monthNames'     => AdminAssets::monthNames(),
         ]);
     }
 
     /**
      * Clears all stored delivery logs (admin_post_cvmtry_clear_activity_logs),
-     * then redirects back with a notice flag.
+     * then redirects back to this section with a notice flag.
      *
      * @return never
      */
@@ -138,7 +217,7 @@ final class ActivityLogPage
     {
         // 1. Method: only the Clear All Logs form's POST.
         if (!AdminRequest::isPost()) {
-            AdminRequest::deny(__('The Activity Log can only be cleared from the Activity Log screen.', 'convermetry'), 405);
+            AdminRequest::deny(__('The Activity Log can only be cleared from the Webhooks screen.', 'convermetry'), 405);
         }
 
         // 2. Capability: deleting log entries, not merely viewing them.
@@ -159,9 +238,7 @@ final class ActivityLogPage
         // 5. No further input: the action takes no parameters.
         DeliveryLog::clearLogs();
 
-        wp_safe_redirect(
-            add_query_arg(['page' => self::MENU_SLUG, 'cvmtry_cleared' => '1'], self_admin_url('admin.php'))
-        );
+        wp_safe_redirect(self::url(['cvmtry_cleared' => '1']));
         exit;
     }
 
@@ -174,10 +251,10 @@ final class ActivityLogPage
     {
         // 1. Method: export links are followed, never posted.
         if (!AdminRequest::isGet()) {
-            AdminRequest::deny(__('Exports are downloaded from the Activity Log screen.', 'convermetry'), 405);
+            AdminRequest::deny(__('Activity Log exports are downloaded from the Webhooks screen.', 'convermetry'), 405);
         }
 
-        // 2. Capability: the export holds every row the screen can show.
+        // 2. Capability: the export holds every row the section can show.
         if (!current_user_can(Capability::required(Capability::ACTIVITY_VIEW))) {
             AdminRequest::deny(AdminRequest::forbiddenMessage());
         }
@@ -205,10 +282,10 @@ final class ActivityLogPage
     {
         // 1. Method: export links are followed, never posted.
         if (!AdminRequest::isGet()) {
-            AdminRequest::deny(__('Exports are downloaded from the Activity Log screen.', 'convermetry'), 405);
+            AdminRequest::deny(__('Activity Log exports are downloaded from the Webhooks screen.', 'convermetry'), 405);
         }
 
-        // 2. Capability: the export holds every row the screen can show.
+        // 2. Capability: the export holds every row the section can show.
         if (!current_user_can(Capability::required(Capability::ACTIVITY_VIEW))) {
             AdminRequest::deny(AdminRequest::forbiddenMessage());
         }
@@ -255,7 +332,7 @@ final class ActivityLogPage
         }
 
         // 4. Nonce issued for listing the log.
-        if (!wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['nonce'])), 'cvmtry_get_activity_logs')) {
+        if (!wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['nonce'])), self::LIST_ACTION)) {
             AdminRequest::denyAjax(AdminRequest::expiredMessage());
         }
 
@@ -267,7 +344,7 @@ final class ActivityLogPage
         $filters       = self::filtersFromRequest($_POST);
 
         // Clamped BEFORE the query — see Pagination::resolve(). Without it,
-        // deleting the last row on the last page left this screen showing
+        // deleting the last row on the last page left this list showing
         // "Showing 11-10 of 10" with no navigation to get back.
         $total  = DeliveryLog::getLogCount($filters);
         $paging = Pagination::resolve($requestedPage > 0 ? $requestedPage : 1, $perPage, $total);
@@ -278,9 +355,12 @@ final class ActivityLogPage
         $logs  = DeliveryLog::getLogsPaginated($page, $perPage, $filters);
         $dates = DeliveryLog::getDistinctDates(['status' => $filters['status'], 'endpoint' => $filters['endpoint']]);
 
+        // Delete is offered only to a user the delete handler would accept.
+        $canDelete = Capability::currentUserCan(Capability::ACTIVITY_MANAGE);
+
         $html = '';
         foreach ($logs as $entry) {
-            $html .= self::renderLogEntryHtml($entry);
+            $html .= self::renderLogEntryHtml($entry, $canDelete);
         }
 
         wp_send_json_success([
@@ -341,7 +421,7 @@ final class ActivityLogPage
         }
 
         // 4. Nonce issued for deleting a log entry.
-        if (!wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['nonce'])), 'cvmtry_delete_activity_log')) {
+        if (!wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['nonce'])), self::DELETE_ACTION)) {
             AdminRequest::denyAjax(AdminRequest::expiredMessage());
         }
 
@@ -386,7 +466,7 @@ final class ActivityLogPage
         }
 
         // 4. Nonce issued for toggling the API.
-        if (!wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['nonce'])), 'cvmtry_toggle_delivery_api')) {
+        if (!wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['nonce'])), self::API_TOGGLE_ACTION)) {
             AdminRequest::denyAjax(AdminRequest::expiredMessage());
         }
 
@@ -435,7 +515,7 @@ final class ActivityLogPage
 
         // 4. Nonce issued for regenerating the key — the toggle's nonce does
         // not qualify.
-        if (!wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['nonce'])), 'cvmtry_regen_delivery_api_key')) {
+        if (!wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['nonce'])), self::API_REGEN_ACTION)) {
             AdminRequest::denyAjax(AdminRequest::expiredMessage());
         }
 
@@ -444,7 +524,12 @@ final class ActivityLogPage
     }
 
     /**
-     * Renders the full Activity Log page HTML.
+     * Renders the Activity Log section of the Webhooks screen.
+     *
+     * Printed inside the Webhooks screen's own .wrap, after its settings form
+     * has closed, so the Clear All Logs form is never nested in it. The
+     * section carries the anchor links open, and cvmtry-delivery-wrap, which
+     * scopes this section's card styling away from the Webhooks cards above.
      *
      * Only row counts are fetched on page load; log entries load lazily into
      * each accordion when it is first opened.
@@ -462,62 +547,21 @@ final class ActivityLogPage
         $totalOk     = DeliveryLog::getLogCount(['status' => 'success']);
         $totalErrors = DeliveryLog::getLogCount(['status' => 'error']);
         $totalAll    = $totalOk + $totalErrors;
-        $apiActive   = DeliveryLogController::isActive();
-        $hasKey      = DeliveryLogController::hasKey();
+        $canClear    = Capability::currentUserCan(Capability::ACTIVITY_MANAGE);
+        $canApi      = Capability::currentUserCan(Capability::API_MANAGE);
 
         ?>
-        <div class="wrap cvmtry-wrap cvmtry-delivery-wrap">
-            <h1><?php esc_html_e('Activity Log', 'convermetry'); ?></h1>
+        <section id="<?php echo esc_attr(self::ANCHOR); ?>" class="cvmtry-delivery-wrap" aria-labelledby="cvmtry-activity-log-title">
+            <h2 id="cvmtry-activity-log-title"><?php esc_html_e('Activity Log', 'convermetry'); ?></h2>
 
             <?php if ($cleared): ?>
-                <div class="notice notice-success is-dismissible"><p><?php esc_html_e('All activity logs have been cleared.', 'convermetry'); ?></p></div>
+                <?php // inline: WordPress moves every other notice up under the page title, out of sight of the section this redirect opens. ?>
+                <div class="notice notice-success is-dismissible inline"><p><?php esc_html_e('All activity logs have been cleared.', 'convermetry'); ?></p></div>
             <?php endif; ?>
 
-            <!-- ── Deliveries API Card ────────────────────────────────────── -->
-            <div class="cvmtry-card cvmtry-delivery-api-card">
-                <h2 class="cvmtry-card-title"><?php esc_html_e('Deliveries API', 'convermetry'); ?></h2>
-                <p class="description" style="margin-bottom:12px;">
-                    <?php echo wp_kses_post(__('Enable a read-only REST endpoint that returns activity log data as JSON, with <code>status</code>, <code>message_type</code>, <code>endpoint</code>, <code>provider</code>, and <code>form_id</code> filters. Pass the API key as the <code>Authorization</code> header on every request. This API is intended for <strong>server-to-server</strong> use — never embed the key in public frontend JavaScript, where any visitor could read it.', 'convermetry')); ?>
-                </p>
-
-                <div class="cvmtry-toggle-row">
-                    <label class="cvmtry-toggle" for="cvmtry-delivery-api-toggle" aria-label="<?php esc_attr_e('Toggle Deliveries API active state', 'convermetry'); ?>">
-                        <input
-                            type="checkbox"
-                            id="cvmtry-delivery-api-toggle"
-                            <?php checked($apiActive, true); ?>
-                        >
-                        <span class="cvmtry-toggle-slider" aria-hidden="true"></span>
-                    </label>
-                    <span class="cvmtry-toggle-label" id="cvmtry-api-toggle-label">
-                        <?php echo esc_html($apiActive ? __('Active', 'convermetry') : __('Inactive', 'convermetry')); ?>
-                    </span>
-                </div>
-
-                <div id="cvmtry-api-key-section"<?php echo $apiActive ? '' : ' hidden'; ?>>
-                    <table class="form-table" role="presentation" style="margin-top:12px;">
-                        <tr>
-                            <th scope="row"><?php esc_html_e('Endpoint', 'convermetry'); ?></th>
-                            <td>
-                                <code><?php echo esc_url(rest_url('convermetry/v1/deliveries')); ?></code>
-                            </td>
-                        </tr>
-                        <tr>
-                            <th scope="row"><?php esc_html_e('API Key', 'convermetry'); ?></th>
-                            <td>
-                                <div class="cvmtry-api-key-row">
-                                    <code id="cvmtry-api-key-value" data-masked="1"><?php echo esc_html($hasKey ? '••••••••••••••••••••' : __('(no key generated yet)', 'convermetry')); ?></code>
-                                    <button type="button" class="button cvmtry-copy-key-btn" hidden><?php esc_html_e('Copy', 'convermetry'); ?></button>
-                                    <button type="button" class="button cvmtry-regen-key-btn"><?php esc_html_e('Regenerate', 'convermetry'); ?></button>
-                                </div>
-                                <p class="description" style="margin-top:6px;">
-                                    <?php echo wp_kses_post(__('Only a hash of the key is stored, so the key is shown <strong>once</strong> — right after it is generated. Copy it then; if it is lost, regenerate a new one (any integrations using the old key stop working).', 'convermetry')); ?>
-                                </p>
-                            </td>
-                        </tr>
-                    </table>
-                </div>
-            </div>
+            <?php if ($canApi): ?>
+                <?php self::renderApiCard(); ?>
+            <?php endif; ?>
 
             <div class="notice notice-info inline cvmtry-retention-notice">
                 <p>
@@ -537,17 +581,19 @@ final class ActivityLogPage
             </div>
 
             <div class="cvmtry-delivery-toolbar">
-                <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>" class="cvmtry-clear-form">
-                    <?php wp_nonce_field(self::CLEAR_ACTION, 'cvmtry_clear_nonce'); ?>
-                    <input type="hidden" name="action" value="<?php echo esc_attr(self::CLEAR_ACTION); ?>">
-                    <button
-                        type="submit"
-                        class="button button-secondary cvmtry-btn-danger"
-                        data-cvmtry-confirm="<?php echo esc_attr(__('Are you sure you want to clear all activity logs? This cannot be undone.', 'convermetry')); ?>"
-                    >
-                        <?php esc_html_e('Clear All Logs', 'convermetry'); ?>
-                    </button>
-                </form>
+                <?php if ($canClear): ?>
+                    <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>" class="cvmtry-clear-form">
+                        <?php wp_nonce_field(self::CLEAR_ACTION, 'cvmtry_clear_nonce'); ?>
+                        <input type="hidden" name="action" value="<?php echo esc_attr(self::CLEAR_ACTION); ?>">
+                        <button
+                            type="submit"
+                            class="button button-secondary cvmtry-btn-danger"
+                            data-cvmtry-confirm="<?php echo esc_attr(__('Are you sure you want to clear all activity logs? This cannot be undone.', 'convermetry')); ?>"
+                        >
+                            <?php esc_html_e('Clear All Logs', 'convermetry'); ?>
+                        </button>
+                    </form>
+                <?php endif; ?>
 
                 <?php if ($totalAll > 0): ?>
                     <div class="cvmtry-export-buttons">
@@ -575,7 +621,7 @@ final class ActivityLogPage
                     <span class="cvmtry-accordion-arrow" aria-hidden="true">&#9660;</span>
                 </button>
                 <div class="cvmtry-accordion-body" id="cvmtry-acc-success" data-status="success" hidden>
-                    <!-- Log list injected by activity-log.js via cvmtry_get_activity_logs AJAX -->
+                    <!-- Log list injected by admin-webhooks.js via cvmtry_get_activity_logs AJAX -->
                 </div>
             </div>
 
@@ -587,10 +633,70 @@ final class ActivityLogPage
                     <span class="cvmtry-accordion-arrow" aria-hidden="true">&#9660;</span>
                 </button>
                 <div class="cvmtry-accordion-body" id="cvmtry-acc-errors" data-status="error" hidden>
-                    <!-- Log list injected by activity-log.js via cvmtry_get_activity_logs AJAX -->
+                    <!-- Log list injected by admin-webhooks.js via cvmtry_get_activity_logs AJAX -->
                 </div>
             </div>
 
+        </section>
+        <?php
+    }
+
+    /**
+     * The Deliveries API card: the toggle, the endpoint, and the masked key
+     * with its Copy and Regenerate controls. Printed for api.manage only.
+     *
+     * @return void
+     */
+    private static function renderApiCard(): void
+    {
+        $apiActive = DeliveryLogController::isActive();
+        $hasKey    = DeliveryLogController::hasKey();
+
+        ?>
+        <!-- ── Deliveries API Card ────────────────────────────────────── -->
+        <div class="cvmtry-card cvmtry-delivery-api-card">
+            <h2 class="cvmtry-card-title"><?php esc_html_e('Deliveries API', 'convermetry'); ?></h2>
+            <p class="description" style="margin-bottom:12px;">
+                <?php echo wp_kses_post(__('Enable a read-only REST endpoint that returns activity log data as JSON, with <code>status</code>, <code>message_type</code>, <code>endpoint</code>, <code>provider</code>, and <code>form_id</code> filters. Pass the API key as the <code>Authorization</code> header on every request. This API is intended for <strong>server-to-server</strong> use — never embed the key in public frontend JavaScript, where any visitor could read it.', 'convermetry')); ?>
+            </p>
+
+            <div class="cvmtry-toggle-row">
+                <label class="cvmtry-toggle" for="cvmtry-delivery-api-toggle" aria-label="<?php esc_attr_e('Toggle Deliveries API active state', 'convermetry'); ?>">
+                    <input
+                        type="checkbox"
+                        id="cvmtry-delivery-api-toggle"
+                        <?php checked($apiActive, true); ?>
+                    >
+                    <span class="cvmtry-toggle-slider" aria-hidden="true"></span>
+                </label>
+                <span class="cvmtry-toggle-label" id="cvmtry-api-toggle-label">
+                    <?php echo esc_html($apiActive ? __('Active', 'convermetry') : __('Inactive', 'convermetry')); ?>
+                </span>
+            </div>
+
+            <div id="cvmtry-api-key-section"<?php echo $apiActive ? '' : ' hidden'; ?>>
+                <table class="form-table" role="presentation" style="margin-top:12px;">
+                    <tr>
+                        <th scope="row"><?php esc_html_e('Endpoint', 'convermetry'); ?></th>
+                        <td>
+                            <code><?php echo esc_url(rest_url('convermetry/v1/deliveries')); ?></code>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row"><?php esc_html_e('API Key', 'convermetry'); ?></th>
+                        <td>
+                            <div class="cvmtry-api-key-row">
+                                <code id="cvmtry-api-key-value" data-masked="1"><?php echo esc_html($hasKey ? '••••••••••••••••••••' : __('(no key generated yet)', 'convermetry')); ?></code>
+                                <button type="button" class="button cvmtry-copy-key-btn" hidden><?php esc_html_e('Copy', 'convermetry'); ?></button>
+                                <button type="button" class="button cvmtry-regen-key-btn"><?php esc_html_e('Regenerate', 'convermetry'); ?></button>
+                            </div>
+                            <p class="description" style="margin-top:6px;">
+                                <?php echo wp_kses_post(__('Only a hash of the key is stored, so the key is shown <strong>once</strong> — right after it is generated. Copy it then; if it is lost, regenerate a new one (any integrations using the old key stop working).', 'convermetry')); ?>
+                            </p>
+                        </td>
+                    </tr>
+                </table>
+            </div>
         </div>
         <?php
     }
@@ -646,10 +752,11 @@ final class ActivityLogPage
     /**
      * Renders a single log row as an HTML list-item string.
      *
-     * @param array<string, mixed> $entry A single DeliveryLog row.
+     * @param array<string, mixed> $entry     A single DeliveryLog row.
+     * @param bool                 $canDelete Whether to offer the Delete button.
      * @return string
      */
-    private static function renderLogEntryHtml(array $entry): string
+    private static function renderLogEntryHtml(array $entry, bool $canDelete): string
     {
         $isError     = (int) ($entry['success'] ?? 0) === 0;
         $itemClass   = $isError ? 'cvmtry-log-error' : 'cvmtry-log-success';
@@ -710,10 +817,12 @@ final class ActivityLogPage
                         (<?php echo esc_html((string) $code); ?>)
                     <?php endif; ?>
                 </span>
-                <button type="button" class="button cvmtry-log-delete-btn" aria-label="<?php
-                /* translators: %s: the Activity Log entry's numeric id. */
-                echo esc_attr(sprintf(__('Delete log entry %s', 'convermetry'), (string) ($entry['id'] ?? '')));
-                ?>"><?php esc_html_e('Delete', 'convermetry'); ?></button>
+                <?php if ($canDelete): ?>
+                    <button type="button" class="button cvmtry-log-delete-btn" aria-label="<?php
+                    /* translators: %s: the Activity Log entry's numeric id. */
+                    echo esc_attr(sprintf(__('Delete log entry %s', 'convermetry'), (string) ($entry['id'] ?? '')));
+                    ?>"><?php esc_html_e('Delete', 'convermetry'); ?></button>
+                <?php endif; ?>
             </div>
 
             <?php if ($endpoint !== ''): ?>

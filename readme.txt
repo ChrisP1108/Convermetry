@@ -4,7 +4,7 @@ Tags: analytics, lead tracking, utm, webhooks, forms
 Requires at least: 6.3
 Tested up to: 7.1
 Requires PHP: 8.3
-Stable tag: 1.0.2
+Stable tag: 1.0.3
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -146,12 +146,17 @@ Deactivating stops tracking and scheduled tasks but keeps your data. Deleting th
 3. A submission expanded: lead status and value, form details, channel and campaign attribution, and the visitor's path to the form.
 4. The Forms screen: form engagement and abandonment, detected form plugins and per-form settings.
 5. Webhook endpoints: the message types each one receives, signing secrets and test buttons.
-6. The Activity Log: every delivery attempt with its payload and response, including retries.
+6. The Activity Log, at the foot of the Webhooks screen: every delivery attempt with its payload and response, including retries.
 7. Goals with their completions, conversion rates and value.
 8. A funnel showing how many visits reached each step on the way to a quote request.
 9. Tracking and privacy settings: interaction types, logged-in users, Do Not Track / Global Privacy Control, IP storage and data retention.
 
 == Changelog ==
+
+= 1.0.3 =
+* Changed: the Activity Log is now the last section of the Webhooks screen, with everything it had before: the Deliveries API card, Clear All Logs, CSV and JSON export, and the successful and failed delivery lists with their filters, search and paging. It no longer has its own menu item, and its old address redirects to the new section.
+* Changed: a user given only Activity Log access through the `convermetry_admin_capability` filter can open the Webhooks screen and sees only the log. Webhook settings, signing secrets, pending retries and the delivery queue still need `webhooks.manage`. Delete, Clear All Logs and the Deliveries API card are shown only to users allowed to use them.
+* Changed: the Home screen's Activity Log card and a submission's "Open the Activity Log" link open the new section, and are shown only to users who may view the log.
 
 = 1.0.2 =
 * Security: every admin form, link and AJAX action checks the request method, the user's capability and its own nonce as separate steps before reading any input. Saves, deletions, exports and retry discards run only on their own admin-post actions, never on ordinary admin page loads.
@@ -178,6 +183,9 @@ Deactivating stops tracking and scheduled tasks but keeps your data. Deleting th
 * Changed: first public release on WordPress.org. Earlier 0.x versions were distributed privately; their full history is in CHANGELOG.md, included with the plugin.
 
 == Upgrade Notice ==
+
+= 1.0.3 =
+The Activity Log moves to the foot of the Webhooks screen; its old address redirects there. No settings or data change on upgrade.
 
 = 1.0.2 =
 Security hardening of admin requests and settings validation. No settings or data change on upgrade; custom header names that are not valid HTTP are reported the next time the page is saved.

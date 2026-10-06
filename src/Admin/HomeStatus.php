@@ -798,16 +798,21 @@ final class HomeStatus
      * An admin URL for one Convermetry screen, or '' when the current user may
      * not open it — so the page never offers a link that would refuse them.
      *
-     * @param string $slug  The screen's menu slug.
-     * @param string $scope The capability scope guarding it.
+     * @param string $slug     The screen's menu slug.
+     * @param string $scope    The capability scope guarding it (or, with a
+     *                         fragment, guarding that section of it).
+     * @param string $fragment Optional anchor of one section on the screen,
+     *                         without the '#'.
      * @return string
      */
-    public static function urlFor(string $slug, string $scope): string
+    public static function urlFor(string $slug, string $scope, string $fragment = ''): string
     {
         if (!Capability::currentUserCan($scope)) {
             return '';
         }
 
-        return add_query_arg(['page' => $slug], self_admin_url('admin.php'));
+        $url = add_query_arg(['page' => $slug], self_admin_url('admin.php'));
+
+        return $fragment === '' ? $url : $url . '#' . $fragment;
     }
 }

@@ -6,12 +6,12 @@ namespace Convermetry\Tests\Unit;
 
 use Brain\Monkey;
 use Brain\Monkey\Functions;
+use Convermetry\Admin\ActivityLogSection;
 use Convermetry\Admin\AdminAssets;
 use Convermetry\Admin\Capability;
 use Convermetry\Admin\HomeStatus;
 use Convermetry\Admin\Icons;
 use Convermetry\Admin\Pages\AboutPage;
-use Convermetry\Admin\Pages\ActivityLogPage;
 use Convermetry\Admin\Pages\AnalyticsPage;
 use Convermetry\Admin\Pages\FormsPage;
 use Convermetry\Admin\Pages\FunnelsPage;
@@ -58,6 +58,15 @@ final class AdminMenuRoutingTest extends TestCase
     /** @var list<string> */
     private array $registered = [];
 
+    /** @var array<string, array{src: string, deps: list<string>}> Handle => source and dependencies, per wp_enqueue_style(). */
+    private array $styles = [];
+
+    /** @var array<string, array{src: string, deps: list<string>}> Handle => source and dependencies, per wp_enqueue_script(). */
+    private array $scripts = [];
+
+    /** @var array<string, array<string, mixed>> JavaScript object name => data, per wp_localize_script(). */
+    private array $localized = [];
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -69,8 +78,15 @@ final class AdminMenuRoutingTest extends TestCase
         $this->enqueued   = [];
         $this->scriptDeps = [];
         $this->registered = [];
+        $this->styles     = [];
+        $this->scripts    = [];
+        $this->localized  = [];
 
         Functions\when('add_action')->justReturn(true);
+
+        // An administrator unless a test says otherwise: the Webhooks screen
+        // decides its menu capability and its scripts from what the user holds.
+        Functions\when('current_user_can')->justReturn(true);
         Functions\when('apply_filters')->alias(
             static fn(string $hook, mixed $value, mixed ...$rest): mixed => $value
         );
@@ -111,12 +127,14 @@ final class AdminMenuRoutingTest extends TestCase
             }
         );
 
-        Functions\when('wp_enqueue_style')->alias(function (string $handle): void {
-            $this->enqueued[] = $handle;
+        Functions\when('wp_enqueue_style')->alias(function (string $handle, string $src = '', array $deps = []): void {
+            $this->enqueued[]        = $handle;
+            $this->styles[$handle]   = ['src' => $src, 'deps' => $deps];
         });
         Functions\when('wp_enqueue_script')->alias(function (string $handle, string $src = '', array $deps = []): void {
             $this->enqueued[]          = $handle;
             $this->scriptDeps[$handle] = $deps;
+            $this->scripts[$handle]    = ['src' => $src, 'deps' => $deps];
         });
         Functions\when('wp_register_script')->alias(function (string $handle): bool {
             $this->registered[] = $handle;
@@ -125,9 +143,13 @@ final class AdminMenuRoutingTest extends TestCase
         });
 
         // Several pages' enqueueAssets() also localizes data onto their
-        // script; irrelevant to what this file asserts (which handles load
-        // where), so these just need to not fatal.
-        Functions\when('wp_localize_script')->justReturn(true);
+        // script. Recorded, because the Webhooks screen's two configuration
+        // objects are part of what it promises its scripts.
+        Functions\when('wp_localize_script')->alias(function (string $handle, string $name, array $data): bool {
+            $this->localized[$name] = $data;
+
+            return true;
+        });
         Functions\when('wp_create_nonce')->justReturn('nonce');
         Functions\when('admin_url')->alias(static fn(string $path = ''): string => 'https://example.test/wp-admin/' . $path);
     }
@@ -155,7 +177,6 @@ final class AdminMenuRoutingTest extends TestCase
         FormsPage::addMenu();
         NotificationsPage::addMenu();
         WebhooksPage::addMenu();
-        ActivityLogPage::addMenu();
         SettingsPage::addMenu();
         AboutPage::addMenu();
     }
@@ -233,9 +254,14 @@ final class AdminMenuRoutingTest extends TestCase
         self::assertSame('convermetry-forms', FormsPage::MENU_SLUG);
         self::assertSame('convermetry-notifications', NotificationsPage::MENU_SLUG);
         self::assertSame('convermetry-webhooks', WebhooksPage::MENU_SLUG);
-        self::assertSame('convermetry-activity', ActivityLogPage::MENU_SLUG);
         self::assertSame('convermetry-settings', SettingsPage::MENU_SLUG);
         self::assertSame('convermetry-about', AboutPage::MENU_SLUG);
+
+        // The Activity Log's own screen is retired, but its URL is still in
+        // bookmarks and links: the slug is still recognised — and redirected —
+        // and the section it now opens has a fixed anchor.
+        self::assertSame('convermetry-activity', ActivityLogSection::LEGACY_SLUG);
+        self::assertSame('cvmtry-activity-log', ActivityLogSection::ANCHOR);
     }
 
     public function testEveryScreenIsStillRegistered(): void
@@ -247,11 +273,24 @@ final class AdminMenuRoutingTest extends TestCase
         foreach (
             [
                 'Home', 'Analytics', 'Submissions', 'Goals', 'Funnels', 'Forms',
-                'Notifications', 'Webhooks', 'Activity Log', 'Settings', 'About',
+                'Notifications', 'Webhooks', 'Settings', 'About',
             ] as $expected
         ) {
             self::assertContains($expected, $labels, $expected . ' disappeared from the menu.');
         }
+    }
+
+    /**
+     * The Activity Log is a section of Webhooks now: no second screen, and no
+     * menu row that would render a duplicate of it.
+     */
+    public function testTheActivityLogIsNoLongerAScreenOfItsOwn(): void
+    {
+        $this->buildMenu();
+
+        self::assertNotContains(ActivityLogSection::LEGACY_SLUG, array_column($this->submenus, 'slug'));
+        self::assertNotContains('Activity Log', array_column($this->submenus, 'label'));
+        self::assertFileDoesNotExist(__DIR__ . '/../../src/Admin/Pages/ActivityLogPage.php');
     }
 
     public function testHomeIsGatedByAResolvedScopeRatherThanALiteral(): void
@@ -297,7 +336,7 @@ final class AdminMenuRoutingTest extends TestCase
             'home'         => ['toplevel_page_convermetry'],
             'analytics'    => ['convermetry_page_convermetry-analytics'],
             'submissions'  => ['convermetry_page_convermetry-submissions'],
-            'activity log' => ['convermetry_page_convermetry-activity'],
+            'webhooks'     => ['convermetry_page_convermetry-webhooks'],
             'settings'     => ['convermetry_page_convermetry-settings'],
             'about'        => ['convermetry_page_convermetry-about'],
         ];
@@ -384,7 +423,7 @@ final class AdminMenuRoutingTest extends TestCase
         return [
             'goals'        => [GoalsPage::class, 'convermetry_page_convermetry-goals', 'cvmtry-goals'],
             'funnels'      => [FunnelsPage::class, 'convermetry_page_convermetry-funnels', 'cvmtry-funnels'],
-            'activity log' => [ActivityLogPage::class, 'convermetry_page_convermetry-activity', 'cvmtry-activity-log'],
+            'webhooks'     => [WebhooksPage::class, 'convermetry_page_convermetry-webhooks', 'cvmtry-webhooks'],
             'submissions'  => [SubmissionsPage::class, 'convermetry_page_convermetry-submissions', 'cvmtry-submissions'],
         ];
     }
@@ -461,7 +500,7 @@ final class AdminMenuRoutingTest extends TestCase
         return [
             'home'          => [HomePage::class, 'toplevel_page_convermetry', 'cvmtry-home'],
             'about'         => [AboutPage::class, 'convermetry_page_convermetry-about', 'cvmtry-about'],
-            'activity log'  => [ActivityLogPage::class, 'convermetry_page_convermetry-activity', 'cvmtry-activity-log'],
+            'webhooks'      => [WebhooksPage::class, 'convermetry_page_convermetry-webhooks', 'cvmtry-webhooks'],
             'settings'      => [SettingsPage::class, 'convermetry_page_convermetry-settings', 'cvmtry-settings'],
         ];
     }
@@ -591,6 +630,374 @@ final class AdminMenuRoutingTest extends TestCase
         HomePage::addMenu();
 
         self::assertStringStartsWith('data:image/svg+xml;base64,', $this->menus[0]['icon']);
+    }
+
+    // ------------------------------------------------- Webhooks + its Activity Log
+
+    /**
+     * Makes the current user hold exactly these scopes. Each scope is mapped
+     * to its own capability through convermetry_admin_capability — the way a
+     * site delegates one — and the user holds only those capabilities.
+     *
+     * @param list<string> $scopes
+     */
+    private function grantOnly(array $scopes): void
+    {
+        $capabilityOf = static fn(string $scope): string => 'cvmtry_test_' . strtr($scope, '.', '_');
+        $held         = array_map($capabilityOf, $scopes);
+
+        Functions\when('apply_filters')->alias(
+            static fn(string $hook, mixed $value, mixed ...$rest): mixed => $hook === 'convermetry_admin_capability'
+                ? $capabilityOf((string) $rest[0])
+                : $value
+        );
+        Functions\when('current_user_can')->alias(
+            static fn(string $capability): bool => in_array($capability, $held, true)
+        );
+
+        Capability::reset();
+    }
+
+    /**
+     * Who gets which script, and which nonces, on the combined screen.
+     *
+     * admin.js drives the settings form and is the screen's for
+     * webhooks.manage; admin-webhooks.js drives the Activity Log and is the
+     * screen's for activity.view. A nonce is issued only for what the user's
+     * scopes allow — but every key is always there.
+     *
+     * @return array<string, array{0: list<string>|null, 1: list<string>, 2: list<string>}>
+     */
+    public static function webhooksAudiences(): array
+    {
+        return [
+            // scopes held (null: administrator), scripts, CVMTRY_LOG nonces issued
+            'administrator'      => [null, ['cvmtry-admin', 'cvmtry-webhooks'], ['logsNonce', 'deleteNonce', 'apiToggleNonce', 'apiRegenNonce']],
+            'webhooks only'      => [[Capability::WEBHOOKS_MANAGE], ['cvmtry-admin'], []],
+            'log viewer'         => [[Capability::ACTIVITY_VIEW], ['cvmtry-webhooks'], ['logsNonce']],
+            'log manager'        => [[Capability::ACTIVITY_VIEW, Capability::ACTIVITY_MANAGE], ['cvmtry-webhooks'], ['logsNonce', 'deleteNonce']],
+            'log viewer with API' => [[Capability::ACTIVITY_VIEW, Capability::API_MANAGE], ['cvmtry-webhooks'], ['logsNonce', 'apiToggleNonce', 'apiRegenNonce']],
+        ];
+    }
+
+    /**
+     * @dataProvider webhooksAudiences
+     *
+     * @param list<string>|null $scopes
+     * @param list<string>      $expectedScripts
+     * @param list<string>      $issuedNonces
+     */
+    public function testTheWebhooksScreenLoadsEachAssetOnceForWhatTheUserMayUse(?array $scopes, array $expectedScripts, array $issuedNonces): void
+    {
+        if ($scopes !== null) {
+            $this->grantOnly($scopes);
+        }
+
+        WebhooksPage::enqueueAssets('convermetry_page_convermetry-webhooks');
+
+        // One stylesheet carries both sections; it still sits on the shared one.
+        self::assertSame(['cvmtry-webhooks'], array_keys($this->styles));
+        self::assertSame('https://example.test/wp-content/plugins/convermetry/assets/css/admin-webhooks.css', $this->styles['cvmtry-webhooks']['src']);
+        self::assertSame([AdminAssets::COMMON_HANDLE], $this->styles['cvmtry-webhooks']['deps']);
+
+        self::assertSame($expectedScripts, array_keys($this->scripts));
+        // The style and script maps are keyed by handle, so an asset enqueued
+        // twice would leave more calls than entries.
+        self::assertCount(count($this->styles) + count($this->scripts), $this->enqueued, 'An asset was enqueued twice.');
+        self::assertNotContains('cvmtry-activity-log', $this->enqueued, 'The retired handle is still enqueued.');
+
+        if (in_array('cvmtry-admin', $expectedScripts, true)) {
+            self::assertSame('https://example.test/wp-content/plugins/convermetry/assets/js/admin.js', $this->scripts['cvmtry-admin']['src']);
+            self::assertSame(['wp-i18n'], $this->scripts['cvmtry-admin']['deps']);
+            self::assertSame(['ajaxUrl', 'testNonce'], array_keys($this->localized['CVMTRY_ADMIN']));
+        } else {
+            self::assertArrayNotHasKey('CVMTRY_ADMIN', $this->localized, 'The settings script\'s nonce reached a user without webhooks.manage.');
+        }
+
+        if (!in_array('cvmtry-webhooks', $expectedScripts, true)) {
+            self::assertArrayNotHasKey('CVMTRY_LOG', $this->localized);
+
+            return;
+        }
+
+        self::assertSame('https://example.test/wp-content/plugins/convermetry/assets/js/admin-webhooks.js', $this->scripts['cvmtry-webhooks']['src']);
+        self::assertSame(['wp-i18n', AdminAssets::CONFIRM_HANDLE], $this->scripts['cvmtry-webhooks']['deps']);
+
+        $log = $this->localized['CVMTRY_LOG'];
+        self::assertSame(['ajaxUrl', 'logsNonce', 'deleteNonce', 'apiToggleNonce', 'apiRegenNonce', 'monthNames'], array_keys($log));
+        self::assertSame('https://example.test/wp-admin/admin-ajax.php', $log['ajaxUrl']);
+        self::assertCount(12, $log['monthNames']);
+
+        foreach (['logsNonce', 'deleteNonce', 'apiToggleNonce', 'apiRegenNonce'] as $key) {
+            self::assertSame(in_array($key, $issuedNonces, true) ? 'nonce' : '', $log[$key], $key);
+        }
+    }
+
+    /**
+     * The screen opens for webhooks.manage OR activity.view. add_submenu_page()
+     * takes one capability, used both to show the row and to open the page, so
+     * it is registered with the capability of a scope the user holds.
+     *
+     * @return array<string, array{0: list<string>, 1: string}>
+     */
+    public static function webhooksMenuAudiences(): array
+    {
+        return [
+            'webhooks only'  => [[Capability::WEBHOOKS_MANAGE], 'cvmtry_test_webhooks_manage'],
+            'log viewer'     => [[Capability::ACTIVITY_VIEW], 'cvmtry_test_activity_view'],
+            'both'           => [[Capability::ACTIVITY_VIEW, Capability::WEBHOOKS_MANAGE], 'cvmtry_test_webhooks_manage'],
+            // Neither: registered behind webhooks.manage, which hides it.
+            'neither'        => [[Capability::ACTIVITY_MANAGE, Capability::API_MANAGE], 'cvmtry_test_webhooks_manage'],
+        ];
+    }
+
+    /**
+     * @dataProvider webhooksMenuAudiences
+     *
+     * @param list<string> $scopes
+     */
+    public function testTheWebhooksMenuOpensForWebhookSettingsOrLogViewing(array $scopes, string $expectedCapability): void
+    {
+        $this->grantOnly($scopes);
+
+        WebhooksPage::addMenu();
+
+        self::assertSame(WebhooksPage::MENU_SLUG, $this->submenus[0]['slug']);
+        self::assertSame($expectedCapability, $this->submenus[0]['capability']);
+        self::assertSame(
+            in_array(Capability::WEBHOOKS_MANAGE, $scopes, true) || in_array(Capability::ACTIVITY_VIEW, $scopes, true),
+            WebhooksPage::currentUserCanView()
+        );
+    }
+
+    /**
+     * The handlers moved with the log, and are registered by Webhooks' own
+     * init() — which Plugin::init() runs on every admin request — so they
+     * answer AJAX and admin-post requests without the screen being rendered.
+     */
+    public function testWebhooksRegistersEveryActivityLogHandlerExactlyOnce(): void
+    {
+        $hooks = [];
+        Functions\when('add_action')->alias(
+            static function (string $hook, mixed $callback, int $priority = 10) use (&$hooks): bool {
+                $hooks[$hook][] = ['callback' => $callback, 'priority' => $priority];
+
+                return true;
+            }
+        );
+
+        WebhooksPage::init();
+
+        foreach (
+            [
+                'admin_post_cvmtry_clear_activity_logs'  => 'processClearLogs',
+                'admin_post_cvmtry_activity_export_csv'  => 'processExportCsv',
+                'admin_post_cvmtry_activity_export_json' => 'processExportJson',
+                'wp_ajax_cvmtry_get_activity_logs'       => 'handleGetLogsAjax',
+                'wp_ajax_cvmtry_delete_activity_log'     => 'handleDeleteLogAjax',
+                'wp_ajax_cvmtry_toggle_delivery_api'     => 'handleApiToggleAjax',
+                'wp_ajax_cvmtry_regen_delivery_api_key'  => 'handleApiRegenKeyAjax',
+            ] as $hook => $method
+        ) {
+            self::assertCount(1, $hooks[$hook] ?? [], $hook . ' is not registered exactly once.');
+            self::assertSame([ActivityLogSection::class, $method], $hooks[$hook][0]['callback'], $hook);
+        }
+
+        // The legacy redirect runs on admin_menu ahead of every menu
+        // registration, because wp-admin refuses an unknown slug straight
+        // after admin_menu — before admin_init would ever fire.
+        self::assertContains(
+            ['callback' => [ActivityLogSection::class, 'redirectLegacyScreen'], 'priority' => 0],
+            $hooks['admin_menu']
+        );
+
+        // The log's assets come through Webhooks' one enqueue callback.
+        self::assertCount(1, $hooks['admin_enqueue_scripts']);
+    }
+
+    private function stubAdminUrls(): void
+    {
+        Functions\when('self_admin_url')->alias(static fn(string $path = ''): string => 'https://example.test/wp-admin/' . $path);
+        Functions\when('add_query_arg')->alias(static fn(array $args, string $url): string => $url . '?' . http_build_query($args));
+    }
+
+    public function testTheRetiredScreenIsSentToTheLogSection(): void
+    {
+        $this->stubAdminUrls();
+
+        self::assertSame(
+            'https://example.test/wp-admin/admin.php?page=convermetry-webhooks#cvmtry-activity-log',
+            ActivityLogSection::legacyRedirectTarget('convermetry-activity')
+        );
+
+        foreach (['convermetry-webhooks', 'convermetry', 'convermetry-activity-log', ''] as $other) {
+            self::assertSame('', ActivityLogSection::legacyRedirectTarget($other), $other . ' was redirected.');
+        }
+    }
+
+    /**
+     * Only someone who could open the old screen is redirected; anyone else
+     * gets WordPress's own refusal, as before.
+     *
+     * @return array<string, array{0: list<string>, 1: bool}>
+     */
+    public static function legacyAudiences(): array
+    {
+        return [
+            'log viewer'       => [[Capability::ACTIVITY_VIEW], true],
+            'webhooks only'    => [[Capability::WEBHOOKS_MANAGE], false],
+            'log manager only' => [[Capability::ACTIVITY_MANAGE], false],
+            'nobody'           => [[], false],
+        ];
+    }
+
+    /**
+     * @dataProvider legacyAudiences
+     *
+     * @param list<string> $scopes
+     */
+    public function testTheLegacyRedirectIsPermissionAware(array $scopes, bool $redirected): void
+    {
+        $this->stubAdminUrls();
+        $this->grantOnly($scopes);
+
+        self::assertSame($redirected, ActivityLogSection::legacyRedirectTarget(ActivityLogSection::LEGACY_SLUG) !== '');
+    }
+
+    public function testTheLegacyRedirectLeavesEveryOtherRequestAlone(): void
+    {
+        Functions\when('sanitize_key')->alias(static fn(string $key): string => strtolower($key));
+        Functions\when('wp_unslash')->returnArg();
+        Functions\expect('wp_safe_redirect')->never();
+
+        $saved = [$GLOBALS['pagenow'] ?? null, $_GET];
+
+        try {
+            foreach (
+                [
+                    ['admin.php', ['page' => 'convermetry-webhooks']],
+                    ['admin.php', ['page' => ['convermetry-activity']]],
+                    ['admin.php', []],
+                    ['edit.php', ['page' => 'convermetry-activity']],
+                ] as [$pagenow, $get]
+            ) {
+                $GLOBALS['pagenow'] = $pagenow;
+                $_GET               = $get;
+
+                ActivityLogSection::redirectLegacyScreen();
+            }
+        } finally {
+            [$GLOBALS['pagenow'], $_GET] = $saved;
+        }
+
+        self::assertTrue(true);
+    }
+
+    /**
+     * Home's Activity Log card and a submission's delivery block open the
+     * section, are built through WordPress's URL helpers, and are offered only
+     * to someone who may view the log.
+     */
+    public function testLinksToTheLogOpenTheSectionForThoseWhoMayViewIt(): void
+    {
+        $this->stubAdminUrls();
+
+        self::assertSame(
+            'https://example.test/wp-admin/admin.php?page=convermetry-webhooks#cvmtry-activity-log',
+            HomeStatus::urlFor(WebhooksPage::MENU_SLUG, Capability::ACTIVITY_VIEW, ActivityLogSection::ANCHOR)
+        );
+        self::assertSame(
+            ActivityLogSection::url(),
+            HomeStatus::urlFor(WebhooksPage::MENU_SLUG, Capability::ACTIVITY_VIEW, ActivityLogSection::ANCHOR)
+        );
+
+        $this->grantOnly([Capability::WEBHOOKS_MANAGE]);
+        self::assertSame('', HomeStatus::urlFor(WebhooksPage::MENU_SLUG, Capability::ACTIVITY_VIEW, ActivityLogSection::ANCHOR));
+
+        foreach (['HomePage.php', 'SubmissionsPage.php'] as $file) {
+            $source = (string) file_get_contents(__DIR__ . '/../../src/Admin/Pages/' . $file);
+
+            self::assertStringContainsString(
+                'HomeStatus::urlFor(WebhooksPage::MENU_SLUG, Capability::ACTIVITY_VIEW, ActivityLogSection::ANCHOR)',
+                $source,
+                $file . ' does not link to the section.'
+            );
+        }
+    }
+
+    /**
+     * Nothing still points at the retired screen, stylesheet, or script —
+     * except the redirect that catches the old slug, and the privacy exporter,
+     * whose 'convermetry-activity' is an export group id, not a URL.
+     */
+    public function testNothingStillReferencesTheRetiredScreenOrItsAssets(): void
+    {
+        $root = dirname(__DIR__, 2);
+
+        self::assertFileDoesNotExist($root . '/assets/css/admin-activity-log.css');
+        self::assertFileDoesNotExist($root . '/assets/js/activity-log.js');
+        self::assertFileExists($root . '/assets/js/admin-webhooks.js');
+        self::assertFileExists($root . '/assets/js/admin.js');
+
+        $files = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($root . '/src', \FilesystemIterator::SKIP_DOTS));
+        $slugUsers = [];
+
+        foreach ($files as $file) {
+            $source   = (string) file_get_contents((string) $file);
+            $relative = substr((string) $file, strlen($root) + 1);
+
+            foreach (['ActivityLogPage', 'activity-log.js', 'admin-activity-log.css'] as $retired) {
+                self::assertStringNotContainsString($retired, $source, $relative . ' still mentions ' . $retired);
+            }
+
+            if (str_contains($source, "'convermetry-activity")) {
+                $slugUsers[] = $relative;
+            }
+        }
+
+        sort($slugUsers);
+        self::assertSame(['src/Admin/ActivityLogSection.php', 'src/Privacy/PersonalDataExporter.php'], $slugUsers);
+    }
+
+    /**
+     * .cvmtry-delivery-wrap gives the Deliveries API card the log's tighter
+     * card styling. It is on the log section only, so the Webhooks settings
+     * cards above it keep theirs.
+     */
+    public function testTheLogCardStylingIsScopedToTheLogSection(): void
+    {
+        $root = dirname(__DIR__, 2);
+        $css  = (string) file_get_contents($root . '/assets/css/admin-webhooks.css');
+
+        foreach (['.cvmtry-delivery-wrap .cvmtry-card {', '.cvmtry-api-key-row {', '.cvmtry-log-item {', '.cvmtry-log-headers pre {', '.cvmtry-endpoint-tests {'] as $rule) {
+            self::assertStringContainsString($rule, $css);
+        }
+
+        self::assertStringNotContainsString('cvmtry-delivery-wrap', (string) file_get_contents($root . '/src/Admin/Pages/WebhooksPage.php'));
+        self::assertSame(1, substr_count((string) file_get_contents($root . '/src/Admin/ActivityLogSection.php'), 'class="cvmtry-delivery-wrap"'));
+        self::assertStringContainsString(
+            '<section id="<?php echo esc_attr(self::ANCHOR); ?>" class="cvmtry-delivery-wrap"',
+            (string) file_get_contents($root . '/src/Admin/ActivityLogSection.php')
+        );
+    }
+
+    /**
+     * The log script shares the screen with admin.js and the settings form,
+     * so it looks only inside its own section.
+     */
+    public function testTheLogScriptIsScopedToItsSection(): void
+    {
+        $source = (string) file_get_contents(dirname(__DIR__, 2) . '/assets/js/admin-webhooks.js');
+
+        self::assertStringContainsString("document.getElementById('cvmtry-activity-log')", $source);
+        self::assertStringNotContainsString('document.querySelector', $source, 'A document-wide query could reach the settings form.');
+        self::assertStringNotContainsString("document.addEventListener('cvmtry:log-deleted'", $source);
+        self::assertStringContainsString('CVMTRY_LOG', $source);
+        self::assertStringNotContainsString('CVMTRY_ADMIN', $source);
+
+        foreach (['cvmtry_get_activity_logs', 'cvmtry_delete_activity_log', 'cvmtry_toggle_delivery_api', 'cvmtry_regen_delivery_api_key'] as $action) {
+            self::assertStringContainsString("'" . $action . "'", $source);
+        }
     }
 
     // ------------------------------------------------------------- capability gating

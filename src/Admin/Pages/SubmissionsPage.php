@@ -5,9 +5,11 @@ namespace Convermetry\Admin\Pages;
 
 if (!defined('ABSPATH')) exit;
 
+use Convermetry\Admin\ActivityLogSection;
 use Convermetry\Admin\AdminAssets;
 use Convermetry\Admin\AdminRequest;
 use Convermetry\Admin\Capability;
+use Convermetry\Admin\HomeStatus;
 use Convermetry\Analytics\SubmissionContext;
 use Convermetry\Database\FormSubmissions;
 use Convermetry\Forms\SubmissionFieldList;
@@ -24,8 +26,8 @@ use Convermetry\Support\Pagination;
 /**
  * The "Convermetry → Submissions" admin page.
  *
- * The lead-facing counterpart to the Activity Log: where that page shows every
- * outbound DELIVERY ATTEMPT, this one shows the SUBMISSIONS themselves — the
+ * The lead-facing counterpart to the Activity Log: where that section of the
+ * Webhooks page shows every outbound DELIVERY ATTEMPT, this one shows the SUBMISSIONS themselves — the
  * durable records in {@see FormSubmissions} — and answers "who converted, and
  * which marketing produced them?".
  *
@@ -38,7 +40,7 @@ use Convermetry\Support\Pagination;
  * channel, campaign, delivery status), each expanding into a detail panel with
  * the form's identity, the analytics/attribution context and visitor journey,
  * the visitor's own field values, and per-endpoint delivery results linking
- * back into the Activity Log.
+ * back into the Activity Log (for users who may view it).
  *
  * Rows are fetched client-side (assets/js/submissions.js) via the
  * cvmtry_get_submissions AJAX action, with detail panels loaded lazily on first
@@ -1269,7 +1271,8 @@ final class SubmissionsPage
             return;
         }
 
-        $logUrl = add_query_arg(['page' => ActivityLogPage::MENU_SLUG], self_admin_url('admin.php'));
+        // '' for a user who may not view the log: no link that would refuse them.
+        $logUrl = HomeStatus::urlFor(WebhooksPage::MENU_SLUG, Capability::ACTIVITY_VIEW, ActivityLogSection::ANCHOR);
         ?>
         <ul class="cvmtry-delivery-list">
             <?php foreach ($endpoints as $endpoint): ?>
@@ -1310,16 +1313,18 @@ final class SubmissionsPage
                 </li>
             <?php endforeach; ?>
         </ul>
+        <?php if ($logUrl !== ''): ?>
         <p class="cvmtry-delivery-loglink">
             <?php
             echo wp_kses_post(sprintf(
-                /* translators: 1: URL of the Activity Log screen, 2: the submission id. */
+                /* translators: 1: URL of the Activity Log section of the Webhooks screen, 2: the submission id. */
                 __('<a href="%1$s">Open the Activity Log</a> and search for %2$s to see every attempt, its payload, and the endpoint\'s response.', 'convermetry'),
                 esc_url($logUrl),
                 '<code>' . esc_html($submissionId) . '</code>'
             ));
             ?>
         </p>
+        <?php endif; ?>
         <?php
     }
 

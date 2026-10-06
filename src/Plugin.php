@@ -7,7 +7,6 @@ if (!defined('ABSPATH')) exit;
 
 use Convermetry\Admin\AdminAssets;
 use Convermetry\Admin\Pages\AboutPage;
-use Convermetry\Admin\Pages\ActivityLogPage;
 use Convermetry\Admin\Pages\AnalyticsPage;
 use Convermetry\Admin\Pages\FormsPage;
 use Convermetry\Admin\Pages\FunnelsPage;
@@ -58,8 +57,9 @@ use Convermetry\Webhook\FormDeliveryQueue;
  *  - DeliveryLogController — read-only deliveries REST API
  *  - PrivacyTools         — suggested privacy-policy text and the core
  *                           personal-data exporter/eraser integration
- *  - Admin pages          — Home, Analytics, Submissions, Forms, Webhooks,
- *                           Activity Log, Settings, About
+ *  - Admin pages          — Home, Analytics, Submissions, Goals, Funnels,
+ *                           Forms, Notifications, Webhooks (with the Activity
+ *                           Log as its last section), Settings, About
  *
  * Static subsystems expose an init() that registers their own hooks; the
  * instance-based form layer (registry + service) is held here so the public
@@ -237,8 +237,9 @@ final class Plugin
             FunnelsPage::init();
             FormsPage::init($this->formRegistry);
             NotificationsPage::init($this->formRegistry);
+            // Also registers the Activity Log's handlers: the log is a
+            // section of the Webhooks screen (see ActivityLogSection).
             WebhooksPage::init();
-            ActivityLogPage::init();
             SettingsPage::init();
             AboutPage::init();
         }

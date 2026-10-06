@@ -5,6 +5,7 @@ namespace Convermetry\Admin\Pages;
 
 if (!defined('ABSPATH')) exit;
 
+use Convermetry\Admin\ActivityLogSection;
 use Convermetry\Admin\AdminAssets;
 use Convermetry\Admin\Capability;
 use Convermetry\Admin\HomeSetupStep;
@@ -531,7 +532,9 @@ final class HomePage
                 'teal'  => false,
                 'title' => __('Activity Log', 'convermetry'),
                 'body'  => __('Review important Convermetry events and system activity.', 'convermetry'),
-                'url'   => HomeStatus::urlFor(ActivityLogPage::MENU_SLUG, Capability::ACTIVITY_VIEW),
+                // A section of Webhooks, guarded by its own scope: activity.view
+                // alone opens the Webhooks screen (see WebhooksPage::menuCapability()).
+                'url'   => HomeStatus::urlFor(WebhooksPage::MENU_SLUG, Capability::ACTIVITY_VIEW, ActivityLogSection::ANCHOR),
             ],
             [
                 'icon'  => 'gear-sm',

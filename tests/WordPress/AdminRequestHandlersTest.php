@@ -3,8 +3,8 @@ declare(strict_types=1);
 
 namespace Convermetry\Tests\WordPress;
 
+use Convermetry\Admin\ActivityLogSection;
 use Convermetry\Admin\Capability;
-use Convermetry\Admin\Pages\ActivityLogPage;
 use Convermetry\Admin\Pages\FormsPage;
 use Convermetry\Admin\Pages\FunnelsPage;
 use Convermetry\Admin\Pages\GoalsPage;
@@ -419,8 +419,14 @@ final class AdminRequestHandlersTest extends WordPressTestCase
 
     public function testClearingTheActivityLogAndSubmissions(): void
     {
-        $this->adminPost('cvmtry_clear_activity_logs', ['cvmtry_clear_nonce' => wp_create_nonce('cvmtry_clear_activity_logs')]);
+        $halt = $this->adminPost('cvmtry_clear_activity_logs', ['cvmtry_clear_nonce' => wp_create_nonce('cvmtry_clear_activity_logs')]);
         self::assertSame(0, $this->rowCount(DeliveryLog::tableName()));
+
+        // Back to the Webhooks screen, opened at the log, with its notice.
+        self::assertSame('redirect', $halt->how);
+        self::assertStringStartsWith(admin_url('admin.php'), $halt->location);
+        self::assertSame(['page' => WebhooksPage::MENU_SLUG, 'cvmtry_cleared' => '1'], $this->queryOf($halt->location));
+        self::assertSame(ActivityLogSection::ANCHOR, parse_url($halt->location, PHP_URL_FRAGMENT));
 
         $this->adminPost('cvmtry_clear_submissions', ['cvmtry_clear_nonce' => wp_create_nonce('cvmtry_clear_submissions')]);
         self::assertSame(0, $this->rowCount(FormSubmissions::tableName()));
@@ -973,6 +979,264 @@ final class AdminRequestHandlersTest extends WordPressTestCase
         self::assertMatchesRegularExpression('/class="button button-primary">Last 30 days/', $html);
     }
 
+    // ── The Activity Log, as a section of Webhooks ────────────────────────────
+
+    /**
+     * Registered by WebhooksPage::init() — once per admin request, whatever
+     * the screen — so AJAX and admin-post requests reach them without the
+     * Webhooks screen ever being rendered, and reach each exactly once.
+     */
+    public function testTheActivityLogHandlersAreRegisteredOnceWithoutTheScreen(): void
+    {
+        global $wp_filter;
+
+        foreach (
+            [
+                'admin_post_' . ActivityLogSection::CLEAR_ACTION       => 'processClearLogs',
+                'admin_post_' . ActivityLogSection::EXPORT_CSV_ACTION  => 'processExportCsv',
+                'admin_post_' . ActivityLogSection::EXPORT_JSON_ACTION => 'processExportJson',
+                'wp_ajax_cvmtry_get_activity_logs'                     => 'handleGetLogsAjax',
+                'wp_ajax_cvmtry_delete_activity_log'                   => 'handleDeleteLogAjax',
+                'wp_ajax_cvmtry_toggle_delivery_api'                   => 'handleApiToggleAjax',
+                'wp_ajax_cvmtry_regen_delivery_api_key'                => 'handleApiRegenKeyAjax',
+            ] as $hook => $method
+        ) {
+            $callbacks = [];
+            foreach ($wp_filter[$hook]->callbacks ?? [] as $atPriority) {
+                foreach ($atPriority as $entry) {
+                    $callbacks[] = $entry['function'];
+                }
+            }
+
+            self::assertSame([[ActivityLogSection::class, $method]], $callbacks, $hook);
+        }
+
+        self::assertSame(0, has_action('admin_menu', [ActivityLogSection::class, 'redirectLegacyScreen']));
+    }
+
+    /**
+     * admin.php?page=convermetry-activity — bookmarks, old links — lands on the
+     * Webhooks screen at the log, for anyone who could open the old screen.
+     */
+    public function testTheRetiredScreenRedirectsToTheLogSection(): void
+    {
+        $saved = $GLOBALS['pagenow'] ?? null;
+
+        try {
+            $GLOBALS['pagenow'] = 'admin.php';
+
+            foreach (['admin' => null, 'editor' => Capability::ACTIVITY_VIEW] as $user => $grant) {
+                if ($grant !== null) {
+                    $this->grantScopeTo($grant, 'edit_posts');
+                }
+                wp_set_current_user(self::$users[$user]);
+
+                $halt = $this->legacyRequest(['page' => ActivityLogSection::LEGACY_SLUG]);
+
+                self::assertInstanceOf(HandlerHalted::class, $halt, $user . ' was not redirected.');
+                self::assertSame('redirect', $halt->how);
+                self::assertSame(admin_url('admin.php?page=' . WebhooksPage::MENU_SLUG . '#' . ActivityLogSection::ANCHOR), $halt->location);
+            }
+        } finally {
+            $GLOBALS['pagenow'] = $saved;
+        }
+    }
+
+    /**
+     * Anyone who could not open the old screen is left to WordPress's own
+     * refusal of an unknown page, and no other request is touched.
+     */
+    public function testTheLegacyRedirectLeavesEveryoneAndEverythingElseAlone(): void
+    {
+        $saved = $GLOBALS['pagenow'] ?? null;
+
+        try {
+            $GLOBALS['pagenow'] = 'admin.php';
+
+            wp_set_current_user(self::$users['subscriber']);
+            self::assertNull($this->legacyRequest(['page' => ActivityLogSection::LEGACY_SLUG]), 'A subscriber was redirected.');
+
+            $this->grantScopeTo(Capability::WEBHOOKS_MANAGE, 'edit_posts');
+            wp_set_current_user(self::$users['editor']);
+            self::assertNull($this->legacyRequest(['page' => ActivityLogSection::LEGACY_SLUG]), 'webhooks.manage alone never opened the log.');
+
+            wp_set_current_user(self::$users['admin']);
+            self::assertNull($this->legacyRequest(['page' => WebhooksPage::MENU_SLUG]));
+            self::assertNull($this->legacyRequest(['page' => [ActivityLogSection::LEGACY_SLUG]]));
+
+            $GLOBALS['pagenow'] = 'edit.php';
+            self::assertNull($this->legacyRequest(['page' => ActivityLogSection::LEGACY_SLUG]));
+        } finally {
+            $GLOBALS['pagenow'] = $saved;
+        }
+
+        self::assertSame([], $this->phpErrors);
+    }
+
+    /**
+     * Someone delegated only the log reaches it — menu, page, section — and
+     * nothing above it: no settings form, no signing secrets, no endpoint
+     * URLs from the retry and queue lists. Delete, Clear All and the API card
+     * are not offered, and their handlers still refuse.
+     */
+    public function testALogOnlyUserSeesTheLogAndNoWebhookSettings(): void
+    {
+        $this->grantScopeTo(Capability::ACTIVITY_VIEW, 'edit_posts');
+        wp_set_current_user(self::$users['editor']);
+
+        self::assertSame('edit_posts', WebhooksPage::menuCapability());
+        self::assertTrue(WebhooksPage::currentUserCanView());
+
+        $_GET = ['page' => WebhooksPage::MENU_SLUG];
+        $html = $this->render([WebhooksPage::class, 'render']);
+
+        self::assertStringContainsString('id="' . ActivityLogSection::ANCHOR . '"', $html);
+        self::assertStringContainsString('Successful Deliveries', $html);
+        self::assertStringContainsString('Failed Deliveries', $html);
+        self::assertStringContainsString('cvmtry-retention-notice', $html);
+
+        foreach (['cvmtry_save_webhooks', 'cvmtry_webhooks_nonce', 'stored-secret', 'b-secret', self::ENDPOINT_URL, 'cvmtry_discard_retry', 'Pending analytics delivery retries'] as $hidden) {
+            self::assertStringNotContainsString($hidden, $html, 'A log-only user was shown ' . $hidden);
+        }
+
+        self::assertStringNotContainsString(ActivityLogSection::CLEAR_ACTION, $html, 'Clear All Logs needs activity.manage.');
+        self::assertStringNotContainsString('cvmtry-delivery-api-toggle', $html, 'The API card needs api.manage.');
+
+        // The export links it is shown carry nonces this user's export accepts.
+        preg_match_all('/href="([^"]*action=cvmtry_activity_export_(?:csv|json)[^"]*)"/', $html, $exports);
+        self::assertCount(2, $exports[1]);
+        foreach ($exports[1] as $link) {
+            $query = $this->queryOf(html_entity_decode($link));
+            self::assertNotFalse(wp_verify_nonce($query['_wpnonce'], $query['action']));
+        }
+
+        $list = $this->ajax('cvmtry_get_activity_logs', ['nonce' => wp_create_nonce('cvmtry_get_activity_logs'), 'status' => 'error']);
+        self::assertTrue($list['success']);
+        self::assertSame(1, $list['data']['total']);
+        self::assertStringContainsString('fixture-delivery', $list['data']['html']);
+        self::assertStringNotContainsString('cvmtry-log-delete-btn', $list['data']['html']);
+
+        $before = $this->snapshot();
+        $delete = $this->ajax('cvmtry_delete_activity_log', ['nonce' => wp_create_nonce('cvmtry_delete_activity_log'), 'log_id' => (string) $this->seed['logRow']]);
+        self::assertFalse($delete['success']);
+        $clear = $this->adminPost('cvmtry_clear_activity_logs', ['cvmtry_clear_nonce' => wp_create_nonce('cvmtry_clear_activity_logs')]);
+        self::assertSame(403, $clear->status);
+        self::assertSame($before, $this->snapshot());
+    }
+
+    /**
+     * And the reverse: webhooks.manage opens the screen for the settings, and
+     * still does not open the log.
+     */
+    public function testAWebhooksOnlyUserSeesTheSettingsAndNotTheLog(): void
+    {
+        require_once ABSPATH . 'wp-admin/includes/template.php';
+
+        $this->grantScopeTo(Capability::WEBHOOKS_MANAGE, 'edit_posts');
+        wp_set_current_user(self::$users['editor']);
+
+        self::assertSame('edit_posts', WebhooksPage::menuCapability());
+
+        $_GET = ['page' => WebhooksPage::MENU_SLUG];
+        $html = $this->render([WebhooksPage::class, 'render']);
+
+        self::assertStringContainsString('name="action" value="cvmtry_save_webhooks"', $html);
+        self::assertStringNotContainsString('id="' . ActivityLogSection::ANCHOR . '"', $html);
+        self::assertStringNotContainsString('cvmtry_activity_export', $html);
+
+        $list = $this->ajax('cvmtry_get_activity_logs', ['nonce' => wp_create_nonce('cvmtry_get_activity_logs')]);
+        self::assertFalse($list['success']);
+    }
+
+    /**
+     * The administrator's combined screen: one .wrap, the settings form
+     * closed before the log begins, the log's Clear All Logs form beside it
+     * rather than inside it, no second page title, and the cleared notice kept
+     * in the section the redirect opens.
+     */
+    public function testTheCombinedScreenKeepsTheLogOutsideTheSettingsForm(): void
+    {
+        require_once ABSPATH . 'wp-admin/includes/template.php';
+
+        $_GET = ['page' => WebhooksPage::MENU_SLUG, 'cvmtry_cleared' => '1'];
+        $html = $this->render([WebhooksPage::class, 'render']);
+
+        $dom = new \DOMDocument();
+        $previous = libxml_use_internal_errors(true);
+        $dom->loadHTML('<?xml encoding="UTF-8"><html><body>' . $html . '</body></html>');
+        libxml_clear_errors();
+        libxml_use_internal_errors($previous);
+        $xpath = new \DOMXPath($dom);
+
+        $hasClass = static fn(string $class): string => "contains(concat(' ', normalize-space(@class), ' '), ' {$class} ')";
+
+        self::assertSame(1, $xpath->query('//*[' . $hasClass('wrap') . ']')->length, 'A second .wrap.');
+        self::assertSame(1, $xpath->query('//h1')->length, 'A second page title.');
+        self::assertSame(0, $xpath->query('//form//form')->length, 'A nested form.');
+
+        $section = $xpath->query('//section[@id="' . ActivityLogSection::ANCHOR . '"]');
+        self::assertSame(1, $section->length);
+        $section = $section->item(0);
+        self::assertInstanceOf(\DOMElement::class, $section);
+
+        self::assertSame(0, $xpath->query('ancestor::form', $section)->length, 'The log is inside the settings form.');
+        self::assertSame(1, $xpath->query('ancestor::*[' . $hasClass('wrap') . ']', $section)->length);
+        self::assertSame('Activity Log', trim($xpath->query('.//h2', $section)->item(0)?->textContent ?? ''));
+
+        // Every form on the screen, in order: the settings form, then the log's.
+        $actions = [];
+        foreach ($xpath->query('//form') as $form) {
+            $actions[] = $xpath->query('.//input[@name="action"]/@value', $form)->item(0)?->nodeValue;
+        }
+        self::assertSame(['cvmtry_save_webhooks', ActivityLogSection::CLEAR_ACTION], $actions);
+
+        $clearForm = $xpath->query('//form[.//input[@value="' . ActivityLogSection::CLEAR_ACTION . '"]]')->item(0);
+        self::assertInstanceOf(\DOMElement::class, $clearForm);
+        self::assertSame(1, $xpath->query('ancestor::section[@id="' . ActivityLogSection::ANCHOR . '"]', $clearForm)->length);
+        self::assertNotSame('', $xpath->query('.//button[@data-cvmtry-confirm]', $clearForm)->item(0)?->getAttribute('data-cvmtry-confirm') ?? '');
+
+        // After the settings form and the pending-retry notice, in that order.
+        $settingsForm = $xpath->query('//form[.//input[@value="cvmtry_save_webhooks"]]')->item(0);
+        $retries      = $xpath->query('//*[contains(., "Pending analytics delivery retries") and ' . $hasClass('notice') . ']')->item(0);
+        self::assertInstanceOf(\DOMElement::class, $settingsForm);
+        self::assertInstanceOf(\DOMElement::class, $retries);
+        self::assertLessThan($retries->getLineNo(), $settingsForm->getLineNo());
+        self::assertLessThan($section->getLineNo(), $retries->getLineNo());
+
+        // The API card is the section's, and is styled by the section's scope.
+        self::assertSame(1, $xpath->query('.//*[@id="cvmtry-delivery-api-toggle"]', $section)->length);
+        self::assertSame(1, $xpath->query('.//*[' . $hasClass('cvmtry-delivery-api-card') . ']', $section)->length);
+        self::assertSame(1, $xpath->query('//*[' . $hasClass('cvmtry-delivery-wrap') . ']')->length);
+
+        // inline, so WordPress does not move it up under the page title.
+        $notice = $xpath->query('.//*[' . $hasClass('notice-success') . ']', $section)->item(0);
+        self::assertInstanceOf(\DOMElement::class, $notice);
+        self::assertStringContainsString('All activity logs have been cleared.', $notice->textContent);
+        self::assertStringContainsString('inline', $notice->getAttribute('class'));
+
+        // The administrator is offered Delete on each entry.
+        $list = $this->ajax('cvmtry_get_activity_logs', ['nonce' => wp_create_nonce('cvmtry_get_activity_logs'), 'status' => 'error']);
+        self::assertStringContainsString('cvmtry-log-delete-btn', $list['data']['html']);
+    }
+
+    /**
+     * Runs the legacy-screen redirect against one query string.
+     *
+     * @param array<string, mixed> $get
+     */
+    private function legacyRequest(array $get): ?HandlerHalted
+    {
+        $this->request('GET', [], $get);
+
+        try {
+            ActivityLogSection::redirectLegacyScreen();
+        } catch (HandlerHalted $halt) {
+            return $halt;
+        }
+
+        return null;
+    }
+
     // ── Harness ──────────────────────────────────────────────────────────────
 
     /**
@@ -1353,7 +1617,7 @@ final class AdminRequestHandlersTest extends WordPressTestCase
         GoalsPage::init();
         FunnelsPage::init();
         SubmissionsPage::init();
-        ActivityLogPage::init();
+        // Also registers the Activity Log's handlers, as Plugin::init() does.
         WebhooksPage::init();
         NotificationsPage::init($registry);
         FormsPage::init($registry);

@@ -22,7 +22,7 @@ Was the lead successfully delivered to external systems?
 
 Convermetry works standalone — full analytics dashboard, form integrations, and webhook delivery inside one WordPress install — and is architected so a future Convermetry SaaS can receive `analytics_report` and `form_submission` messages from many installations, keyed by a shared, versioned payload schema.
 
-- **Version:** 1.0.2
+- **Version:** 1.0.3
 - **Requires WordPress:** 6.3+
 - **Requires PHP:** 8.3+
 - **License:** GPL-2.0-or-later
@@ -95,11 +95,17 @@ Convermetry
     Forms          — provider status, discovered forms, per-form configuration,
                      engagement and abandonment
     Notifications  — internal email alerts for new submissions, with analytics context
-    Webhooks       — endpoints, delivery types, signing, schedule, request customization
-    Activity Log   — every delivery attempt with its (redacted) payload and response
+    Webhooks       — endpoints, delivery types, signing, schedule, request customization,
+                     and, at the foot of the page, the Activity Log: every delivery
+                     attempt with its (redacted) payload and response
     Settings       — website/client identity, tracking toggles, privacy, retention
     About          — this documentation inside wp-admin
 ```
+
+The Activity Log is no longer a screen of its own: it is the last section of
+**Webhooks**, at `admin.php?page=convermetry-webhooks#cvmtry-activity-log`. The
+old address, `admin.php?page=convermetry-activity`, still works — it redirects
+there for anyone allowed to view the log.
 
 **Submissions** and **Activity Log** answer different questions and are easy to
 confuse:
@@ -161,7 +167,9 @@ Per form:
 
 ### Webhooks
 
-Endpoints, delivery types, signing, schedule, backfill, failure mode, global headers/query parameters, per-endpoint tests, pending retries, and the pending form-delivery queue — see [Webhooks](#webhooks) below.
+Endpoints, delivery types, signing, schedule, backfill, failure mode, global headers/query parameters, per-endpoint tests, pending retries, and the pending form-delivery queue — see [Webhooks](#webhooks) below — followed by the [Activity Log](#activity-log) of every delivery attempt.
+
+The screen opens for `webhooks.manage` **or** `activity.view` (see `convermetry_admin_capability` under [Operations, settings & API](#operations-settings--api)) and shows each section only to its own scope: everything above the Activity Log needs `webhooks.manage`; the Activity Log needs `activity.view`, its Delete and Clear All Logs buttons `activity.manage`, and its Deliveries API card `api.manage`. Someone given only the log never sees an endpoint's signing secret, and every handler checks its own scope again.
 
 Each endpoint independently chooses its **Delivery Types**, so it can receive **Analytics Reports only**, **Form Submissions only**, or **both**:
 
@@ -170,9 +178,9 @@ Each endpoint independently chooses its **Delivery Types**, so it can receive **
 
 For an analytics-only endpoint, check **Analytics Reports** and leave **Form Submissions** unchecked. Note what that does and does not mean: no **submitted form field values** are sent, but analytics reports still describe individual conversions in `conversions.recent[]` — conversion id, form name and ids, provider, and the visitor's IP when IP storage is on. Each endpoint block has separate **Send analytics test** and **Send form test** buttons, and both message types appear in the Activity Log, distinguishable by `message_type`.
 
-### Activity Log / Settings / About
+### Settings / About
 
-See [Activity Log](#activity-log); Settings holds the website/client identity (`website_info`), tracking toggles, privacy signals, the **IP addresses** switch (on by default, covering analytics events and form submissions — see [Privacy](#privacy)), hover dwell, retention, and the Activity Log lead-data privacy switch.
+The Activity Log is part of [Webhooks](#webhooks) — see [Activity Log](#activity-log). Settings holds the website/client identity (`website_info`), tracking toggles, privacy signals, the **IP addresses** switch (on by default, covering analytics events and form submissions — see [Privacy](#privacy)), hover dwell, retention, and the Activity Log lead-data privacy switch.
 
 ## Submissions
 
@@ -1120,7 +1128,7 @@ Every outbound message shares one versioned envelope:
 {
     "schema_version": "1.0 | 2.0",
     "source": "convermetry",
-    "plugin_version": "1.0.2",
+    "plugin_version": "1.0.3",
     "message_type": "analytics_report | form_submission",
     "website_info": { },
     "generated_at": "2026-08-22T14:00:00+00:00",
@@ -1148,7 +1156,7 @@ Every outbound message shares one versioned envelope:
 {
     "schema_version": "1.1",
     "source": "convermetry",
-    "plugin_version": "1.0.2",
+    "plugin_version": "1.0.3",
     "message_type": "analytics_report",
     "website_info": {
         "name": "Example Financial", "url": "https://example.com", "domain": "example.com",
@@ -1268,7 +1276,7 @@ Every outbound message shares one versioned envelope:
 {
     "schema_version": "2.0",
     "source": "convermetry",
-    "plugin_version": "1.0.2",
+    "plugin_version": "1.0.3",
     "message_type": "form_submission",
     "website_info": {
         "name": "Example Financial", "url": "https://example.com", "domain": "example.com",
@@ -1428,11 +1436,13 @@ Three headers are *not* frozen; they are regenerated on each attempt from the fr
 
 ## Activity Log
 
-**Convermetry → Activity Log** records every delivery attempt — analytics report or form submission; scheduled, immediate, retry, or test — as normalized columns (`message_type`, `kind`, `attempt`; never parsed from display labels), with: timestamp, endpoint URL + label, delivery/submission/conversion ids, form provider and name, HTTP status, final request URL, request headers (credential values redacted), the **JSON payload sent**, the response body, and transport errors.
+The **Activity Log** — the last section of **Convermetry → Webhooks** (`admin.php?page=convermetry-webhooks#cvmtry-activity-log`; the retired `admin.php?page=convermetry-activity` redirects there) — records every delivery attempt — analytics report or form submission; scheduled, immediate, retry, or test — as normalized columns (`message_type`, `kind`, `attempt`; never parsed from display labels), with: timestamp, endpoint URL + label, delivery/submission/conversion ids, form provider and name, HTTP status, final request URL, request headers (credential values redacted), the **JSON payload sent**, the response body, and transport errors.
 
 Stored bodies are a **redacted representation of the request, not a byte-exact copy**: values under sensitive-looking keys (`password`, `token`, `secret`, `api_key`, …) are replaced with `[REDACTED]` in both request and response before storage, form `submission_data` is replaced entirely when *Store form submission data in the Activity Log* is off, and both bodies are capped at 64 KB. A stored body therefore will **not** reproduce the original `X-Convermetry-Signature` — verify signatures against what your endpoint received, never against a log copy.
 
-Two paginated accordions (Successful / Failed) offer year/month, message-type, endpoint, provider, and form filters, debounced payload search, a per-page selector (5–100), and per-entry delete. The toolbar provides **Clear All Logs** and **CSV/JSON export** — both stream in keyset-paginated chunks, so even huge logs export in bounded memory. Entries share the analytics retention window.
+Two paginated accordions (Successful / Failed) offer year/month, message-type, endpoint, provider, and form filters, debounced payload search, a per-page selector (5–100), and per-entry delete. The toolbar provides **Clear All Logs** and **CSV/JSON export** — the exports stream in keyset-paginated chunks, so even huge logs export in bounded memory. Entries share the analytics retention window.
+
+Viewing the log and exporting it need `activity.view`; Delete and Clear All Logs need `activity.manage`; the Deliveries API card needs `api.manage`. Each control is shown only to a user who may use it.
 
 **Log security:** response bodies are size-capped at download (64 KB via `limit_response_size`) and at storage; values of sensitive-looking keys (`password`, `passwd`, `secret`, `token`, `authorization`, `api_key`, `apikey`, `access_token`, `refresh_token`, `client_secret`, …) in JSON bodies are replaced with `[REDACTED]` (BOM/whitespace-prefixed JSON included); configured credential headers are stored redacted (sent intact); signing secrets never appear in logs. The `convermetry_delivery_log_row` filter allows site-specific redaction of e.g. PII fields, or skipping a row entirely; a Settings toggle can exclude form `submission_data` from stored payloads while keeping delivery metadata.
 
@@ -1444,7 +1454,7 @@ The tracker's ingestion endpoint — see [Analytics tracking](#analytics-trackin
 
 ### `GET /wp-json/convermetry/v1/deliveries` (API-key)
 
-Read-only Activity Log API, off by default; enable it (and manage its key) on the Activity Log page.
+Read-only Activity Log API, off by default; enable it (and manage its key) in the **Deliveries API** card of the Activity Log, at the foot of **Convermetry → Webhooks**.
 
 ```text
 GET /wp-json/convermetry/v1/deliveries?page=1&per_page=25&status=error&message_type=form_submission
@@ -2138,19 +2148,18 @@ convermetry/
 │   ├── css/admin-common.css     # Older cvmtry-* components shared by 2+ admin screens
 │   ├── css/admin-home.css       # Home-only styling (none yet — reserved)
 │   ├── css/admin-about.css      # About-only styling
-│   ├── css/admin-activity-log.css   # Activity Log-only styling
 │   ├── css/admin-analytics.css  # Analytics-only styling + print/report styles
 │   ├── css/admin-submissions.css    # Submissions-only styling
 │   ├── css/admin-goals.css      # Goals-only styling
 │   ├── css/admin-funnels.css    # Funnels-only styling
 │   ├── css/admin-forms.css      # Forms-only styling
 │   ├── css/admin-notifications.css  # Notifications-only styling (none yet — reserved)
-│   ├── css/admin-webhooks.css   # Webhooks-only styling
+│   ├── css/admin-webhooks.css   # Webhooks-only styling, including its Activity Log section
 │   ├── css/admin-settings.css   # Settings-only styling (none yet — reserved)
 │   ├── fonts/                   # Self-hosted Play (headings), OFL-licensed
 │   ├── js/admin.js              # Webhooks/Forms/Notifications pages (repeater, builders, tests)
 │   ├── js/dashboard.js          # Chart navigation/tooltips, panel state, print prep
-│   ├── js/activity-log.js       # Activity Log accordions, filters, pagination, API card
+│   ├── js/admin-webhooks.js     # Webhooks' Activity Log: accordions, filters, pagination, API card
 │   ├── js/submissions.js        # Submissions list, filters, pagination, lazy detail panels
 │   ├── js/goals.js              # Goals editor (rule controls, edit-in-place)
 │   ├── js/funnels.js            # Funnels step editor
@@ -2160,7 +2169,8 @@ convermetry/
     ├── Plugin.php               # Composition root
     ├── Admin/                   # HomePage, AdminAssets, AnalyticsPage, SubmissionsPage,
     │                             # GoalsPage, FunnelsPage, FormsPage, NotificationsPage,
-    │                             # WebhooksPage, ActivityLogPage, SettingsPage, AboutPage
+    │                             # WebhooksPage, ActivityLogSection (the Activity Log on
+    │                             # the Webhooks screen), SettingsPage, AboutPage
     ├── Analytics/               # ReportQuery (shared read path), Reports, GoalReports,
     │                             # FunnelReport, FormEngagementReport, LeadReports,
     │                             # ReportQueryException, SubmissionContext

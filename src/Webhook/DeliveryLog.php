@@ -60,7 +60,7 @@ final class DeliveryLog
     /**
      * Valid message_type values.
      *
-     * Kept as a constant — the Activity Log page, the REST controller, and
+     * Kept as a constant — the Activity Log section, the REST controller, and
      * this class's own filter builder all read it — but derived from
      * {@see MessageType} so the validation list and the enum cannot disagree.
      *
@@ -527,7 +527,7 @@ final class DeliveryLog
 
     /**
      * Returns the distinct calendar years and months that have log entries,
-     * for the Activity Log page's filter dropdowns.
+     * for the Activity Log section's filter dropdowns.
      *
      * @param array<string, string> $filters Active filters (status, endpoint, message_type, provider).
      * @return array{years: list<string>, months: list<string>}

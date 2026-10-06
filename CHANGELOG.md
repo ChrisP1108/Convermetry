@@ -5,6 +5,56 @@ All notable changes to Convermetry are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 1.0.3
+
+The Activity Log becomes the last section of the Webhooks screen.
+
+### Changed
+
+- **Activity Log moved into Webhooks.** The Deliveries API card, the retention
+  notice, Clear All Logs, CSV/JSON export, and the Successful/Failed Deliveries
+  accordions with their filters, debounced search, per-page selection,
+  pagination and per-entry delete now sit at the foot of
+  **Convermetry → Webhooks**, at the `#cvmtry-activity-log` anchor, below the
+  settings form, pending retries and pending queue. The Activity Log submenu is
+  gone. Stored log rows, settings, the API key, REST routes, delivery and
+  retention are unchanged.
+- **Old address redirects.** `admin.php?page=convermetry-activity` is
+  redirected on `admin_menu` (before WordPress refuses an unregistered page) to
+  `admin.php?page=convermetry-webhooks#cvmtry-activity-log`, for users with
+  `activity.view`. Anyone else gets WordPress's usual refusal, as before.
+- **Clear All Logs** now returns to the Webhooks screen's Activity Log section,
+  with its success notice inside the section.
+- **Links.** Home's Activity Log card and a submission's "Open the Activity
+  Log" link open the section, built with `self_admin_url()`/`add_query_arg()`,
+  and are offered only to users with `activity.view`.
+  `HomeStatus::urlFor()` takes an optional fragment.
+- **Code.** `ActivityLogPage` is replaced by `Convermetry\Admin\ActivityLogSection`,
+  which owns the section, its script configuration and all seven handlers
+  (`cvmtry_get_activity_logs`, `cvmtry_delete_activity_log`,
+  `cvmtry_toggle_delivery_api`, `cvmtry_regen_delivery_api_key`,
+  `cvmtry_clear_activity_logs`, `cvmtry_activity_export_csv`,
+  `cvmtry_activity_export_json`), registered once per admin request by
+  `WebhooksPage::init()`. Action names, nonce actions, and the export file
+  names are unchanged.
+- **Assets.** `assets/js/activity-log.js` is renamed `assets/js/admin-webhooks.js`
+  (handle `cvmtry-webhooks`, still `wp-i18n` + `cvmtry-admin-confirm`, still
+  configured by `CVMTRY_LOG`) and now queries only inside the section.
+  `assets/css/admin-activity-log.css` is merged, rule for rule, into
+  `assets/css/admin-webhooks.css`; `.cvmtry-delivery-wrap` is on the section
+  only. `assets/js/admin.js` (`CVMTRY_ADMIN`) is unchanged.
+
+### Security
+
+- **Separate scopes on one screen.** Webhooks opens for `webhooks.manage` *or*
+  `activity.view` — the submenu is registered with the capability of the scope
+  the user holds — and each section is printed only for its own scope. A user
+  delegated only the log never receives the settings form, signing secrets,
+  endpoint URLs from the retry and queue lists, or `admin.js` and its test
+  nonce. Delete and Clear All Logs are shown, and their nonces issued, only
+  with `activity.manage`; the Deliveries API card and its nonces only with
+  `api.manage`. Every handler keeps its own server-side check.
+
 ## 1.0.2
 
 Addresses the WordPress.org manual review of 1.0.1.

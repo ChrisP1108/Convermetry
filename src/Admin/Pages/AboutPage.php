@@ -1858,8 +1858,9 @@ Was it successfully delivered to external systems?');
     Forms          — provider status, discovered forms, per-form configuration,
                      engagement and abandonment
     Notifications  — internal email alerts for new submissions
-    Webhooks       — endpoints, delivery types, signing, schedule, customization
-    Activity Log   — every delivery attempt with its (redacted) payload and response
+    Webhooks       — endpoints, delivery types, signing, schedule, customization,
+                     and, at the foot of the page, the Activity Log: every
+                     delivery attempt with its (redacted) payload and response
     Settings       — website/client identity, tracking toggles, privacy, retention
     About          — this documentation');
         self::cardEnd();
@@ -1899,9 +1900,10 @@ Was it successfully delivered to external systems?');
         <tr><td><code>goals.manage</code> · <code>funnels.manage</code></td><td><?php esc_html_e('Creating and editing goal and funnel definitions.', 'convermetry'); ?></td></tr>
         <tr><td><code>forms.manage</code></td><td><?php esc_html_e('Per-form configuration and exclusions.', 'convermetry'); ?></td></tr>
         <tr><td><code>notifications.manage</code> · <code>webhooks.manage</code></td><td><?php esc_html_e('Notification and endpoint settings — both hold credentials.', 'convermetry'); ?></td></tr>
-        <tr><td><code>activity.view</code> · <code>activity.manage</code></td><td><?php esc_html_e('Reading the Activity Log, versus clearing it and managing its API key.', 'convermetry'); ?></td></tr>
+        <tr><td><code>activity.view</code> · <code>activity.manage</code></td><td><?php esc_html_e('Reading the Activity Log, versus deleting its entries and clearing it.', 'convermetry'); ?></td></tr>
         <tr><td><code>api.manage</code></td><td><?php esc_html_e('The delivery-log REST API and its key.', 'convermetry'); ?></td></tr>
         <tr><td><code>settings.manage</code></td><td><?php esc_html_e('Identity, tracking, privacy, and retention.', 'convermetry'); ?></td></tr></tbody></table>
+        <p><?php echo wp_kses_post(__('The Webhooks screen opens for <code>webhooks.manage</code> <strong>or</strong> <code>activity.view</code> and shows each section only to its own scope: the endpoint settings, pending retries and delivery queue need <code>webhooks.manage</code>; the Activity Log at the foot of the page needs <code>activity.view</code>, with Delete and Clear All Logs behind <code>activity.manage</code> and the Deliveries API card behind <code>api.manage</code>. Someone given only the log never sees an endpoint\'s signing secret.', 'convermetry')); ?></p>
         <p><?php echo wp_kses_post(__('Remap one with the <code>convermetry_admin_capability</code> filter. It must return a non-empty lowercase <code>[a-z0-9_]</code> capability name; anything else falls back to the default, because <code>current_user_can(\'\')</code> would lock the owner out of their own site.', 'convermetry')); ?></p>
         <?php
         self::cardEnd();
@@ -2837,7 +2839,7 @@ add_action('convermetry_lead_updated', function (string \$submissionId, array \$
 
         self::cardStart('GET /wp-json/convermetry/v1/deliveries');
         ?>
-        <p><?php echo wp_kses_post(__('<strong>API-key authenticated, read-only, and off by default</strong> — enable it and manage its key on the Activity Log page.', 'convermetry')); ?></p>
+        <p><?php echo wp_kses_post(__('<strong>API-key authenticated, read-only, and off by default</strong> — enable it and manage its key in the Deliveries API card of the Activity Log, at the foot of <strong>Convermetry → Webhooks</strong>.', 'convermetry')); ?></p>
         <?php
         self::code('GET /wp-json/convermetry/v1/deliveries?page=1&per_page=25&status=error&message_type=form_submission
 Authorization: <api-key>');

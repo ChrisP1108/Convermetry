@@ -5,6 +5,7 @@ namespace Convermetry\Admin\Pages;
 
 if (!defined('ABSPATH')) exit;
 
+use Convermetry\Admin\ActivityLogSection;
 use Convermetry\Admin\AdminAssets;
 use Convermetry\Admin\AdminRequest;
 use Convermetry\Admin\Capability;
@@ -33,7 +34,15 @@ use Convermetry\Webhook\FormDeliveryQueue;
  *    on the form),
  *  - per-endpoint test buttons for both payload types, pending
  *    analytics-retry chains (with Discard), and the pending form-delivery
- *    queue.
+ *    queue,
+ *  - and, last, the Activity Log of every delivery attempt
+ *    ({@see ActivityLogSection}, at the #cvmtry-activity-log anchor).
+ *
+ * Two scopes open the screen: webhooks.manage, for everything above the
+ * Activity Log, and activity.view, for the log. Each section is printed only
+ * for its own scope, so a user delegated the log never sees endpoint URLs,
+ * signing secrets, or the retry and queue lists, and each handler behind a
+ * section checks that section's scope again.
  *
  * Endpoints must use HTTPS; the 'convermetry_allow_insecure_webhooks'
  * filter allows plain HTTP for development setups.
@@ -53,7 +62,13 @@ final class WebhooksPage
     private const string REJECTED_TRANSIENT = 'cvmtry_webhook_rejected_';
 
     /**
-     * Registers menu, save, discard, notice, asset, and AJAX hooks.
+     * Registers menu, save, discard, notice, asset, and AJAX hooks — and,
+     * through {@see ActivityLogSection::init()}, the Activity Log's handlers
+     * and the redirect from its retired screen.
+     *
+     * Plugin::init() calls this once per admin request, whichever screen the
+     * request is for, so the log's AJAX and admin-post handlers are
+     * registered exactly once and never depend on this page being rendered.
      *
      * @return void
      */
@@ -65,6 +80,8 @@ final class WebhooksPage
         add_action('admin_notices', [self::class, 'maybeShowNotices']);
         add_action('admin_enqueue_scripts', [self::class, 'enqueueAssets']);
         add_action('wp_ajax_cvmtry_test_webhook', [self::class, 'handleTestAjax']);
+
+        ActivityLogSection::init();
     }
 
     /**
@@ -78,15 +95,58 @@ final class WebhooksPage
             HomePage::MENU_SLUG,
             __('Convermetry Webhooks', 'convermetry'),
             __('Webhooks', 'convermetry'),
-            Capability::required(Capability::WEBHOOKS_MANAGE),
+            self::menuCapability(),
             self::MENU_SLUG,
             [self::class, 'render']
         );
     }
 
     /**
-     * Enqueues the admin script (endpoint repeater, key/value builders,
-     * test buttons) on this page only.
+     * The capability the Webhooks submenu is registered with.
+     *
+     * The screen serves two scopes — webhooks.manage and activity.view — and
+     * add_submenu_page() accepts one capability, which WordPress uses both to
+     * show the menu entry and to let the user open the page. So the entry is
+     * registered with the capability of whichever scope the current user
+     * holds, webhooks.manage first; for a user with neither, with
+     * webhooks.manage's, which hides it. Menu visibility, page access, and
+     * {@see self::currentUserCanView()} therefore always agree.
+     *
+     * @return string
+     */
+    public static function menuCapability(): string
+    {
+        foreach ([Capability::WEBHOOKS_MANAGE, Capability::ACTIVITY_VIEW] as $scope) {
+            if (Capability::currentUserCan($scope)) {
+                return Capability::required($scope);
+            }
+        }
+
+        return Capability::required(Capability::WEBHOOKS_MANAGE);
+    }
+
+    /**
+     * Whether the current user may open this screen at all.
+     *
+     * @return bool
+     */
+    public static function currentUserCanView(): bool
+    {
+        return Capability::currentUserCan(Capability::WEBHOOKS_MANAGE)
+            || Capability::currentUserCan(Capability::ACTIVITY_VIEW);
+    }
+
+    /**
+     * Enqueues this page's stylesheet and, per scope, its two scripts — on
+     * this page only.
+     *
+     *  - assets/js/admin.js (CVMTRY_ADMIN) drives the settings form: endpoint
+     *    repeater, key/value builders, test buttons. Shared with Forms and
+     *    Notifications; loaded here for webhooks.manage.
+     *  - assets/js/admin-webhooks.js (CVMTRY_LOG) drives the Activity Log
+     *    section; loaded for activity.view by ActivityLogSection.
+     *
+     * The stylesheet carries both sections' rules.
      *
      * @param string $hook The current admin page hook suffix.
      * @return void
@@ -104,19 +164,25 @@ final class WebhooksPage
             CVMTRY_VERSION
         );
 
-        wp_enqueue_script(
-            'cvmtry-admin',
-            CVMTRY_PLUGIN_URL . 'assets/js/admin.js',
-            ['wp-i18n'],
-            CVMTRY_VERSION,
-            true
-        );
-        wp_set_script_translations('cvmtry-admin', 'convermetry');
+        if (Capability::currentUserCan(Capability::WEBHOOKS_MANAGE)) {
+            wp_enqueue_script(
+                'cvmtry-admin',
+                CVMTRY_PLUGIN_URL . 'assets/js/admin.js',
+                ['wp-i18n'],
+                CVMTRY_VERSION,
+                true
+            );
+            wp_set_script_translations('cvmtry-admin', 'convermetry');
 
-        wp_localize_script('cvmtry-admin', 'CVMTRY_ADMIN', [
-            'ajaxUrl'   => admin_url('admin-ajax.php'),
-            'testNonce' => wp_create_nonce('cvmtry_test_webhook'),
-        ]);
+            wp_localize_script('cvmtry-admin', 'CVMTRY_ADMIN', [
+                'ajaxUrl'   => admin_url('admin-ajax.php'),
+                'testNonce' => wp_create_nonce('cvmtry_test_webhook'),
+            ]);
+        }
+
+        if (Capability::currentUserCan(Capability::ACTIVITY_VIEW)) {
+            ActivityLogSection::enqueueScript();
+        }
     }
 
     /**
@@ -441,16 +507,46 @@ final class WebhooksPage
     }
 
     /**
-     * Renders the Webhooks page.
+     * Renders the Webhooks page: the settings form, pending retries and the
+     * pending queue for webhooks.manage, then the Activity Log section for
+     * activity.view — all inside the one .wrap.
      *
      * @return void
      */
     public static function render(): void
     {
-        if (!Capability::currentUserCan(Capability::WEBHOOKS_MANAGE)) {
+        $canManage = Capability::currentUserCan(Capability::WEBHOOKS_MANAGE);
+
+        if (!$canManage && !Capability::currentUserCan(Capability::ACTIVITY_VIEW)) {
             return;
         }
 
+        ?>
+        <div class="wrap cvmtry-wrap">
+        <h1><?php esc_html_e('Convermetry Webhooks', 'convermetry'); ?></h1>
+        <?php
+
+        if ($canManage) {
+            self::renderSettingsForm();
+            self::renderPendingRetries();
+            self::renderPendingQueue();
+        }
+
+        // After the settings form has closed, so the log's Clear All Logs form
+        // is a sibling of it, never nested inside it.
+        ActivityLogSection::render();
+
+        ?></div>
+        <?php
+    }
+
+    /**
+     * Renders the webhook settings form.
+     *
+     * @return void
+     */
+    private static function renderSettingsForm(): void
+    {
         $settings  = Options::webhookAll();
         $endpoints = Options::endpoints();
         if ($endpoints === []) {
@@ -469,8 +565,6 @@ final class WebhooksPage
         }
 
         ?>
-        <div class="wrap cvmtry-wrap">
-        <h1><?php esc_html_e('Convermetry Webhooks', 'convermetry'); ?></h1>
         <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
         <?php
         wp_nonce_field(self::SAVE_ACTION, 'cvmtry_webhooks_nonce');
@@ -589,21 +683,6 @@ final class WebhooksPage
         submit_button(__('Save Webhook Settings', 'convermetry'));
         ?>
         </form>
-        <?php
-
-        self::renderPendingRetries();
-        self::renderPendingQueue();
-
-        $logUrl = add_query_arg(['page' => ActivityLogPage::MENU_SLUG], self_admin_url('admin.php'));
-        ?>
-        <h2><?php esc_html_e('Activity Log', 'convermetry'); ?></h2>
-        <p><?php
-        echo wp_kses_post(sprintf(
-            /* translators: %s: URL of the Activity Log screen. */
-            __('Every delivery attempt — analytics report or form submission, scheduled, immediate, retry, or test — is recorded with its payload and response (sensitive values redacted) on the <a href="%s">Activity Log</a> page.', 'convermetry'),
-            esc_url($logUrl)
-        ));
-        ?></p></div>
         <?php
     }
 

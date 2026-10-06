@@ -1,11 +1,21 @@
 /**
  * Convermetry — Webhooks page.
  *
- * Styling exclusive to Convermetry → Webhooks (src/Admin/WebhooksPage.php):
- * the endpoint repeater blocks and the delivery-type/test controls. The
- * toggle switch, the key/value builder (shared with Forms), and the
- * "send a test" result feedback (shared with Notifications) live in
- * assets/css/admin-common.css, which loads before this file.
+ * Styling exclusive to Convermetry → Webhooks (src/Admin/Pages/WebhooksPage.php),
+ * in two parts:
+ *
+ *  - the settings form: the endpoint repeater blocks and the
+ *    delivery-type/test controls;
+ *  - the Activity Log section (src/Admin/ActivityLogSection.php, scoped by
+ *    .cvmtry-delivery-wrap): the Deliveries API card, the delivery-log entry
+ *    list, and the request-headers detail viewer.
+ *
+ * The toggle switch, the key/value builder (shared with Forms), the "send a
+ * test" result feedback (shared with Notifications), and the accordion shell,
+ * badge, retention notice, toolbar, filters/search, and pagination the
+ * Activity Log section uses (shared with Submissions) live in
+ * assets/css/admin-common.css, which loads before this file — see that file's
+ * header for the full ownership map.
  */
 
 /* The webhook status toggle card, and the endpoint repeater ------------- */
@@ -109,4 +119,201 @@
 
 .cvmtry-test-endpoint {
     min-width: min(160px, 100%);
+}
+
+/* ======================================================================
+   Activity Log section
+   ----------------------------------------------------------------------
+   Every rule below came from the retired assets/css/admin-activity-log.css
+   unchanged. .cvmtry-delivery-wrap is on the section element only, so its
+   card rule styles the Deliveries API card and none of the settings cards
+   above it. Links open the section at #cvmtry-activity-log; WordPress's own
+   admin-bar stylesheet already keeps an anchor clear of the admin bar
+   (scroll-padding-top on html), so no offset is added here.
+   ====================================================================== */
+
+/* Delivery Log — webhook label badge --------------------------------- */
+
+.cvmtry-log-webhook-label {
+    display: inline-block;
+    padding: 1px 8px;
+    background: #e8f0fb;
+    border: 1px solid #b3c8f0;
+    border-radius: 3px;
+    color: #2271b1;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}
+
+/* The Deliveries API card, and the shared .cvmtry-card given this page's own
+   tighter padding/border ------------------------------------------------- */
+
+.cvmtry-delivery-wrap .cvmtry-card {
+    border-color: #c3c4c7;
+    border-radius: 4px;
+    padding: 20px 24px;
+    margin-bottom: 20px;
+}
+
+.cvmtry-api-key-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.cvmtry-api-key-row code {
+    word-break: break-all;
+}
+
+/* Log entries --------------------------------------------------------- */
+
+.cvmtry-log-list {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.cvmtry-log-item {
+    border: 1px solid #dcdcde;
+    border-left-width: 4px;
+    border-radius: 4px;
+    padding: 12px 14px;
+    margin-bottom: 10px;
+    font-size: 13px;
+    line-height: 1.5;
+}
+
+.cvmtry-log-error {
+    border-left-color: #d63638;
+    background: #fff8f8;
+}
+
+.cvmtry-log-success {
+    border-left-color: #00a32a;
+    background: #f7fef7;
+}
+
+.cvmtry-log-meta {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 8px;
+    flex-wrap: wrap;
+}
+
+.cvmtry-log-time {
+    color: #757575;
+    font-size: 12px;
+    flex-shrink: 0;
+}
+
+.cvmtry-log-kind-label {
+    display: inline-block;
+    padding: 1px 8px;
+    background: #e8f0fb;
+    border: 1px solid #b3c8f0;
+    border-radius: 3px;
+    color: #2271b1;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}
+
+.cvmtry-log-status {
+    padding: 2px 8px;
+    border-radius: 3px;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    flex-shrink: 0;
+}
+
+.cvmtry-log-status.error {
+    background: #d63638;
+    color: #fff;
+}
+
+.cvmtry-log-status.success {
+    background: #00a32a;
+    color: #fff;
+}
+
+.cvmtry-log-delete-btn {
+    margin-left: auto;
+    flex-shrink: 0;
+    padding: 1px 8px !important;
+    height: 22px;
+    font-size: 12px;
+    line-height: 20px;
+    color: #d63638 !important;
+    border-color: #d63638 !important;
+}
+
+.cvmtry-log-delete-btn:hover {
+    background: #d63638 !important;
+    color: #fff !important;
+}
+
+.cvmtry-log-url {
+    margin-bottom: 6px;
+    word-break: break-all;
+}
+
+.cvmtry-log-url code {
+    font-size: 12px;
+    background: #f0f0f1;
+    padding: 1px 5px;
+    border-radius: 2px;
+}
+
+.cvmtry-log-error-msg {
+    color: #d63638;
+    margin-bottom: 8px;
+    font-weight: 500;
+}
+
+.cvmtry-log-data,
+.cvmtry-log-response {
+    margin-bottom: 6px;
+}
+
+.cvmtry-log-data pre,
+.cvmtry-log-response pre {
+    background: #f6f7f7;
+    border: 1px solid #dcdcde;
+    border-radius: 3px;
+    padding: 8px 10px;
+    margin: 4px 0 0;
+    overflow-x: auto;
+    font-size: 12px;
+    max-height: 160px;
+    overflow-y: auto;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+/* Request headers detail --------------------------------------------- */
+
+.cvmtry-log-headers {
+    margin: 8px 0;
+    font-size: 12px;
+}
+
+.cvmtry-log-headers summary {
+    cursor: pointer;
+    color: #2271b1;
+}
+
+.cvmtry-log-headers pre {
+    background: #f6f7f7;
+    border: 1px solid #dcdcde;
+    border-radius: 4px;
+    padding: 10px;
+    overflow-x: auto;
+    max-height: 200px;
 }

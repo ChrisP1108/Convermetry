@@ -23,17 +23,21 @@
  *    without altering a single property — this is a reorganisation, not a
  *    restyle.
  *
- * Which pages use what, so a future edit here can tell what it will touch:
+ * Which pages use what, so a future edit here can tell what it will touch.
+ * "Activity Log" below is the last section of the Webhooks screen
+ * (src/Admin/ActivityLogSection.php); it is no longer a screen of its own.
  *
  *   .cvmtry-wrap, headings, .button-primary/.button-secondary  — every screen
- *   .cvmtry-card, .cvmtry-cards, .cvmtry-card-title                  — About, Activity
- *                                                              Log, Analytics,
+ *   .cvmtry-card, .cvmtry-cards, .cvmtry-card-title                  — About, Analytics,
  *                                                              Forms,
  *                                                              Notifications,
  *                                                              Settings,
- *                                                              Webhooks
- *   .cvmtry-toggle*                                             — Activity Log,
- *                                                              Webhooks
+ *                                                              Webhooks (incl.
+ *                                                              Activity Log)
+ *   .cvmtry-toggle*                                             — Webhooks (status
+ *                                                              card and the
+ *                                                              Activity Log's
+ *                                                              API card)
  *   .cvmtry-retention-notice                                    — Activity Log,
  *                                                              Analytics,
  *                                                              Submissions
@@ -46,7 +50,7 @@
  *     (.cvmtry-empty-msg also: Funnels)
  *   .cvmtry-acc-*, .cvmtry-search-*, .cvmtry-page-*, .cvmtry-pagination  — Activity Log,
  *                                                              Submissions
- *     (client-rendered by assets/js/activity-log.js and assets/js/submissions.js)
+ *     (client-rendered by assets/js/admin-webhooks.js and assets/js/submissions.js)
  *   .cvmtry-test-result, .cvmtry-test-ok, .cvmtry-test-fail           — Notifications,
  *                                                              Webhooks
  *     (both features' "send a test" feedback — assets/js/admin.js drives both)
@@ -151,7 +155,8 @@ html {
    this file, which this section does not touch. */
 
 /* Summary cards -------------------------------------------------------
-   About, Activity Log, Analytics, Forms, Notifications, Settings, Webhooks. */
+   About, Analytics, Forms, Notifications, Settings, Webhooks (and its
+   Activity Log section). */
 
 .cvmtry-cards {
     display: flex;
@@ -180,8 +185,8 @@ html {
 }
 
 /* Toggle switch --------------------------------------------------------
-   Activity Log (the deliveries-API on/off switch) and Webhooks (the master
-   delivery switch). */
+   Both on the Webhooks screen: the master delivery switch, and the
+   deliveries-API on/off switch in its Activity Log section. */
 
 .cvmtry-toggle-row {
     display: flex;
@@ -376,7 +381,7 @@ html {
 }
 
 /* Accordion controls: filters, search, per-page --------------------------
-   Client-rendered by assets/js/activity-log.js and assets/js/submissions.js,
+   Client-rendered by assets/js/admin-webhooks.js and assets/js/submissions.js,
    which build the same markup for both screens' list toolbars. */
 
 .cvmtry-acc-controls {
