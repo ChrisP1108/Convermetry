@@ -2,23 +2,67 @@
  * Convermetry — Forms page.
  *
  * Styling exclusive to Convermetry → Forms (src/Admin/FormsPage.php): the
- * provider status cards, the form filter bar, and the collapsible per-form
- * blocks. The key/value builder repeater this page shares with Webhooks, and
+ * report-beside-chart rows of the engagement section, the provider status
+ * cards, the form filter bar, and the collapsible per-form blocks. The key/value builder repeater this page shares with Webhooks, and
  * the results-table look it shares with Goals (.cvmtry-goals-table, .cvmtry-num,
  * .cvmtry-goal-meta — Forms' own "Engagement & abandonment" report reuses that
  * table styling), both live in assets/css/admin-common.css, which loads
  * before this file.
  */
 
+/* Reporting and configuration -------------------------------------------
+   The page is three bounded regions (.cvmtry-section-card, shared): the
+   engagement report, provider status, and per-form configuration. */
+
+/* Prose or a table beside the small chart that summarizes it; the chart
+   drops below once the two cannot sit side by side. */
+.cvmtry-forms-split {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(260px, 340px);
+    gap: 16px 24px;
+    align-items: start;
+    margin: 12px 0;
+}
+
+.cvmtry-forms-split > :only-child {
+    grid-column: 1 / -1;
+}
+
+.cvmtry-forms-split-main {
+    min-width: 0;
+}
+
+.cvmtry-forms-split-main > h3:first-child {
+    margin-top: 4px;
+}
+
+.cvmtry-forms-split-main > .description:first-child {
+    margin-top: 0;
+}
+
+@media screen and (max-width: 1100px) {
+    .cvmtry-forms-split {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}
+
+/* Provider status: compact one-line cards, name on the left and state on the
+   right, so a dozen providers take a couple of rows instead of a screen. */
 .cvmtry-provider-cards {
-    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(210px, 100%), 1fr));
+    gap: 8px;
+    margin: 12px 0;
 }
 
 .cvmtry-provider-card {
     display: flex;
-    flex-direction: column;
+    flex-direction: row;
     gap: 8px;
-    align-items: flex-start;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 14px;
+    box-shadow: none;
 }
 
 .cvmtry-provider-status {
@@ -57,9 +101,9 @@
 }
 
 .cvmtry-form-block {
-    background: #fff;
-    border: 1px solid #dcdcde;
-    border-radius: 8px;
+    background: var(--cvmtry-ui-color-surface);
+    border: 1px solid var(--cvmtry-ui-color-border);
+    border-radius: var(--cvmtry-ui-radius-sm);
     margin-bottom: 10px;
 }
 

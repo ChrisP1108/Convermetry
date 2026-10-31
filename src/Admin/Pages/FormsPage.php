@@ -8,6 +8,7 @@ if (!defined('ABSPATH')) exit;
 use Convermetry\Admin\AdminAssets;
 use Convermetry\Admin\AdminRequest;
 use Convermetry\Admin\Capability;
+use Convermetry\Admin\Charts;
 use Convermetry\Analytics\FormEngagementReport;
 use Convermetry\Analytics\ReportQueryException;
 use Convermetry\Database\MigrationRunner;
@@ -363,9 +364,29 @@ final class FormsPage
             return;
         }
 
+        // Ranked by what the form plugin confirmed, the one column here that is
+        // not browser-observed. A bar per form, never a funnel: views, starts,
+        // attempts and successes are counted in different units by different
+        // means, so lining them up as stages would compare unlike things.
+        $successful = array_values(array_filter($forms, static fn(array $form): bool => (int) $form['successful'] > 0));
+        usort($successful, static fn(array $a, array $b): int => (int) $b['successful'] <=> (int) $a['successful']);
+
         ?>
-        <h2><?php esc_html_e('Engagement & abandonment', 'convermetry'); ?></h2>
+        <section class="cvmtry-section-card cvmtry-forms-engagement" aria-labelledby="cvmtry-forms-engagement-title">
+        <h2 id="cvmtry-forms-engagement-title"><?php esc_html_e('Engagement & abandonment', 'convermetry'); ?></h2>
+        <div class="cvmtry-forms-split">
+        <div class="cvmtry-forms-split-main">
         <p class="description" style="max-width:760px;"><?php echo wp_kses_post(__('The last 30 days. <strong>Views</strong>, <strong>Started</strong> and <strong>Abandoned</strong> count sessions and are observed in the visitor\'s browser; <strong>Attempts</strong> counts individual submit presses; <strong>Successful</strong> counts submissions your form plugin confirmed on the server. A completion rate above 100% is not an error — it means people are submitting with JavaScript blocked, so the browser-observed columns are undercounting.', 'convermetry')); ?></p>
+        </div>
+        <?php
+        if ($successful !== []) {
+            self::chartCard('cvmtry-chart-successful', __('Successful', 'convermetry'), array_map(static fn(array $form): array => [
+                'label'  => $form['form_name'] !== '' ? (string) $form['form_name'] : (string) $form['form_key'],
+                'values' => [(int) $form['successful']],
+            ], array_slice($successful, 0, 8)));
+        }
+        ?>
+        </div>
         <?php
 
         if ($forms === []) {
@@ -374,6 +395,7 @@ final class FormsPage
             <?php
         } else {
             ?>
+            <div class="cvmtry-table-scroll">
             <table class="widefat striped cvmtry-goals-table"><thead><tr>
             <th scope="col"><?php esc_html_e('Form', 'convermetry'); ?></th>
             <?php
@@ -431,7 +453,7 @@ final class FormsPage
             }
 
             ?>
-            </tbody></table>
+            </tbody></table></div>
             <?php
 
             echo '<p class="description">' . esc_html(sprintf(
@@ -448,8 +470,11 @@ final class FormsPage
 
         if ($friction !== []) {
             ?>
+            <div class="cvmtry-forms-split">
+            <div class="cvmtry-forms-split-main">
             <h3><?php esc_html_e('Most common friction points', 'convermetry'); ?></h3>
             <p class="description" style="max-width:760px;"><?php echo wp_kses_post(__('Which fields fail validation most often. Convermetry records the field\'s name, its type, and which check failed — <strong>never what the visitor typed</strong>.', 'convermetry')); ?></p>
+            <div class="cvmtry-table-scroll">
             <table class="widefat striped cvmtry-goals-table"><thead><tr>
             <th scope="col"><?php esc_html_e('Field', 'convermetry'); ?></th><th scope="col"><?php esc_html_e('Type', 'convermetry'); ?></th><th scope="col"><?php esc_html_e('Problem', 'convermetry'); ?></th>
             <th scope="col" class="cvmtry-num"><?php esc_html_e('Errors', 'convermetry'); ?></th><th scope="col" class="cvmtry-num"><?php esc_html_e('Sessions', 'convermetry'); ?></th></tr></thead><tbody>
@@ -467,12 +492,38 @@ final class FormsPage
             }
 
             ?>
-            </tbody></table>
+            </tbody></table></div></div>
+            <?php
+            self::chartCard('cvmtry-chart-friction', __('Errors', 'convermetry'), array_map(static fn(array $row): array => [
+                'label'  => $row['field_id'] . ' · ' . self::errorLabel($row['error_type']),
+                'values' => [(int) $row['errors']],
+            ], $friction));
+            ?>
+            </div>
             <?php
         }
 
         ?>
         <div class="notice notice-info inline"><p><?php echo wp_kses_post(__('<strong>Elementor forms are not included above.</strong> Elementor identifies a form by its display name on the server while exposing a widget id in the browser, so the two cannot be matched reliably — and an engagement figure attributed to the wrong form is worse than none. Elementor submissions are recorded and attributed normally everywhere else in Convermetry.', 'convermetry')); ?></p></div>
+        </section>
+        <?php
+    }
+
+    /**
+     * A small titled bar chart beside the table it summarizes.
+     *
+     * @param string                                        $id    Id for the title, which labels the chart.
+     * @param string                                        $title The table column the bars measure.
+     * @param array<int, array{label: string, values: array<int, int>}> $rows  Chart rows, in display order.
+     * @return void
+     */
+    private static function chartCard(string $id, string $title, array $rows): void
+    {
+        ?>
+        <div class="cvmtry-chart-card">
+        <p class="cvmtry-chart-card-title" id="<?php echo esc_attr($id); ?>"><?php echo esc_html($title); ?></p>
+        <?php Charts::bars($id, [$title], $rows); ?>
+        </div>
         <?php
     }
 
@@ -513,7 +564,11 @@ final class FormsPage
         self::renderEngagement();
 
         // ── Provider status cards ──────────────────────────────────────
+        // Reporting above, configuration below: each in its own bounded
+        // region, titled with the names the About page already gives them.
         ?>
+        <section class="cvmtry-section-card cvmtry-forms-providers" aria-labelledby="cvmtry-forms-providers-title">
+        <h2 id="cvmtry-forms-providers-title"><?php esc_html_e('Supported form providers', 'convermetry'); ?></h2>
         <div class="cvmtry-cards cvmtry-provider-cards">
         <?php
         $availableProviders = [];
@@ -533,14 +588,34 @@ final class FormsPage
         </div>
         <?php
 
-        self::renderAtomicSetupNotice(isset($availableProviders[AtomicFormsBridge::PROVIDER_KEY]));
-        self::renderBricksSetupNotice(isset($availableProviders[BricksFormsBridge::PROVIDER_KEY]));
+        $bricksAvailable = isset($availableProviders[BricksFormsBridge::PROVIDER_KEY]);
+
+        // Without the provider, renderBricksSetupNotice() prints only the
+        // "Bricks is too old" notice — which explains an Unavailable card, so
+        // it stays with the cards.
+        if (!$bricksAvailable) {
+            self::renderBricksSetupNotice(false);
+        }
 
         if ($availableProviders === []) {
             ?>
-            <div class="notice notice-info inline"><p><?php echo wp_kses_post(__('No supported form plugin or builder is currently active. Install and activate Elementor Pro, Bricks Builder, Gravity Forms, WPForms, Contact Form 7, or Fluent Forms — or integrate a custom form with <code>convermetry_submit_form()</code> (see the About page).', 'convermetry')); ?></p></div></div>
+            <div class="notice notice-info inline"><p><?php echo wp_kses_post(__('No supported form plugin or builder is currently active. Install and activate Elementor Pro, Bricks Builder, Gravity Forms, WPForms, Contact Form 7, or Fluent Forms — or integrate a custom form with <code>convermetry_submit_form()</code> (see the About page).', 'convermetry')); ?></p></div></section></div>
             <?php
             return;
+        }
+
+        ?>
+        </section>
+        <section class="cvmtry-section-card cvmtry-forms-config" aria-labelledby="cvmtry-forms-config-title">
+        <h2 id="cvmtry-forms-config-title"><?php esc_html_e('Per-form configuration', 'convermetry'); ?></h2>
+        <?php
+
+        // The builder setup notices sit directly above the list whose entries
+        // they qualify.
+        self::renderAtomicSetupNotice(isset($availableProviders[AtomicFormsBridge::PROVIDER_KEY]));
+
+        if ($bricksAvailable) {
+            self::renderBricksSetupNotice(true);
         }
 
         // ── Discovered forms + filters ─────────────────────────────────
@@ -601,9 +676,12 @@ final class FormsPage
 
         ?>
         </div>
+        <div class="cvmtry-savebar">
         <?php
-
         submit_button(__('Save Form Settings', 'convermetry'));
+        ?>
+        </div>
+        <?php
 
         /**
          * Fires at the end of the Forms admin screen, after the settings form.
@@ -618,7 +696,7 @@ final class FormsPage
          */
         do_action('convermetry_forms_admin_sections');
         ?>
-        </form></div>
+        </form></section></div>
         <?php
     }
 

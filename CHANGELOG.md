@@ -5,6 +5,79 @@ All notable changes to Convermetry are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 1.1.0
+
+CSV and JSON exports for every reporting screen, charts drawn from the reports
+already on screen, and a layout pass across every admin page. No setting,
+stored data, schema, tracking, calculation, delivery or payload changes.
+
+### Added
+
+- **Exports.** CSV and JSON for the selected period on Analytics
+  (`cvmtry_analytics_export_csv` / `_json`, `analytics.view`), Goals
+  (`cvmtry_goals_export_csv` / `_json`, `goals.manage`) and Funnels
+  (`cvmtry_funnels_export_csv` / `_json`, `funnels.manage`), and JSON for
+  Submissions (`cvmtry_submissions_export_json` and
+  `cvmtry_submissions_export_json_filtered`, `submissions.export`). Each format
+  is its own admin-post action and nonce action; each handler checks method,
+  scope and nonce in that order before reading input. Period links carry the
+  period signed with the screen's filter nonce, and an expired or altered
+  period is refused rather than replaced by the default.
+- **Export content.** Analytics runs the panels' own queries, row limits and
+  retention-clamped window (`AnalyticsPage::reportWindow()`), writing raw
+  values; a failed section is `null` and listed under `failed` (CSV: the
+  dashboard's error sentence), never empty. Goals and Funnels export exactly
+  what their table and cards show. The Submissions JSON uses the CSV's column
+  keys and values — `convermetry_submission_csv_columns` and
+  `convermetry_submission_csv_values` now shape both — with `submission_data`
+  as the descriptor list and no formula escaping.
+- **Charts.** `Convermetry\Admin\Charts` renders ranked and grouped bars and a
+  doughnut as plain HTML and SVG — no script, no library — with every value
+  printed beside its mark and the marks hidden from assistive technology.
+  Analytics adds a device-share doughnut and summary charts (top pages, clicked
+  elements, channels, goal completions, leads by channel as grouped
+  leads/qualified/won bars on one scale); Forms adds successful-submission and
+  friction-point bars; Goals adds completions by goal. Each is drawn from the
+  result its table prints: Analytics memoizes report results per render
+  (`AnalyticsPage::result()`), so no chart costs a query. Chart colours are the
+  new `--cvmtry-ui-chart-*` tokens in `assets/css/admin-ui.css`.
+- **Shared admin pieces** in `assets/css/admin-common.css`: page header and
+  actions, section cards, a sticky save bar (with `scroll-padding-bottom` so
+  focused fields stay clear of it), section links, the danger zone, and table
+  scroll containers. `Convermetry\Admin\Export` holds the download plumbing
+  for the new exports.
+
+### Changed
+
+- **Layout, every screen.** Existing text, headings and type styles are
+  unchanged; hierarchy comes from grouping, spacing, borders and surfaces, and
+  card, accordion and panel surfaces now use the design-system tokens.
+  Analytics: header with period, exports and Print; activity and form metrics
+  in separate tile groups; chart row; summary grid; report cards inside
+  panels. Home: status and quick links before Getting Started. Forms:
+  engagement, providers and per-form configuration as separate regions, with
+  compact provider cards. Goals and Funnels: period filter, exports and an
+  editor jump link in the header; funnel cards two-up, each opening with its
+  overall conversion. Submissions: search-first filter bar, two-column
+  expanded record, Delete moved to a footer action bar after
+  `convermetry_submission_detail_sections`, Clear All moved below the list.
+  Webhooks: section links, status, retries and queue grouped at the top,
+  gridded endpoint blocks, and an Activity Log heading row with its exports,
+  Clear All Logs after the log and the Deliveries API card in its own column.
+  Notifications and Settings: bounded panels and grouped rows. About: a
+  contents sidebar on wide screens.
+- **Analytics' Print / Save as PDF button** moved into the page header; it is
+  still revealed by `assets/js/dashboard.js`, which now also opens a panel when
+  its "View data table" link is followed.
+
+### Fixed
+
+- The Goals and Funnels editors' Cancel button showed in "add" mode, because
+  `.button`'s display overrode the `hidden` attribute.
+- The print stylesheet targeted retired `--30`/`--90` chart classes, so a
+  dense daily chart kept its on-screen minimum width on paper; it now targets
+  `--wide`.
+
 ## 1.0.3
 
 The Activity Log becomes the last section of the Webhooks screen.

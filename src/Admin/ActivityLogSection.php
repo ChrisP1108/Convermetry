@@ -51,6 +51,9 @@ final class ActivityLogSection
     /** The section's id on the Webhooks screen; links open it as a fragment. */
     public const string ANCHOR = 'cvmtry-activity-log';
 
+    /** The Deliveries API card's id, for the screen's section links. */
+    public const string API_ANCHOR = 'cvmtry-deliveries-api';
+
     /** Slug of the retired standalone screen. Requests for it are redirected. */
     public const string LEGACY_SLUG = 'convermetry-activity';
 
@@ -550,50 +553,15 @@ final class ActivityLogSection
         $canClear    = Capability::currentUserCan(Capability::ACTIVITY_MANAGE);
         $canApi      = Capability::currentUserCan(Capability::API_MANAGE);
 
+        // Review first — the log, its exports and its retention — then, apart
+        // from it, the one destructive action, Clear All Logs. The Deliveries
+        // API card is configuration rather than review, so it takes its own
+        // column beside the log on a wide screen and follows it on a narrow
+        // one, under its own heading.
         ?>
         <section id="<?php echo esc_attr(self::ANCHOR); ?>" class="cvmtry-delivery-wrap" aria-labelledby="cvmtry-activity-log-title">
-            <h2 id="cvmtry-activity-log-title"><?php esc_html_e('Activity Log', 'convermetry'); ?></h2>
-
-            <?php if ($cleared): ?>
-                <?php // inline: WordPress moves every other notice up under the page title, out of sight of the section this redirect opens. ?>
-                <div class="notice notice-success is-dismissible inline"><p><?php esc_html_e('All activity logs have been cleared.', 'convermetry'); ?></p></div>
-            <?php endif; ?>
-
-            <?php if ($canApi): ?>
-                <?php self::renderApiCard(); ?>
-            <?php endif; ?>
-
-            <div class="notice notice-info inline cvmtry-retention-notice">
-                <p>
-                    <?php
-                    echo wp_kses_post(sprintf(
-                        /* translators: %d: retention period in days. */
-                        _n(
-                            '<strong>Log retention policy:</strong> Entries older than %d day are automatically removed daily. The retention period is shared with the analytics data and can be changed under <strong>Settings</strong>.',
-                            '<strong>Log retention policy:</strong> Entries older than %d days are automatically removed daily. The retention period is shared with the analytics data and can be changed under <strong>Settings</strong>.',
-                            Options::retentionDays(),
-                            'convermetry'
-                        ),
-                        Options::retentionDays()
-                    ));
-                    ?>
-                </p>
-            </div>
-
-            <div class="cvmtry-delivery-toolbar">
-                <?php if ($canClear): ?>
-                    <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>" class="cvmtry-clear-form">
-                        <?php wp_nonce_field(self::CLEAR_ACTION, 'cvmtry_clear_nonce'); ?>
-                        <input type="hidden" name="action" value="<?php echo esc_attr(self::CLEAR_ACTION); ?>">
-                        <button
-                            type="submit"
-                            class="button button-secondary cvmtry-btn-danger"
-                            data-cvmtry-confirm="<?php echo esc_attr(__('Are you sure you want to clear all activity logs? This cannot be undone.', 'convermetry')); ?>"
-                        >
-                            <?php esc_html_e('Clear All Logs', 'convermetry'); ?>
-                        </button>
-                    </form>
-                <?php endif; ?>
+            <div class="cvmtry-activity-head">
+                <h2 id="cvmtry-activity-log-title"><?php esc_html_e('Activity Log', 'convermetry'); ?></h2>
 
                 <?php if ($totalAll > 0): ?>
                     <div class="cvmtry-export-buttons">
@@ -611,6 +579,31 @@ final class ActivityLogSection
                         </a>
                     </div>
                 <?php endif; ?>
+            </div>
+
+            <?php if ($cleared): ?>
+                <?php // inline: WordPress moves every other notice up under the page title, out of sight of the section this redirect opens. ?>
+                <div class="notice notice-success is-dismissible inline"><p><?php esc_html_e('All activity logs have been cleared.', 'convermetry'); ?></p></div>
+            <?php endif; ?>
+
+            <div class="cvmtry-activity-layout">
+            <div class="cvmtry-activity-main">
+
+            <div class="notice notice-info inline cvmtry-retention-notice">
+                <p>
+                    <?php
+                    echo wp_kses_post(sprintf(
+                        /* translators: %d: retention period in days. */
+                        _n(
+                            '<strong>Log retention policy:</strong> Entries older than %d day are automatically removed daily. The retention period is shared with the analytics data and can be changed under <strong>Settings</strong>.',
+                            '<strong>Log retention policy:</strong> Entries older than %d days are automatically removed daily. The retention period is shared with the analytics data and can be changed under <strong>Settings</strong>.',
+                            Options::retentionDays(),
+                            'convermetry'
+                        ),
+                        Options::retentionDays()
+                    ));
+                    ?>
+                </p>
             </div>
 
             <!-- ── Successful Deliveries Accordion ─────────────────────────── -->
@@ -637,6 +630,31 @@ final class ActivityLogSection
                 </div>
             </div>
 
+            <?php if ($canClear): ?>
+                <div class="cvmtry-delivery-toolbar cvmtry-danger-zone">
+                    <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>" class="cvmtry-clear-form">
+                        <?php wp_nonce_field(self::CLEAR_ACTION, 'cvmtry_clear_nonce'); ?>
+                        <input type="hidden" name="action" value="<?php echo esc_attr(self::CLEAR_ACTION); ?>">
+                        <button
+                            type="submit"
+                            class="button button-secondary cvmtry-btn-danger"
+                            data-cvmtry-confirm="<?php echo esc_attr(__('Are you sure you want to clear all activity logs? This cannot be undone.', 'convermetry')); ?>"
+                        >
+                            <?php esc_html_e('Clear All Logs', 'convermetry'); ?>
+                        </button>
+                    </form>
+                </div>
+            <?php endif; ?>
+
+            </div>
+
+            <?php if ($canApi): ?>
+                <div class="cvmtry-activity-aside">
+                    <?php self::renderApiCard(); ?>
+                </div>
+            <?php endif; ?>
+            </div>
+
         </section>
         <?php
     }
@@ -654,7 +672,7 @@ final class ActivityLogSection
 
         ?>
         <!-- ── Deliveries API Card ────────────────────────────────────── -->
-        <div class="cvmtry-card cvmtry-delivery-api-card">
+        <div class="cvmtry-card cvmtry-delivery-api-card" id="<?php echo esc_attr(self::API_ANCHOR); ?>">
             <h2 class="cvmtry-card-title"><?php esc_html_e('Deliveries API', 'convermetry'); ?></h2>
             <p class="description" style="margin-bottom:12px;">
                 <?php echo wp_kses_post(__('Enable a read-only REST endpoint that returns activity log data as JSON, with <code>status</code>, <code>message_type</code>, <code>endpoint</code>, <code>provider</code>, and <code>form_id</code> filters. Pass the API key as the <code>Authorization</code> header on every request. This API is intended for <strong>server-to-server</strong> use — never embed the key in public frontend JavaScript, where any visitor could read it.', 'convermetry')); ?>

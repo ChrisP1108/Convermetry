@@ -6,7 +6,11 @@ namespace Convermetry\Admin\Pages;
 if (!defined('ABSPATH')) exit;
 
 use Convermetry\Admin\AdminAssets;
+use Convermetry\Admin\AdminRequest;
+use Convermetry\Admin\AnalyticsExport;
 use Convermetry\Admin\Capability;
+use Convermetry\Admin\Charts;
+use Convermetry\Admin\Export;
 use Convermetry\Admin\ReportPeriod;
 use Convermetry\Analytics\AnalyticsSectionRegistry;
 use Convermetry\Analytics\GoalReports;
@@ -41,6 +45,12 @@ use Convermetry\Settings\Options;
  * elements, so they are keyboard accessible with no script at all. A
  * Print / Save as PDF button produces a print-optimized report.
  *
+ * The Overview also carries a device doughnut and a grid of summary charts
+ * (top pages, clicked elements, channels, goal completions, lead outcomes).
+ * Each is drawn from the SAME result its panel's table prints — see
+ * {@see self::result()} — so a chart costs no query and cannot disagree with
+ * the table it links to.
+ *
  * All numbers come from {@see Reports}, the same query layer the analytics
  * webhook payload uses, so the dashboard and webhook consumers always agree.
  */
@@ -55,8 +65,25 @@ final class AnalyticsPage
     /** Nonce action for the read-only period filter; authorizes nothing else. */
     public const string PERIOD_NONCE = 'cvmtry_analytics_period';
 
+    /** Rows each Overview summary chart shows; its panel's table shows them all. */
+    private const int HIGHLIGHT_ROWS = 5;
+
+    /** admin-post action, and nonce action, for the CSV export. */
+    public const string EXPORT_CSV_ACTION = 'cvmtry_analytics_export_csv';
+
+    /** admin-post action, and nonce action, for the JSON export. */
+    public const string EXPORT_JSON_ACTION = 'cvmtry_analytics_export_json';
+
     /**
-     * Registers the admin menu and asset hooks.
+     * Report results already fetched during this render, by key — or the
+     * query's failure, so a chart and its table fail together, once.
+     *
+     * @var array<string, mixed>
+     */
+    private static array $results = [];
+
+    /**
+     * Registers the admin menu, asset, and export hooks.
      *
      * @return void
      */
@@ -64,6 +91,116 @@ final class AnalyticsPage
     {
         add_action('admin_menu', [self::class, 'addMenu']);
         add_action('admin_enqueue_scripts', [self::class, 'enqueueAssets']);
+        add_action('admin_post_' . self::EXPORT_CSV_ACTION, [self::class, 'processExportCsv']);
+        add_action('admin_post_' . self::EXPORT_JSON_ACTION, [self::class, 'processExportJson']);
+    }
+
+    /**
+     * Streams the selected period's reports as CSV
+     * (admin_post_cvmtry_analytics_export_csv).
+     *
+     * @return never
+     */
+    public static function processExportCsv(): never
+    {
+        $days = self::authorizeExport(self::EXPORT_CSV_ACTION);
+        [$effectiveDays, $start, $end] = self::reportWindow($days);
+
+        AnalyticsExport::csv(
+            'convermetry-analytics-' . $days . 'd-' . gmdate('Y-m-d') . '.csv',
+            self::reportHeading($days, $effectiveDays),
+            AnalyticsExport::sections($start, $end)
+        );
+    }
+
+    /**
+     * Sends the selected period's reports as JSON
+     * (admin_post_cvmtry_analytics_export_json).
+     *
+     * @return never
+     */
+    public static function processExportJson(): never
+    {
+        $days = self::authorizeExport(self::EXPORT_JSON_ACTION);
+        [$effectiveDays, $start, $end] = self::reportWindow($days);
+
+        Export::json('convermetry-analytics-' . $days . 'd-' . gmdate('Y-m-d') . '.json', AnalyticsExport::document(
+            AnalyticsExport::sections($start, $end),
+            [
+                'report'       => 'convermetry_analytics',
+                'site'         => ['name' => get_bloginfo('name'), 'url' => home_url()],
+                'period'       => [
+                    'days_selected' => $days,
+                    'days_shown'    => $effectiveDays,
+                    'start'         => $start,
+                    'end'           => $end,
+                    'timezone'      => 'UTC',
+                ],
+                'generated_at' => gmdate('Y-m-d H:i:s'),
+            ]
+        ));
+    }
+
+    /**
+     * The guard both exports share, in the order every handler here checks:
+     * method, scope, nonce present, nonce issued for THIS format — then the
+     * one input, the period, which must be the screen's own signed choice.
+     *
+     * @param string $action The export's admin-post and nonce action.
+     * @return int The period, in days.
+     */
+    private static function authorizeExport(string $action): int
+    {
+        // 1. Method: export links are followed, never posted.
+        if (!AdminRequest::isGet()) {
+            AdminRequest::deny(__('Exports are downloaded from the Analytics screen.', 'convermetry'), 405);
+        }
+
+        // 2. Capability: the export holds what the screen shows.
+        if (!current_user_can(Capability::required(Capability::ANALYTICS_VIEW))) {
+            AdminRequest::deny(AdminRequest::forbiddenMessage());
+        }
+
+        // 3 and 4. Nonce present, as one string, and issued for this format.
+        if (!Export::nonceIsValid($action)) {
+            AdminRequest::deny(__('Invalid or expired export link.', 'convermetry'));
+        }
+
+        // 5. Input: the period. A refused one is refused here too — the
+        // screen falls back to its default and says so, but a file cannot
+        // carry that notice, and a download covering a different period than
+        // the one asked for would be silently wrong.
+        $period = self::currentPeriod();
+        if ($period->refused) {
+            AdminRequest::deny(__('Invalid or expired export link.', 'convermetry'));
+        }
+
+        return $period->days;
+    }
+
+    /**
+     * The window a period covers: clamped to retention, aligned to UTC days.
+     *
+     * Shared by the screen and its exports so both always cover exactly the
+     * same rows.
+     *
+     * @param int $days Selected period in days.
+     * @return array{0: int, 1: string, 2: string} [days shown, start, end]
+     */
+    private static function reportWindow(int $days): array
+    {
+        // Clamped to the configured retention window: querying/displaying
+        // the full nominal period when retention is shorter would silently
+        // zero-fill days past the actual cutoff and understate any "per day"
+        // average.
+        $effectiveDays = min($days, Options::retentionDays());
+        $end           = gmdate('Y-m-d H:i:s');
+
+        // Align the range to calendar days (UTC): the period covers the last
+        // N days *including today*, so the chart renders exactly N bars.
+        $start = gmdate('Y-m-d 00:00:00', time() - ($effectiveDays - 1) * DAY_IN_SECONDS);
+
+        return [$effectiveDays, $start, $end];
     }
 
     /**
@@ -135,16 +272,7 @@ final class AnalyticsPage
         $selected = self::currentPeriod();
         $days     = $selected->days;
 
-        // Clamped to the configured retention window: querying/displaying
-        // the full nominal period when retention is shorter would silently
-        // zero-fill days past the actual cutoff and understate any "per day"
-        // average.
-        $effectiveDays = min($days, Options::retentionDays());
-        $end           = gmdate('Y-m-d H:i:s');
-
-        // Align the range to calendar days (UTC): the period covers the last
-        // N days *including today*, so the chart renders exactly N bars.
-        $start = gmdate('Y-m-d 00:00:00', time() - ($effectiveDays - 1) * DAY_IN_SECONDS);
+        [$effectiveDays, $start, $end] = self::reportWindow($days);
 
         // Queried together and guarded by one try/catch: a failure partway
         // through must not render summary cards built from only half of
@@ -168,7 +296,23 @@ final class AnalyticsPage
 
         ?>
         <div class="wrap cvmtry-wrap cvmtry-dash">
+        <div class="cvmtry-page-header">
         <h1><?php esc_html_e('Convermetry Analytics', 'convermetry'); ?></h1>
+        <div class="cvmtry-page-actions">
+        <?php
+        self::renderPeriodNav($days);
+
+        // The exports cover the period shown, so each link carries it, signed.
+        $periodArgs = ReportPeriod::queryArgs(self::PERIOD_NONCE, $days);
+
+        // The print button is revealed by dashboard.js, like the panel
+        // toolbar below: without JavaScript it would do nothing.
+        ?>
+        <span class="cvmtry-export-group">
+        <a class="button" href="<?php echo esc_url(Export::url(self::EXPORT_CSV_ACTION, $periodArgs)); ?>"><?php esc_html_e('Export CSV', 'convermetry'); ?></a>
+        <a class="button" href="<?php echo esc_url(Export::url(self::EXPORT_JSON_ACTION, $periodArgs)); ?>"><?php esc_html_e('Export JSON', 'convermetry'); ?></a>
+        <button type="button" class="button cvmtry-print-btn" hidden><?php esc_html_e('Print / Save as PDF', 'convermetry'); ?></button></span></div></div>
+        <hr class="wp-header-end">
         <?php
 
         self::maybeRenderRateLimitNotice();
@@ -180,7 +324,7 @@ final class AnalyticsPage
         }
 
         self::maybeRenderRetentionNotice($days);
-        self::renderPeriodFilter($days, $effectiveDays);
+        self::renderPeriodRange($days, $effectiveDays);
 
         ?>
         <section class="cvmtry-overview" aria-labelledby="cvmtry-h-overview">
@@ -190,8 +334,21 @@ final class AnalyticsPage
             self::renderErrorNotice();
         } else {
             self::renderSummaryCards($totals, $serverCount);
+        }
+
+        // The device query is its own; it fails, or succeeds, independently
+        // of the overview figures above.
+        ?>
+        <div class="cvmtry-overview-charts">
+        <?php
+        if (!$overviewFailed) {
             self::renderPageviewChart($daily, $effectiveDays);
         }
+        self::renderDeviceSummary($start, $end);
+        ?>
+        </div>
+        <?php
+        self::renderHighlights($start, $end);
         ?>
         </section>
         <?php
@@ -201,8 +358,7 @@ final class AnalyticsPage
         ?>
         <div class="cvmtry-panel-toolbar" hidden>
         <button type="button" class="button cvmtry-panels-expand"><?php esc_html_e('Expand all sections', 'convermetry'); ?></button>
-        <button type="button" class="button cvmtry-panels-collapse"><?php esc_html_e('Collapse all sections', 'convermetry'); ?></button>
-        <button type="button" class="button cvmtry-print-btn"><?php esc_html_e('Print / Save as PDF', 'convermetry'); ?></button></div>
+        <button type="button" class="button cvmtry-panels-collapse"><?php esc_html_e('Collapse all sections', 'convermetry'); ?></button></div>
         <?php
 
         self::panelStart('content', __('Content', 'convermetry'), __('Which pages draw traffic and where visitors arrive.', 'convermetry'), true);
@@ -461,20 +617,15 @@ final class AnalyticsPage
     }
 
     /**
-     * Renders the 7/30/90-day period selector as a segmented button group,
-     * with the covered UTC date range spelled out below it.
+     * Renders the 7/30/90-day period selector as a button group, in the page
+     * header.
      *
-     * @param int $active        Currently selected period in days (button state).
-     * @param int $effectiveDays Retention-clamped period actually queried/displayed.
+     * @param int $active Currently selected period in days (button state).
      * @return void
      */
-    private static function renderPeriodFilter(int $active, int $effectiveDays): void
+    private static function renderPeriodNav(int $active): void
     {
-        $startLabel = self::utcDate(__('M j, Y', 'convermetry'), time() - ($effectiveDays - 1) * DAY_IN_SECONDS);
-        $endLabel   = self::utcDate(__('M j, Y', 'convermetry'), time());
-
         ?>
-        <div class="cvmtry-period">
         <nav class="cvmtry-period-group" aria-label="<?php esc_attr_e('Reporting period', 'convermetry'); ?>">
         <?php
 
@@ -503,6 +654,24 @@ final class AnalyticsPage
 
         ?>
         </nav>
+        <?php
+    }
+
+    /**
+     * Spells out the covered UTC date range under the page header, with the
+     * print-only report header beside it.
+     *
+     * @param int $active        Currently selected period in days.
+     * @param int $effectiveDays Retention-clamped period actually queried/displayed.
+     * @return void
+     */
+    private static function renderPeriodRange(int $active, int $effectiveDays): void
+    {
+        $startLabel = self::utcDate(__('M j, Y', 'convermetry'), time() - ($effectiveDays - 1) * DAY_IN_SECONDS);
+        $endLabel   = self::utcDate(__('M j, Y', 'convermetry'), time());
+
+        ?>
+        <div class="cvmtry-period">
         <p class="cvmtry-period-range"><?php
         echo esc_html(sprintf(
             /* translators: 1: first date of the period, 2: last date of the period. */
@@ -514,15 +683,31 @@ final class AnalyticsPage
         <?php
 
         // Print-only report header (admin-analytics.css shows it in @media print).
+        ?>
+        <p class="cvmtry-print-meta"><?php echo esc_html(self::reportHeading($active, $effectiveDays)); ?></p></div>
+        <?php
+    }
+
+    /**
+     * The one-line description of a report — site, range, period, and when
+     * it was generated. Heads the printed report and the CSV export alike.
+     *
+     * @param int $active        Selected period in days.
+     * @param int $effectiveDays Retention-clamped period actually queried.
+     * @return string Plain text; escape for its context.
+     */
+    private static function reportHeading(int $active, int $effectiveDays): string
+    {
+        $startLabel      = self::utcDate(__('M j, Y', 'convermetry'), time() - ($effectiveDays - 1) * DAY_IN_SECONDS);
+        $endLabel        = self::utcDate(__('M j, Y', 'convermetry'), time());
         $generatedFormat = trim(get_option('date_format', 'F j, Y') . ' ' . get_option('time_format', 'g:i a'));
-        $rangeNote = $active === $effectiveDays
+        $rangeNote       = $active === $effectiveDays
             /* translators: %d: number of days in the reporting period. */
             ? sprintf(_n('last %d day', 'last %d days', $active, 'convermetry'), $active)
             /* translators: 1: selected number of days, 2: number of days actually shown after the retention limit. */
             : sprintf(__('last %1$d days selected; %2$d days shown per data retention', 'convermetry'), $active, $effectiveDays);
-        ?>
-        <p class="cvmtry-print-meta"><?php
-        echo esc_html(sprintf(
+
+        return sprintf(
             /* translators: 1: site name, 2: first date, 3: last date, 4: period description, 5: generation date and time, 6: site timezone. */
             __('%1$s — Convermetry analytics report · %2$s – %3$s (UTC, %4$s; the final day was still collecting when generated) · Generated %5$s (%6$s)', 'convermetry'),
             get_bloginfo('name'),
@@ -531,9 +716,7 @@ final class AnalyticsPage
             $rangeNote,
             get_date_from_gmt(gmdate('Y-m-d H:i:s'), $generatedFormat),
             self::siteTimezoneLabel()
-        ));
-        ?></p></div>
-        <?php
+        );
     }
 
     /**
@@ -547,47 +730,366 @@ final class AnalyticsPage
      *  - Server-Confirmed Submissions — submissions a form plugin's own
      *    server-side success hook confirmed (the authoritative count).
      *
+     * They are laid out as two groups: visitor activity first, then the three
+     * form metrics side by side on their own band — so the three are read
+     * against each other rather than mistaken for one another — closed by
+     * "Other Events", which must stay last because it describes itself as
+     * everything "not shown above".
+     *
      * @param array<string, int> $totals      Map of event_type → count for the period.
      * @param int                $serverCount Server-confirmed submissions in the period.
      * @return void
      */
     private static function renderSummaryCards(array $totals, int $serverCount): void
     {
-        $cards = [
+        $activity = [
             'pageview'     => [__('Page Views', 'convermetry'), ''],
             'click'        => [__('Clicks', 'convermetry'), ''],
-            'form_submit'  => [__('Form Submit Attempts', 'convermetry'), __('Counted when a form is submitted, before the server confirms success.', 'convermetry')],
-            'form_success' => [__('Confirmed Conversions', 'convermetry'), __('Unique conversions, deduplicated across frontend and server detection.', 'convermetry')],
             'hover'        => [__('Hovers', 'convermetry'), ''],
             'scroll_depth' => [__('Scroll Milestones', 'convermetry'), __('Times visitors reached 50% or 100% of a page.', 'convermetry')],
+        ];
+        $forms = [
+            'form_submit'  => [__('Form Submit Attempts', 'convermetry'), __('Counted when a form is submitted, before the server confirms success.', 'convermetry')],
+            'form_success' => [__('Confirmed Conversions', 'convermetry'), __('Unique conversions, deduplicated across frontend and server detection.', 'convermetry')],
         ];
 
         // Every other event type — form views, starts and validation errors,
         // custom events, and anything recorded via cvmtry_track_event() — is
         // summed into a single "Other Events" card so nothing is invisible.
-        $other = array_sum(array_diff_key($totals, $cards));
+        $other = array_sum(array_diff_key($totals, $activity, $forms));
 
         ?>
-        <div class="cvmtry-cards">
+        <div class="cvmtry-kpis">
+        <div class="cvmtry-cards cvmtry-kpi-group">
         <?php
-        foreach ($cards as $type => [$label, $desc]) {
+        foreach ($activity as $type => [$label, $desc]) {
             self::renderStatCard(number_format_i18n($totals[$type] ?? 0), $label, $desc);
-
-            if ($type === 'form_success') {
-                self::renderStatCard(
-                    number_format_i18n($serverCount),
-                    __('Server-Confirmed Submissions', 'convermetry'),
-                    __('Submissions a form plugin\'s server-side hook confirmed — the authoritative lead count.', 'convermetry')
-                );
-            }
         }
+        ?>
+        </div>
+        <div class="cvmtry-cards cvmtry-kpi-group cvmtry-kpi-group--forms">
+        <?php
+        foreach ($forms as $type => [$label, $desc]) {
+            self::renderStatCard(number_format_i18n($totals[$type] ?? 0), $label, $desc);
+        }
+
+        self::renderStatCard(
+            number_format_i18n($serverCount),
+            __('Server-Confirmed Submissions', 'convermetry'),
+            __('Submissions a form plugin\'s server-side hook confirmed — the authoritative lead count.', 'convermetry')
+        );
 
         if ($other > 0) {
             self::renderStatCard(number_format_i18n($other), __('Other Events', 'convermetry'), __('Event types not shown above, such as form views, form starts, validation errors and custom events.', 'convermetry'));
         }
         ?>
+        </div></div>
+        <?php
+    }
+
+    /**
+     * The compact device breakdown beside the page-view chart: a doughnut of
+     * page-view share with a legend naming every part, its share and its count.
+     *
+     * Drawn from the same result the Devices panel's table prints, with the
+     * same rounding, and linked to it.
+     *
+     * @param string $start UTC window start (inclusive).
+     * @param string $end   UTC window end (exclusive).
+     * @return void
+     */
+    private static function renderDeviceSummary(string $start, string $end): void
+    {
+        $headingId = 'cvmtry-h-device-summary';
+
+        ?>
+        <section class="cvmtry-chart-frame cvmtry-device-summary" aria-labelledby="<?php echo esc_attr($headingId); ?>">
+        <h3 id="<?php echo esc_attr($headingId); ?>"><?php esc_html_e('Devices', 'convermetry'); ?></h3>
+        <p class="cvmtry-chart-summary"><?php esc_html_e('Mobile versus desktop share of page views.', 'convermetry'); ?></p>
+        <?php
+
+        try {
+            $devices = self::deviceData($start, $end);
+        } catch (ReportQueryException) {
+            $devices = null;
+            self::renderErrorNotice();
+        }
+
+        if ($devices === []) {
+            ?>
+            <p class="cvmtry-highlight-empty"><?php esc_html_e('No page views recorded in this period.', 'convermetry'); ?></p>
+            <?php
+        } elseif ($devices !== null) {
+            $total = array_sum($devices);
+            $parts = [];
+
+            foreach ($devices as $device => $views) {
+                $parts[] = [
+                    'label'  => ucfirst($device),
+                    'share'  => $total > 0 ? round($views / $total * 100) . '%' : '',
+                    'detail' => sprintf(
+                        /* translators: %s: number of page views, already formatted. */
+                        _n('%s page view', '%s page views', $views, 'convermetry'),
+                        number_format_i18n($views)
+                    ),
+                    'value'  => $views,
+                    // Colour follows the device, not its rank this period.
+                    'slot'   => match ($device) {
+                        'desktop' => 1,
+                        'mobile'  => 2,
+                        'tablet'  => 3,
+                        default   => 4,
+                    },
+                ];
+            }
+
+            Charts::doughnut($headingId, $parts);
+        }
+
+        self::panelLink('devices', $headingId);
+        ?>
+        </section>
+        <?php
+    }
+
+    /**
+     * The grid of summary charts at the foot of the Overview, one per report
+     * the panels below print in full.
+     *
+     * @param string $start UTC window start (inclusive).
+     * @param string $end   UTC window end (exclusive).
+     * @return void
+     */
+    private static function renderHighlights(string $start, string $end): void
+    {
+        ?>
+        <div class="cvmtry-highlights">
+        <?php
+        self::highlight(
+            'pages',
+            __('Top Pages', 'convermetry'),
+            'content',
+            [__('Views', 'convermetry')],
+            static fn(): array => array_map(static fn(array $row): array => [
+                'label'  => $row['page_title'] !== '' ? $row['page_title'] : self::urlDisplayText($row['page_url']),
+                'values' => [(int) $row['views']],
+            ], self::topPagesData($start, $end)),
+            __('No page views recorded in this period.', 'convermetry')
+        );
+
+        self::highlight(
+            'clicks',
+            __('Top Clicked Elements', 'convermetry'),
+            'engagement',
+            [__('Clicks', 'convermetry')],
+            static fn(): array => array_map(static fn(array $row): array => [
+                'label'  => self::clickLabel($row),
+                'values' => [(int) $row['clicks']],
+            ], self::topClicksData($start, $end)),
+            __('No clicks recorded in this period.', 'convermetry')
+        );
+
+        self::highlight(
+            'channels',
+            __('Channels', 'convermetry'),
+            'acquisition',
+            [__('Sessions', 'convermetry')],
+            static fn(): array => array_map(static fn(array $row): array => [
+                'label'  => $row['channel'] !== '' ? $row['channel'] : '—',
+                'values' => [(int) $row['sessions']],
+            ], self::channelData($start, $end)),
+            __('No channel data recorded in this period. Channels are classified as new events arrive, so this fills in from the moment of installation onward.', 'convermetry')
+        );
+
+        self::highlight(
+            'goals',
+            __('Goal Completions', 'convermetry'),
+            'goals',
+            [__('Completions', 'convermetry')],
+            static fn(): array => array_map(static fn(array $goal): array => [
+                'label'  => (string) $goal['name'],
+                'values' => [(int) $goal['completions']],
+            ], self::goalData($start, $end)['goals']),
+            __('No goal completions in this period. Goals are configured under Convermetry → Goals.', 'convermetry')
+        );
+
+        // Grouped, never stacked: a won lead is also a qualified lead, and both
+        // are leads, so these three counts overlap rather than add up.
+        self::highlight(
+            'leads',
+            __('Leads by Channel', 'convermetry'),
+            'outcomes',
+            [__('Leads', 'convermetry'), __('Qualified', 'convermetry'), __('Won', 'convermetry')],
+            static fn(): array => array_map(static fn(array $row): array => [
+                'label'  => (string) $row['label'] !== '' ? (string) $row['label'] : '—',
+                'values' => [(int) $row['leads'], (int) $row['qualified'], (int) $row['won']],
+            ], self::leadData($start, $end, 'channel')),
+            __('No leads recorded in this period.', 'convermetry'),
+            true
+        );
+        ?>
         </div>
         <?php
+    }
+
+    /**
+     * One Overview summary card: a chart of a report's first rows, and a link
+     * to the panel that prints the whole report.
+     *
+     * @param string                                                  $key    Slug for the card's element ids.
+     * @param string                                                  $title  The report's own title.
+     * @param string                                                  $panel  Slug of the panel holding the full table.
+     * @param list<string>                                            $series Series names (the table's own column labels).
+     * @param callable(): array<int, array{label: string, values: array<int, int>}> $rows Chart rows, built from the cached report result.
+     * @param string                                                  $empty  The report's own empty-state message.
+     * @param bool                                                    $wide   Span two grid columns (grouped bars).
+     * @return void
+     */
+    private static function highlight(string $key, string $title, string $panel, array $series, callable $rows, string $empty, bool $wide = false): void
+    {
+        $headingId = 'cvmtry-hl-' . $key;
+
+        ?>
+        <section class="cvmtry-highlight<?php echo $wide ? ' cvmtry-highlight--wide' : ''; ?>" aria-labelledby="<?php echo esc_attr($headingId); ?>">
+        <div class="cvmtry-highlight-head">
+        <h3 id="<?php echo esc_attr($headingId); ?>"><?php echo esc_html($title); ?></h3>
+        <?php
+        if (count($series) === 1) {
+            ?>
+            <span class="cvmtry-highlight-metric"><?php echo esc_html($series[0]); ?></span>
+            <?php
+        }
+        ?>
+        </div>
+        <?php
+
+        try {
+            $data = $rows();
+        } catch (ReportQueryException) {
+            $data = null;
+            self::renderErrorNotice();
+        }
+
+        if ($data === []) {
+            ?>
+            <p class="cvmtry-highlight-empty"><?php echo esc_html($empty); ?></p>
+            <?php
+        } elseif ($data !== null) {
+            Charts::bars($headingId, $series, array_slice($data, 0, self::HIGHLIGHT_ROWS));
+        }
+
+        self::panelLink($panel, $headingId);
+        ?>
+        </section>
+        <?php
+    }
+
+    /**
+     * A "View data table" link to one report panel. dashboard.js opens the
+     * panel as the link is followed; without it the anchor still scrolls there.
+     *
+     * @param string $panel     Panel slug.
+     * @param string $headingId Id of the card heading, so the link is announced with it.
+     * @return void
+     */
+    private static function panelLink(string $panel, string $headingId): void
+    {
+        ?>
+        <p class="cvmtry-highlight-link"><a href="#cvmtry-panel-<?php echo esc_attr($panel); ?>" aria-describedby="<?php echo esc_attr($headingId); ?>"><?php esc_html_e('View data table', 'convermetry'); ?></a></p>
+        <?php
+    }
+
+    /**
+     * Runs a report query once per page render and returns its rows.
+     *
+     * A summary chart and the table it links to read the same key, so the
+     * second reader gets the first one's result — or the same failure, rethrown
+     * for its own error notice — instead of a second query.
+     *
+     * @template T
+     * @param string      $key   Identifies the query and its arguments.
+     * @param callable(): T $query Runs the query.
+     * @return T
+     * @throws ReportQueryException When the query failed.
+     */
+    private static function result(string $key, callable $query): mixed
+    {
+        if (!array_key_exists($key, self::$results)) {
+            try {
+                self::$results[$key] = $query();
+            } catch (ReportQueryException $e) {
+                self::$results[$key] = $e;
+            }
+        }
+
+        if (self::$results[$key] instanceof ReportQueryException) {
+            throw self::$results[$key];
+        }
+
+        return self::$results[$key];
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    private static function topPagesData(string $start, string $end): array
+    {
+        return self::result('top_pages', static fn(): array => Reports::topPages($start, $end));
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    private static function topClicksData(string $start, string $end): array
+    {
+        return self::result('top_clicks', static fn(): array => Reports::topClicks($start, $end));
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    private static function channelData(string $start, string $end): array
+    {
+        return self::result('channels', static fn(): array => Reports::channelBreakdown($start, $end));
+    }
+
+    /**
+     * @return array<string, int>
+     */
+    private static function deviceData(string $start, string $end): array
+    {
+        return self::result('devices', static fn(): array => Reports::deviceBreakdown($start, $end));
+    }
+
+    /**
+     * @return array{goals: list<array<string, mixed>>, sessions: int, truncated: bool, total: int}
+     */
+    private static function goalData(string $start, string $end): array
+    {
+        return self::result('goals', static fn(): array => GoalReports::summary($start, $end, GoalRepository::names(), 25));
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    private static function leadData(string $start, string $end, string $dimension): array
+    {
+        return self::result('leads_' . $dimension, static fn(): array => LeadReports::byDimension($start, $end, $dimension, 10));
+    }
+
+    /**
+     * The display label of one clicked element.
+     *
+     * @param array<string, mixed> $row A Reports::topClicks() row.
+     * @return string
+     */
+    private static function clickLabel(array $row): string
+    {
+        return (string) $row['element_label'] !== '' ? (string) $row['element_label'] : sprintf(
+            /* translators: %s: HTML tag name of the clicked element, such as "a" or "button". */
+            __('(unlabeled %s)', 'convermetry'),
+            (string) $row['element_tag']
+        );
     }
 
     /**
@@ -1153,7 +1655,7 @@ final class AnalyticsPage
     private static function renderTopPages(string $start, string $end): void
     {
         self::renderQueriedTable(__('Top Pages', 'convermetry'), static function () use ($start, $end): void {
-            $rows = Reports::topPages($start, $end);
+            $rows = self::topPagesData($start, $end);
 
             self::renderReportTable(
                 __('Top Pages', 'convermetry'),
@@ -1203,7 +1705,7 @@ final class AnalyticsPage
     private static function renderTopClicks(string $start, string $end): void
     {
         self::renderQueriedTable(__('Top Clicked Elements', 'convermetry'), static function () use ($start, $end): void {
-            $rows = Reports::topClicks($start, $end);
+            $rows = self::topClicksData($start, $end);
 
             self::renderReportTable(
                 __('Top Clicked Elements', 'convermetry'),
@@ -1214,11 +1716,7 @@ final class AnalyticsPage
                     ['label' => __('Clicks', 'convermetry'), 'num' => true],
                 ],
                 array_map(static fn(array $row): array => [
-                    self::cellText($row['element_label'] !== '' ? $row['element_label'] : sprintf(
-                        /* translators: %s: HTML tag name of the clicked element, such as "a" or "button". */
-                        __('(unlabeled %s)', 'convermetry'),
-                        $row['element_tag']
-                    )),
+                    self::cellText(self::clickLabel($row)),
                     self::cellLink($row['target_url']),
                     self::cellNum($row['clicks']),
                 ], $rows),
@@ -1386,7 +1884,7 @@ final class AnalyticsPage
     private static function renderChannels(string $start, string $end): void
     {
         self::renderQueriedTable(__('Channels', 'convermetry'), static function () use ($start, $end): void {
-            $rows = Reports::channelBreakdown($start, $end);
+            $rows = self::channelData($start, $end);
 
             self::renderReportTable(
                 __('Channels', 'convermetry'),
@@ -1416,7 +1914,7 @@ final class AnalyticsPage
     private static function renderDevices(string $start, string $end): void
     {
         self::renderQueriedTable(__('Devices', 'convermetry'), static function () use ($start, $end): void {
-            $devices = Reports::deviceBreakdown($start, $end);
+            $devices = self::deviceData($start, $end);
             $total   = array_sum($devices);
 
             $rows = [];
@@ -1507,7 +2005,7 @@ final class AnalyticsPage
     private static function renderGoals(string $start, string $end): void
     {
         self::renderQueriedTable(__('Goal Completions', 'convermetry'), static function () use ($start, $end): void {
-            $summary = GoalReports::summary($start, $end, GoalRepository::names(), 25);
+            $summary = self::goalData($start, $end);
 
             $rows = [];
             foreach ($summary['goals'] as $goal) {
@@ -1552,7 +2050,7 @@ final class AnalyticsPage
         self::renderQueriedTable($title, static function () use ($start, $end, $dimension, $title): void {
             $rows = [];
 
-            foreach (LeadReports::byDimension($start, $end, $dimension, 10) as $row) {
+            foreach (self::leadData($start, $end, $dimension) as $row) {
                 $leads = (int) $row['leads'];
 
                 $rows[] = [
@@ -1663,12 +2161,13 @@ final class AnalyticsPage
     }
 
     /**
-     * A duration in seconds as a short human string.
+     * A duration in seconds as a short human string. Public so the export
+     * writes Time to Lead's medians exactly as the panel prints them.
      *
      * @param int $seconds Duration.
      * @return string
      */
-    private static function humanDuration(int $seconds): string
+    public static function humanDuration(int $seconds): string
     {
         return match (true) {
             /* translators: %s: number of seconds. */

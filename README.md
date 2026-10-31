@@ -22,7 +22,7 @@ Was the lead successfully delivered to external systems?
 
 Convermetry works standalone — full analytics dashboard, form integrations, and webhook delivery inside one WordPress install — and is architected so a future Convermetry SaaS can receive `analytics_report` and `form_submission` messages from many installations, keyed by a shared, versioned payload schema.
 
-- **Version:** 1.0.3
+- **Version:** 1.1.0
 - **Requires WordPress:** 6.3+
 - **Requires PHP:** 8.3+
 - **License:** GPL-2.0-or-later
@@ -128,7 +128,7 @@ For a selectable 7/30/90-day period (UTC calendar days, clamped to the retention
 
 | Section | Reports |
 |---|---|
-| Overview | Summary cards + daily page-view chart |
+| Overview | Summary cards (activity, then the three form metrics on their own band), the daily page-view chart beside a device-share doughnut, and summary charts — Top Pages, Top Clicked Elements, Channels, Goal Completions, and Leads by Channel (leads, qualified and won as grouped bars on one scale, never stacked) — each linking to its full table |
 | Content | Top Pages, Top Landing Pages |
 | Engagement | Top Clicked Elements, Top Form Submit Attempts, Most Hovered Elements |
 | Acquisition | Top Referrers, Channels, Campaigns, Campaign Terms & Content |
@@ -136,7 +136,9 @@ For a selectable 7/30/90-day period (UTC calendar days, clamped to the retention
 | Conversions | Recent Conversions — each with attribution, provider/form identity, and conversion id |
 | Recent Activity | The latest 15 raw events in the site timezone |
 
-A **Print / Save as PDF** button produces a print-optimized report (sections and chart values expanded automatically, landscape campaign tables, link URLs printed). Empty states and per-section database-error notices are explicit — a failed query is never rendered as a silent zero.
+Every summary chart is drawn from the same report result as the table it links to — results are memoized per render, so a chart costs no query — and prints its values beside its marks; the marks themselves are hidden from assistive technology, and the tables remain the exact record. A **Print / Save as PDF** button produces a print-optimized report (sections and chart values expanded automatically, landscape campaign tables, link URLs printed). Empty states and per-section database-error notices are explicit — a failed query is never rendered as a silent zero.
+
+**Export CSV** and **Export JSON** download the selected period's reports — the same queries, row limits and retention-clamped window as the panels, with raw values (integers, rate percentages, UTC dates) rather than display strings. The CSV is one file of titled sections headed by the same line the printed report carries; the JSON is `{report, site, period, generated_at, reports: {section: rows}, failed: [...]}`, with the overview as a single object. A section whose query failed is `null` and listed under `failed` (in the CSV, the dashboard's own error sentence) — never an empty result. Latest Events ignores the period, as its panel does; third-party analytics sections are not included. Both need `analytics.view`; each format has its own nonce, and the link carries the period signed with the screen's filter nonce, so an expired or altered period is refused rather than silently replaced by the default.
 
 The three form metrics are deliberately distinct:
 
@@ -242,12 +244,14 @@ Expanding a row loads its detail over `cvmtry_get_submission_detail` (once per r
 
 The session summary behind *Visitor journey* is normally computed when a webhook delivery freezes its payload. On a site with no endpoints that never happens, so the detail handler computes it lazily on first expand and persists the result — at most one extra query per submission, ever.
 
-### CSV export
+### CSV and JSON export
 
-Two buttons, both streaming in keyset-paginated chunks so memory stays bounded on any table size:
+Four buttons, all streaming in keyset-paginated chunks so memory stays bounded on any table size:
 
-- **Export Current Filters** — exactly the rows on screen; the link is rewritten as filters change, and the server re-sanitizes the query string through the same code path the list uses.
-- **Export All To CSV** — every stored submission.
+- **Export Current Filters** (CSV) and **Export Current Filters To JSON** — exactly the rows on screen; both links are rewritten as filters change, and the server re-sanitizes the query string through the same code path the list uses.
+- **Export All To CSV** and **Export All To JSON** — every stored submission.
+
+The JSON export is an array of one object per submission, keyed by the CSV's column keys (`created_at`, `submission_id`, … `submission_data`) with the same values — `convermetry_submission_csv_columns` and `convermetry_submission_csv_values` shape both files — except that `submission_data` is the descriptor list itself rather than a JSON string, and nothing is formula-escaped. All four need `submissions.export`.
 
 Field sets differ from form to form, so there is no honest column-per-field header. The fixed columns carry identity, attribution, and delivery state — Date, Submission ID, Conversion ID, Session ID, Provider, Form Name, Form ID, Native Form ID, Conversion Page, Channel, UTM Source/Medium/Campaign/Term/Content, Ad Click Type, Entrance Referrer, Landing Page, Device, IP Address, Delivery Status — and the visitor's own answers travel in a final **Submission Data (JSON)** column. Cells beginning `=`, `+`, `-`, or `@` are tab-prefixed so spreadsheets treat them as text rather than formulas.
 
@@ -327,6 +331,10 @@ A goal keeps its id forever. Editing its **matching rule** starts a new measurem
 
 Goals start counting **from when you create them**. Completions are not applied retroactively.
 
+### Exporting goals
+
+**Export CSV** and **Export JSON** on the Goals screen download every goal with its status, rule, counting mode and configured value, and its completions, sessions, rate, attributed value and last completion for the selected period — the same figures the table prints. Both need `goals.manage`; the period travels signed, as on Analytics.
+
 ---
 
 ## Funnels
@@ -372,6 +380,8 @@ A funnel is a **cohort**: the sessions that reached step 1 during the selected p
 Each funnel's result is cached for five minutes, keyed by its definition, so editing a step invalidates the cache automatically.
 
 Funnels are limited to 8 steps and 20 funnels per site.
+
+**Export CSV** and **Export JSON** download every funnel for the selected period: per step, its label, sessions, share of entrants, share continued from the step before, and sessions lost, plus the funnel's overall conversion. The CSV has one row per step; the JSON nests the steps under each funnel. A funnel that could not be measured, or that no session entered, is still listed with the same sentence its card shows. Both need `funnels.manage`.
 
 ---
 
@@ -1128,7 +1138,7 @@ Every outbound message shares one versioned envelope:
 {
     "schema_version": "1.0 | 2.0",
     "source": "convermetry",
-    "plugin_version": "1.0.3",
+    "plugin_version": "1.1.0",
     "message_type": "analytics_report | form_submission",
     "website_info": { },
     "generated_at": "2026-08-22T14:00:00+00:00",
@@ -1156,7 +1166,7 @@ Every outbound message shares one versioned envelope:
 {
     "schema_version": "1.1",
     "source": "convermetry",
-    "plugin_version": "1.0.3",
+    "plugin_version": "1.1.0",
     "message_type": "analytics_report",
     "website_info": {
         "name": "Example Financial", "url": "https://example.com", "domain": "example.com",
@@ -1276,7 +1286,7 @@ Every outbound message shares one versioned envelope:
 {
     "schema_version": "2.0",
     "source": "convermetry",
-    "plugin_version": "1.0.3",
+    "plugin_version": "1.1.0",
     "message_type": "form_submission",
     "website_info": {
         "name": "Example Financial", "url": "https://example.com", "domain": "example.com",
@@ -1897,6 +1907,45 @@ README, payload examples, readme.txt `Stable tag`), and refuses to build when a
 runtime file would be silently left out — an untracked file (add it, or
 `git add -N` it), or one hidden by `.gitignore` — or when `readme.txt`,
 `LICENSE` or `uninstall.php` is missing.
+
+**WordPress.org releases.** Run `bash bin/prepare-svn.sh` to select the newest
+`build/convermetry-*.zip` by modification time, validate its plugin version and
+stable tag, and prepare `trunk` plus `tags/<version>` in a private temporary SVN
+checkout. Pass a ZIP path to select a specific build. This uses SVN and Python 3
+(standard library only), and works from any current directory when invoked by
+the script's path. Preparation prints the changes and retains its workspace for
+review; it does not publish. The script stops for an existing tag, a downgrade,
+invalid archive contents, or mismatched version headers. Equal timestamps require
+an explicit ZIP selection.
+
+```bash
+bash bin/prepare-svn.sh                           # prepare the newest build
+bash bin/prepare-svn.sh build/convermetry-1.1.0.zip # prepare a specific build
+bash bin/prepare-svn.sh --publish                 # prepare and commit newest build
+```
+
+For credentials without repeated prompts, copy `.env.svn.example` to `.env.svn`,
+run `chmod 600 .env.svn`, and enter your separate WordPress.org SVN password in
+`SVN_PASSWORD`. This file contains a plaintext password; keep it private. It is
+ignored by Git and excluded from plugin builds. The blank example is also
+excluded from builds. The parser reads literal `SVN_USERNAME` and `SVN_PASSWORD`
+values, optionally enclosed in matching quotes; it never executes shell code or
+expands `$`, backticks, or backslash escapes. Comments must be on their own lines.
+Exported variables with those names override the file. `--env-file /path/to/file`
+selects a different private credentials file (keep custom files outside the
+source tree). With a password configured, publishing sends it through stdin to
+SVN 1.10+, without putting it in command arguments or saving it in SVN's auth
+cache. Otherwise SVN uses its normal saved credentials or prompts.
+
+`--publish` always prepares a fresh checkout, commits only `trunk` and the new
+release tag, and removes its own temporary workspace after success. Failed or
+interrupted operations retain the workspace for inspection. Preparation also
+prints a direct `svn commit` command for the reviewed working copy; that direct
+command uses SVN's own authentication, not `.env.svn`. Existing release tags and
+the top-level directory artwork in SVN `assets/` are preserved. Complete any
+WordPress.org release-confirmation email after publishing. Local integration
+tests run with `python3 tests/Shell/test_prepare_svn.py` using disposable `file://`
+repositories; `CVMTRY_SVN_URL` supports only that local override for testing.
 
 **WordPress.org listing assets** live in `.wordpress-org/` (icons, banners and
 `screenshot-N.png`, numbered to match `== Screenshots ==` in `readme.txt`). They

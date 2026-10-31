@@ -61,6 +61,11 @@ final class WebhooksPage
     /** Per-user transient prefix for what the last save refused (structured, never raw input). */
     private const string REJECTED_TRANSIENT = 'cvmtry_webhook_rejected_';
 
+    /** Section anchors, for the links at the top of the screen. */
+    private const string ANCHOR_ENDPOINTS = 'cvmtry-webhook-endpoints';
+    private const string ANCHOR_DELIVERY = 'cvmtry-delivery-settings';
+    private const string ANCHOR_CUSTOMIZATION = 'cvmtry-request-customization';
+
     /**
      * Registers menu, save, discard, notice, asset, and AJAX hooks — and,
      * through {@see ActivityLogSection::init()}, the Activity Log's handlers
@@ -522,14 +527,15 @@ final class WebhooksPage
         }
 
         ?>
-        <div class="wrap cvmtry-wrap">
-        <h1><?php esc_html_e('Convermetry Webhooks', 'convermetry'); ?></h1>
+        <div class="wrap cvmtry-wrap cvmtry-webhooks-wrap">
+        <h1 id="cvmtry-webhooks-title"><?php esc_html_e('Convermetry Webhooks', 'convermetry'); ?></h1>
+        <hr class="wp-header-end">
         <?php
+
+        self::renderSectionNav($canManage);
 
         if ($canManage) {
             self::renderSettingsForm();
-            self::renderPendingRetries();
-            self::renderPendingQueue();
         }
 
         // After the settings form has closed, so the log's Clear All Logs form
@@ -537,6 +543,52 @@ final class WebhooksPage
         ActivityLogSection::render();
 
         ?></div>
+        <?php
+    }
+
+    /**
+     * Links to the screen's sections, each labelled with the heading it
+     * jumps to — so the Activity Log is one click away however long the
+     * configuration above it grows.
+     *
+     * Only sections the current user can see are linked, by the same scopes
+     * that print them; a lone link is not worth a bar.
+     *
+     * @param bool $canManage Whether the user holds webhooks.manage.
+     * @return void
+     */
+    private static function renderSectionNav(bool $canManage): void
+    {
+        $links = [];
+
+        if ($canManage) {
+            $links[self::ANCHOR_ENDPOINTS]     = __('Webhook Endpoints', 'convermetry');
+            $links[self::ANCHOR_DELIVERY]      = __('Delivery Settings', 'convermetry');
+            $links[self::ANCHOR_CUSTOMIZATION] = __('Request Customization', 'convermetry');
+        }
+
+        if (Capability::currentUserCan(Capability::ACTIVITY_VIEW)) {
+            $links[ActivityLogSection::ANCHOR] = __('Activity Log', 'convermetry');
+
+            if (Capability::currentUserCan(Capability::API_MANAGE)) {
+                $links[ActivityLogSection::API_ANCHOR] = __('Deliveries API', 'convermetry');
+            }
+        }
+
+        if (count($links) < 2) {
+            return;
+        }
+
+        ?>
+        <nav aria-labelledby="cvmtry-webhooks-title"><ul class="cvmtry-section-nav">
+        <?php
+        foreach ($links as $anchor => $label) {
+            ?>
+            <li><a href="#<?php echo esc_attr($anchor); ?>"><?php echo esc_html($label); ?></a></li>
+            <?php
+        }
+        ?>
+        </ul></nav>
         <?php
     }
 
@@ -572,8 +624,13 @@ final class WebhooksPage
         <input type="hidden" name="action" value="<?php echo esc_attr(self::SAVE_ACTION); ?>">
         <?php
 
-        // ── Webhook Status toggle card ─────────────────────────────────
+        // ── Current state: status, pending retries, queued work ────────
+        // Together at the top, so whether delivery is running and what is
+        // waiting on it is the first thing on the screen. The retry and queue
+        // readouts hold only text and links — no fields — so sitting inside
+        // the form changes nothing that is submitted.
         ?>
+        <div class="cvmtry-webhooks-state">
         <div class="cvmtry-card cvmtry-toggle-card" id="cvmtry-webhook-toggle-card"<?php echo ($hasAnyUrl ? '' : ' style="display:none"'); ?>>
         <h2 class="cvmtry-card-title"><?php esc_html_e('Webhook Status', 'convermetry'); ?></h2>
         <div class="cvmtry-toggle-row">
@@ -583,10 +640,15 @@ final class WebhooksPage
         <span class="cvmtry-toggle-label" id="cvmtry-webhook-toggle-label"><?php echo esc_html(!empty($settings['active']) ? __('Active', 'convermetry') : __('Inactive', 'convermetry')); ?></span></div>
         <p class="description"><?php esc_html_e('When inactive, no new deliveries are sent — scheduled analytics reports pause and newly confirmed form submissions wait in the queue. Saved endpoints and settings are preserved.', 'convermetry'); ?></p></div>
         <?php
+        self::renderPendingRetries();
+        self::renderPendingQueue();
+        ?>
+        </div>
+        <?php
 
         // ── Endpoints card ─────────────────────────────────────────────
         ?>
-        <div class="cvmtry-card">
+        <div class="cvmtry-card" id="<?php echo esc_attr(self::ANCHOR_ENDPOINTS); ?>">
         <h2 class="cvmtry-card-title"><?php esc_html_e('Webhook Endpoints', 'convermetry'); ?></h2>
         <p class="description" style="margin-bottom:14px;"><?php echo wp_kses_post(__('Each endpoint chooses which message types it receives: <strong>Analytics Reports</strong> (aggregated analytics on the schedule below) and/or <strong>Form Submissions</strong> (each confirmed lead, delivered immediately in the background). Endpoints must use HTTPS. Add a label so each endpoint is easy to identify in the Activity Log. Failed deliveries retry automatically — 5m, 30m, 2h, 6h, then 16h after the initial attempt.', 'convermetry')); ?></p>
         <div id="cvmtry-webhooks-container">
@@ -609,7 +671,7 @@ final class WebhooksPage
 
         // ── Delivery settings card ─────────────────────────────────────
         ?>
-        <div class="cvmtry-card">
+        <div class="cvmtry-card" id="<?php echo esc_attr(self::ANCHOR_DELIVERY); ?>">
         <h2 class="cvmtry-card-title"><?php esc_html_e('Delivery Settings', 'convermetry'); ?></h2>
         <table class="form-table" role="presentation">
         <tr><th scope="row"><label for="cvmtry-shared-secret"><?php esc_html_e('Shared signing secret', 'convermetry'); ?> <span class="description"><?php esc_html_e('(optional)', 'convermetry'); ?></span></label></th><td>
@@ -663,7 +725,7 @@ final class WebhooksPage
 
         // ── Request customization card ─────────────────────────────────
         ?>
-        <div class="cvmtry-card">
+        <div class="cvmtry-card" id="<?php echo esc_attr(self::ANCHOR_CUSTOMIZATION); ?>">
         <h2 class="cvmtry-card-title"><?php esc_html_e('Request Customization', 'convermetry'); ?></h2>
         <p class="description" style="margin-bottom:14px;"><?php esc_html_e('Headers and URL query parameters added to every webhook request. Per-form headers and parameters (configured on the Forms page) are merged after these; when page URL parameters are included, the precedence is: global parameters → page parameters → per-form parameters. Header values that look like credentials are redacted in the Activity Log but sent intact.', 'convermetry'); ?></p>
         <h3><?php esc_html_e('Global Request Headers', 'convermetry'); ?></h3>
@@ -678,10 +740,11 @@ final class WebhooksPage
         ?>
         <p style="margin-top:12px;"><label><input type="checkbox" name="cvmtry_include_page_params" value="1" <?php echo checked(!empty($settings['include_page_params']), true, false); ?>>
         <?php echo wp_kses_post(__('Include page URL parameters — query parameters present on the page a form was submitted from (e.g. <code>?utm_source=google&amp;gclid=…</code>) are appended to the webhook URL for that submission.', 'convermetry')); ?></label></p></div>
+        <div class="cvmtry-savebar">
         <?php
-
         submit_button(__('Save Webhook Settings', 'convermetry'));
         ?>
+        </div>
         </form>
         <?php
     }

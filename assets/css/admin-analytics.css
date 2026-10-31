@@ -13,10 +13,23 @@
    .cvmtry-dash so the Settings, About, and Delivery Log screens are unaffected.
    ========================================================================== */
 
+/* A dashboard of side-by-side cards uses more of a wide screen than the
+   single-column settings screens do. */
+.cvmtry-dash {
+    max-width: 1440px;
+}
+
 /* ── Period selector ──────────────────────────────────────────────────────── */
 
+/* The buttons sit in the page header; the date range they cover is spelled
+   out on the line beneath it. */
 .cvmtry-dash .cvmtry-period {
-    margin: 16px 0 4px;
+    margin: 4px 0 0;
+}
+
+/* .button sets display, which would otherwise override [hidden]. */
+.cvmtry-dash .cvmtry-print-btn[hidden] {
+    display: none;
 }
 
 /* The buttons themselves are plain .button / .button-primary / .button-secondary
@@ -52,6 +65,125 @@
     flex-direction: column;
 }
 
+/* Two groups of tiles: visitor activity, then the form metrics on a tinted
+   band of their own so the three are compared rather than confused. */
+.cvmtry-dash .cvmtry-kpis {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin: 16px 0 0;
+}
+
+.cvmtry-dash .cvmtry-kpi-group {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(200px, 100%), 1fr));
+    gap: 12px;
+    margin: 0;
+}
+
+.cvmtry-dash .cvmtry-kpi-group--forms {
+    padding: 12px;
+    background: var(--cvmtry-ui-color-surface-tint);
+    border: 1px solid var(--cvmtry-ui-color-border-tint);
+    border-radius: var(--cvmtry-ui-radius-lg);
+}
+
+.cvmtry-dash .cvmtry-kpi-group--forms .cvmtry-card {
+    box-shadow: none;
+}
+
+/* ── Overview: page-view chart beside the device breakdown ───────────────── */
+
+.cvmtry-dash .cvmtry-overview-charts {
+    display: grid;
+    grid-template-columns: minmax(0, 2.2fr) minmax(280px, 1fr);
+    gap: 16px;
+    align-items: stretch;
+    margin-top: 16px;
+}
+
+/* With only one child (the device card, when the overview figures failed to
+   load) it takes the whole row. */
+.cvmtry-dash .cvmtry-overview-charts > :only-child {
+    grid-column: 1 / -1;
+}
+
+.cvmtry-dash .cvmtry-overview-charts > .cvmtry-chart-frame {
+    margin-top: 0;
+    min-width: 0;
+}
+
+.cvmtry-dash .cvmtry-device-summary {
+    display: flex;
+    flex-direction: column;
+}
+
+/* Content stays at the top of the card: it is stretched to the chart's
+   height, and the chart grows when its data table is opened. */
+.cvmtry-dash .cvmtry-device-summary .cvmtry-donut {
+    margin: 4px 0 8px;
+}
+
+/* ── Overview: summary charts ─────────────────────────────────────────────── */
+
+.cvmtry-dash .cvmtry-highlights {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 16px;
+    margin-top: 16px;
+}
+
+.cvmtry-dash .cvmtry-highlight {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    min-width: 0;
+    padding: 16px 20px;
+    background: var(--cvmtry-ui-color-surface);
+    border: 1px solid var(--cvmtry-ui-color-border);
+    border-radius: var(--cvmtry-ui-radius-lg);
+    box-shadow: var(--cvmtry-ui-shadow-card);
+}
+
+.cvmtry-dash .cvmtry-highlight--wide {
+    grid-column: span 2;
+}
+
+.cvmtry-dash .cvmtry-highlight-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 4px 12px;
+    flex-wrap: wrap;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--cvmtry-ui-color-rule);
+}
+
+.cvmtry-dash .cvmtry-highlight-metric {
+    color: #646970;
+}
+
+.cvmtry-dash .cvmtry-highlight .cvmtry-bars,
+.cvmtry-dash .cvmtry-highlight-empty {
+    flex: 1 1 auto;
+}
+
+.cvmtry-dash .cvmtry-highlight-empty {
+    margin: 0;
+    color: #646970;
+}
+
+.cvmtry-dash .cvmtry-highlight-link {
+    margin: 0;
+}
+
+/* The lead-outcome bars sit two-up inside their wide card. */
+.cvmtry-dash .cvmtry-highlight--wide .cvmtry-bars-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(260px, 100%), 1fr));
+    gap: 12px 24px;
+}
+
 .cvmtry-dash .cvmtry-card-value {
     font-size: 32px;
     font-weight: 600;
@@ -79,9 +211,10 @@
 /* ── Overview: daily page-view chart ──────────────────────────────────────── */
 
 .cvmtry-dash .cvmtry-chart-frame {
-    background: #fff;
-    border: 1px solid #dcdcde;
-    border-radius: 8px;
+    background: var(--cvmtry-ui-color-surface);
+    border: 1px solid var(--cvmtry-ui-color-border);
+    border-radius: var(--cvmtry-ui-radius-lg);
+    box-shadow: var(--cvmtry-ui-shadow-card);
     padding: 16px 20px 12px;
     margin-top: 16px;
 }
@@ -339,20 +472,27 @@
 .cvmtry-dash .cvmtry-panel-toolbar {
     display: flex;
     flex-wrap: wrap;
+    justify-content: flex-end;
     gap: 8px;
-    margin: 24px 0 -8px;
-}
-
-.cvmtry-dash .cvmtry-print-btn {
-    margin-left: auto;
+    margin: 28px 0 -8px;
 }
 
 .cvmtry-dash .cvmtry-panel {
-    background: #fff;
-    border: 1px solid #c3c4c7;
-    border-radius: 4px;
+    background: var(--cvmtry-ui-color-surface);
+    border: 1px solid var(--cvmtry-ui-color-border);
+    border-radius: var(--cvmtry-ui-radius-lg);
     margin-top: 20px;
-    box-shadow: 0 1px 1px rgba(0, 0, 0, 0.04);
+    box-shadow: var(--cvmtry-ui-shadow-card);
+    scroll-margin-top: calc(var(--wp-admin--admin-bar--height, 32px) + 16px);
+}
+
+/* The summary's hover tint follows the panel's rounded corners. */
+.cvmtry-dash .cvmtry-panel-summary {
+    border-radius: var(--cvmtry-ui-radius-lg);
+}
+
+.cvmtry-dash .cvmtry-panel[open] > .cvmtry-panel-summary {
+    border-radius: var(--cvmtry-ui-radius-lg) var(--cvmtry-ui-radius-lg) 0 0;
 }
 
 .cvmtry-dash .cvmtry-panel-summary {
@@ -413,21 +553,38 @@
 .cvmtry-dash .cvmtry-tables {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 0 24px;
+    gap: 16px;
+    margin-top: 16px;
 }
 
+/* Each report is its own quiet card, so a panel's grid reads as a set of
+   distinct reports rather than one run of tables. */
 .cvmtry-dash .cvmtry-report {
-    margin-top: 20px;
+    margin-top: 16px;
     min-width: 0;
+    padding: 16px;
+    background: var(--cvmtry-ui-color-surface-muted);
+    border: 1px solid var(--cvmtry-ui-color-border-soft);
+    border-radius: var(--cvmtry-ui-radius-sm);
+}
+
+.cvmtry-dash .cvmtry-tables > .cvmtry-report {
+    margin-top: 0;
 }
 
 .cvmtry-dash .cvmtry-report--wide {
     grid-column: 1 / -1;
 }
 
-.cvmtry-dash .cvmtry-report h3 {
+/* A summary card is titled exactly like the report it summarizes. */
+.cvmtry-dash .cvmtry-report h3,
+.cvmtry-dash .cvmtry-highlight h3 {
     margin: 0 0 4px;
     font-size: 14px;
+}
+
+.cvmtry-dash .cvmtry-highlight h3 {
+    margin: 0;
 }
 
 .cvmtry-dash .cvmtry-report-desc {
@@ -479,9 +636,28 @@
 
 /* ── Responsive ───────────────────────────────────────────────────────────── */
 
+/* Breakpoints are viewport widths, chosen for the content width left beside
+   wp-admin's menu: 160px expanded down to 960px, 36px folded below it. */
+@media screen and (max-width: 1400px) {
+    .cvmtry-dash .cvmtry-highlights {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
 @media screen and (max-width: 1100px) {
-    .cvmtry-dash .cvmtry-tables {
+    .cvmtry-dash .cvmtry-tables,
+    .cvmtry-dash .cvmtry-overview-charts {
         grid-template-columns: minmax(0, 1fr);
+    }
+}
+
+@media screen and (max-width: 782px) {
+    .cvmtry-dash .cvmtry-highlights {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .cvmtry-dash .cvmtry-highlight--wide {
+        grid-column: auto;
     }
 }
 
@@ -555,11 +731,38 @@
     .cvmtry-dash .notice:not(.cvmtry-rate-limit-notice),
     .cvmtry-dash .cvmtry-period-group,
     .cvmtry-dash .cvmtry-period-range,
+    .cvmtry-dash .cvmtry-export-group,
+    .cvmtry-dash .cvmtry-print-btn,
     .cvmtry-dash .cvmtry-panel-toolbar,
+    .cvmtry-dash .cvmtry-highlight-link,
     .cvmtry-dash .cvmtry-chart-tip,
     .cvmtry-dash .cvmtry-panel-arrow,
     .cvmtry-dash .cvmtry-newtab {
         display: none !important;
+    }
+
+    /* Cards print flat and whole. The page-view chart prints with its data
+       table open, so it takes the full width and the device card follows it
+       rather than stretching beside it. */
+    .cvmtry-dash .cvmtry-chart-frame,
+    .cvmtry-dash .cvmtry-highlight {
+        box-shadow: none;
+        break-inside: avoid;
+        page-break-inside: avoid;
+    }
+
+    .cvmtry-dash .cvmtry-overview-charts {
+        grid-template-columns: minmax(0, 1fr);
+        align-items: start;
+    }
+
+    .cvmtry-dash .cvmtry-overview-charts > .cvmtry-chart-frame:first-child {
+        break-inside: auto;
+        page-break-inside: auto;
+    }
+
+    .cvmtry-dash .cvmtry-report {
+        background: #fff;
     }
 
     /* Data-quality warning, print-friendly: bordered, no tinted background. */
@@ -620,13 +823,14 @@
         min-width: 0;
     }
 
-    .cvmtry-dash .cvmtry-chart-layout--30,
-    .cvmtry-dash .cvmtry-chart-layout--90 {
+    /* The dense-period layout class is --wide (it replaced per-length
+       --30/--90 classes), so that is the one whose screen minimum width is
+       released on paper. */
+    .cvmtry-dash .cvmtry-chart-layout--wide {
         min-width: 0;
     }
 
-    .cvmtry-dash .cvmtry-chart-layout--30 .cvmtry-chart-col,
-    .cvmtry-dash .cvmtry-chart-layout--90 .cvmtry-chart-col {
+    .cvmtry-dash .cvmtry-chart-layout--wide .cvmtry-chart-col {
         min-width: 1px;
     }
 

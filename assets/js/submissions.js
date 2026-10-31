@@ -350,14 +350,10 @@
         }
 
         /**
-         * Keeps the "Export Current Filters" link pointing at exactly what is
-         * on screen.
+         * Keeps the "Export Current Filters" links (CSV and JSON) pointing at
+         * exactly what is on screen.
          */
         function syncExportLink() {
-            const link = document.querySelector('.cvmtry-export-filtered');
-            const base = cfg('exportBase');
-            if (!link || !base) return;
-
             const params = new URLSearchParams({
                 filter_year: state.year,
                 filter_month: state.month,
@@ -377,7 +373,14 @@
             });
 
             const query = params.toString();
-            link.href = query === '' ? base : base + '&' + query;
+
+            [['.cvmtry-export-filtered', 'exportBase'], ['.cvmtry-export-filtered-json', 'exportJsonBase']].forEach(function (pair) {
+                const link = document.querySelector(pair[0]);
+                const base = cfg(pair[1]);
+                if (link && base) {
+                    link.href = query === '' ? base : base + '&' + query;
+                }
+            });
         }
 
         // ── Core fetch ───────────────────────────────────────────────────────
@@ -570,6 +573,10 @@
      * Returns the HTML string for the controls bar. Year/month and the
      * value-list options start empty; the first response fills them.
      *
+     * Search leads, with the page size beside it; the filters wrap on the row
+     * beneath (see admin-submissions.css). Source order is reading order, so
+     * keyboard focus moves through the bar the way it looks.
+     *
      * @returns {string}
      */
     function buildControlsHtml() {
@@ -577,7 +584,20 @@
             return '<option value="' + escapeAttr(value) + '">' + escapeHtml(label) + '</option>';
         };
 
-        return '<div class="cvmtry-acc-filters">' +
+        return '<div class="cvmtry-acc-search">' +
+                   '<input type="text" class="cvmtry-search-input" placeholder="' + escapeAttr(__('Search name, email, field values, IDs…', 'convermetry')) + '" />' +
+                   '<button type="button" class="cvmtry-search-clear" aria-label="' + escapeAttr(__('Clear search', 'convermetry')) + '">✕</button>' +
+               '</div>' +
+               '<div class="cvmtry-acc-perpage">' +
+                   '<label>' + escapeHtml(__('Per page:', 'convermetry')) + ' <select class="cvmtry-per-page">' +
+                       '<option value="5">5</option>' +
+                       '<option value="10" selected>10</option>' +
+                       '<option value="25">25</option>' +
+                       '<option value="50">50</option>' +
+                       '<option value="100">100</option>' +
+                   '</select></label>' +
+               '</div>' +
+               '<div class="cvmtry-acc-filters">' +
                    '<select class="cvmtry-filter-year">' + option('', __('All Years', 'convermetry')) + '</select>' +
                    '<select class="cvmtry-filter-month">' + option('', __('All Months', 'convermetry')) + '</select>' +
                    '<span style="display:none"><select class="cvmtry-filter-provider">' + option('', __('All Providers', 'convermetry')) + '</select></span>' +
@@ -601,19 +621,6 @@
                        option('yes', __('Has a value', 'convermetry')) +
                        option('no', __('No value recorded', 'convermetry')) +
                    '</select>' +
-                   '<div class="cvmtry-acc-search">' +
-                       '<input type="text" class="cvmtry-search-input" placeholder="' + escapeAttr(__('Search name, email, field values, IDs…', 'convermetry')) + '" />' +
-                       '<button type="button" class="cvmtry-search-clear" aria-label="' + escapeAttr(__('Clear search', 'convermetry')) + '">✕</button>' +
-                   '</div>' +
-               '</div>' +
-               '<div class="cvmtry-acc-perpage">' +
-                   '<label>' + escapeHtml(__('Per page:', 'convermetry')) + ' <select class="cvmtry-per-page">' +
-                       '<option value="5">5</option>' +
-                       '<option value="10" selected>10</option>' +
-                       '<option value="25">25</option>' +
-                       '<option value="50">50</option>' +
-                       '<option value="100">100</option>' +
-                   '</select></label>' +
                '</div>';
     }
 

@@ -11,31 +11,61 @@
  * this file — see that file's header for the full ownership map.
  */
 
+/* The list is the page's working area; on a wide screen it gets the width to
+   keep its nine columns and an expanded record's two columns readable. */
+.cvmtry-submissions-wrap {
+    max-width: 1440px;
+}
+
 .cvmtry-submissions-intro {
     max-width: 780px;
     margin: 8px 0 16px;
 }
 
+/* Exports, right above the list they export. */
+.cvmtry-submissions-toolbar {
+    justify-content: flex-end;
+    margin-bottom: 12px;
+}
+
 /* The list carries the page's card chrome itself: unlike the Activity Log,
-   these rows are not nested inside a page-level accordion. */
+   these rows are not nested inside a page-level accordion. The bar above it
+   puts search first with the page size beside it, and the filters on the
+   row beneath. */
 .cvmtry-submissions-wrap .cvmtry-acc-controls {
-    background: #fff;
-    border: 1px solid #c3c4c7;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 10px 16px;
+    background: var(--cvmtry-ui-color-surface);
+    border: 1px solid var(--cvmtry-ui-color-border);
     border-bottom: none;
-    border-radius: 4px 4px 0 0;
-    padding: 12px 16px;
+    border-radius: var(--cvmtry-ui-radius-lg) var(--cvmtry-ui-radius-lg) 0 0;
+    padding: 14px 16px;
     margin-bottom: 0;
+}
+
+.cvmtry-submissions-wrap .cvmtry-acc-filters {
+    grid-column: 1 / -1;
+}
+
+.cvmtry-submissions-wrap .cvmtry-search-input {
+    width: min(420px, 100%);
+}
+
+.cvmtry-submissions-wrap .cvmtry-acc-search {
+    min-width: 0;
 }
 
 .cvmtry-submission-list {
     margin: 0;
     padding: 0;
     list-style: none;
-    background: #fff;
-    border: 1px solid #c3c4c7;
-    border-radius: 0 0 4px 4px;
+    background: var(--cvmtry-ui-color-surface);
+    border: 1px solid var(--cvmtry-ui-color-border);
+    border-radius: 0 0 var(--cvmtry-ui-radius-lg) var(--cvmtry-ui-radius-lg);
     border-top: none;
-    box-shadow: 0 1px 1px rgba(0, 0, 0, 0.04);
+    box-shadow: var(--cvmtry-ui-shadow-card);
     overflow: hidden;
 }
 
@@ -64,7 +94,7 @@
     gap: 12px;
     padding: 8px 16px 8px 19px;
     background: #f6f7f7;
-    border: 1px solid #c3c4c7;
+    border: 1px solid var(--cvmtry-ui-color-border);
     border-bottom: none;
     font-size: 11px;
     font-weight: 600;
@@ -153,10 +183,36 @@
     padding: 16px 16px 20px 19px;
 }
 
+/* The lead (outcome, then what was submitted) beside its record (form,
+   attribution, journey, delivery); one column once they cannot sit side by
+   side. */
+.cvmtry-detail-columns {
+    display: grid;
+    grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+    gap: 16px 32px;
+    align-items: start;
+}
+
+.cvmtry-detail-col {
+    min-width: 0;
+}
+
+@media screen and (max-width: 1100px) {
+    .cvmtry-detail-columns {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}
+
+/* The action bar closes the panel, across a rule from everything above, so
+   Delete never sits among the lead controls. */
 .cvmtry-detail-actions {
     display: flex;
+    flex-wrap: wrap;
     justify-content: flex-end;
-    margin-bottom: 4px;
+    gap: 8px;
+    margin-top: 20px;
+    padding-top: 14px;
+    border-top: 1px solid #dcdcde;
 }
 
 .cvmtry-detail-block {
@@ -329,7 +385,7 @@
 /* Delete failure notice inside an expanded row. */
 
 .cvmtry-delete-error {
-    margin-right: 10px;
+    margin-right: 2px;
     color: #b32d2e;
     font-size: 12px;
     align-self: center;

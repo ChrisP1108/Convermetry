@@ -8,6 +8,7 @@ if (!defined('ABSPATH')) exit;
 use Convermetry\Admin\AdminAssets;
 use Convermetry\Admin\AdminRequest;
 use Convermetry\Admin\Capability;
+use Convermetry\Admin\Export;
 use Convermetry\Admin\ReportPeriod;
 use Convermetry\Analytics\FunnelReport;
 use Convermetry\Analytics\ReportQueryException;
@@ -50,6 +51,15 @@ final class FunnelsPage
     /** Nonce action for the read-only period filter; authorizes nothing else. */
     public const string PERIOD_NONCE = 'cvmtry_funnels_period';
 
+    /** admin-post action, and nonce action, for the CSV export. */
+    public const string EXPORT_CSV_ACTION = 'cvmtry_funnels_export_csv';
+
+    /** admin-post action, and nonce action, for the JSON export. */
+    public const string EXPORT_JSON_ACTION = 'cvmtry_funnels_export_json';
+
+    /** Id of the add/edit panel, which the header's jump link opens. */
+    private const string EDITOR_ANCHOR = 'cvmtry-funnel-editor';
+
     /**
      * Registers menu and request hooks.
      *
@@ -63,6 +73,8 @@ final class FunnelsPage
         add_action('admin_menu', [self::class, 'addMenu']);
         add_action('admin_post_' . self::SAVE_ACTION, [self::class, 'processSave']);
         add_action('admin_post_' . self::DELETE_ACTION, [self::class, 'processDelete']);
+        add_action('admin_post_' . self::EXPORT_CSV_ACTION, [self::class, 'processExportCsv']);
+        add_action('admin_post_' . self::EXPORT_JSON_ACTION, [self::class, 'processExportJson']);
         add_action('admin_enqueue_scripts', [self::class, 'enqueueAssets']);
     }
 
@@ -218,6 +230,181 @@ final class FunnelsPage
     }
 
     /**
+     * Streams every funnel's steps for the selected period as CSV, one row
+     * per step (admin_post_cvmtry_funnels_export_csv).
+     *
+     * @return never
+     */
+    public static function processExportCsv(): never
+    {
+        $days    = self::authorizeExport(self::EXPORT_CSV_ACTION);
+        $columns = [
+            'funnel'             => __('Name', 'convermetry'),
+            'status'             => __('Status', 'convermetry'),
+            'overall_conversion' => __('Overall conversion', 'convermetry'),
+            'step'               => __('Step', 'convermetry'),
+            'step_label'         => __('Label', 'convermetry'),
+            'sessions'           => __('Sessions', 'convermetry'),
+            'share_of_entrants'  => __('% of entrants', 'convermetry'),
+            'continued'          => __('% continued', 'convermetry'),
+            'lost'               => __('Lost', 'convermetry'),
+            'note'               => __('Note', 'convermetry'),
+        ];
+        $output = Export::startCsv('convermetry-funnels-' . $days . 'd-' . gmdate('Y-m-d') . '.csv');
+
+        if ($output === null) {
+            exit;
+        }
+
+        Export::csvRow($output, array_values($columns));
+
+        foreach (self::exportFunnels($days)['funnels'] as $funnel) {
+            $base = [
+                'funnel'             => $funnel['name'],
+                'status'             => $funnel['enabled'] ? __('Active', 'convermetry') : __('Paused', 'convermetry'),
+                'overall_conversion' => $funnel['note'] === '' ? $funnel['overall_rate'] : '',
+            ];
+
+            // A funnel that could not be measured, or that no session
+            // entered, is still listed — once, with the reason.
+            $steps = $funnel['steps'] === [] ? [['step' => '', 'label' => '', 'sessions' => '', 'overall_rate' => '', 'step_rate' => '', 'dropped' => '']] : $funnel['steps'];
+
+            foreach ($steps as $step) {
+                $row = $base + [
+                    'step'              => $step['step'],
+                    'step_label'        => $step['label'],
+                    'sessions'          => $step['sessions'],
+                    'share_of_entrants' => $step['overall_rate'],
+                    'continued'         => $step['step_rate'],
+                    'lost'              => $step['dropped'],
+                    'note'              => $funnel['note'],
+                ];
+
+                Export::csvRow($output, array_map(static fn(string $key): string => (string) $row[$key], array_keys($columns)));
+            }
+        }
+
+        // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fclose -- closes the php://output stream; no file is involved.
+        fclose($output);
+        exit;
+    }
+
+    /**
+     * Sends every funnel's steps for the selected period as JSON
+     * (admin_post_cvmtry_funnels_export_json).
+     *
+     * @return never
+     */
+    public static function processExportJson(): never
+    {
+        $days = self::authorizeExport(self::EXPORT_JSON_ACTION);
+        $data = self::exportFunnels($days);
+
+        Export::json('convermetry-funnels-' . $days . 'd-' . gmdate('Y-m-d') . '.json', [
+            'report'       => 'convermetry_funnels',
+            'site'         => ['name' => get_bloginfo('name'), 'url' => home_url()],
+            'period'       => ['days' => $days, 'start' => $data['start'], 'end' => $data['end'], 'timezone' => 'UTC'],
+            'generated_at' => gmdate('Y-m-d H:i:s'),
+            'funnels'      => $data['funnels'],
+        ]);
+    }
+
+    /**
+     * Method, scope, nonce, then the signed period — the same order as every
+     * other handler on this screen.
+     *
+     * @param string $action The export's admin-post and nonce action.
+     * @return int The period, in days.
+     */
+    private static function authorizeExport(string $action): int
+    {
+        // 1. Method: export links are followed, never posted.
+        if (!AdminRequest::isGet()) {
+            AdminRequest::deny(__('Exports are downloaded from the Funnels screen.', 'convermetry'), 405);
+        }
+
+        // 2. Capability: the scope that grants this screen.
+        if (!current_user_can(Capability::required(Capability::FUNNELS_MANAGE))) {
+            AdminRequest::deny(AdminRequest::forbiddenMessage());
+        }
+
+        // 3 and 4. Nonce present, as one string, and issued for this format.
+        if (!Export::nonceIsValid($action)) {
+            AdminRequest::deny(__('Invalid or expired export link.', 'convermetry'));
+        }
+
+        // 5. Input: the period the screen showed. A refused one is refused
+        // here rather than silently replaced by the default.
+        $period = self::currentPeriod();
+        if ($period->refused) {
+            AdminRequest::deny(__('Invalid or expired export link.', 'convermetry'));
+        }
+
+        return $period->days;
+    }
+
+    /**
+     * Every funnel the screen lists, measured exactly as its card is: the same
+     * report over the same window, with the same step labels, and the same
+     * sentence when it cannot be measured or no session entered.
+     *
+     * @param int $days The period, in days.
+     * @return array{start: string, end: string, funnels: list<array{name: string, enabled: bool, overall_rate: float|string, entered: int, completed: int, note: string, steps: list<array<string, mixed>>}>}
+     */
+    private static function exportFunnels(int $days): array
+    {
+        $end   = gmdate('Y-m-d H:i:s');
+        $start = gmdate('Y-m-d 00:00:00', time() - ($days - 1) * DAY_IN_SECONDS);
+        $out   = [];
+
+        foreach (FunnelRepository::visible() as $funnel) {
+            $note = '';
+            $rows = [];
+
+            try {
+                $report = FunnelReport::compute($funnel, $start, $end);
+                $note   = $report['error'];
+            } catch (ReportQueryException) {
+                $report = ['steps' => [], 'overall_rate' => 0.0, 'error' => ''];
+                $note   = __('This funnel could not be measured — a database query failed.', 'convermetry');
+            }
+
+            $entered = (int) ($report['steps'][0]['sessions'] ?? 0);
+
+            if ($note === '' && $entered === 0) {
+                $note = __('No sessions reached the first step during this period, so there is nothing to measure yet. Check that the first step matches a page visitors actually land on.', 'convermetry');
+            }
+
+            if ($note === '') {
+                foreach ($report['steps'] as $index => $step) {
+                    $rows[] = [
+                        'step'         => $index + 1,
+                        'label'        => (string) $step['label'] !== ''
+                            ? (string) $step['label']
+                            : FunnelSettings::stepLabel($funnel['steps'][$index] ?? []),
+                        'sessions'     => (int) $step['sessions'],
+                        'overall_rate' => $step['overall_rate'],
+                        'step_rate'    => $index > 0 ? $step['step_rate'] : '',
+                        'dropped'      => $index > 0 ? (int) $step['dropped'] : '',
+                    ];
+                }
+            }
+
+            $out[] = [
+                'name'         => (string) $funnel['name'],
+                'enabled'      => !empty($funnel['enabled']),
+                'overall_rate' => $note === '' ? $report['overall_rate'] : '',
+                'entered'      => $entered,
+                'completed'    => $note === '' ? (int) ($report['steps'][count($report['steps']) - 1]['sessions'] ?? 0) : 0,
+                'note'         => $note,
+                'steps'        => $rows,
+            ];
+        }
+
+        return ['start' => $start, 'end' => $end, 'funnels' => $out];
+    }
+
+    /**
      * Redirects back with a notice flag, keeping the period the form was
      * posted from (with a fresh filter nonce).
      *
@@ -276,9 +463,32 @@ final class FunnelsPage
             return;
         }
 
+        $pending  = MigrationRunner::isPending();
+        $selected = self::currentPeriod();
+
         ?>
         <div class="wrap cvmtry-wrap cvmtry-funnels-wrap">
+        <div class="cvmtry-page-header">
         <h1><?php esc_html_e('Funnels', 'convermetry'); ?></h1>
+        <?php
+        if (!$pending) {
+            // Results first; the editor stays below them, one jump away.
+            ?>
+            <div class="cvmtry-page-actions">
+            <?php
+            self::renderPeriodFilter($selected->days);
+
+            $periodArgs = ReportPeriod::queryArgs(self::PERIOD_NONCE, $selected->days);
+            ?>
+            <span class="cvmtry-export-group">
+            <a class="button" href="<?php echo esc_url(Export::url(self::EXPORT_CSV_ACTION, $periodArgs)); ?>"><?php esc_html_e('Export CSV', 'convermetry'); ?></a>
+            <a class="button" href="<?php echo esc_url(Export::url(self::EXPORT_JSON_ACTION, $periodArgs)); ?>"><?php esc_html_e('Export JSON', 'convermetry'); ?></a></span>
+            <a class="button button-secondary" href="#<?php echo esc_attr(self::EDITOR_ANCHOR); ?>"><?php esc_html_e('Add a funnel', 'convermetry'); ?></a></div>
+            <?php
+        }
+        ?>
+        </div>
+        <hr class="wp-header-end">
         <?php
 
         self::renderNotices();
@@ -287,7 +497,7 @@ final class FunnelsPage
         <p class="description cvmtry-goals-intro"><?php esc_html_e('A funnel measures the path to a conversion in order: how many visitors reached each step, and how many were lost between them. Steps are counted per session and must happen in sequence — a visitor who reaches step three without step two is not counted at step three.', 'convermetry'); ?></p>
         <?php
 
-        if (MigrationRunner::isPending()) {
+        if ($pending) {
             ?>
             <div class="notice notice-warning inline"><p><?php echo wp_kses_post(__('<strong>Preparing.</strong> Convermetry is still applying a database update from the last plugin upgrade. Funnels will become available as soon as it finishes.', 'convermetry')); ?></p></div></div>
             <?php
@@ -295,17 +505,14 @@ final class FunnelsPage
             return;
         }
 
-        $selected = self::currentPeriod();
-        $period   = $selected->days;
-        $funnels  = FunnelRepository::visible();
+        $period  = $selected->days;
+        $funnels = FunnelRepository::visible();
 
         if ($selected->refused) {
             ?>
             <div class="notice notice-warning inline"><p><?php echo esc_html(ReportPeriod::refusedMessage()); ?></p></div>
             <?php
         }
-
-        self::renderPeriodFilter($period);
 
         if ($funnels === []) {
             ?>
@@ -315,9 +522,15 @@ final class FunnelsPage
             $end   = gmdate('Y-m-d H:i:s');
             $start = gmdate('Y-m-d 00:00:00', time() - ($period - 1) * DAY_IN_SECONDS);
 
+            ?>
+            <div class="cvmtry-funnels-grid">
+            <?php
             foreach ($funnels as $funnel) {
                 self::renderFunnel($funnel, $start, $end);
             }
+            ?>
+            </div>
+            <?php
         }
 
         self::renderEditor();
@@ -490,6 +703,22 @@ final class FunnelsPage
             return;
         }
 
+        // The funnel's headline figure leads the card, above the steps that
+        // explain it, rather than trailing after them.
+        echo '<p class="description cvmtry-funnel-summary">' . wp_kses_post(sprintf(
+            /* translators: 1: overall conversion percentage, 2: sessions that completed every step, 3: sessions that entered the funnel, 4: hours after the period during which later steps still count. */
+            _n(
+                'Overall conversion: <strong>%1$s%%</strong> — %2$s of %3$s sessions that entered this funnel completed every step, in order. Later steps are counted for up to %4$d hour after the period ends, so a visit that started near the edge is not unfairly cut off.',
+                'Overall conversion: <strong>%1$s%%</strong> — %2$s of %3$s sessions that entered this funnel completed every step, in order. Later steps are counted for up to %4$d hours after the period ends, so a visit that started near the edge is not unfairly cut off.',
+                FunnelReport::COMPLETION_WINDOW_HOURS,
+                'convermetry'
+            ),
+            esc_html((string) $report['overall_rate']),
+            esc_html(number_format_i18n((int) ($steps[count($steps) - 1]['sessions'] ?? 0))),
+            esc_html(number_format_i18n($entered)),
+            FunnelReport::COMPLETION_WINDOW_HOURS
+        )) . '</p>';
+
         ?>
         <div class="cvmtry-funnel-steps">
         <?php
@@ -530,20 +759,6 @@ final class FunnelsPage
         ?>
         </div>
         <?php
-
-        echo '<p class="description cvmtry-funnel-summary">' . wp_kses_post(sprintf(
-            /* translators: 1: overall conversion percentage, 2: sessions that completed every step, 3: sessions that entered the funnel, 4: hours after the period during which later steps still count. */
-            _n(
-                'Overall conversion: <strong>%1$s%%</strong> — %2$s of %3$s sessions that entered this funnel completed every step, in order. Later steps are counted for up to %4$d hour after the period ends, so a visit that started near the edge is not unfairly cut off.',
-                'Overall conversion: <strong>%1$s%%</strong> — %2$s of %3$s sessions that entered this funnel completed every step, in order. Later steps are counted for up to %4$d hours after the period ends, so a visit that started near the edge is not unfairly cut off.',
-                FunnelReport::COMPLETION_WINDOW_HOURS,
-                'convermetry'
-            ),
-            esc_html((string) $report['overall_rate']),
-            esc_html(number_format_i18n((int) ($steps[count($steps) - 1]['sessions'] ?? 0))),
-            esc_html(number_format_i18n($entered)),
-            FunnelReport::COMPLETION_WINDOW_HOURS
-        )) . '</p>';
     }
 
     /**
@@ -554,7 +769,7 @@ final class FunnelsPage
     private static function renderEditor(): void
     {
         ?>
-        <div class="cvmtry-goal-editor cvmtry-funnel-editor">
+        <div class="cvmtry-goal-editor cvmtry-funnel-editor" id="<?php echo esc_attr(self::EDITOR_ANCHOR); ?>">
             <h2 id="cvmtry-funnel-editor-title"><?php esc_html_e('Add a funnel', 'convermetry'); ?></h2>
 
             <form method="post" action="<?php echo esc_url(self::formAction()); ?>" class="cvmtry-funnel-form">

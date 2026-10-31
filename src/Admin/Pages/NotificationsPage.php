@@ -425,16 +425,22 @@ final class NotificationsPage
         $enabled  = !empty($settings['enabled']);
         $scope    = Options::notificationScope();
 
+        // The privacy and delivery expectations come first, before the switch
+        // they are about. Then the settings form, one panel per group, and
+        // after it the queue — which has its own form, so it is never nested
+        // in the settings one, and which the Delivery panel's help text
+        // points to as "below".
         ?>
-        <div class="wrap cvmtry-wrap">
+        <div class="wrap cvmtry-wrap cvmtry-notifications-wrap">
         <h1><?php esc_html_e('Convermetry Notifications', 'convermetry'); ?></h1>
+        <hr class="wp-header-end">
         <p class="description"><?php esc_html_e('Send an internal email whenever a form submission is recorded, enriched with the analytics context Convermetry already captured for that visitor.', 'convermetry'); ?></p>
         <?php
 
         self::renderPrivacyCard();
 
         ?>
-        <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
+        <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>" class="cvmtry-notify-form">
         <?php
         wp_nonce_field(self::SAVE_ACTION, 'cvmtry_notifications_nonce');
         ?>
@@ -445,8 +451,12 @@ final class NotificationsPage
         self::renderContentSection($includes);
         self::renderFormsSection($scope);
 
+        ?>
+        <div class="cvmtry-savebar">
+        <?php
         submit_button(__('Save Notification Settings', 'convermetry'));
         ?>
+        </div>
         </form>
         <?php
 
@@ -465,7 +475,7 @@ final class NotificationsPage
     private static function renderPrivacyCard(): void
     {
         ?>
-        <div class="cvmtry-card"><span class="cvmtry-card-label"><?php esc_html_e('Before you switch this on', 'convermetry'); ?></span><ul>
+        <div class="cvmtry-card cvmtry-notify-privacy"><span class="cvmtry-card-label"><?php esc_html_e('Before you switch this on', 'convermetry'); ?></span><ul>
         <li><?php echo wp_kses_post(__('<strong>Email creates a copy of lead data outside Convermetry\'s control.</strong> Deleting a submission, or letting retention expire it, cancels any notification still queued — but it cannot recall a message that has already been sent. Those copies live in the recipients\' mailboxes under whatever retention policy applies there, not yours.', 'convermetry')); ?></li>
         <li><?php echo wp_kses_post(__('<strong>Your form plugin may already email you.</strong> Most form plugins send their own notification. These are in addition to those, not a replacement — check before you end up with two.', 'convermetry')); ?></li>
         <li><?php echo wp_kses_post(__('<strong>"Sent" means handed to your mail system.</strong> Convermetry can tell you that WordPress accepted a message, which is not the same as it reaching an inbox. Nothing here can confirm delivery or detect spam foldering.', 'convermetry')); ?></li>
@@ -486,7 +496,8 @@ final class NotificationsPage
         $recipients = is_array($settings['recipients'] ?? null) ? $settings['recipients'] : [];
 
         ?>
-        <h2><?php esc_html_e('Delivery', 'convermetry'); ?></h2><table class="form-table" role="presentation"><tbody>
+        <section class="cvmtry-section-card" aria-labelledby="cvmtry-notify-delivery-title">
+        <h2 id="cvmtry-notify-delivery-title"><?php esc_html_e('Delivery', 'convermetry'); ?></h2><table class="form-table" role="presentation"><tbody>
         <tr><th scope="row"><?php esc_html_e('Notifications', 'convermetry'); ?></th><td>
         <label><input type="checkbox" name="cvmtry_notifications[enabled]" value="1" <?php echo checked($enabled, true, false); ?>>
         <?php esc_html_e('Email me when a form submission is recorded', 'convermetry'); ?></label>
@@ -508,6 +519,7 @@ final class NotificationsPage
         <button type="button" class="button cvmtry-test-notification"><?php esc_html_e('Send test email', 'convermetry'); ?></button> 
         <span class="cvmtry-test-result" role="status" aria-live="polite"></span>
         <p class="description"><?php esc_html_e('Sends a sample built entirely from made-up data. It never reads a real submission, so testing cannot expose a lead.', 'convermetry'); ?></p></td></tr></tbody></table>
+        </section>
         <?php
     }
 
@@ -520,7 +532,8 @@ final class NotificationsPage
     private static function renderContentSection(array $includes): void
     {
         ?>
-        <h2><?php esc_html_e('What to include', 'convermetry'); ?></h2><table class="form-table" role="presentation"><tbody>
+        <section class="cvmtry-section-card" aria-labelledby="cvmtry-notify-include-title">
+        <h2 id="cvmtry-notify-include-title"><?php esc_html_e('What to include', 'convermetry'); ?></h2><table class="form-table" role="presentation"><tbody>
         <tr><th scope="row"><?php esc_html_e('Submitted fields', 'convermetry'); ?></th><td>
         <label><input type="checkbox" name="cvmtry_notifications[include_fields]" value="1" <?php echo checked($includes['fields'], true, false); ?>>
         <?php esc_html_e('Include the visitor\'s answers', 'convermetry'); ?></label>
@@ -537,6 +550,7 @@ final class NotificationsPage
         <label><input type="checkbox" name="cvmtry_notifications[include_ip]" value="1" <?php echo checked($includes['ip'], true, false); ?>>
         <?php esc_html_e('Include the submitter\'s IP address', 'convermetry'); ?></label>
         <p class="description"><?php echo wp_kses_post(__('<strong>Off by default.</strong> An IP address is personal data in the EU and UK. It is only available at all when IP storage is enabled on the Settings page.', 'convermetry')); ?></p></td></tr></tbody></table>
+        </section>
         <?php
     }
 
@@ -549,7 +563,8 @@ final class NotificationsPage
     private static function renderFormsSection(string $scope): void
     {
         ?>
-        <h2><?php esc_html_e('Which forms', 'convermetry'); ?></h2><table class="form-table" role="presentation"><tbody>
+        <section class="cvmtry-section-card" aria-labelledby="cvmtry-notify-forms-title">
+        <h2 id="cvmtry-notify-forms-title"><?php esc_html_e('Which forms', 'convermetry'); ?></h2><table class="form-table" role="presentation"><tbody>
         <tr><th scope="row"><?php esc_html_e('Scope', 'convermetry'); ?></th><td>
         <label><input type="radio" name="cvmtry_notifications[scope]" value="all" <?php echo checked($scope, 'all', false); ?>>
         <?php esc_html_e('Every form, except those switched off below', 'convermetry'); ?></label><br>
@@ -562,11 +577,13 @@ final class NotificationsPage
         if ($discovered === []) {
             ?>
             <div class="notice notice-info inline"><p><?php echo wp_kses_post(__('No forms have been discovered yet. Under <em>Every form</em>, any form that appears later will notify automatically.', 'convermetry')); ?></p></div>
+            </section>
             <?php
             return;
         }
 
         ?>
+        <div class="cvmtry-table-scroll">
         <table class="widefat striped"><thead><tr><th scope="col"><?php esc_html_e('Form', 'convermetry'); ?></th><th scope="col"><?php esc_html_e('Provider', 'convermetry'); ?></th><th scope="col"><?php esc_html_e('Notifications', 'convermetry'); ?></th></tr></thead><tbody>
         <?php
 
@@ -598,8 +615,9 @@ final class NotificationsPage
         }
 
         ?>
-        </tbody></table>
+        </tbody></table></div>
         <p class="description"><?php echo wp_kses_post(__('Elementor forms are identified by their <em>name</em>, so renaming an Elementor form resets its rule here to the scope default — the same behaviour as the Forms page.', 'convermetry')); ?></p>
+        </section>
         <?php
     }
 
@@ -613,7 +631,8 @@ final class NotificationsPage
         $pending = NotificationQueue::pendingCount();
 
         ?>
-        <h2><?php esc_html_e('Queue', 'convermetry'); ?></h2>
+        <section class="cvmtry-section-card cvmtry-notify-queue" aria-labelledby="cvmtry-notify-queue-title">
+        <h2 id="cvmtry-notify-queue-title"><?php esc_html_e('Queue', 'convermetry'); ?></h2>
         <p><?php echo esc_html(sprintf(
             /* translators: %d: number of queued notification emails. */
             _n('%d notification waiting to be sent.', '%d notifications waiting to be sent.', $pending, 'convermetry'),
@@ -634,6 +653,10 @@ final class NotificationsPage
             </form>
             <?php
         }
+
+        ?>
+        </section>
+        <?php
     }
 
     /**

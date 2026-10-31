@@ -1,14 +1,43 @@
 /**
  * Convermetry — Notifications page.
  *
- * Reserved for styling exclusive to Convermetry → Notifications
- * (src/Admin/NotificationsPage.php). The page currently needs none: its
- * cards and headings are covered by assets/css/admin-common.css, and its
- * "Send test email" feedback (.cvmtry-test-result, .cvmtry-test-ok, .cvmtry-test-fail)
- * is the same shared rule Webhooks' endpoint tests use, also in
- * admin-common.css — see that file's header for the shared-class map.
- *
- * This file is enqueued on the Notifications screen regardless, so a future
- * Notifications-only rule has an obvious, already-wired home rather than
- * being added to the shared stylesheet "just this once."
+ * Styling exclusive to Convermetry → Notifications
+ * (src/Admin/NotificationsPage.php). Its panels are the shared
+ * .cvmtry-section-card and its Save button sits in the shared .cvmtry-savebar;
+ * its "Send test email" feedback (.cvmtry-test-result, .cvmtry-test-ok,
+ * .cvmtry-test-fail) is the same shared rule Webhooks' endpoint tests use —
+ * all in assets/css/admin-common.css; see that file's header for the
+ * shared-class map. What is here is the privacy card's emphasis.
  */
+
+/* "Before you switch this on": read before the switch, so it is set apart on
+   an informational band rather than looking like one more settings panel. */
+.cvmtry-notify-privacy {
+    margin: 16px 0 20px;
+    background: var(--cvmtry-ui-color-surface-tint);
+    border-color: var(--cvmtry-ui-color-border-tint);
+    border-left: 4px solid var(--cvmtry-ui-color-accent);
+    box-shadow: none;
+}
+
+.cvmtry-notify-privacy ul {
+    margin: 10px 0 0;
+    padding-left: 1.4em;
+    list-style: disc;
+}
+
+.cvmtry-notify-privacy li {
+    margin-bottom: 8px;
+}
+
+/* Five short points: two columns where the line length allows. */
+@media screen and (min-width: 1280px) {
+    .cvmtry-notify-privacy ul {
+        column-count: 2;
+        column-gap: 40px;
+    }
+
+    .cvmtry-notify-privacy li {
+        break-inside: avoid;
+    }
+}

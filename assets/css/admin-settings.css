@@ -1,14 +1,23 @@
 /**
  * Convermetry — Settings page.
  *
- * Reserved for styling exclusive to Convermetry → Settings
- * (src/Admin/SettingsPage.php). The page currently needs none: its cards,
- * card titles, headings, and buttons are all covered by
- * assets/css/admin-common.css (shared with the other screens) and
- * assets/css/admin-ui.css (the design-system tokens both draw from) — see
- * admin-common.css's header for the shared-class map.
- *
- * This file is enqueued on the Settings screen regardless, so a future
- * Settings-only rule has an obvious, already-wired home rather than being
- * added to the shared stylesheet "just this once."
+ * Styling exclusive to Convermetry → Settings (src/Admin/SettingsPage.php).
+ * Its panels (.cvmtry-section-card, with a rule between row groups), its
+ * sticky Save bar (.cvmtry-savebar), its cards, card titles, headings, and
+ * buttons all come from assets/css/admin-common.css (shared with the other
+ * screens) and assets/css/admin-ui.css (the design-system tokens both draw
+ * from) — see admin-common.css's header for the shared-class map. What is
+ * here is the spacing between the identity card and the panels after it, and
+ * the visitor-privacy rows' emphasis.
  */
+
+.cvmtry-settings-wrap form > .cvmtry-card {
+    margin: 16px 0 20px;
+}
+
+/* Visitor privacy: its own band within Tracking, edged like the privacy
+   notes elsewhere, so it is not read as one more tracking toggle. */
+.cvmtry-settings-privacy th {
+    padding-left: 12px;
+    box-shadow: inset 3px 0 0 var(--cvmtry-ui-color-accent-soft-border);
+}

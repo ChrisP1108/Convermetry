@@ -255,7 +255,7 @@ final class SettingsPage
         $settings = Options::all();
 
         ?>
-        <div class="wrap cvmtry-wrap">
+        <div class="wrap cvmtry-wrap cvmtry-settings-wrap">
         <h1><?php esc_html_e('Convermetry Settings', 'convermetry'); ?></h1>
         <?php
 
@@ -264,6 +264,9 @@ final class SettingsPage
         // also surfaces core's own "Settings saved." confirmation.
         settings_errors();
 
+        // One bounded panel per heading, in reading order; the Save button
+        // follows the reader down the form. Every field is still in the one
+        // form and posts exactly as before.
         ?>
         <form method="post" action="options.php">
         <?php
@@ -273,8 +276,12 @@ final class SettingsPage
         self::renderTrackingSection($settings);
         self::renderDataSection($settings);
 
+        ?>
+        <div class="cvmtry-savebar">
+        <?php
         submit_button();
         ?>
+        </div>
         </form></div>
         <?php
     }
@@ -338,9 +345,14 @@ final class SettingsPage
             'scroll_depth' => __('Scroll depth milestones (50% and 100%)', 'convermetry'),
         ];
 
+        // Three groups of rows, each its own <tbody>: what is tracked, what is
+        // done with it, and the visitor-privacy controls. The privacy pair
+        // stays in order — the IP note refers to the signal setting "above".
         ?>
-        <h2><?php esc_html_e('Tracking', 'convermetry'); ?></h2>
+        <section class="cvmtry-section-card" aria-labelledby="cvmtry-settings-tracking-title">
+        <h2 id="cvmtry-settings-tracking-title"><?php esc_html_e('Tracking', 'convermetry'); ?></h2>
         <table class="form-table" role="presentation">
+        <tbody>
         <tr><th scope="row"><?php esc_html_e('Interactions to track', 'convermetry'); ?></th><td>
         <?php
         foreach ($labels as $type => $label) {
@@ -353,6 +365,11 @@ final class SettingsPage
         }
         ?>
         </td></tr>
+        <tr><th scope="row"><label for="cvmtry-hover-dwell"><?php esc_html_e('Hover dwell time (ms)', 'convermetry'); ?></label></th><td>
+        <input type="number" id="cvmtry-hover-dwell" min="200" max="10000" step="50" name="<?php echo esc_attr(Options::OPTION_KEY . '[hover_dwell_ms]'); ?>" value="<?php echo esc_attr((string) $settings['hover_dwell_ms']); ?>" class="small-text">
+        <p class="description"><?php echo wp_kses_post(__('How long the pointer must rest on an element before a hover event is recorded. Add <code>data-cvmtry-hover</code> to any element — images included — to opt it into hover tracking.', 'convermetry')); ?></p></td></tr>
+        </tbody>
+        <tbody>
         <tr><th scope="row"><?php esc_html_e('Conversion goals', 'convermetry'); ?></th><td>
         <label><input type="checkbox" name="<?php echo esc_attr(Options::OPTION_KEY . '[goals_enabled]'); ?>" value="1" <?php echo checked(!empty($settings['goals_enabled']), true, false); ?>>
         <?php esc_html_e('Match tracked activity against configured goals', 'convermetry'); ?></label>
@@ -361,6 +378,8 @@ final class SettingsPage
         <label><input type="checkbox" name="<?php echo esc_attr(Options::OPTION_KEY . '[exclude_logged_in]'); ?>" value="1" <?php echo checked(!empty($settings['exclude_logged_in']), true, false); ?>>
         <?php esc_html_e('Exclude logged-in users from tracking', 'convermetry'); ?></label>
         <p class="description"><?php esc_html_e('Recommended, so admin and editor activity does not skew visitor analytics. Webhook delivery of form submissions is unaffected.', 'convermetry'); ?></p></td></tr>
+        </tbody>
+        <tbody class="cvmtry-settings-privacy">
         <tr><th scope="row"><?php esc_html_e('Browser privacy signals', 'convermetry'); ?></th><td>
         <label><input type="checkbox" name="<?php echo esc_attr(Options::OPTION_KEY . '[respect_dnt]'); ?>" value="1" <?php echo checked(!empty($settings['respect_dnt']), true, false); ?>>
         <?php esc_html_e('Honor Do Not Track / Global Privacy Control', 'convermetry'); ?></label>
@@ -370,9 +389,7 @@ final class SettingsPage
         <?php esc_html_e('Store visitor IP addresses', 'convermetry'); ?></label>
         <p class="description"><?php echo wp_kses_post(__('On by default. Records the visitor\'s IP with <strong>every analytics event</strong> (page views, clicks, hovers, scroll milestones, conversions) and with <strong>every server-confirmed form submission</strong> — surfaced in analytics reports and sent as <code>form_submission.ip_address</code> in webhook payloads. Useful for fraud checks, spam review, and CRM deduplication. Turning this off leaves the address empty on new rows; rows already stored are unchanged and age out with the retention window. No IP is ever sent to a geolocation service. Behind a proxy or CDN, map the real address with the <code>convermetry_client_ip</code> filter.', 'convermetry')); ?></p>
         <p class="description"><?php echo wp_kses_post(__('<strong>Privacy note:</strong> in the EU/UK an IP address is personal data. Storing it for general visitor activity — not just leads someone actively submitted — usually needs to be disclosed in your privacy policy and to rest on a lawful basis. When <em>Honor Do Not Track / Global Privacy Control</em> is enabled above, a visitor sending either signal gets no stored IP on either path — their analytics events are not recorded at all, and a form they submit is still delivered but carries an empty address.', 'convermetry')); ?></p></td></tr>
-        <tr><th scope="row"><label for="cvmtry-hover-dwell"><?php esc_html_e('Hover dwell time (ms)', 'convermetry'); ?></label></th><td>
-        <input type="number" id="cvmtry-hover-dwell" min="200" max="10000" step="50" name="<?php echo esc_attr(Options::OPTION_KEY . '[hover_dwell_ms]'); ?>" value="<?php echo esc_attr((string) $settings['hover_dwell_ms']); ?>" class="small-text">
-        <p class="description"><?php echo wp_kses_post(__('How long the pointer must rest on an element before a hover event is recorded. Add <code>data-cvmtry-hover</code> to any element — images included — to opt it into hover tracking.', 'convermetry')); ?></p></td></tr></table>
+        </tbody></table></section>
         <?php
     }
 
@@ -384,19 +401,28 @@ final class SettingsPage
      */
     private static function renderDataSection(array $settings): void
     {
+        // Retention, currency and log privacy are unrelated decisions, so
+        // each is its own group of rows.
         ?>
-        <h2><?php esc_html_e('Data', 'convermetry'); ?></h2>
+        <section class="cvmtry-section-card" aria-labelledby="cvmtry-settings-data-title">
+        <h2 id="cvmtry-settings-data-title"><?php esc_html_e('Data', 'convermetry'); ?></h2>
         <table class="form-table" role="presentation">
+        <tbody>
         <tr><th scope="row"><label for="cvmtry-retention"><?php esc_html_e('Retention period (days)', 'convermetry'); ?></label></th><td>
         <input type="number" id="cvmtry-retention" min="7" max="365" name="<?php echo esc_attr(Options::OPTION_KEY . '[retention_days]'); ?>" value="<?php echo esc_attr((string) $settings['retention_days']); ?>" class="small-text">
         <p class="description"><?php esc_html_e('Analytics events, form submission records, goal completions, lead status history, and activity log entries older than this are deleted by a daily cleanup job. Default is 90 days.', 'convermetry'); ?></p></td></tr>
+        </tbody>
+        <tbody>
         <tr><th scope="row"><label for="cvmtry-currency"><?php esc_html_e('Lead value currency', 'convermetry'); ?></label></th><td>
         <input type="text" id="cvmtry-currency" maxlength="3" size="5" name="<?php echo esc_attr(Options::OPTION_KEY . '[lead_currency]'); ?>" value="<?php echo esc_attr((string) ($settings['lead_currency'] ?? '')); ?>" class="small-text" pattern="[A-Za-z]{3}" placeholder="USD">
         <p class="description"><?php echo wp_kses_post(__('Three-letter ISO 4217 code (USD, EUR, GBP, AUD…) used when you record a value against a lead on the Submissions screen. The code is <strong>saved onto each lead</strong> at the moment you enter its value, so changing this later never rewrites what is already recorded — and reports total each currency separately rather than adding different currencies together.', 'convermetry')); ?></p></td></tr>
+        </tbody>
+        <tbody>
         <tr><th scope="row"><?php esc_html_e('Activity Log privacy', 'convermetry'); ?></th><td>
         <label><input type="checkbox" name="<?php echo esc_attr(Options::OPTION_KEY . '[log_submission_data]'); ?>" value="1" <?php echo checked(!empty($settings['log_submission_data']), true, false); ?>>
         <?php esc_html_e('Store form submission data in the Activity Log', 'convermetry'); ?></label>
-        <p class="description"><?php esc_html_e('When disabled, the Activity Log records every delivery\'s metadata but replaces the visitor\'s field values with a placeholder — useful when compliance rules forbid a second copy of lead data. The payload actually delivered to endpoints is unaffected.', 'convermetry'); ?></p></td></tr></table>
+        <p class="description"><?php esc_html_e('When disabled, the Activity Log records every delivery\'s metadata but replaces the visitor\'s field values with a placeholder — useful when compliance rules forbid a second copy of lead data. The payload actually delivered to endpoints is unaffected.', 'convermetry'); ?></p></td></tr>
+        </tbody></table></section>
         <?php
     }
 }

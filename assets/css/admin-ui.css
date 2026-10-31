@@ -170,6 +170,23 @@
        --cvmtry-ui-color-border-hover but a shade lighter, and used only here. */
     --cvmtry-ui-color-button-border: #c9cdd9;
 
+    /* Charts (src/Admin/Charts.php). Each set was run through a colour-vision
+       validator against the white card surface; change them as a set.
+       - single: one series, so one hue — the brand blue.
+       - ord-1..3: a one-hue ordinal ramp, light → dark, for counts that are
+         nested stages of the same thing (leads ⊇ qualified ⊇ won).
+       - cat-1..4: categorical identity (device types). Slots 1 and 4 sit
+         close under deuteranopia, which is why every part is also named and
+         valued in the legend beside the ring. */
+    --cvmtry-ui-chart-single: #1c7bb1;
+    --cvmtry-ui-chart-ord-1: #78aed6;
+    --cvmtry-ui-chart-ord-2: #2a7fb8;
+    --cvmtry-ui-chart-ord-3: #0f4a6e;
+    --cvmtry-ui-chart-cat-1: #1c7bb1;
+    --cvmtry-ui-chart-cat-2: #e0662f;
+    --cvmtry-ui-chart-cat-3: #17a372;
+    --cvmtry-ui-chart-cat-4: #7a4fd6;
+
     /* Type. */
     --cvmtry-ui-font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
     /* Headings only. The body stack is the fallback, so a heading in a script

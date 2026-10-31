@@ -8,6 +8,8 @@ if (!defined('ABSPATH')) exit;
 use Convermetry\Admin\AdminAssets;
 use Convermetry\Admin\AdminRequest;
 use Convermetry\Admin\Capability;
+use Convermetry\Admin\Charts;
+use Convermetry\Admin\Export;
 use Convermetry\Admin\ReportPeriod;
 use Convermetry\Analytics\GoalReports;
 use Convermetry\Analytics\ReportQueryException;
@@ -55,6 +57,18 @@ final class GoalsPage
     /** Nonce action for the read-only period filter; authorizes nothing else. */
     public const string PERIOD_NONCE = 'cvmtry_goals_period';
 
+    /** admin-post action, and nonce action, for the CSV export. */
+    public const string EXPORT_CSV_ACTION = 'cvmtry_goals_export_csv';
+
+    /** admin-post action, and nonce action, for the JSON export. */
+    public const string EXPORT_JSON_ACTION = 'cvmtry_goals_export_json';
+
+    /** Id of the add/edit panel, which the header's jump link opens. */
+    private const string EDITOR_ANCHOR = 'cvmtry-goal-editor';
+
+    /** Goals the completions chart shows; the table lists every goal. */
+    private const int CHART_ROWS = 10;
+
     /**
      * Registers menu and request hooks.
      *
@@ -68,6 +82,8 @@ final class GoalsPage
         add_action('admin_menu', [self::class, 'addMenu']);
         add_action('admin_post_' . self::SAVE_ACTION, [self::class, 'processSave']);
         add_action('admin_post_' . self::DELETE_ACTION, [self::class, 'processDelete']);
+        add_action('admin_post_' . self::EXPORT_CSV_ACTION, [self::class, 'processExportCsv']);
+        add_action('admin_post_' . self::EXPORT_JSON_ACTION, [self::class, 'processExportJson']);
         add_action('admin_enqueue_scripts', [self::class, 'enqueueAssets']);
     }
 
@@ -222,6 +238,166 @@ final class GoalsPage
     }
 
     /**
+     * Streams every goal with its performance for the selected period as CSV
+     * (admin_post_cvmtry_goals_export_csv).
+     *
+     * @return never
+     */
+    public static function processExportCsv(): never
+    {
+        $days    = self::authorizeExport(self::EXPORT_CSV_ACTION);
+        $columns = self::exportColumns();
+        $output  = Export::startCsv('convermetry-goals-' . $days . 'd-' . gmdate('Y-m-d') . '.csv');
+
+        if ($output === null) {
+            exit;
+        }
+
+        Export::csvRow($output, array_values($columns));
+
+        foreach (self::exportRows($days)['goals'] as $row) {
+            Export::csvRow($output, array_map(static fn(string $key): string => (string) ($row[$key] ?? ''), array_keys($columns)));
+        }
+
+        // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fclose -- closes the php://output stream; no file is involved.
+        fclose($output);
+        exit;
+    }
+
+    /**
+     * Sends every goal with its performance for the selected period as JSON
+     * (admin_post_cvmtry_goals_export_json).
+     *
+     * @return never
+     */
+    public static function processExportJson(): never
+    {
+        $days = self::authorizeExport(self::EXPORT_JSON_ACTION);
+        $data = self::exportRows($days);
+
+        Export::json('convermetry-goals-' . $days . 'd-' . gmdate('Y-m-d') . '.json', [
+            'report'       => 'convermetry_goals',
+            'site'         => ['name' => get_bloginfo('name'), 'url' => home_url()],
+            'period'       => ['days' => $days, 'start' => $data['start'], 'end' => $data['end'], 'timezone' => 'UTC'],
+            'sessions'     => $data['sessions'],
+            'generated_at' => gmdate('Y-m-d H:i:s'),
+            'failed'       => $data['failed'],
+            'goals'        => $data['goals'],
+        ]);
+    }
+
+    /**
+     * Method, scope, nonce, then the signed period — the same order as every
+     * other handler on this screen.
+     *
+     * @param string $action The export's admin-post and nonce action.
+     * @return int The period, in days.
+     */
+    private static function authorizeExport(string $action): int
+    {
+        // 1. Method: export links are followed, never posted.
+        if (!AdminRequest::isGet()) {
+            AdminRequest::deny(__('Exports are downloaded from the Goals screen.', 'convermetry'), 405);
+        }
+
+        // 2. Capability: the scope that grants this screen.
+        if (!current_user_can(Capability::required(Capability::GOALS_MANAGE))) {
+            AdminRequest::deny(AdminRequest::forbiddenMessage());
+        }
+
+        // 3 and 4. Nonce present, as one string, and issued for this format.
+        if (!Export::nonceIsValid($action)) {
+            AdminRequest::deny(__('Invalid or expired export link.', 'convermetry'));
+        }
+
+        // 5. Input: the period the screen showed. A refused one is refused
+        // here rather than silently replaced by the default.
+        $period = self::currentPeriod();
+        if ($period->refused) {
+            AdminRequest::deny(__('Invalid or expired export link.', 'convermetry'));
+        }
+
+        return $period->days;
+    }
+
+    /**
+     * The export's columns: key => header label.
+     *
+     * @return array<string, string>
+     */
+    private static function exportColumns(): array
+    {
+        return [
+            'goal'                 => __('Goal', 'convermetry'),
+            'status'               => __('Status', 'convermetry'),
+            'rule'                 => __('Rule', 'convermetry'),
+            'counting'             => __('Counting', 'convermetry'),
+            'value_per_completion' => __('Value per completion', 'convermetry'),
+            'completions'          => __('Completions', 'convermetry'),
+            'sessions'             => __('Sessions', 'convermetry'),
+            'rate'                 => __('Rate', 'convermetry'),
+            'value'                => __('Value', 'convermetry'),
+            'currency'             => __('Currency', 'convermetry'),
+            'last_completion'      => __('Last completion (UTC)', 'convermetry'),
+        ];
+    }
+
+    /**
+     * Every goal the table lists, with the numbers the table prints — from
+     * the same summary query, over the same window.
+     *
+     * When that query fails the goals are still listed, with their figures
+     * left empty and the failure flagged, exactly as the screen keeps the
+     * list and shows an error.
+     *
+     * @param int $days The period, in days.
+     * @return array{start: string, end: string, sessions: int, failed: bool, goals: list<array<string, string|int>>}
+     */
+    private static function exportRows(int $days): array
+    {
+        $end    = gmdate('Y-m-d H:i:s');
+        $start  = gmdate('Y-m-d 00:00:00', time() - ($days - 1) * DAY_IN_SECONDS);
+        $failed = false;
+
+        try {
+            $summary  = GoalReports::summary($start, $end, GoalRepository::names(), GoalSettings::MAX_GOALS);
+            $lastSeen = GoalReports::lastSeen();
+        } catch (ReportQueryException) {
+            $summary  = ['goals' => [], 'sessions' => 0];
+            $lastSeen = [];
+            $failed   = true;
+        }
+
+        $stats = [];
+        foreach ($summary['goals'] as $row) {
+            $stats[(string) $row['goal_id']] = $row;
+        }
+
+        $rows = [];
+        foreach (GoalRepository::visible() as $goal) {
+            $goalId = (string) $goal['goal_id'];
+            $row    = $stats[$goalId] ?? null;
+            $value  = $row === null ? '0.00' : (string) $row['value'];
+
+            $rows[] = [
+                'goal'                 => (string) $goal['name'],
+                'status'               => empty($goal['enabled']) ? __('Paused', 'convermetry') : __('Active', 'convermetry'),
+                'rule'                 => self::describeRule($goal),
+                'counting'             => !empty($goal['once_per_session']) ? __('Once per session', 'convermetry') : __('Every occurrence', 'convermetry'),
+                'value_per_completion' => ($goal['goal_value'] ?? null) === null ? '' : (string) $goal['goal_value'],
+                'completions'          => $failed ? '' : (int) ($row['completions'] ?? 0),
+                'sessions'             => $failed ? '' : (int) ($row['sessions'] ?? 0),
+                'rate'                 => $row === null || ($row['sessions'] ?? 0) === 0 ? '' : (string) $row['conversion_rate'],
+                'value'                => $value === '0.00' ? '' : $value,
+                'currency'             => $value === '0.00' ? '' : (string) ($row['currency'] ?? ''),
+                'last_completion'      => (string) ($lastSeen[$goalId] ?? ''),
+            ];
+        }
+
+        return ['start' => $start, 'end' => $end, 'sessions' => (int) $summary['sessions'], 'failed' => $failed, 'goals' => $rows];
+    }
+
+    /**
      * Redirects back to this page with a notice flag, keeping the period the
      * form was posted from (with a fresh filter nonce).
      *
@@ -280,9 +456,31 @@ final class GoalsPage
             return;
         }
 
+        // Nothing on this page can work against a half-migrated schema, so it
+        // says so plainly rather than rendering controls that would fail.
+        $pending = MigrationRunner::isPending();
+        $period  = self::currentPeriod();
+
         ?>
         <div class="wrap cvmtry-wrap cvmtry-goals-wrap">
+        <div class="cvmtry-page-header">
         <h1><?php esc_html_e('Goals', 'convermetry'); ?></h1>
+        <?php
+        if (!$pending) {
+            // The period filter scopes the results; the editor stays below
+            // them, one jump away, so it never crowds the numbers.
+            ?>
+            <div class="cvmtry-page-actions">
+            <?php
+            self::renderPeriodFilter($period->days);
+            self::renderExportLinks($period->days);
+            ?>
+            <a class="button button-secondary" href="#<?php echo esc_attr(self::EDITOR_ANCHOR); ?>"><?php esc_html_e('Add a goal', 'convermetry'); ?></a></div>
+            <?php
+        }
+        ?>
+        </div>
+        <hr class="wp-header-end">
         <?php
 
         self::renderNotices();
@@ -291,9 +489,7 @@ final class GoalsPage
         <p class="description cvmtry-goals-intro"><?php esc_html_e('A goal is an important visitor action that is not a form submission — a phone number tapped, a PDF opened, a booking link followed, a pricing page reached. Convermetry matches these on the server as activity arrives, so completions carry the same channel and campaign attribution as everything else and can be broken down the same way.', 'convermetry'); ?></p>
         <?php
 
-        // Nothing on this page can work against a half-migrated schema, so it
-        // says so plainly rather than rendering controls that would fail.
-        if (MigrationRunner::isPending()) {
+        if ($pending) {
             ?>
             <div class="notice notice-warning inline"><p><?php echo wp_kses_post(__('<strong>Preparing.</strong> Convermetry is still applying a database update from the last plugin upgrade. Goals will become available as soon as it finishes — this page will work normally then, and no data is lost in the meantime.', 'convermetry')); ?></p></div></div>
             <?php
@@ -303,8 +499,7 @@ final class GoalsPage
         self::renderTrackingWarnings();
         self::renderOverflowNotice();
 
-        $period = self::currentPeriod();
-        $goals  = GoalRepository::visible();
+        $goals = GoalRepository::visible();
 
         if ($period->refused) {
             ?>
@@ -312,7 +507,6 @@ final class GoalsPage
             <?php
         }
 
-        self::renderPeriodFilter($period->days);
         self::renderList($goals, $period->days);
         self::renderEditor();
 
@@ -478,6 +672,23 @@ final class GoalsPage
     }
 
     /**
+     * The CSV and JSON export links for the period shown.
+     *
+     * @param int $days The selected period in days.
+     * @return void
+     */
+    private static function renderExportLinks(int $days): void
+    {
+        $periodArgs = ReportPeriod::queryArgs(self::PERIOD_NONCE, $days);
+
+        ?>
+        <span class="cvmtry-export-group">
+        <a class="button" href="<?php echo esc_url(Export::url(self::EXPORT_CSV_ACTION, $periodArgs)); ?>"><?php esc_html_e('Export CSV', 'convermetry'); ?></a>
+        <a class="button" href="<?php echo esc_url(Export::url(self::EXPORT_JSON_ACTION, $periodArgs)); ?>"><?php esc_html_e('Export JSON', 'convermetry'); ?></a></span>
+        <?php
+    }
+
+    /**
      * Renders the goal list with each goal's performance.
      *
      * @param array<int, array<string, mixed>> $goals  Visible goals.
@@ -513,7 +724,33 @@ final class GoalsPage
             $stats[(string) $row['goal_id']] = $row;
         }
 
+        // Completions by goal, from the summary the table below is built
+        // from — already ordered by completions. Only goals that completed
+        // at least once; the table still lists every goal.
+        $chartRows = [];
+        foreach ($summary['goals'] as $row) {
+            if ((int) $row['completions'] > 0 && count($chartRows) < self::CHART_ROWS) {
+                $chartRows[] = ['label' => (string) $row['name'], 'values' => [(int) $row['completions']]];
+            }
+        }
+
+        // The chart summarizes, the table is the record: chart first, across
+        // the card, so the table below keeps the full width its seven
+        // columns need.
         ?>
+        <div class="cvmtry-section-card cvmtry-goals-performance">
+        <?php
+        if ($chartRows !== []) {
+            ?>
+            <div class="cvmtry-chart-card">
+            <p class="cvmtry-chart-card-title" id="cvmtry-goals-chart-title"><?php esc_html_e('Completions', 'convermetry'); ?></p>
+            <?php Charts::bars('cvmtry-goals-chart-title', [__('Completions', 'convermetry')], $chartRows); ?>
+            </div>
+            <?php
+        }
+        ?>
+        <div class="cvmtry-goals-performance-main">
+        <div class="cvmtry-table-scroll">
         <table class="widefat striped cvmtry-goals-table"><thead><tr>
         <th scope="col"><?php esc_html_e('Goal', 'convermetry'); ?></th><th scope="col"><?php esc_html_e('Rule', 'convermetry'); ?></th>
         <th scope="col" class="cvmtry-num"><?php esc_html_e('Completions', 'convermetry'); ?></th>
@@ -528,7 +765,7 @@ final class GoalsPage
         }
 
         ?>
-        </tbody></table>
+        </tbody></table></div>
         <?php
 
         $sessions = (int) ($summary['sessions'] ?? 0);
@@ -543,6 +780,10 @@ final class GoalsPage
             ),
             number_format_i18n($sessions)
         )) . '</p>';
+
+        ?>
+        </div></div>
+        <?php
     }
 
     /**
@@ -677,7 +918,7 @@ final class GoalsPage
     private static function renderEditor(): void
     {
         ?>
-        <div class="cvmtry-goal-editor">
+        <div class="cvmtry-goal-editor" id="<?php echo esc_attr(self::EDITOR_ANCHOR); ?>">
             <h2 id="cvmtry-goal-editor-title"><?php esc_html_e('Add a goal', 'convermetry'); ?></h2>
 
             <form method="post" action="<?php echo esc_url(self::formAction()); ?>" class="cvmtry-goal-form">

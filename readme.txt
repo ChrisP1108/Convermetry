@@ -4,7 +4,7 @@ Tags: analytics, lead tracking, utm, webhooks, forms
 Requires at least: 6.3
 Tested up to: 7.1
 Requires PHP: 8.3
-Stable tag: 1.0.3
+Stable tag: 1.1.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -22,15 +22,15 @@ Everything is stored in your WordPress database. Convermetry works on its own: i
 
 * Page views, clicks, form views, starts, validation errors and submit attempts, confirmed conversions, scroll depth, hover and custom events. Each type can be switched off.
 * UTM campaign parameters, ad-click identifiers (only which parameter was present, never its value) and entrance referrers classified into channels such as Paid Search, Organic Social or Email.
-* An analytics dashboard with top pages, landing pages, referrers, campaigns, channels, devices, conversions and lead outcomes.
-* Goals for actions that are not form submissions (phone and email link clicks, downloads, reaching a page, custom events) and funnels that measure the ordered path to a conversion.
+* An analytics dashboard with top pages, landing pages, referrers, campaigns, channels, devices, conversions and lead outcomes, with summary charts beside the full tables and CSV and JSON export of the selected period.
+* Goals for actions that are not form submissions (phone and email link clicks, downloads, reaching a page, custom events) and funnels that measure the ordered path to a conversion, each exportable as CSV or JSON.
 * Form engagement and abandonment reporting that never records what a visitor typed into a form they did not submit.
 
 = Leads =
 
 * A Submissions screen with each lead's answers, the page it came from, its campaign attribution and its webhook delivery status.
 * Lead status (new, qualified, won, lost…) and value, with history, and lead reports by channel, campaign, landing page and form.
-* CSV export, per-submission delete, and a retention window after which data is deleted automatically.
+* CSV and JSON export (everything, or just the current filters), per-submission delete, and a retention window after which data is deleted automatically.
 
 = Supported form plugins =
 
@@ -153,6 +153,14 @@ Deactivating stops tracking and scheduled tasks but keeps your data. Deleting th
 
 == Changelog ==
 
+= 1.1.0 =
+* New: CSV and JSON export on the Analytics, Goals and Funnels screens, covering the period you are viewing with the same figures the screen shows. Submissions adds JSON export alongside its CSV export, for everything or for the current filters. Each export needs the same permission as its screen (Submissions: `submissions.export`).
+* New: Analytics shows a device-share doughnut beside the daily page-view chart and summary charts of top pages, clicked elements, channels, goal completions and lead outcomes. Each chart links to its full table, and every value is printed beside its mark.
+* Changed: every admin screen has a consistent layout. Page headers carry each screen's period filter and actions, related settings are grouped into panels, and long settings forms keep their Save button in reach. All existing text, settings and behavior are unchanged.
+* Changed: Home lists this site's status and quick links before the setup checklist. Goals and Funnels have a link to their editor in the header, and each funnel card leads with its overall conversion. A submission's details show the lead outcome and submitted answers beside its attribution and delivery details, with Delete at the foot of the panel. Webhooks has links to each of its sections. About has a contents sidebar on wide screens.
+* Fix: the Cancel button on the Goals and Funnels editors appears only while you are editing an existing item.
+* Fix: printing Analytics for 30 or 90 days no longer lets the daily chart overflow the page.
+
 = 1.0.3 =
 * Changed: the Activity Log is now the last section of the Webhooks screen, with everything it had before: the Deliveries API card, Clear All Logs, CSV and JSON export, and the successful and failed delivery lists with their filters, search and paging. It no longer has its own menu item, and its old address redirects to the new section.
 * Changed: a user given only Activity Log access through the `convermetry_admin_capability` filter can open the Webhooks screen and sees only the log. Webhook settings, signing secrets, pending retries and the delivery queue still need `webhooks.manage`. Delete, Clear All Logs and the Deliveries API card are shown only to users allowed to use them.
@@ -183,6 +191,9 @@ Deactivating stops tracking and scheduled tasks but keeps your data. Deleting th
 * Changed: first public release on WordPress.org. Earlier 0.x versions were distributed privately; their full history is in CHANGELOG.md, included with the plugin.
 
 == Upgrade Notice ==
+
+= 1.1.0 =
+Adds CSV and JSON exports and charts, and reorganizes the admin screens. No settings or data change on upgrade.
 
 = 1.0.3 =
 The Activity Log moves to the foot of the Webhooks screen; its old address redirects there. No settings or data change on upgrade.

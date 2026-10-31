@@ -18,6 +18,28 @@
  * header for the full ownership map.
  */
 
+/* Settings form layout -------------------------------------------------------
+   Current state first (status, pending retries, queued deliveries, side by
+   side where they fit), then one card each for endpoints, delivery settings
+   and request customization, each a target of the section links above. */
+
+.cvmtry-webhooks-wrap form > .cvmtry-card {
+    margin-bottom: 20px;
+}
+
+/* Spacing lives on the children, so a site with nothing to report here (no
+   endpoint yet, so no status card; nothing pending) leaves no empty gap. */
+.cvmtry-webhooks-state {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr));
+    gap: 0 16px;
+    align-items: start;
+}
+
+.cvmtry-webhooks-state > * {
+    margin: 0 0 20px;
+}
+
 /* The webhook status toggle card, and the endpoint repeater ------------- */
 
 .cvmtry-toggle-card {
@@ -40,19 +62,31 @@
     margin: 8px 0 0;
 }
 
+/* One endpoint as one block: its title and Remove, the URL across the full
+   width, label and signing secret side by side, and a footer pairing what it
+   receives with the buttons that test it. One column on a narrow screen. */
 .cvmtry-webhook-block {
-    background: #f6f7f7;
-    border: 1px solid #dcdcde;
-    border-radius: 4px;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px 16px;
+    align-items: center;
+    background: var(--cvmtry-ui-color-surface-subtle);
+    border: 1px solid var(--cvmtry-ui-color-border);
+    border-radius: var(--cvmtry-ui-radius-sm);
     padding: 14px 16px;
     margin-bottom: 12px;
+}
+
+.cvmtry-webhook-block-header,
+.cvmtry-webhook-url-row {
+    grid-column: 1 / -1;
 }
 
 .cvmtry-webhook-block-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    margin-bottom: 10px;
+    margin-bottom: 2px;
 }
 
 .cvmtry-webhook-block-title {
@@ -83,13 +117,13 @@
 }
 
 .cvmtry-webhook-block input:not([type='checkbox']) {
-    width: min(420px, 100%);
+    width: 100%;
 }
 
 /* Endpoint delivery types & tests --------------------------------------- */
 
 .cvmtry-webhook-field {
-    margin-top: 8px;
+    min-width: 0;
     max-width: 100%;
 }
 
@@ -97,10 +131,14 @@
     max-width: 100%;
 }
 
-.cvmtry-webhook-types {
-    margin-top: 10px;
+.cvmtry-webhook-types,
+.cvmtry-endpoint-tests {
+    align-self: stretch;
+    min-width: 0;
+    margin: 4px 0 0;
+    padding: 10px 0 0;
     border: none;
-    padding: 0;
+    border-top: 1px dashed #dcdcde;
 }
 
 .cvmtry-webhook-types label {
@@ -108,13 +146,25 @@
 }
 
 .cvmtry-endpoint-tests {
-    margin-top: 10px;
-    padding-top: 10px;
-    border-top: 1px dashed #dcdcde;
     display: flex;
     flex-wrap: wrap;
     gap: 8px;
     align-items: center;
+    justify-content: flex-end;
+}
+
+@media screen and (max-width: 782px) {
+    .cvmtry-webhook-block {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    /* Stacked, the two footer halves share one rule, not two. */
+    .cvmtry-endpoint-tests {
+        margin-top: 0;
+        padding-top: 0;
+        border-top: none;
+        justify-content: flex-start;
+    }
 }
 
 .cvmtry-test-endpoint {
@@ -151,10 +201,65 @@
    tighter padding/border ------------------------------------------------- */
 
 .cvmtry-delivery-wrap .cvmtry-card {
-    border-color: #c3c4c7;
-    border-radius: 4px;
+    border-color: var(--cvmtry-ui-color-border);
+    border-radius: var(--cvmtry-ui-radius-lg);
     padding: 20px 24px;
     margin-bottom: 20px;
+}
+
+/* The section opens on a rule of its own, its heading level with its
+   exports, so review starts visibly where configuration ends. */
+.cvmtry-activity-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px 16px;
+    margin: 32px 0 14px;
+    padding-top: 24px;
+    border-top: 1px solid var(--cvmtry-ui-color-border);
+}
+
+.cvmtry-activity-head h2 {
+    margin: 0;
+}
+
+/* The log, beside the Deliveries API card where both fit. Without api.manage
+   there is no card, and the log takes the whole width. */
+.cvmtry-activity-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(280px, 340px);
+    gap: 20px 24px;
+    align-items: start;
+}
+
+.cvmtry-activity-layout > :only-child {
+    grid-column: 1 / -1;
+}
+
+.cvmtry-activity-main {
+    min-width: 0;
+}
+
+/* Configuration, not review: an accent edge and tinted surface mark it. */
+.cvmtry-delivery-wrap .cvmtry-delivery-api-card {
+    background: var(--cvmtry-ui-color-surface-tint);
+    border-color: var(--cvmtry-ui-color-border-tint);
+    border-top: 3px solid var(--cvmtry-ui-color-accent);
+}
+
+/* In the narrow column the key table reads top to bottom. */
+.cvmtry-activity-aside .form-table th,
+.cvmtry-activity-aside .form-table td {
+    display: block;
+    width: auto;
+    padding: 6px 0;
+}
+
+@media screen and (max-width: 1280px) {
+    .cvmtry-activity-layout {
+        grid-template-columns: minmax(0, 1fr);
+    }
 }
 
 .cvmtry-api-key-row {

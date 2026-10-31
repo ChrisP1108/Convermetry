@@ -186,11 +186,22 @@ final class HomePage
         <hr class="wp-header-end">
 
         <?php
+        // Ordered for the reader who comes back: this installation's state and
+        // the way into every screen first, side by side; the setup checklist
+        // next (the hero's Get Started button jumps straight to it); then the
+        // introduction to what Convermetry is, which matters most on the first
+        // visit and least on every one after.
         self::hero($status);
-        self::valueProposition();
-        self::gettingStarted($status);
+        ?>
+        <div class="cvmtry-home-glance">
+        <?php
         self::status($status);
         self::quickAccess();
+        ?>
+        </div>
+        <?php
+        self::gettingStarted($status);
+        self::valueProposition();
         self::journey();
         self::dataControl();
         self::learnMore();
@@ -530,8 +541,8 @@ final class HomePage
             [
                 'icon'  => 'list-sm',
                 'teal'  => false,
-                'title' => __('Activity Log', 'convermetry'),
-                'body'  => __('Review important Convermetry events and system activity.', 'convermetry'),
+                'title' => __('Webhooks Activity Log', 'convermetry'),
+                'body'  => __('Review important Convermetry webhook events and system activity.', 'convermetry'),
                 // A section of Webhooks, guarded by its own scope: activity.view
                 // alone opens the Webhooks screen (see WebhooksPage::menuCapability()).
                 'url'   => HomeStatus::urlFor(WebhooksPage::MENU_SLUG, Capability::ACTIVITY_VIEW, ActivityLogSection::ANCHOR),

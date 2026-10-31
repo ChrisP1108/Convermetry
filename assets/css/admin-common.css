@@ -18,10 +18,10 @@
  *    it points the old classes' typography and button colours at the same
  *    --cvmtry-ui-* custom properties (admin-ui.css declares them on `.cvmtry-wrap`
  *    as well as `.cvmtry-ui` for exactly this reason), so both class systems
- *    read from the one token source. Everything else here is unchanged,
- *    literal-value CSS moved out of the old, single assets/css/admin.css
- *    without altering a single property — this is a reorganisation, not a
- *    restyle.
+ *    read from the one token source. Most of the rest is literal-value CSS
+ *    moved out of the old, single assets/css/admin.css; the card and
+ *    accordion surfaces have since been pointed at the same tokens, and the
+ *    layout pieces listed below were added for the admin layout pass.
  *
  * Which pages use what, so a future edit here can tell what it will touch.
  * "Activity Log" below is the last section of the Webhooks screen
@@ -41,8 +41,8 @@
  *   .cvmtry-retention-notice                                    — Activity Log,
  *                                                              Analytics,
  *                                                              Submissions
- *   .cvmtry-delivery-toolbar, .cvmtry-clear-form, .cvmtry-export-buttons,
- *   .cvmtry-btn-danger                                          — Activity Log,
+ *   .cvmtry-delivery-toolbar, .cvmtry-danger-zone, .cvmtry-clear-form,
+ *   .cvmtry-export-buttons, .cvmtry-btn-danger                  — Activity Log,
  *                                                              Submissions
  *     (.cvmtry-btn-danger also: Funnels, Goals)
  *   .cvmtry-accordion*, .cvmtry-badge*, .cvmtry-empty-msg             — Activity Log,
@@ -62,6 +62,29 @@
  *   .cvmtry-goal-editor                                         — Funnels, Goals
  *     (.cvmtry-goals-table / .cvmtry-goal-meta / .cvmtry-num also: Forms, whose own
  *     "Engagement & abandonment" tables reuse the Goals table look)
+ *
+ * Layout pieces added with the admin layout pass. They arrange existing
+ * content and never set a font size, weight, line height or letter spacing
+ * on text that already had one — hierarchy comes from position, grouping,
+ * spacing, borders and surfaces:
+ *
+ *   .cvmtry-page-header, .cvmtry-page-actions                   — every screen
+ *                                                              except Home
+ *   .cvmtry-section-card                                        — Forms, Goals,
+ *                                                              Funnels,
+ *                                                              Notifications,
+ *                                                              Settings,
+ *                                                              Submissions
+ *   .cvmtry-savebar                                             — Forms,
+ *                                                              Notifications,
+ *                                                              Settings, Webhooks
+ *   .cvmtry-section-nav                                         — Webhooks
+ *   .cvmtry-grid                                                — Analytics, Forms,
+ *                                                              Funnels
+ *   .cvmtry-bars*, .cvmtry-donut*, .cvmtry-chart-legend,
+ *   .cvmtry-chart-swatch                                        — Analytics, Forms,
+ *                                                              Goals
+ *     (rendered by src/Admin/Charts.php)
  */
 
 /* Smooth scrolling ---------------------------------------------------------
@@ -165,13 +188,15 @@ html {
     margin: 20px 0;
 }
 
+/* Surface, edge and corner come from the design-system tokens, so these cards
+   match the Home page's and every panel below. */
 .cvmtry-card {
-    background: #fff;
-    border: 1px solid #dcdcde;
-    border-radius: 8px;
+    background: var(--cvmtry-ui-color-surface);
+    border: 1px solid var(--cvmtry-ui-color-border);
+    border-radius: var(--cvmtry-ui-radius-lg);
     padding: 20px;
     flex: 1 1 200px;
-    box-shadow: 0 1px 1px rgba(0, 0, 0, 0.04);
+    box-shadow: var(--cvmtry-ui-shadow-card);
 }
 
 .cvmtry-card-title {
@@ -282,6 +307,14 @@ html {
     flex-wrap: wrap;
 }
 
+/* A "Clear All …" action, kept apart from every routine control: after the
+   list it would empty, across a rule. */
+.cvmtry-delivery-toolbar.cvmtry-danger-zone {
+    margin: 24px 0 0;
+    padding-top: 16px;
+    border-top: 1px solid var(--cvmtry-ui-color-border);
+}
+
 .cvmtry-btn-danger {
     color: #d63638 !important;
     border-color: #d63638 !important;
@@ -297,11 +330,11 @@ html {
    row accordion shares with it. */
 
 .cvmtry-accordion {
-    background: #fff;
-    border: 1px solid #c3c4c7;
-    border-radius: 4px;
+    background: var(--cvmtry-ui-color-surface);
+    border: 1px solid var(--cvmtry-ui-color-border);
+    border-radius: var(--cvmtry-ui-radius-lg);
     margin-bottom: 20px;
-    box-shadow: 0 1px 1px rgba(0, 0, 0, 0.04);
+    box-shadow: var(--cvmtry-ui-shadow-card);
     overflow: hidden;
 }
 
@@ -679,11 +712,404 @@ html {
     color: #8a2424;
 }
 
+/* The add/edit panel: a card set apart from the results above it by its
+   tinted surface and accent edge, so the editor is easy to find without
+   competing with the performance review. scroll-margin keeps it clear of the
+   admin bar when the header's jump link or an Edit button brings it into view. */
 .cvmtry-goal-editor {
     margin-top: 28px;
-    padding: 4px 20px 12px;
-    background: #fff;
-    border: 1px solid #c3c4c7;
-    border-radius: 4px;
+    padding: 4px 24px 12px;
+    background: var(--cvmtry-ui-color-surface-tint);
+    border: 1px solid var(--cvmtry-ui-color-border-tint);
+    border-top: 3px solid var(--cvmtry-ui-color-accent);
+    border-radius: var(--cvmtry-ui-radius-lg);
     max-width: 70em;
+    scroll-margin-top: calc(var(--wp-admin--admin-bar--height, 32px) + 16px);
+}
+
+/* The editors' Cancel buttons are rendered hidden and revealed only while an
+   existing goal or funnel is being edited; .button's display would otherwise
+   override the hidden attribute and show Cancel in "add" mode too. */
+.cvmtry-goal-editor .button[hidden] {
+    display: none;
+}
+
+/* Page header ----------------------------------------------------------------
+   Title on the left, the page's own actions (period filter, exports, jump
+   links) on the right; wraps to a stack when it cannot fit. Every screen that
+   uses it prints <hr class="wp-header-end"> right after, so WordPress places
+   admin notices under the whole header rather than inside it. */
+
+.cvmtry-page-header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px 24px;
+}
+
+.cvmtry-page-header > h1 {
+    flex: 1 1 auto;
+}
+
+.cvmtry-page-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+}
+
+/* Export links (and Analytics' print button) kept together as one group, so
+   they wrap as a unit rather than splitting across lines. */
+.cvmtry-export-group {
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+}
+
+/* Period filters moved into a header keep their buttons, minus the block
+   margin they had when they stood alone. */
+.cvmtry-page-actions .cvmtry-period-filter {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 0;
+}
+
+/* Section card ---------------------------------------------------------------
+   One bounded group of related content or fields. Its heading keeps whatever
+   element and class it already had; only the space around it is set here. */
+
+.cvmtry-section-card {
+    background: var(--cvmtry-ui-color-surface);
+    border: 1px solid var(--cvmtry-ui-color-border);
+    border-radius: var(--cvmtry-ui-radius-lg);
+    box-shadow: var(--cvmtry-ui-shadow-card);
+    padding: 4px 24px 20px;
+    margin: 0 0 20px;
+    min-width: 0;
+}
+
+.cvmtry-section-card > h2:first-child,
+.cvmtry-section-card > .cvmtry-section-card-head:first-child {
+    margin-top: 18px;
+}
+
+.cvmtry-section-card > :last-child {
+    margin-bottom: 0;
+}
+
+/* A card heading with a short note or control beside it. */
+.cvmtry-section-card-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 4px 16px;
+    margin-bottom: 8px;
+}
+
+.cvmtry-section-card-head > h2,
+.cvmtry-section-card-head > h3 {
+    margin: 0;
+}
+
+/* Rows of a form table split into visually separate groups (one <tbody>
+   each), without new headings and without changing what is submitted. */
+.cvmtry-section-card .form-table > tbody + tbody {
+    border-top: 1px solid var(--cvmtry-ui-color-rule);
+}
+
+/* A wide table scrolls inside its own box on a narrow screen instead of
+   pushing the page sideways. */
+.cvmtry-wrap .cvmtry-table-scroll {
+    overflow-x: auto;
+}
+
+/* Grid --------------------------------------------------------------------- */
+
+.cvmtry-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(var(--cvmtry-grid-min, 300px), 100%), 1fr));
+    gap: 16px;
+    align-items: start;
+}
+
+/* Save bar -------------------------------------------------------------------
+   The Save button of a long settings form, kept in reach: it follows the
+   reader down the form and comes to rest at its end. It is the same
+   submit_button() markup as before, inside the same <form>. */
+
+.cvmtry-savebar {
+    position: sticky;
+    bottom: 0;
+    z-index: 10;
+    margin: 20px 0 0;
+    padding: 12px 0;
+    background: #f0f0f1;
+    border-top: 1px solid var(--cvmtry-ui-color-border);
+}
+
+.cvmtry-savebar p.submit {
+    margin: 0;
+    padding: 0;
+}
+
+/* A field reached by Tab, or by a jump link, is scrolled clear of the bar
+   rather than coming to rest underneath it. */
+html:has(.cvmtry-savebar) {
+    scroll-padding-bottom: 80px;
+}
+
+/* Inside a card the bar takes the card's surface, not the page's. */
+.cvmtry-section-card .cvmtry-savebar {
+    background: var(--cvmtry-ui-color-surface);
+}
+
+/* Section links --------------------------------------------------------------
+   In-page links to a long screen's sections, built from the headings those
+   sections already carry. Plain anchors: they work without JavaScript. */
+
+.cvmtry-section-nav {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin: 12px 0 20px;
+    padding: 0;
+    list-style: none;
+}
+
+.cvmtry-section-nav li {
+    margin: 0;
+}
+
+.cvmtry-section-nav a {
+    display: inline-block;
+    padding: 5px 12px;
+    border: 1px solid var(--cvmtry-ui-color-button-border);
+    border-radius: var(--cvmtry-ui-radius-pill);
+    background: var(--cvmtry-ui-color-surface);
+    color: var(--cvmtry-ui-color-heading);
+    text-decoration: none;
+}
+
+.cvmtry-section-nav a:hover,
+.cvmtry-section-nav a:focus {
+    border-color: var(--cvmtry-ui-color-accent);
+    color: var(--cvmtry-ui-color-accent);
+}
+
+.cvmtry-section-nav a:focus-visible {
+    outline: 2px solid var(--cvmtry-ui-color-accent);
+    outline-offset: 2px;
+    box-shadow: none;
+}
+
+/* Sections a section link can land on stay clear of the admin bar. */
+.cvmtry-wrap [id].cvmtry-section-card,
+.cvmtry-wrap [id].cvmtry-card,
+.cvmtry-wrap section[id] {
+    scroll-margin-top: calc(var(--wp-admin--admin-bar--height, 32px) + 16px);
+}
+
+/* Charts -------------------------------------------------------------------
+   Rendered by src/Admin/Charts.php from rows the page has already fetched for
+   its tables. Values are printed beside every mark and the marks themselves
+   are aria-hidden, so no reading depends on colour or hover; the table each
+   chart summarizes remains on the page. Colours are the --cvmtry-ui-chart-*
+   tokens in assets/css/admin-ui.css. Marks keep their colours in print and
+   in forced-colours mode, where they would otherwise vanish. */
+
+.cvmtry-bars,
+.cvmtry-donut {
+    margin: 0;
+}
+
+/* A small chart set beside the table it summarizes (Forms, Goals). */
+.cvmtry-chart-card {
+    min-width: 0;
+    padding: 14px 16px;
+    background: var(--cvmtry-ui-color-surface-muted);
+    border: 1px solid var(--cvmtry-ui-color-border-soft);
+    border-radius: var(--cvmtry-ui-radius-sm);
+}
+
+.cvmtry-chart-card-title {
+    margin: 0 0 10px;
+    font-weight: 600;
+    color: #1d2327;
+}
+
+.cvmtry-bars-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.cvmtry-bars-row {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    min-width: 0;
+    margin: 0;
+}
+
+.cvmtry-bars-label {
+    color: #1d2327;
+    overflow-wrap: anywhere;
+}
+
+.cvmtry-bars-line {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.cvmtry-bars-track {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+/* Thin, square at the baseline, rounded at the data end. */
+.cvmtry-bars-bar {
+    display: block;
+    width: var(--cvmtry-w, 0%);
+    height: 10px;
+    border-radius: 0 4px 4px 0;
+    background: var(--cvmtry-ui-chart-single);
+}
+
+.cvmtry-bars--grouped .cvmtry-bars-row {
+    gap: 2px;
+}
+
+.cvmtry-bars--grouped .cvmtry-bars-bar {
+    height: 8px;
+}
+
+.cvmtry-bars-value {
+    flex: 0 0 auto;
+    min-width: 4ch;
+    text-align: right;
+    color: #1d2327;
+    font-variant-numeric: tabular-nums;
+}
+
+.cvmtry-bars--grouped .cvmtry-bars-s1 {
+    background: var(--cvmtry-ui-chart-ord-1);
+}
+
+.cvmtry-bars--grouped .cvmtry-bars-s2 {
+    background: var(--cvmtry-ui-chart-ord-2);
+}
+
+.cvmtry-bars--grouped .cvmtry-bars-s3 {
+    background: var(--cvmtry-ui-chart-ord-3);
+}
+
+.cvmtry-chart-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 16px;
+    margin: 0 0 10px;
+    padding: 0;
+    list-style: none;
+}
+
+.cvmtry-chart-legend li {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin: 0;
+}
+
+.cvmtry-chart-swatch {
+    flex: none;
+    width: 10px;
+    height: 10px;
+    border-radius: 2px;
+}
+
+.cvmtry-donut {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 16px 24px;
+}
+
+.cvmtry-donut-ring {
+    flex: none;
+    width: 132px;
+    height: 132px;
+    transform: rotate(-90deg);
+}
+
+.cvmtry-donut-seg {
+    fill: none;
+    stroke-width: 6;
+}
+
+.cvmtry-donut-seg.cvmtry-cat-1 { stroke: var(--cvmtry-ui-chart-cat-1); }
+.cvmtry-donut-seg.cvmtry-cat-2 { stroke: var(--cvmtry-ui-chart-cat-2); }
+.cvmtry-donut-seg.cvmtry-cat-3 { stroke: var(--cvmtry-ui-chart-cat-3); }
+.cvmtry-donut-seg.cvmtry-cat-4 { stroke: var(--cvmtry-ui-chart-cat-4); }
+.cvmtry-chart-swatch.cvmtry-cat-1 { background: var(--cvmtry-ui-chart-cat-1); }
+.cvmtry-chart-swatch.cvmtry-cat-2 { background: var(--cvmtry-ui-chart-cat-2); }
+.cvmtry-chart-swatch.cvmtry-cat-3 { background: var(--cvmtry-ui-chart-cat-3); }
+.cvmtry-chart-swatch.cvmtry-cat-4 { background: var(--cvmtry-ui-chart-cat-4); }
+
+.cvmtry-donut-legend {
+    flex: 1 1 150px;
+    flex-direction: column;
+    flex-wrap: nowrap;
+    gap: 10px;
+    margin: 0;
+}
+
+.cvmtry-donut-legend li {
+    display: grid;
+    grid-template-columns: 10px minmax(0, 1fr) auto;
+    align-items: center;
+    column-gap: 8px;
+}
+
+.cvmtry-donut-label {
+    color: #1d2327;
+    overflow-wrap: anywhere;
+}
+
+.cvmtry-donut-share {
+    font-weight: 600;
+    color: #1d2327;
+    font-variant-numeric: tabular-nums;
+}
+
+.cvmtry-donut-detail {
+    grid-column: 2 / -1;
+    color: #646970;
+}
+
+@media print {
+    .cvmtry-bars-bar,
+    .cvmtry-chart-swatch,
+    .cvmtry-donut-seg {
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+    }
+
+    .cvmtry-savebar {
+        position: static;
+    }
+}
+
+@media (forced-colors: active) {
+    .cvmtry-bars-bar,
+    .cvmtry-chart-swatch,
+    .cvmtry-donut-ring {
+        forced-color-adjust: none;
+    }
 }

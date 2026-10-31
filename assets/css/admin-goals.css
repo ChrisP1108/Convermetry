@@ -6,11 +6,40 @@
  * table, inline-remove form, status chip, and editor panel — is shared with
  * Funnels and lives in assets/css/admin-common.css, which loads before this
  * file; see that file's header for the shared-class map. What remains here is
- * specific to the goal DEFINITION form.
+ * the performance card's layout and what is specific to the goal DEFINITION
+ * form.
  */
+
+/* Performance: the completions chart across the top of the card, its bars
+   two or three to a row so it stays short, then the full-width table. */
+.cvmtry-goals-performance {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    padding-top: 20px;
+}
+
+.cvmtry-goals-performance-main {
+    min-width: 0;
+}
+
+.cvmtry-goals-performance .cvmtry-bars-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(260px, 100%), 1fr));
+    gap: 10px 32px;
+}
+
+.cvmtry-goals-performance .cvmtry-goals-table {
+    margin-top: 0;
+}
 
 .cvmtry-goal-actions {
     white-space: nowrap;
+}
+
+/* Edit and Remove read as two separate actions, not one phrase. */
+.cvmtry-goal-actions .cvmtry-inline-form {
+    margin-left: 10px;
 }
 
 /* The "this goal has never fired" explanation, attached to its own row so it

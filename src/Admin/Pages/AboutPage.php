@@ -1753,11 +1753,20 @@ final class AboutPage
             CVMTRY_VERSION
         ));
         ?></p>
-        <p class="cvmtry-about-meta"><?php echo wp_kses_post(__('Everything on this page is also in the plugin\'s <code>README.md</code>. Use the bar below to jump between sections.', 'convermetry')); ?></p>
+        <p class="cvmtry-about-meta"><?php echo wp_kses_post(__('Everything on this page is also in the plugin\'s <code>README.md</code>. Use the contents links to jump between sections.', 'convermetry')); ?></p>
         <?php
 
+        // The same nav either way: a contents column beside the documentation
+        // on a wide screen, the sticky bar across its top on a narrow one
+        // (assets/css/admin-about.css).
+        ?>
+        <div class="cvmtry-about-layout">
+        <?php
         self::nav();
 
+        ?>
+        <div class="cvmtry-about-content">
+        <?php
         self::renderOverview();
         self::renderAdminPages();
         self::renderTracking();
@@ -1773,7 +1782,7 @@ final class AboutPage
         self::renderPrivacy();
 
         ?>
-        </div>
+        </div></div></div>
         <?php
     }
 
@@ -1879,7 +1888,7 @@ Was it successfully delivered to external systems?');
 
         self::cardStart(__('The Analytics dashboard', 'convermetry'));
         ?>
-        <p><?php echo wp_kses_post(__('For a selectable 7/30/90-day period (UTC calendar days, clamped to the retention window with an explanatory notice when clamped): summary cards, an accessible daily page-view chart (single-Tab-stop keyboard navigation, touch/mouse tooltips, visible axes, data-table fallback), and collapsible sections for Content, Engagement, Acquisition, Devices, Conversions, Goals, Lead outcomes, and Recent Activity. A <strong>Print / Save as PDF</strong> button produces a print-optimized report. Empty states and per-section database-error notices are explicit — a failed query is never rendered as a silent zero.', 'convermetry')); ?></p>
+        <p><?php echo wp_kses_post(__('For a selectable 7/30/90-day period (UTC calendar days, clamped to the retention window with an explanatory notice when clamped): summary cards, an accessible daily page-view chart (single-Tab-stop keyboard navigation, touch/mouse tooltips, visible axes, data-table fallback) beside a device-share doughnut, summary charts of top pages, clicked elements, channels, goal completions and lead outcomes, and collapsible sections for Content, Engagement, Acquisition, Devices, Conversions, Goals, Lead outcomes, and Recent Activity. Every chart is drawn from the same result as the table it links to, and prints its values beside its marks. <strong>Export CSV</strong> and <strong>Export JSON</strong> download the period\'s reports with raw values, and a <strong>Print / Save as PDF</strong> button produces a print-optimized report. Empty states and per-section database-error notices are explicit — a failed query is never rendered as a silent zero.', 'convermetry')); ?></p>
         <p><?php esc_html_e('Three form metrics are deliberately kept distinct, because merging them would hide which evidence each rests on:', 'convermetry'); ?></p>
         <ul class="cvmtry-about-features">
         <li><?php echo wp_kses_post(__('<strong>Form Submit Attempts</strong> — frontend <code>submit</code> events; success unconfirmed.', 'convermetry')); ?></li>
@@ -1892,12 +1901,12 @@ Was it successfully delivered to external systems?');
         ?>
         <p><?php echo wp_kses_post(__('Every Convermetry screen resolves its required capability through one named scope, and the scope is applied to <strong>menu visibility and every handler behind it</strong> — never to the menu alone, which would hide a screen while leaving its POST handler reachable. All fourteen default to <code>manage_options</code>, so nothing changes until you filter one.', 'convermetry')); ?></p>
         <table class="cvmtry-about-table"><thead><tr><th scope="col"><?php esc_html_e('Scope', 'convermetry'); ?></th><th scope="col"><?php esc_html_e('Covers', 'convermetry'); ?></th></tr></thead><tbody>
-        <tr><td><code>analytics.view</code></td><td><?php esc_html_e('The dashboard and this About page.', 'convermetry'); ?></td></tr>
+        <tr><td><code>analytics.view</code></td><td><?php esc_html_e('The dashboard, its CSV and JSON exports, and this About page.', 'convermetry'); ?></td></tr>
         <tr><td><code>submissions.view</code></td><td><?php esc_html_e('The Submissions list and detail panels.', 'convermetry'); ?></td></tr>
-        <tr><td><code>submissions.export</code></td><td><?php echo wp_kses_post(__('CSV export — <strong>every lead\'s name and email in one file</strong>. Grant deliberately.', 'convermetry')); ?></td></tr>
+        <tr><td><code>submissions.export</code></td><td><?php echo wp_kses_post(__('CSV and JSON export — <strong>every lead\'s name and email in one file</strong>. Grant deliberately.', 'convermetry')); ?></td></tr>
         <tr><td><code>submissions.delete</code></td><td><?php esc_html_e('Deleting one submission, or clearing them all.', 'convermetry'); ?></td></tr>
         <tr><td><code>leads.edit</code></td><td><?php esc_html_e('Setting lead status and value.', 'convermetry'); ?></td></tr>
-        <tr><td><code>goals.manage</code> · <code>funnels.manage</code></td><td><?php esc_html_e('Creating and editing goal and funnel definitions.', 'convermetry'); ?></td></tr>
+        <tr><td><code>goals.manage</code> · <code>funnels.manage</code></td><td><?php esc_html_e('Creating and editing goal and funnel definitions, and exporting their results.', 'convermetry'); ?></td></tr>
         <tr><td><code>forms.manage</code></td><td><?php esc_html_e('Per-form configuration and exclusions.', 'convermetry'); ?></td></tr>
         <tr><td><code>notifications.manage</code> · <code>webhooks.manage</code></td><td><?php esc_html_e('Notification and endpoint settings — both hold credentials.', 'convermetry'); ?></td></tr>
         <tr><td><code>activity.view</code> · <code>activity.manage</code></td><td><?php esc_html_e('Reading the Activity Log, versus deleting its entries and clearing it.', 'convermetry'); ?></td></tr>
@@ -2125,7 +2134,7 @@ Headers: Content-Type → global → per-form → runtime
 
         self::cardStart(__('Submissions', 'convermetry'));
         ?>
-        <p><?php echo wp_kses_post(__('<strong>Convermetry → Submissions</strong> lists every server-confirmed lead with its date, form, provider, channel and campaign, delivery status, lead status and value. Filters cover date range, provider, form, channel, campaign, delivery state, lead status, and free-text search; the detail panel is loaded on demand and shows the submitted answers, the full analytics context, the delivery outcome per endpoint, and the lead\'s status history. CSV export streams in keyset-paginated chunks, so even a very large table exports in bounded memory.', 'convermetry')); ?></p>
+        <p><?php echo wp_kses_post(__('<strong>Convermetry → Submissions</strong> lists every server-confirmed lead with its date, form, provider, channel and campaign, delivery status, lead status and value. Filters cover date range, provider, form, channel, campaign, delivery state, lead status, and free-text search; the detail panel is loaded on demand and shows the submitted answers, the full analytics context, the delivery outcome per endpoint, and the lead\'s status history. CSV and JSON exports — of the current filters or of everything — stream in keyset-paginated chunks, so even a very large table exports in bounded memory.', 'convermetry')); ?></p>
         <p><?php echo wp_kses_post(__('Deleting a submission also cancels anything still queued for it — webhook queue rows and email notifications alike — and cascades its lead history away, firing <code>convermetry_submission_deleted</code> once everything attached to it is gone.', 'convermetry')); ?></p>
         <p><?php echo wp_kses_post(__('Every submission — bundled provider or custom API — passes the same two extension points before anything is written: <a href="#hook-convermetry_should_record_submission"><code>convermetry_should_record_submission</code></a> can veto the whole write (the visitor still sees success), and <a href="#hook-convermetry_submission_fields"><code>convermetry_submission_fields</code></a> sees the normalized descriptors, with any change re-normalized so the <code>cvmtry_*</code> strip and the descriptor shape hold.', 'convermetry')); ?></p>
         <?php

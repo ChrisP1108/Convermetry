@@ -5,6 +5,7 @@ namespace Convermetry\Tests\WordPress;
 
 use Convermetry\Admin\ActivityLogSection;
 use Convermetry\Admin\Capability;
+use Convermetry\Admin\Pages\AnalyticsPage;
 use Convermetry\Admin\Pages\FormsPage;
 use Convermetry\Admin\Pages\FunnelsPage;
 use Convermetry\Admin\Pages\GoalsPage;
@@ -161,6 +162,14 @@ final class AdminRequestHandlersTest extends WordPressTestCase
             'submissions: clear'             => ['post', 'cvmtry_clear_submissions', 'cvmtry_clear_nonce', 'cvmtry_clear_submissions', Capability::SUBMISSIONS_DELETE],
             'submissions: export'            => ['get', 'cvmtry_submissions_export_csv', '_wpnonce', 'cvmtry_submissions_export_csv', Capability::SUBMISSIONS_EXPORT],
             'submissions: export filtered'   => ['get', 'cvmtry_submissions_export_csv_filtered', '_wpnonce', 'cvmtry_submissions_export_csv_filtered', Capability::SUBMISSIONS_EXPORT],
+            'submissions: export json'       => ['get', 'cvmtry_submissions_export_json', '_wpnonce', 'cvmtry_submissions_export_json', Capability::SUBMISSIONS_EXPORT],
+            'submissions: export json filtered' => ['get', 'cvmtry_submissions_export_json_filtered', '_wpnonce', 'cvmtry_submissions_export_json_filtered', Capability::SUBMISSIONS_EXPORT],
+            'analytics: export csv'          => ['get', 'cvmtry_analytics_export_csv', '_wpnonce', 'cvmtry_analytics_export_csv', Capability::ANALYTICS_VIEW],
+            'analytics: export json'         => ['get', 'cvmtry_analytics_export_json', '_wpnonce', 'cvmtry_analytics_export_json', Capability::ANALYTICS_VIEW],
+            'goals: export csv'              => ['get', 'cvmtry_goals_export_csv', '_wpnonce', 'cvmtry_goals_export_csv', Capability::GOALS_MANAGE],
+            'goals: export json'             => ['get', 'cvmtry_goals_export_json', '_wpnonce', 'cvmtry_goals_export_json', Capability::GOALS_MANAGE],
+            'funnels: export csv'            => ['get', 'cvmtry_funnels_export_csv', '_wpnonce', 'cvmtry_funnels_export_csv', Capability::FUNNELS_MANAGE],
+            'funnels: export json'           => ['get', 'cvmtry_funnels_export_json', '_wpnonce', 'cvmtry_funnels_export_json', Capability::FUNNELS_MANAGE],
             'webhooks: save'                 => ['post', 'cvmtry_save_webhooks', 'cvmtry_webhooks_nonce', 'cvmtry_save_webhooks', Capability::WEBHOOKS_MANAGE],
             'webhooks: discard retry'        => ['get', 'cvmtry_discard_retry', 'cvmtry_nonce', 'cvmtry_discard_retry', Capability::WEBHOOKS_MANAGE],
             'notifications: save'            => ['post', 'cvmtry_save_notifications', 'cvmtry_notifications_nonce', 'cvmtry_save_notifications', Capability::NOTIFICATIONS_MANAGE],
@@ -953,10 +962,24 @@ final class AdminRequestHandlersTest extends WordPressTestCase
         $html = $this->render([GoalsPage::class, 'render']);
 
         preg_match_all('/href="([^"]*period=\d+[^"]*)"/', $html, $links);
-        self::assertCount(3, $links[1]);
-        foreach ($links[1] as $link) {
+        $periodLinks = array_values(array_filter($links[1], static fn(string $link): bool => !str_contains($link, 'admin-post.php')));
+        $exportLinks = array_values(array_filter($links[1], static fn(string $link): bool => str_contains($link, 'admin-post.php')));
+
+        self::assertCount(3, $periodLinks);
+        foreach ($periodLinks as $link) {
             $query = $this->queryOf(html_entity_decode($link));
             self::assertNotFalse(wp_verify_nonce($query[ReportPeriod::NONCE_FIELD], GoalsPage::PERIOD_NONCE));
+        }
+
+        // The two export links carry the period shown, signed, and each its
+        // own format's nonce — so the file covers what the screen covered.
+        self::assertCount(2, $exportLinks);
+        foreach ($exportLinks as $link) {
+            $query = $this->queryOf(html_entity_decode($link));
+            self::assertSame('7', $query['period']);
+            self::assertNotFalse(wp_verify_nonce($query[ReportPeriod::NONCE_FIELD], GoalsPage::PERIOD_NONCE));
+            self::assertContains($query['action'], [GoalsPage::EXPORT_CSV_ACTION, GoalsPage::EXPORT_JSON_ACTION]);
+            self::assertNotFalse(wp_verify_nonce($query['_wpnonce'], $query['action']));
         }
 
         preg_match_all('/<form method="post" action="([^"]+)"/', $html, $forms);
@@ -1614,6 +1637,7 @@ final class AdminRequestHandlersTest extends WordPressTestCase
 
         $registry = new FormProviderRegistry();
 
+        AnalyticsPage::init();
         GoalsPage::init();
         FunnelsPage::init();
         SubmissionsPage::init();

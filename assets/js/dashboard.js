@@ -17,9 +17,11 @@
  * script runs, disabled when they would have no effect) and per-panel
  * open/closed state persisted in sessionStorage — panel ids and booleans
  * only, no analytics or user data — so the layout survives period changes
- * within the browsing session.
+ * within the browsing session. The Overview's "View data table" links open
+ * the panel they point at.
  *
- * Print: the "Print / Save as PDF" button calls window.print(); beforeprint
+ * Print: the "Print / Save as PDF" button (in the page header, revealed only
+ * when this script runs) calls window.print(); beforeprint
  * expands every panel (and the chart's data table) so the printed report is
  * complete, and afterprint restores the previous states. The print layout
  * itself is pure CSS (assets/css/admin-analytics.css).
@@ -342,6 +344,18 @@
             });
         });
 
+        // A summary card's "View data table" link opens the panel it points at
+        // before the browser scrolls there; a closed <details> would otherwise
+        // show only its heading. The toggle handler above remembers it.
+        document.querySelectorAll('.cvmtry-dash a[href^="#cvmtry-panel-"]').forEach(function (link) {
+            link.addEventListener('click', function () {
+                const target = document.getElementById(link.getAttribute('href').slice(1));
+                if (target && target.tagName === 'DETAILS') {
+                    target.open = true;
+                }
+            });
+        });
+
         if (toolbar) {
             toolbar.hidden = false; // Buttons only make sense once this script runs.
 
@@ -393,6 +407,7 @@
 
         const printBtn = document.querySelector('.cvmtry-dash .cvmtry-print-btn');
         if (printBtn) {
+            printBtn.hidden = false; // Rendered hidden: without this script it would do nothing.
             printBtn.addEventListener('click', function () {
                 window.print();
             });

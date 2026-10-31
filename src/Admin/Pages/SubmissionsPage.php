@@ -9,6 +9,7 @@ use Convermetry\Admin\ActivityLogSection;
 use Convermetry\Admin\AdminAssets;
 use Convermetry\Admin\AdminRequest;
 use Convermetry\Admin\Capability;
+use Convermetry\Admin\Export;
 use Convermetry\Admin\HomeStatus;
 use Convermetry\Analytics\SubmissionContext;
 use Convermetry\Database\FormSubmissions;
@@ -66,6 +67,12 @@ final class SubmissionsPage
     /** admin-post action, and nonce action, for exporting the filtered list. */
     public const string EXPORT_FILTERED_ACTION = 'cvmtry_submissions_export_csv_filtered';
 
+    /** admin-post action, and nonce action, for exporting every submission as JSON. */
+    public const string EXPORT_JSON_ALL_ACTION = 'cvmtry_submissions_export_json';
+
+    /** admin-post action, and nonce action, for exporting the filtered list as JSON. */
+    public const string EXPORT_JSON_FILTERED_ACTION = 'cvmtry_submissions_export_json_filtered';
+
     /**
      * Registers menu, asset, action, and AJAX hooks.
      *
@@ -77,6 +84,8 @@ final class SubmissionsPage
         add_action('admin_post_' . self::CLEAR_ACTION, [self::class, 'processClearSubmissions']);
         add_action('admin_post_' . self::EXPORT_ALL_ACTION, [self::class, 'processExportAll']);
         add_action('admin_post_' . self::EXPORT_FILTERED_ACTION, [self::class, 'processExportFiltered']);
+        add_action('admin_post_' . self::EXPORT_JSON_ALL_ACTION, [self::class, 'processExportJsonAll']);
+        add_action('admin_post_' . self::EXPORT_JSON_FILTERED_ACTION, [self::class, 'processExportJsonFiltered']);
         add_action('admin_enqueue_scripts', [self::class, 'enqueueAssets']);
 
         add_action('wp_ajax_cvmtry_get_submissions', [self::class, 'handleGetSubmissionsAjax']);
@@ -143,6 +152,7 @@ final class SubmissionsPage
             'leadStatuses' => LeadStatus::labels(),
             'monthNames'   => AdminAssets::monthNames(),
             'exportBase'   => self::exportUrl(self::EXPORT_FILTERED_ACTION),
+            'exportJsonBase' => self::exportUrl(self::EXPORT_JSON_FILTERED_ACTION),
         ]);
     }
 
@@ -300,6 +310,61 @@ final class SubmissionsPage
         // AJAX list uses, so the file can never contain rows the screen would
         // have excluded.
         self::exportCsv(self::filtersFromRequest($_GET));
+    }
+
+    /**
+     * Streams every submission as JSON (admin_post_cvmtry_submissions_export_json).
+     *
+     * @return never
+     */
+    public static function processExportJsonAll(): never
+    {
+        // 1. Method: export links are followed, never posted.
+        if (!AdminRequest::isGet()) {
+            AdminRequest::deny(__('Exports are downloaded from the Submissions screen.', 'convermetry'), 405);
+        }
+
+        // 2. Capability: bulk export of lead data is a scope of its own.
+        if (!current_user_can(Capability::required(Capability::SUBMISSIONS_EXPORT))) {
+            AdminRequest::deny(AdminRequest::forbiddenMessage());
+        }
+
+        // 3 and 4. Nonce present, as one string, and issued for the full JSON
+        // export — no other link's nonce opens it.
+        if (!Export::nonceIsValid(self::EXPORT_JSON_ALL_ACTION)) {
+            AdminRequest::deny(__('Invalid or expired export link.', 'convermetry'));
+        }
+
+        // 5. No further input: the export covers every submission.
+        self::exportJson([]);
+    }
+
+    /**
+     * Streams the submissions matching the list's filters as JSON
+     * (admin_post_cvmtry_submissions_export_json_filtered).
+     *
+     * @return never
+     */
+    public static function processExportJsonFiltered(): never
+    {
+        // 1. Method: export links are followed, never posted.
+        if (!AdminRequest::isGet()) {
+            AdminRequest::deny(__('Exports are downloaded from the Submissions screen.', 'convermetry'), 405);
+        }
+
+        // 2. Capability: bulk export of lead data is a scope of its own.
+        if (!current_user_can(Capability::required(Capability::SUBMISSIONS_EXPORT))) {
+            AdminRequest::deny(AdminRequest::forbiddenMessage());
+        }
+
+        // 3 and 4. Nonce present, as one string, and issued for the filtered
+        // JSON export.
+        if (!Export::nonceIsValid(self::EXPORT_JSON_FILTERED_ACTION)) {
+            AdminRequest::deny(__('Invalid or expired export link.', 'convermetry'));
+        }
+
+        // 5. Input: the filters, through the same path as the list and the CSV.
+        self::exportJson(self::filtersFromRequest($_GET));
     }
 
     /**
@@ -717,6 +782,7 @@ final class SubmissionsPage
         ?>
         <div class="wrap cvmtry-wrap cvmtry-submissions-wrap">
             <h1><?php esc_html_e('Submissions', 'convermetry'); ?></h1>
+            <hr class="wp-header-end">
 
             <?php if ($cleared): ?>
                 <div class="notice notice-success is-dismissible"><p><?php esc_html_e('All submissions have been deleted.', 'convermetry'); ?></p></div>
@@ -769,7 +835,40 @@ final class SubmissionsPage
                 </p>
             </div>
 
-            <div class="cvmtry-delivery-toolbar">
+            <?php
+            // Exports sit directly above the list they export, under the
+            // retention notice that warns what an export contains. Clearing
+            // everything is a different kind of action, so it is kept apart,
+            // after the list.
+            ?>
+            <?php if ($total > 0): ?>
+                <div class="cvmtry-delivery-toolbar cvmtry-submissions-toolbar">
+                    <div class="cvmtry-export-buttons">
+                        <a href="#" class="button button-secondary cvmtry-export-filtered"><?php esc_html_e('Export Current Filters', 'convermetry'); ?></a>
+                        <a
+                            href="<?php echo esc_url(self::exportUrl(self::EXPORT_ALL_ACTION)); ?>"
+                            class="button button-secondary"
+                        >
+                            <?php esc_html_e('Export All To CSV', 'convermetry'); ?>
+                        </a>
+                    </div>
+                    <div class="cvmtry-export-buttons">
+                        <a href="#" class="button button-secondary cvmtry-export-filtered-json"><?php esc_html_e('Export Current Filters To JSON', 'convermetry'); ?></a>
+                        <a
+                            href="<?php echo esc_url(self::exportUrl(self::EXPORT_JSON_ALL_ACTION)); ?>"
+                            class="button button-secondary"
+                        >
+                            <?php esc_html_e('Export All To JSON', 'convermetry'); ?>
+                        </a>
+                    </div>
+                </div>
+            <?php endif; ?>
+
+            <div id="cvmtry-submissions" data-total="<?php echo esc_attr((string) $total); ?>">
+                <!-- Controls, list, and pagination injected by submissions.js -->
+            </div>
+
+            <div class="cvmtry-delivery-toolbar cvmtry-danger-zone">
                 <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>" class="cvmtry-clear-form">
                     <?php wp_nonce_field(self::CLEAR_ACTION, 'cvmtry_clear_nonce'); ?>
                     <input type="hidden" name="action" value="<?php echo esc_attr(self::CLEAR_ACTION); ?>">
@@ -782,22 +881,6 @@ final class SubmissionsPage
                         <?php esc_html_e('Clear All Submissions', 'convermetry'); ?>
                     </button>
                 </form>
-
-                <?php if ($total > 0): ?>
-                    <div class="cvmtry-export-buttons">
-                        <a href="#" class="button button-secondary cvmtry-export-filtered"><?php esc_html_e('Export Current Filters', 'convermetry'); ?></a>
-                        <a
-                            href="<?php echo esc_url(self::exportUrl(self::EXPORT_ALL_ACTION)); ?>"
-                            class="button button-secondary"
-                        >
-                            <?php esc_html_e('Export All To CSV', 'convermetry'); ?>
-                        </a>
-                    </div>
-                <?php endif; ?>
-            </div>
-
-            <div id="cvmtry-submissions" data-total="<?php echo esc_attr((string) $total); ?>">
-                <!-- Controls, list, and pagination injected by submissions.js -->
             </div>
         </div>
         <?php
@@ -1001,31 +1084,42 @@ final class SubmissionsPage
 
         $analyticsPairs[] = [__('IP address', 'convermetry'), (string) ($row['ip_address'] ?? '')];
 
+        // Two columns on a wide screen: the lead — its outcome, the one thing
+        // here an administrator writes, and what the visitor actually
+        // submitted — beside the record of where it came from and where it
+        // went. One column, in that same order, on a narrow screen. The
+        // action bar, which carries the destructive Delete, closes the panel
+        // on its own, away from the lead controls.
         ob_start();
         ?>
         <div class="cvmtry-detail-inner">
-
-            <div class="cvmtry-detail-actions">
-                <button type="button" class="button cvmtry-submission-delete-btn"><?php esc_html_e('Delete Submission', 'convermetry'); ?></button>
-                <?php
-                /**
-                 * Fires in one submission's action bar, after the Delete button.
-                 *
-                 * For buttons and links that act on this submission — resending
-                 * it to a CRM, opening it in another system. Runs after the same
-                 * nonce and capability checks as the panel around it.
-                 *
-                 * A callback ECHOES its own markup and MUST escape everything it
-                 * prints. Use class="button" to match the existing control, and
-                 * nonce-protect anything that acts.
-                 *
-                 * @param array<string, mixed> $row The submission row (PII).
-                 */
-                do_action('convermetry_submission_row_actions', $row);
-                ?>
-            </div>
+          <div class="cvmtry-detail-columns">
+            <div class="cvmtry-detail-col cvmtry-detail-col--lead">
 
             <?php self::printLeadBlock($row); ?>
+
+            <div class="cvmtry-detail-block">
+                <h4><?php esc_html_e('Submitted fields', 'convermetry'); ?></h4>
+                <?php if ($fields->isEmpty()): ?>
+                    <p class="cvmtry-empty-msg"><?php esc_html_e('This submission recorded no field values.', 'convermetry'); ?></p>
+                <?php else: ?>
+                    <div class="cvmtry-field-table-wrap">
+                        <table class="cvmtry-field-table">
+                            <tbody>
+                            <?php foreach ($fields->toDisplayPairs() as $pair): ?>
+                                <tr>
+                                    <th scope="row"><?php echo esc_html($pair['label']); ?></th>
+                                    <td><?php echo esc_html($pair['value']); ?></td>
+                                </tr>
+                            <?php endforeach; ?>
+                            </tbody>
+                        </table>
+                    </div>
+                <?php endif; ?>
+            </div>
+
+            </div>
+            <div class="cvmtry-detail-col">
 
             <div class="cvmtry-detail-block">
                 <h4><?php esc_html_e('Form', 'convermetry'); ?></h4>
@@ -1054,26 +1148,6 @@ final class SubmissionsPage
                 </div>
             <?php endif; ?>
 
-            <div class="cvmtry-detail-block">
-                <h4><?php esc_html_e('Submitted fields', 'convermetry'); ?></h4>
-                <?php if ($fields->isEmpty()): ?>
-                    <p class="cvmtry-empty-msg"><?php esc_html_e('This submission recorded no field values.', 'convermetry'); ?></p>
-                <?php else: ?>
-                    <div class="cvmtry-field-table-wrap">
-                        <table class="cvmtry-field-table">
-                            <tbody>
-                            <?php foreach ($fields->toDisplayPairs() as $pair): ?>
-                                <tr>
-                                    <th scope="row"><?php echo esc_html($pair['label']); ?></th>
-                                    <td><?php echo esc_html($pair['value']); ?></td>
-                                </tr>
-                            <?php endforeach; ?>
-                            </tbody>
-                        </table>
-                    </div>
-                <?php endif; ?>
-            </div>
-
             <?php if ($pageQuery !== []): ?>
                 <div class="cvmtry-detail-block">
                     <h4><?php esc_html_e('Page query parameters', 'convermetry'); ?></h4>
@@ -1090,9 +1164,13 @@ final class SubmissionsPage
                 <?php self::printDeliveryBlock($status, (string) ($row['submission_id'] ?? '')); ?>
             </div>
 
+            </div>
+          </div>
+
             <?php
             /**
-             * Fires at the end of one submission's detail panel.
+             * Fires at the end of one submission's detail panel, after every
+             * block above at full width, and before the panel's action bar.
              *
              * Runs inside the cvmtry_get_submission_detail AJAX response, after
              * that handler's nonce check and its submissions.view capability
@@ -1113,6 +1191,26 @@ final class SubmissionsPage
              */
             do_action('convermetry_submission_detail_sections', $row);
             ?>
+
+            <div class="cvmtry-detail-actions">
+                <button type="button" class="button cvmtry-submission-delete-btn cvmtry-btn-danger"><?php esc_html_e('Delete Submission', 'convermetry'); ?></button>
+                <?php
+                /**
+                 * Fires in one submission's action bar, after the Delete button.
+                 *
+                 * For buttons and links that act on this submission — resending
+                 * it to a CRM, opening it in another system. Runs after the same
+                 * nonce and capability checks as the panel around it.
+                 *
+                 * A callback ECHOES its own markup and MUST escape everything it
+                 * prints. Use class="button" to match the existing control, and
+                 * nonce-protect anything that acts.
+                 *
+                 * @param array<string, mixed> $row The submission row (PII).
+                 */
+                do_action('convermetry_submission_row_actions', $row);
+                ?>
+            </div>
 
         </div>
         <?php
@@ -1441,7 +1539,77 @@ final class SubmissionsPage
     }
 
     /**
-     * The export's columns, as an ordered key => header-label map.
+     * Streams matching submissions as a JSON array and exits.
+     *
+     * One object per submission, keyed by the CSV export's column KEYS and
+     * holding the same values — the column and value filters shape both files
+     * — except that the visitor's answers are the descriptor list itself
+     * rather than a JSON string inside a cell, and nothing is formula-escaped,
+     * because no spreadsheet reads this file.
+     *
+     * Streamed structurally, in the same keyset-paginated chunks as the CSV,
+     * so memory stays bounded however large the table is.
+     *
+     * @param array<string, string> $filters Active filters ([] exports everything).
+     * @return never
+     */
+    private static function exportJson(array $filters): never
+    {
+        while (ob_get_level() > 0) {
+            ob_end_clean();
+        }
+
+        header('Content-Type: application/json; charset=utf-8');
+        header('Content-Disposition: attachment; filename="convermetry-submissions-' . gmdate('Y-m-d') . '.json"');
+        header('Cache-Control: no-cache, no-store, must-revalidate');
+        header('Pragma: no-cache');
+        header('Expires: 0');
+
+        echo "[\n";
+
+        $columns  = array_keys(self::exportColumns());
+        $beforeId = PHP_INT_MAX;
+        $first    = true;
+
+        do {
+            $rows     = FormSubmissions::getChunk($beforeId, self::EXPORT_CHUNK, $filters);
+            $statuses = self::deliveryStatuses($rows);
+
+            foreach ($rows as $row) {
+                $beforeId = (int) ($row['id'] ?? 0);
+
+                $values = self::exportValues(
+                    $row,
+                    $statuses[(string) ($row['submission_id'] ?? '')] ?? null
+                );
+
+                $item = [];
+                foreach ($columns as $key) {
+                    $item[$key] = $values[$key] ?? '';
+                }
+
+                // The answers as structure, not a string — unless a values
+                // filter put something there that is not JSON, which is kept
+                // as it was given.
+                if (isset($item['submission_data'])) {
+                    $decoded = json_decode($item['submission_data'], true);
+                    if (is_array($decoded)) {
+                        $item['submission_data'] = $decoded;
+                    }
+                }
+
+                echo ($first ? '' : ",\n") . wp_json_encode($item, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+                $first = false;
+            }
+        } while (count($rows) === self::EXPORT_CHUNK);
+
+        echo "\n]";
+        exit;
+    }
+
+    /**
+     * The export's columns, as an ordered key => header-label map. The JSON
+     * export uses the same keys.
      *
      * @return array<string, string>
      */
@@ -1480,7 +1648,8 @@ final class SubmissionsPage
         ];
 
         /**
-         * Filters the submissions CSV export's columns.
+         * Filters the submissions CSV export's columns — and, by the same
+         * keys, the properties of each object in the JSON export.
          *
          * The map is KEY => HEADER LABEL, and its order is the column order.
          * Add a key here and supply its value from
@@ -1563,7 +1732,9 @@ final class SubmissionsPage
         ];
 
         /**
-         * Filters one submission's CSV export values.
+         * Filters one submission's CSV export values (and its JSON export
+         * object's, which are the same values without the spreadsheet
+         * escaping).
          *
          * The map is KEY => VALUE, matched against the keys from
          * convermetry_submission_csv_columns. A key with no column is ignored; a

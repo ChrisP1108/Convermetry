@@ -465,6 +465,73 @@
     padding-left: 22px;
 }
 
+/* Contents sidebar ---------------------------------------------------------
+   On a wide screen the section nav becomes a column beside the documentation:
+   the same links, stacked, sticky under the admin bar, and scrolling within
+   itself if the window is short. Below this width it stays the horizontal
+   sticky bar above. Active-section highlighting (assets/js/about.js) is the
+   same in both. */
+
+@media screen and (min-width: 1280px) {
+    .cvmtry-about {
+        max-width: 1320px;
+    }
+
+    .cvmtry-about-layout {
+        display: grid;
+        grid-template-columns: 220px minmax(0, 1fr);
+        gap: 32px;
+        align-items: start;
+        margin-top: 16px;
+    }
+
+    .cvmtry-about-content {
+        min-width: 0;
+    }
+
+    .cvmtry-about-nav {
+        top: calc(var(--wp-admin--admin-bar--height, 32px) + 16px);
+        margin: 0;
+        border-color: var(--cvmtry-ui-color-border);
+        border-radius: var(--cvmtry-ui-radius-lg);
+        box-shadow: var(--cvmtry-ui-shadow-card);
+    }
+
+    .cvmtry-about-nav-inner {
+        flex-direction: column;
+        align-items: stretch;
+        flex-wrap: nowrap;
+        gap: 1px;
+        max-height: calc(100vh - var(--wp-admin--admin-bar--height, 32px) - 32px);
+        padding: 10px;
+    }
+
+    .cvmtry-about-nav a {
+        display: block;
+        white-space: normal;
+    }
+
+    .cvmtry-about-nav-top {
+        border-right: 0;
+        border-bottom: 1px solid #dcdcde;
+        border-radius: 3px 3px 0 0 !important;
+        margin: 0 0 6px;
+        padding-right: 10px !important;
+        padding-bottom: 8px;
+    }
+
+    /* No bar across the top any more, so a jumped-to heading needs only to
+       clear the admin bar. */
+    .cvmtry-about-section,
+    .cvmtry-about-hook {
+        scroll-margin-top: calc(var(--wp-admin--admin-bar--height, 32px) + 16px);
+    }
+
+    .cvmtry-about-content > .cvmtry-about-section:first-child .cvmtry-about-section-title {
+        margin-top: 0;
+    }
+}
+
 @media (max-width: 782px) {
     .cvmtry-about-nav-inner {
         flex-wrap: nowrap;

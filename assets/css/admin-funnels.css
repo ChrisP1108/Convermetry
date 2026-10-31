@@ -10,13 +10,23 @@
  * header for the shared-class map.
  */
 
+/* Funnel cards sit two-up where a card still has room for a step's label and
+   its counts on one line, and stack where it does not. */
+.cvmtry-funnels-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(480px, 100%), 1fr));
+    gap: 20px;
+    align-items: start;
+    margin-top: 16px;
+}
+
 .cvmtry-funnel {
-    background: #fff;
-    border: 1px solid #c3c4c7;
-    border-radius: 4px;
+    min-width: 0;
+    background: var(--cvmtry-ui-color-surface);
+    border: 1px solid var(--cvmtry-ui-color-border);
+    border-radius: var(--cvmtry-ui-radius-lg);
+    box-shadow: var(--cvmtry-ui-shadow-card);
     padding: 16px 20px 20px;
-    margin-bottom: 20px;
-    max-width: 70em;
 }
 
 .cvmtry-funnel-header {
@@ -35,6 +45,9 @@
 }
 
 .cvmtry-funnel-actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
     margin-left: auto;
     white-space: nowrap;
 }
@@ -84,8 +97,13 @@
     margin-right: 4px;
 }
 
+/* The overall conversion leads the card, set apart on a tinted band. */
 .cvmtry-funnel-summary {
-    margin-top: 14px;
+    margin: 0 0 14px;
+    padding: 10px 12px;
+    background: var(--cvmtry-ui-color-accent-soft);
+    border-left: 3px solid var(--cvmtry-ui-color-accent);
+    border-radius: 0 var(--cvmtry-ui-radius-control) var(--cvmtry-ui-radius-control) 0;
 }
 
 /* Step editor ----------------------------------------------------------- */

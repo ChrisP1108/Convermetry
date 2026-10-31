@@ -179,7 +179,9 @@ done < .distignore
 dist_ignored() {
   local file="$1" pattern
   for pattern in ${IGNORES+"${IGNORES[@]}"}; do
-    if [[ "$file" == "$pattern" || "$file" == "$pattern"/* ]]; then
+    # Unquoted RHS inside [[ ]] intentionally treats .distignore entries as
+    # patterns, including .env.svn.*; it does not expand filesystem paths.
+    if [[ "$file" == $pattern || "$file" == $pattern/* ]]; then
       return 0
     fi
   done

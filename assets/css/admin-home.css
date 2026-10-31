@@ -1,12 +1,30 @@
 /**
  * Convermetry — Home page.
  *
- * Reserved for styling exclusive to Convermetry → Home
- * (src/Admin/HomePage.php). The page currently needs none: it is built
- * entirely from assets/css/admin-ui.css's `cvmtry-ui-*` design-system
- * components and tokens, with no rule of its own.
- *
- * This file is enqueued on the Home screen regardless, so a future
- * Home-only rule has an obvious, already-wired home rather than being added
- * to the design-system stylesheet "just this once."
+ * Styling exclusive to Convermetry → Home (src/Admin/HomePage.php). The page
+ * is built from assets/css/admin-ui.css's `cvmtry-ui-*` design-system
+ * components and tokens; the only rule of its own is the layout that sets
+ * the status grid and the quick links side by side.
  */
+
+/* Status beside Quick Access: the installation's state takes the wide column,
+   the way into every screen runs down a narrow one beside it. Either one
+   alone (Quick Access is omitted when the user may open none of its screens)
+   takes the whole row. Stacks once the narrow column would squeeze the
+   status cards to one per row. */
+.cvmtry-home-glance {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: var(--cvmtry-ui-section-gap) 28px;
+    align-items: start;
+}
+
+.cvmtry-home-glance > :only-child {
+    grid-column: 1 / -1;
+}
+
+@media screen and (max-width: 1200px) {
+    .cvmtry-home-glance {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}

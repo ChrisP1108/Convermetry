@@ -11,3 +11,8 @@
 /.phpunit.wordpress.cache/
 /build/
 .DS_Store
+
+# Local WordPress.org release credentials; keep only the blank template tracked.
+/.env.svn
+/.env.svn.*
+!/.env.svn.example
