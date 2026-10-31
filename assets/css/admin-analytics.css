@@ -75,8 +75,8 @@
 }
 
 .cvmtry-dash .cvmtry-kpi-group {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(min(200px, 100%), 1fr));
+    display: -ms-flexbox;
+    flex-wrap: wrap;
     gap: 12px;
     margin: 0;
 }

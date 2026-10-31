@@ -305,6 +305,17 @@ final class TrackingController
             $data['form_key'] = self::scalarString($event['form_key'] ?? '');
         }
 
+        // An attempt carries the conversion token the server will record its
+        // confirmed success under. That link is what orders the success after
+        // its own attempt however the two requests race (see EventOrder), so it
+        // is kept only when it is shaped like a conversion id, and otherwise
+        // not stored at all.
+        if ($type === 'form_submit'
+            && !preg_match('~^[A-Za-z0-9_.:\-]{8,100}$~', $data['event_value'])
+        ) {
+            $data['event_value'] = '';
+        }
+
         // A validation error is the one event that describes a specific FIELD,
         // which makes it the one place where a careless implementation could
         // record what a visitor typed. It is rebuilt from three whitelisted
@@ -551,7 +562,44 @@ final class TrackingController
     }
 
     /**
-     * Whether the request's user agent is empty or a known crawler.
+     * How an automated client names itself in its user agent.
+     *
+     * Each alternative matches the way a crawler, headless browser, or scripted
+     * client IDENTIFIES itself — not merely a string that can occur anywhere in
+     * a user agent. A bare "bot" substring discarded every visitor on a CUBOT
+     * handset ("CUBOT X70", "CUBOT_P50"), because the device model sits in the
+     * same user agent a crawler names itself in. A word boundary alone would
+     * not do either: "bot" is a SUFFIX in the names that matter (Googlebot,
+     * bingbot), so it would miss them.
+     *
+     *   bot(-x)/          A product token calling itself a bot, with a version:
+     *                     Googlebot/2.1, AhrefsBot/7.0, Googlebot-Image/1.0.
+     *                     A handset model is not followed by a version slash.
+     *   bot as a word     "bot" standing alone or after a separator: archive.org_bot.
+     *   http(s)://        The crawler convention of a contact URL,
+     *                     "(+https://example.com/bot.html)". Browsers never
+     *                     put a URL in their user agent.
+     *   googlebot, …      The search crawlers that render JavaScript — the ones
+     *                     that actually reach this endpoint — by name, whatever
+     *                     follows it.
+     *   crawl, spider, slurp, preview, headless
+     *                     Unchanged: crawler families, link previewers, and
+     *                     headless browsers (HeadlessChrome).
+     *   curl/, wget/, python-requests/
+     *                     Scripted clients by their product token, so a "curl"
+     *                     inside another word ("Securly") is not one.
+     */
+    private const string BOT_PATTERN = '~'
+        . 'bot(?:-[a-z]+)*/'
+        . '|(?<![a-z0-9])bot(?![a-z0-9])'
+        . '|https?://'
+        . '|\b(?:google|bing|yandex|apple|duckduck|petal)bot'
+        . '|crawl|spider|slurp|preview|headless'
+        . '|(?:curl|wget|python-requests)/'
+        . '~i';
+
+    /**
+     * Whether the request's user agent is empty or names an automated client.
      *
      * @return bool
      */
@@ -565,7 +613,7 @@ final class TrackingController
             return true;
         }
 
-        return (bool) preg_match('~bot|crawl|spider|slurp|preview|headless|curl|wget|python-requests~i', $ua);
+        return preg_match(self::BOT_PATTERN, $ua) === 1;
     }
 
     /**

@@ -39,6 +39,13 @@ use Convermetry\Goals\GoalCompletions;
  * preserved, but a batch that failed and was resent from a later page sorts by
  * when it arrived.
  *
+ * ONE EXCEPTION, AND IT IS CAUSAL. A server-confirmed form_success is written
+ * by a different request from the browser batch that holds its attempt, and
+ * can be stored first. A success step is therefore positioned no earlier than
+ * the attempt that carried its conversion token — see
+ * {@see \Convermetry\Database\EventOrder} for the rule and its limits. Nothing
+ * else moves, and no timestamp is consulted.
+ *
  * NO WINDOW FUNCTIONS AND NO LATERAL. WordPress 6.3 still supports MySQL 5.7
  * and MariaDB 10.4, and neither offers LATERAL; the nested-derived-table chain
  * below runs everywhere the plugin claims to run.
@@ -137,12 +144,13 @@ final class FunnelReport
         }
 
         $firstTable    = $first['source'] === 'goals' ? $goals : $events;
-        $firstPosition = StepCompiler::isGoalStep($steps[0]) ? 'e0.source_event_id' : 'e0.id';
+        $firstPosition = StepCompiler::positionColumn($steps[0], 'e0');
+        $firstJoin     = StepCompiler::positionJoin($steps[0], 'e0', $events);
 
         // The innermost derived table: every session that reached step 1 inside
         // the window, with the position at which it first did.
         $sql = "SELECT e0.session_id, MIN({$firstPosition}) AS p0"
-             . " FROM {$firstTable} AS e0"
+             . " FROM {$firstTable} AS e0{$firstJoin}"
              . " WHERE ({$first['sql']}) AND e0.session_id <> ''"
              . ' AND e0.created_at >= %s AND e0.created_at < %s'
              . ' GROUP BY e0.session_id';
@@ -171,9 +179,8 @@ final class FunnelReport
             }
 
             $table    = $compiled['source'] === 'goals' ? $goals : $events;
-            $position = StepCompiler::isGoalStep($steps[$i])
-                ? 'e' . $i . '.source_event_id'
-                : 'e' . $i . '.id';
+            $position = StepCompiler::positionColumn($steps[$i], 'e' . $i);
+            $join     = StepCompiler::positionJoin($steps[$i], 'e' . $i, $events);
 
             $previous = 'p' . ($i - 1);
             $current  = 'p' . $i;
@@ -182,7 +189,7 @@ final class FunnelReport
             // Strictly greater than the previous step's position — this is the
             // ordering guarantee, and the reason the whole query is nested
             // rather than a set of independent aggregates.
-            $correlated = "(SELECT MIN({$position}) FROM {$table} AS e{$i}"
+            $correlated = "(SELECT MIN({$position}) FROM {$table} AS e{$i}{$join}"
                 . " WHERE e{$i}.session_id = {$inner}.session_id"
                 . " AND {$position} > {$inner}.{$previous}"
                 . " AND ({$compiled['sql']})"

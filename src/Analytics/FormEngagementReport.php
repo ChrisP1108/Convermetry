@@ -6,6 +6,8 @@ namespace Convermetry\Analytics;
 if (!defined('ABSPATH')) exit;
 
 use Convermetry\Database\DatabaseManager;
+use Convermetry\Database\EventOrder;
+use Convermetry\Database\FormSubmissions;
 
 /**
  * The path between seeing a form and submitting it.
@@ -65,7 +67,6 @@ final class FormEngagementReport
 
         $rows = ReportQuery::rows($wpdb->prepare(
             "SELECT form_key,
-                    MAX(element_label) AS form_name,
                     COUNT(DISTINCT CASE WHEN event_type = 'form_view' THEN session_id END) AS views,
                     COUNT(DISTINCT CASE WHEN event_type = 'form_start' THEN session_id END) AS started,
                     SUM(CASE WHEN event_type = 'form_submit' THEN 1 ELSE 0 END) AS attempts,
@@ -80,8 +81,13 @@ final class FormEngagementReport
         ));
 
         $abandoned = self::abandonment($start, $end);
+        $names     = self::displayNames(
+            array_values(array_map(static fn(array $row): string => (string) $row['form_key'], $rows)),
+            $start,
+            $end
+        );
 
-        return array_map(static function (array $row) use ($abandoned): array {
+        return array_map(static function (array $row) use ($abandoned, $names): array {
             $formKey = (string) $row['form_key'];
             $views   = (int) $row['views'];
             $started = (int) $row['started'];
@@ -89,7 +95,7 @@ final class FormEngagementReport
 
             return [
                 'form_key'        => $formKey,
-                'form_name'       => (string) $row['form_name'],
+                'form_name'       => $names[$formKey] ?? '',
                 'views'           => $views,
                 'started'         => $started,
                 'attempts'        => (int) $row['attempts'],
@@ -103,14 +109,212 @@ final class FormEngagementReport
     }
 
     /**
+     * Where a label came from, most authoritative first. {@see preferredName()}
+     *
+     * SOURCE_SUBMISSION: the form plugin's own title, from the latest
+     *                    server-confirmed submission row.
+     * SOURCE_CONFIRMED:  a label seen on a server-confirmed form_success event.
+     * SOURCE_BROWSER:    a label the tracker read from the form's markup.
+     */
+    public const int SOURCE_SUBMISSION = 0;
+    public const int SOURCE_CONFIRMED  = 1;
+    public const int SOURCE_BROWSER    = 2;
+
+    /**
+     * The name each form is listed under.
+     *
+     * One form collects several labels: the form plugin's own title, written
+     * by the server on every confirmed submission and success, and whatever the
+     * browser could read from the markup on views, starts and attempts — the
+     * site's data-cvmtry-form-name, the form's name or id attribute, or the
+     * generic 'form'. History mixes all of them, including rows from before the
+     * tracker gave every event the same label. MAX(element_label) used to pick
+     * among them by collation order, so "form" beat "Footer Feedback" and
+     * "demo-quote-request" beat "Demo Quote Request": alphabet, not meaning.
+     *
+     * Candidates come from two places, and {@see preferredName()} ranks them:
+     *
+     *  - the form name on each form's MOST RECENT submission row — what the form
+     *    plugin calls the form now, recorded server-side, and present even when
+     *    analytics tracking skipped the success (an excluded logged-in user, a
+     *    privacy signal, form_success tracking switched off);
+     *  - every distinct label on the form's lifecycle events in the range, with
+     *    how often it appeared, how often on a confirmed success, and its
+     *    newest row. Labels are grouped byte for byte, so two spellings that
+     *    differ only by case stay two candidates instead of one picked by the
+     *    collation.
+     *
+     * Nothing is rewritten: historical rows keep their labels, and only the
+     * choice among them changes.
+     *
+     * @param list<string> $formKeys Forms to name.
+     * @param string       $start    UTC datetime (inclusive).
+     * @param string       $end      UTC datetime (exclusive).
+     * @return array<string, string> Name per form key; absent when it has none.
+     */
+    private static function displayNames(array $formKeys, string $start, string $end): array
+    {
+        global $wpdb;
+
+        $formKeys = array_values(array_unique(array_filter($formKeys, static fn(string $key): bool => $key !== '')));
+        if ($formKeys === []) {
+            return [];
+        }
+
+        $candidates = array_fill_keys($formKeys, []);
+
+        // One indexed lookup per form (provider_form, newest id first), rather
+        // than a MAX(id) over every submission each form has ever received.
+        $lookups = [];
+        $params  = [];
+        foreach ($formKeys as $formKey) {
+            $provider = strstr($formKey, ':', true);
+            if ($provider === false || $provider === '') {
+                continue;
+            }
+            $lookups[] = "(SELECT form_key, form_name FROM %i WHERE provider = %s AND form_key = %s AND form_name <> '' ORDER BY id DESC LIMIT 1)";
+            array_push($params, FormSubmissions::tableName(), $provider, $formKey);
+        }
+
+        if ($lookups !== []) {
+            // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- one fixed, fully-placeholdered SELECT per form key, joined by UNION ALL; every table name and value is bound.
+            $rows = ReportQuery::rows($wpdb->prepare(implode(' UNION ALL ', $lookups), $params));
+
+            foreach ($rows as $row) {
+                $formKey = (string) $row['form_key'];
+                if (isset($candidates[$formKey])) {
+                    $candidates[$formKey][] = [
+                        'label'     => (string) $row['form_name'],
+                        'source'    => self::SOURCE_SUBMISSION,
+                        'confirmed' => 0,
+                        'seen'      => 0,
+                        'latest'    => 0,
+                    ];
+                }
+            }
+        }
+
+        $rows = ReportQuery::rows($wpdb->prepare(
+            "SELECT form_key, CAST(element_label AS BINARY) AS label,
+                    COUNT(*) AS seen,
+                    SUM(CASE WHEN event_type = 'form_success' THEN 1 ELSE 0 END) AS confirmed,
+                    MAX(id) AS latest
+             FROM %i
+             WHERE form_key IN (" . implode(', ', array_fill(0, count($formKeys), '%s')) . ")
+               AND event_type IN (" . implode(', ', array_fill(0, count(self::LIFECYCLE), '%s')) . ")
+               AND element_label <> ''
+               AND created_at >= %s AND created_at < %s
+             GROUP BY form_key, label",
+            array_merge([DatabaseManager::tableName()], $formKeys, self::LIFECYCLE, [$start, $end])
+        ));
+
+        foreach ($rows as $row) {
+            $formKey = (string) $row['form_key'];
+            if (isset($candidates[$formKey])) {
+                $candidates[$formKey][] = [
+                    'label'     => (string) $row['label'],
+                    'source'    => (int) $row['confirmed'] > 0 ? self::SOURCE_CONFIRMED : self::SOURCE_BROWSER,
+                    'confirmed' => (int) $row['confirmed'],
+                    'seen'      => (int) $row['seen'],
+                    'latest'    => (int) $row['latest'],
+                ];
+            }
+        }
+
+        $names = [];
+        foreach ($candidates as $formKey => $forForm) {
+            $name = self::preferredName((string) $formKey, $forForm);
+            if ($name !== '') {
+                $names[(string) $formKey] = $name;
+            }
+        }
+
+        return $names;
+    }
+
+    /**
+     * Chooses the name a form is shown under. Pure and deterministic.
+     *
+     * Each rule only breaks ties left by the ones before it:
+     *
+     *  1. A real name beats a placeholder. 'form' is the tracker's fallback when
+     *     the markup names nothing. The provider key, the bare native id and
+     *     "Form <id>" are the server's fallbacks when the form plugin has no
+     *     title. A placeholder is still shown when it is all there is.
+     *  2. Authority, {@see SOURCE_SUBMISSION} first: the form plugin's own
+     *     title is the form's name; markup is only evidence of it.
+     *  3. A label that reads as a name ("Demo Quote Request", "Contact") beats
+     *     one that reads as an identifier ("demo-quote-request", "gform_7").
+     *  4. More confirmed successes, then more appearances, then the newest.
+     *  5. Byte order, so equal candidates always resolve the same way.
+     *
+     * @param string $formKey    The form's key, provider:identity.
+     * @param list<array{label: string, source: int, confirmed: int, seen: int, latest: int}> $candidates
+     * @return string '' when there is no usable candidate.
+     */
+    public static function preferredName(string $formKey, array $candidates): string
+    {
+        $candidates = array_values(array_filter(
+            $candidates,
+            static fn(array $candidate): bool => trim($candidate['label']) !== ''
+        ));
+
+        if ($candidates === []) {
+            return '';
+        }
+
+        $rank = static fn(array $candidate): array => [
+            self::isPlaceholderName($candidate['label'], $formKey) ? 1 : 0,
+            $candidate['source'],
+            preg_match('~^[a-z0-9_.:-]+$~', $candidate['label']) === 1 ? 1 : 0,
+            -$candidate['confirmed'],
+            -$candidate['seen'],
+            -$candidate['latest'],
+        ];
+
+        usort(
+            $candidates,
+            static fn(array $a, array $b): int => ($rank($a) <=> $rank($b)) ?: strcmp($a['label'], $b['label'])
+        );
+
+        return $candidates[0]['label'];
+    }
+
+    /**
+     * Whether a label is a fallback some code produced because the form had
+     * no name — never a name anyone chose.
+     *
+     * @param string $label   Candidate label.
+     * @param string $formKey The form's key, provider:identity.
+     * @return bool
+     */
+    private static function isPlaceholderName(string $label, string $formKey): bool
+    {
+        [$provider, $identity] = array_pad(explode(':', strtolower($formKey), 2), 2, '');
+
+        $placeholders = ['form', $provider];
+        if ($identity !== '') {
+            $placeholders[] = $identity;
+            $placeholders[] = 'form ' . $identity;
+        }
+
+        return in_array(strtolower(trim($label)), $placeholders, true);
+    }
+
+    /**
      * Abandoned and in-progress session counts per form.
      *
      * A start is abandoned when no confirmed success followed it for the same
      * session and form within the completion window. The success must come
-     * AFTER the start (`x.id > s.id`) — a visitor who submits a form, sees the
-     * thank-you page, then comes back and starts filling it in again has
-     * genuinely abandoned the second attempt, and matching the earlier success
-     * would hide that.
+     * AFTER the start — a visitor who submits a form, sees the thank-you page,
+     * then comes back and starts filling it in again has genuinely abandoned
+     * the second attempt, and matching the earlier success would hide that.
+     *
+     * "After" is the success's causal position, not merely its row id: the
+     * server's confirmation can be stored before the browser batch holding the
+     * start and the attempt, and a success is never placed before the attempt
+     * that caused it ({@see EventOrder}). Ordered by id alone, that race made a
+     * converted start count as abandoned.
      *
      * @param string $start UTC datetime (inclusive).
      * @param string $end   UTC datetime (exclusive).
@@ -124,8 +328,9 @@ final class FormEngagementReport
         // Starts more recent than this are still in play, not abandoned.
         $mature = gmdate('Y-m-d H:i:s', time() - self::COMPLETION_WINDOW_MINUTES * MINUTE_IN_SECONDS);
 
-        $rows = ReportQuery::rows($wpdb->prepare(
-            "SELECT s.form_key,
+        // EventOrder's fixed fragments over literal aliases. The attempt join's
+        // table is a %i placeholder, bound below like every other table.
+        $sql = "SELECT s.form_key,
                     SUM(CASE WHEN s.created_at < %s THEN 1 ELSE 0 END) AS abandoned,
                     SUM(CASE WHEN s.created_at >= %s THEN 1 ELSE 0 END) AS in_progress
              FROM (
@@ -136,22 +341,17 @@ final class FormEngagementReport
                  GROUP BY e.form_key, e.session_id
              ) AS s
              WHERE NOT EXISTS (
-                 SELECT 1 FROM %i AS x
+                 SELECT 1 FROM %i AS x" . EventOrder::attemptJoin('%i', 'x', 'x_attempt') . "
                  WHERE x.event_type = 'form_success'
                    AND x.session_id = s.session_id
                    AND x.form_key = s.form_key
-                   AND x.id > s.id
+                   AND " . EventOrder::successPosition('x', 'x_attempt') . " > s.id
                    AND x.created_at <= DATE_ADD(s.created_at, INTERVAL %d MINUTE)
              )
-             GROUP BY s.form_key",
-            $mature,
-            $mature,
-            $table,
-            $start,
-            $end,
-            $table,
-            self::COMPLETION_WINDOW_MINUTES
-        ));
+             GROUP BY s.form_key";
+
+        // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- $sql is fixed SQL plus EventOrder's fixed fragments; every table and value is a placeholder bound right here.
+        $rows = ReportQuery::rows($wpdb->prepare($sql, $mature, $mature, $table, $start, $end, $table, $table, self::COMPLETION_WINDOW_MINUTES));
 
         $out = [];
         foreach ($rows as $row) {

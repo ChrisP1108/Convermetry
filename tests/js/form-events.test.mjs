@@ -59,16 +59,50 @@ test('a Formidable form is keyed the way the server records it', () => {
     assert.equal(submit.form_key, 'formidable:7', 'the server records Formidable as formidable:<form id>');
 });
 
-test('a Ninja Forms form is keyed from its wrapper', () => {
+test('Ninja Forms views and starts are keyed from its wrapper', () => {
     // Ninja Forms 3 puts the id on <div id="nf-form-3-cont">, not on the <form>.
     const wrapper = new FakeElement('div', { id: 'nf-form-3-cont', class: 'nf-form-cont' });
     const form = wrapper.appendChild(new FakeElement('form'));
     const harness = bootTracker({ forms: [form] });
 
+    harness.document.dispatchEvent({ type: 'input', target: { form } });
+    harness.runTimers();
+
+    const start = harness.trackedEvents().find((event) => event.type === 'form_start');
+    assert.equal(start.form_key, 'ninjaforms:3');
+});
+
+test('an attempt is labelled like the form\'s view and start, honoring data-cvmtry-form-name', () => {
+    const form = declaredForm({ name: 'contact-form', 'data-cvmtry-form-name': 'Footer Feedback' });
+    const harness = bootTracker({ forms: [form] });
+
     harness.document.dispatchEvent({ type: 'submit', target: form });
 
     const submit = harness.trackedEvents().find((event) => event.type === 'form_submit');
-    assert.equal(submit.form_key, 'ninjaforms:3');
+    assert.equal(submit.element_label, 'Footer Feedback', 'the attempt must not fall back to the name attribute');
+});
+
+test('an attempt carries the conversion token that was put into the form', () => {
+    const form = declaredForm();
+    const harness = bootTracker({ forms: [form] });
+
+    harness.document.dispatchEvent({ type: 'submit', target: form });
+
+    const submit = harness.trackedEvents().find((event) => event.type === 'form_submit');
+    const travelled = form.querySelector('input[name="cvmtry_conversion_id"]').value;
+    assert.match(travelled, /^c[a-f0-9]{16}$/);
+    assert.equal(submit.event_value, travelled, 'the server records the success under this same token');
+});
+
+test('a form that is not correlated sends an attempt without a token', () => {
+    const form = new FakeElement('form', { method: 'get', 'data-cvmtry-form-key': 'mysite:search' });
+    const harness = bootTracker({ forms: [form] });
+
+    harness.document.dispatchEvent({ type: 'submit', target: form });
+
+    const submit = harness.trackedEvents().find((event) => event.type === 'form_submit');
+    assert.equal(submit.event_value, undefined);
+    assert.equal(form.querySelector('input[name="cvmtry_conversion_id"]'), null);
 });
 
 test('a data-cvmtry-ignore form records no attempt at all', () => {

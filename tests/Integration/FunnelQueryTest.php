@@ -425,6 +425,254 @@ final class FunnelQueryTest extends IntegrationTestCase
         self::assertSame(0, $result['steps'][1]['sessions']);
     }
 
+    // ── A confirmed success and the attempt that caused it ───────────────────
+    //
+    // The browser's batch (view, start, submit attempt) and the form plugin's
+    // server-side confirmation are separate requests, and either can be stored
+    // first. Rows below are inserted in INGESTION order, which is what their
+    // ids record — so "success first" means the server won the race.
+
+    /**
+     * Records one form lifecycle event for gravityforms:7.
+     *
+     * @param array<string, mixed> $extra Column overrides.
+     */
+    private function formEvent(string $type, string $session, array $extra = []): int
+    {
+        return $this->insertEvent(array_merge([
+            'event_type' => $type,
+            'session_id' => $session,
+            'form_key'   => 'gravityforms:7',
+            'page_url'   => 'https://example.com/contact/',
+            'created_at' => '2026-08-10 09:05:00',
+        ], $extra));
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function formStep(string $type, string $formKey = 'gravityforms:7'): array
+    {
+        return ['type' => $type, 'value' => $formKey, 'label' => $type];
+    }
+
+    /**
+     * The defect itself: a success stored before its own attempt's batch sat
+     * before the attempt, the start and the view in id order, and every funnel
+     * ending in it missed a completion that really happened.
+     */
+    public function testASuccessStoredBeforeItsAttemptStillCompletesTheFunnel(): void
+    {
+        $this->view('race1', '/contact/', '2026-08-10 09:00:00');
+        $success = $this->formEvent('form_success', 'race1', ['event_value' => 'craceone00000001']);
+        $this->formEvent('form_view', 'race1');
+        $this->formEvent('form_start', 'race1');
+        $attempt = $this->formEvent('form_submit', 'race1', ['event_value' => 'craceone00000001']);
+
+        self::assertLessThan($attempt, $success, 'Precondition: the confirmation was stored first.');
+
+        $full = $this->compute([
+            $this->formStep('form_view'),
+            $this->formStep('form_start'),
+            $this->formStep('form_submit'),
+            $this->formStep('form_success'),
+        ]);
+        self::assertSame([1, 1, 1, 1], array_column($full['steps'], 'sessions'));
+
+        $short = $this->compute([$this->pageStep('/contact/'), $this->formStep('form_success')]);
+        self::assertSame(1, $short['steps'][1]['sessions']);
+    }
+
+    /**
+     * HISTORICAL ROWS. Attempts recorded before they carried a token cannot be
+     * linked to anything, and nothing is guessed — no timestamps, no "the
+     * nearest attempt". Such a success keeps its ingestion position, exactly
+     * as before this change, so old reports do not shift.
+     */
+    public function testWithoutATokenNothingIsGuessedAndIngestionOrderStands(): void
+    {
+        $this->formEvent('form_success', 'old1', ['event_value' => 'coldone000000001']);
+        $this->formEvent('form_start', 'old1');
+        $this->formEvent('form_submit', 'old1'); // A pre-change attempt: event_value ''.
+
+        $result = $this->compute([$this->formStep('form_submit'), $this->formStep('form_success')]);
+
+        self::assertSame(0, $result['steps'][1]['sessions']);
+    }
+
+    /**
+     * The token links an attempt and a success in the SAME session only. An
+     * attempt elsewhere that happens to carry the same value moves nothing.
+     */
+    public function testTheLinkNeverCrossesASessionBoundary(): void
+    {
+        $this->formEvent('form_success', 'sessA', ['event_value' => 'csharedtoken0001']);
+        $this->formEvent('form_start', 'sessA');
+        $this->formEvent('form_submit', 'sessB', ['event_value' => 'csharedtoken0001']);
+
+        $result = $this->compute([$this->formStep('form_start'), $this->formStep('form_success')]);
+
+        self::assertSame(1, $result['steps'][0]['sessions']);
+        self::assertSame(0, $result['steps'][1]['sessions'], 'sessA has no attempt of its own after its start.');
+    }
+
+    /**
+     * Two submissions in one session, each confirmed before its attempt was
+     * stored. Each success is placed after ITS OWN attempt, so a funnel asking
+     * for submit → success twice over is satisfied in order.
+     */
+    public function testRepeatedSubmissionsAreEachOrderedAfterTheirOwnAttempt(): void
+    {
+        $this->formEvent('form_success', 'rep1', ['event_value' => 'crepfirst0000001']);
+        $this->formEvent('form_start', 'rep1');
+        $this->formEvent('form_submit', 'rep1', ['event_value' => 'crepfirst0000001']);
+        $this->formEvent('form_submit', 'rep1', ['event_value' => 'crepreject000001']); // Rejected: no success.
+        $this->formEvent('form_success', 'rep1', ['event_value' => 'crepsecond000001']);
+        $this->formEvent('form_submit', 'rep1', ['event_value' => 'crepsecond000001']);
+
+        $result = $this->compute([
+            $this->formStep('form_submit'),
+            $this->formStep('form_success'),
+            $this->formStep('form_submit'),
+            $this->formStep('form_success'),
+        ]);
+
+        self::assertSame([1, 1, 1, 1], array_column($result['steps'], 'sessions'));
+    }
+
+    /**
+     * A RESENT batch. The attempt's first send failed and the next page resent
+     * it, after that page's own pageview was stored. The success still follows
+     * its attempt — but, like every event in a resent batch, the pair sorts
+     * where the batch arrived (the documented limit of ingestion order), so the
+     * next page's view does not count as coming after the success.
+     */
+    public function testAResentAttemptStillPrecedesItsSuccess(): void
+    {
+        $this->formEvent('form_start', 'retry1');
+        $this->formEvent('form_success', 'retry1', ['event_value' => 'cretryone0000001']);
+        $this->view('retry1', '/thanks/', '2026-08-10 09:06:00');
+        $this->formEvent('form_submit', 'retry1', ['event_value' => 'cretryone0000001']); // Resent.
+
+        $ordered = $this->compute([
+            $this->formStep('form_start'),
+            $this->formStep('form_submit'),
+            $this->formStep('form_success'),
+        ]);
+        self::assertSame([1, 1, 1], array_column($ordered['steps'], 'sessions'));
+
+        $after = $this->compute([$this->formStep('form_success'), $this->pageStep('/thanks/')]);
+        self::assertSame(0, $after['steps'][1]['sessions']);
+    }
+
+    /**
+     * When the attempt WAS stored first, nothing changes: the success keeps its
+     * own position, so a page the visitor viewed while the server was still
+     * working does not become "after the success".
+     */
+    public function testInTheOrdinaryOrderTheSuccessKeepsItsOwnPosition(): void
+    {
+        $this->formEvent('form_submit', 'norm1', ['event_value' => 'cnormalone000001']);
+        $this->view('norm1', '/pricing/', '2026-08-10 09:05:01');
+        $this->formEvent('form_success', 'norm1', ['event_value' => 'cnormalone000001']);
+
+        self::assertSame(1, $this->compute([$this->formStep('form_submit'), $this->formStep('form_success')])['steps'][1]['sessions']);
+        self::assertSame(0, $this->compute([$this->formStep('form_success'), $this->pageStep('/pricing/')])['steps'][1]['sessions']);
+    }
+
+    /**
+     * Goal steps order by source_event_id, on the same scale as an event id. A
+     * success placed after its attempt is still compared correctly against a
+     * goal the visitor completed on the way there.
+     */
+    public function testAGoalStepAndAPlacedSuccessShareOneScale(): void
+    {
+        $goalId = 'g' . str_repeat('f', 16);
+
+        $this->view('goalrace', '/land/', '2026-08-10 09:00:00');
+        $this->formEvent('form_success', 'goalrace', ['event_value' => 'cgoalrace0000001']);
+        $click = $this->insertEvent([
+            'event_type' => 'click',
+            'session_id' => 'goalrace',
+            'target_url' => 'tel:+15551234567',
+            'created_at' => '2026-08-10 09:05:00',
+        ]);
+        $this->formEvent('form_submit', 'goalrace', ['event_value' => 'cgoalrace0000001']);
+
+        self::$db->query(self::$db->prepare(
+            'INSERT INTO wp_cvmtry_goal_completions
+             (completion_id, goal_id, definition_hash, dedupe_key, event_uid, source_event_id,
+              session_id, page_url, created_at)
+             VALUES (%s, %s, %s, %s, %s, %d, %s, %s, %s)',
+            str_repeat('7', 32),
+            $goalId,
+            'abcdef123456',
+            str_repeat('8', 32),
+            str_repeat('9', 32),
+            $click,
+            'goalrace',
+            'https://example.com/land/',
+            '2026-08-10 09:05:00'
+        ));
+
+        $result = $this->compute([
+            $this->pageStep('/land/'),
+            ['type' => 'goal', 'value' => $goalId, 'label' => 'Called'],
+            $this->formStep('form_success'),
+        ]);
+
+        self::assertSame([1, 1, 1], array_column($result['steps'], 'sessions'));
+    }
+
+    /**
+     * The browser's own success event and the server's confirmation share one
+     * conversion id. Both are placed by the same attempt, and the session is
+     * still one session — including as a funnel's FIRST step.
+     */
+    public function testTheBrowsersAndTheServersSuccessCountAsOneSession(): void
+    {
+        $this->formEvent('form_success', 'dup1', ['event_value' => 'cduplicate000001']);
+        $this->formEvent('form_submit', 'dup1', ['event_value' => 'cduplicate000001']);
+        $this->formEvent('form_success', 'dup1', ['event_value' => 'cduplicate000001', 'form_key' => '']);
+        $this->view('dup1', '/thanks/', '2026-08-10 09:06:00');
+
+        $result = $this->compute([$this->formStep('form_success', ''), $this->pageStep('/thanks/')]);
+
+        self::assertSame([1, 1], array_column($result['steps'], 'sessions'));
+    }
+
+    /**
+     * Provider request hooks now emit the SAME key and token as their server
+     * integrations, including Atomic's document scope and Ninja's embed id.
+     *
+     * @dataProvider ajaxProviderKeys
+     */
+    public function testAjaxProviderAttemptsCompleteWhenBothConfirmationsArriveFirst(string $formKey): void
+    {
+        foreach (['cajaxfirst000001', 'cajaxsecond00001'] as $token) {
+            $this->formEvent('form_success', 'ajaxsession', ['form_key' => $formKey, 'event_value' => $token]);
+            $this->formEvent('form_submit', 'ajaxsession', ['form_key' => $formKey, 'event_value' => $token]);
+        }
+
+        $result = $this->compute([
+            $this->formStep('form_submit', $formKey),
+            $this->formStep('form_success', $formKey),
+            $this->formStep('form_submit', $formKey),
+            $this->formStep('form_success', $formKey),
+        ]);
+        self::assertSame([1, 1, 1, 1], array_column($result['steps'], 'sessions'));
+    }
+
+    /** @return array<string, array{string}> */
+    public static function ajaxProviderKeys(): array
+    {
+        return [
+            'Atomic document-scoped form' => ['elementor_atomic:42:abc123'],
+            'Atomic without a document id' => ['elementor_atomic:abc123'],
+            'Ninja repeated embed' => ['ninjaforms:3'],
+        ];
+    }
+
     // ── Shape ────────────────────────────────────────────────────────────────
 
     /**

@@ -5,6 +5,63 @@ All notable changes to Convermetry are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 1.1.2
+
+No schema change and no migration. Stored events are never rewritten.
+
+### Fixed
+
+- **A form field named `method` stopped the tracker starting.** A form exposes
+  its named controls as its own properties, so `form.method` was an element
+  and seeding — which runs synchronously while the deferred tracker
+  initializes — threw: no events, no `window.Convermetry`, and no correlation
+  fields for any later form. Every read the tracker makes of a form now goes
+  through the native accessor, and each form is seeded and observed on its
+  own, so one form's markup cannot stop the rest.
+- **A field named `action` let an external POST form receive correlation
+  data.** The destination is now resolved as the browser resolves it —
+  including a `<base href>` and the pressed button's `formaction` /
+  `formmethod` — and a submission that is not a same-origin `POST` has any
+  seeded `cvmtry_*` fields taken back out before the browser reads the form.
+- **A field named `id` cost a form its `form_view`, `form_start` and
+  `form_submit` events.** Labels are read from attributes, and only strings
+  become labels.
+- **The Forms screen showed misleading names.** `MAX(element_label)` chose by
+  collation, so `form` beat `Footer Feedback` and `demo-quote-request` beat
+  `Demo Quote Request`. The name is now chosen by a documented preference: a
+  real name over a placeholder, the form plugin's own title (latest
+  submission, then confirmed successes) over markup, a name over a slug, then
+  frequency and recency. `form_submit` now uses the same label as the form's
+  view and start, honoring `data-cvmtry-form-name`.
+- **Funnels and abandonment could miss a real completion when the server's
+  confirmation was stored before the browser's batch.** `form_submit` rows now
+  carry their attempt's conversion token in `event_value`, and a confirmed
+  success is ordered no earlier than the attempt with the same token in the
+  same session. No timestamp is used and nothing else moves. Events recorded
+  before this change carry no token and keep their previous (ingestion)
+  ordering.
+- **Ninja Forms and Elementor Atomic now participate in that ordering fix.**
+  Their outgoing request records one attempt with the same token, session and
+  form key as the server submission, even without a native submit event.
+  Native submits reserve tokens without double-counting; retries of the same
+  payload preserve them, and new submissions get fresh tokens. For these two
+  AJAX providers, client validation that sends no request is not counted as a
+  submission attempt. GET and cross-origin Atomic requests remain uncorrelated.
+- **Visitors on CUBOT phones were discarded as bots.** The filter matched the
+  bare substring `bot`; it now matches how crawlers, headless browsers and
+  scripted clients name themselves (`Googlebot/2.1`, a `+https://…` contact
+  URL, `HeadlessChrome`, `curl/`).
+
+### Tests
+
+- `tests/js/tracker-browser.test.mjs` runs the tracker in real headless Chrome,
+  driven over the DevTools protocol with no dependency, against forms whose
+  controls shadow the form's own properties. CI requires it to run.
+- AJAX transport regressions cover native and AJAX-only attempts, retries,
+  fresh submissions, provider form keys, privacy gates and disabled tracking.
+  Browser tests inspect the serialized requests; MySQL tests verify repeated
+  submissions whose confirmations were stored before their attempts.
+
 ## 1.1.1
 
 Resolves the two warnings WordPress Plugin Check reported against 1.1.0. No

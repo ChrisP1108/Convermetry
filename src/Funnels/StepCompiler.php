@@ -5,6 +5,8 @@ namespace Convermetry\Funnels;
 
 if (!defined('ABSPATH')) exit;
 
+use Convermetry\Database\EventOrder;
+
 /**
  * Turns one funnel step into the SQL fragment that identifies it.
  *
@@ -23,6 +25,8 @@ if (!defined('ABSPATH')) exit;
  * the entire reason completions carry it: without it a funnel could not ask
  * "did this goal happen after that pageview?" without inventing a marker row,
  * and marker rows sort wrongly (see {@see \Convermetry\Goals\GoalRecorder}).
+ * A form_success step is placed no earlier than the attempt that caused it,
+ * still on that scale ({@see EventOrder}).
  *
  * CASE SENSITIVITY is inherited from the column collation, which for WordPress
  * is a *_ci collation — so `=` and `LIKE` here are case-insensitive, matching
@@ -114,7 +118,12 @@ final class StepCompiler
     }
 
     /**
-     * The column carrying a step's position on the shared ordering scale.
+     * The SQL carrying a step's position on the shared ordering scale.
+     *
+     * A goal step's position is its source_event_id, and an event step's is its
+     * id — except a form_success step's, which is never earlier than the
+     * attempt that caused it ({@see EventOrder}); that expression reads the
+     * attempt {@see positionJoin()} attaches.
      *
      * @param array<string, mixed> $step  A normalized funnel step.
      * @param string               $alias The SQL alias.
@@ -122,7 +131,37 @@ final class StepCompiler
      */
     public static function positionColumn(array $step, string $alias): string
     {
-        return self::isGoalStep($step) ? "{$alias}.source_event_id" : "{$alias}.id";
+        return match ((string) ($step['type'] ?? '')) {
+            'goal'         => "{$alias}.source_event_id",
+            'form_success' => EventOrder::successPosition($alias, self::attemptAlias($alias)),
+            default        => "{$alias}.id",
+        };
+    }
+
+    /**
+     * The join {@see positionColumn()} needs for this step, or '' for none.
+     *
+     * @param array<string, mixed> $step   A normalized funnel step.
+     * @param string               $alias  The SQL alias.
+     * @param string               $events The events table name.
+     * @return string
+     */
+    public static function positionJoin(array $step, string $alias, string $events): string
+    {
+        return (string) ($step['type'] ?? '') === 'form_success'
+            ? EventOrder::attemptJoin($events, $alias, self::attemptAlias($alias))
+            : '';
+    }
+
+    /**
+     * The alias a form_success step's attempt is joined under.
+     *
+     * @param string $alias The step's own alias.
+     * @return string
+     */
+    private static function attemptAlias(string $alias): string
+    {
+        return $alias . '_attempt';
     }
 
     /**

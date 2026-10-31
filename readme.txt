@@ -4,7 +4,7 @@ Tags: analytics, lead tracking, utm, webhooks, forms
 Requires at least: 6.3
 Tested up to: 7.1
 Requires PHP: 8.3
-Stable tag: 1.1.1
+Stable tag: 1.1.2
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -153,6 +153,14 @@ Deactivating stops tracking and scheduled tasks but keeps your data. Deleting th
 
 == Changelog ==
 
+= 1.1.2 =
+* Fix: a form field named `method` no longer stops the tracker from starting. Previously no events were recorded on that page and later forms lost their session link. One form's markup can no longer affect the others.
+* Fix: a form field named `action` can no longer make an external form look like one on your site. Session and campaign data is only added to forms that post to your own site, as the browser actually sends them — including a `<base>` URL and the submit button's own destination.
+* Fix: a form field named `id` no longer loses that form's view, start and submit-attempt events.
+* Fix: the Forms screen lists each form under a meaningful name. It prefers your form plugin's own title over labels read from the page, and never shows the generic "form" when a real name is known. Submit attempts now use the same name as the form's views and starts, including `data-cvmtry-form-name`.
+* Fix: funnels and abandonment no longer miss a completed submission when the form plugin confirmed it before the browser's tracking request arrived. Each submit attempt now carries its conversion token, so a confirmed submission is always ordered after its own attempt. This includes Ninja Forms and Elementor Atomic forms. Events recorded before 1.1.2 keep their previous order.
+* Fix: visitors on phones whose model name contains "bot", such as CUBOT handsets, are no longer discarded as bots. Search crawlers, headless browsers and scripted clients are still filtered.
+
 = 1.1.1 =
 * Hardening: the JSON export handlers on the Submissions screen verify their nonce in the same step that reads the request, and the shared export nonce check reads and unslashes the nonce directly, resolving two WordPress Plugin Check warnings. Export behavior and permissions are unchanged.
 
@@ -194,6 +202,9 @@ Deactivating stops tracking and scheduled tasks but keeps your data. Deleting th
 * Changed: first public release on WordPress.org. Earlier 0.x versions were distributed privately; their full history is in CHANGELOG.md, included with the plugin.
 
 == Upgrade Notice ==
+
+= 1.1.2 =
+Fixes form tracking for fields named method, action or id, form names on the Forms screen, funnel completions, and CUBOT phones being treated as bots. No settings or data change on upgrade.
 
 = 1.1.1 =
 Resolves two Plugin Check warnings in the export handlers. No settings, data or behavior change on upgrade.

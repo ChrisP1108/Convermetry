@@ -68,8 +68,19 @@ jobs:
         run: |
           node tests/js/bricks-tracker.test.mjs
           node tests/js/ninja-tracker.test.mjs
+          node tests/js/ajax-attempts.test.mjs
           node tests/js/form-events.test.mjs
           node tests/js/admin-confirm.test.mjs
+
+      # The shim above cannot model a form's named controls shadowing the
+      # form's own properties (<input name="method"> makes form.method an
+      # element), so this runs the tracker in the runner's preinstalled Chrome.
+      # It skips itself when no browser is found, which is right for a laptop
+      # and wrong here: CVMTRY_REQUIRE_BROWSER turns that skip into a failure.
+      - name: Tracker in a real browser
+        env:
+          CVMTRY_REQUIRE_BROWSER: '1'
+        run: node tests/js/tracker-browser.test.mjs
 
   analyse:
     name: Static analysis (PHPStan level 8)

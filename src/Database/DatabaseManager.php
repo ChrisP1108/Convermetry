@@ -52,6 +52,12 @@ use Convermetry\Tracking\Channels;
  * tracker's array order becomes batch_seq order becomes id order. Across
  * batches, the order is delivery order, so a batch that failed and was resent
  * from a later page sorts by when it arrived.
+ *
+ * The server-confirmed form_success is written by the form plugin's request,
+ * not the tracker's, so it can be stored before the batch holding the attempt
+ * that caused it. form_submit rows carry that attempt's conversion token in
+ * event_value for exactly this reason: a success is ordered no earlier than its
+ * own attempt. {@see EventOrder} owns that rule.
  */
 final class DatabaseManager
 {

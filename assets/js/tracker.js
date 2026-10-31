@@ -427,36 +427,187 @@
     }
 
     /** Destination URL with query string and fragment removed (they can carry
-     *  tokens or emails); mailto:/tel: destinations are kept whole. */
+     *  tokens or emails); mailto:/tel: destinations are kept whole. Anything
+     *  but a string — a named control shadowing an element's href — is no
+     *  destination at all. */
     function cleanTarget(url) {
-        if (!url) {
+        if (!url || typeof url !== 'string') {
             return '';
         }
         if (/^(mailto:|tel:)/i.test(url)) {
-            return String(url).slice(0, 255);
+            return url.slice(0, 255);
         }
-        return String(url).split('#')[0].split('?')[0];
+        return url.split('#')[0].split('?')[0];
+    }
+
+    /* ------------------------------------------------------------------ *
+     *  Reading an element without trusting its own properties
+     *
+     *  A <form> exposes each named control as a property of itself, and the
+     *  control WINS over the form's own property of the same name (the HTML
+     *  spec's [LegacyOverrideBuiltIns]). <input name="method"> makes
+     *  form.method that input; "action", "id" and "className" behave the
+     *  same, and so would "getAttribute" or "querySelector". Real forms have
+     *  fields called exactly these things, so every read the tracker makes of
+     *  an element that may be a form goes through the native accessor on the
+     *  prototype, which no control can reach.
+     *
+     *  Declared up here because seedCorrelationFields() runs synchronously
+     *  while the tracker initializes (see FORM_ATTR above).
+     *
+     *  Outside a real DOM (no Element / HTMLFormElement) each helper falls
+     *  back to the element's own method, which is all a shim provides.
+     * ------------------------------------------------------------------ */
+
+    const ELEMENT_PROTO = typeof Element === 'function' ? Element.prototype : null;
+
+    /** The native getter for one IDL attribute, or null where there is none. */
+    function nativeGetter(ctor, name) {
+        try {
+            const descriptor = typeof ctor === 'function'
+                ? Object.getOwnPropertyDescriptor(ctor.prototype, name)
+                : null;
+            return descriptor && typeof descriptor.get === 'function' ? descriptor.get : null;
+        } catch (e) {
+            return null;
+        }
+    }
+
+    const GET_TAG_NAME = nativeGetter(typeof Element === 'function' ? Element : null, 'tagName');
+    const GET_FORM_METHOD = nativeGetter(typeof HTMLFormElement === 'function' ? HTMLFormElement : null, 'method');
+    const GET_FORM_ACTION = nativeGetter(typeof HTMLFormElement === 'function' ? HTMLFormElement : null, 'action');
+
+    /** Calls one Element method on el through the prototype; null when el is
+     *  not an element or the call throws (an invalid selector, say). */
+    function callElement(el, name, args) {
+        if (!el) {
+            return null;
+        }
+        try {
+            const native = ELEMENT_PROTO ? ELEMENT_PROTO[name] : null;
+            if (typeof native === 'function') {
+                return native.apply(el, args);
+            }
+            return typeof el[name] === 'function' ? el[name].apply(el, args) : null;
+        } catch (e) {
+            return null;
+        }
+    }
+
+    /** An attribute's value, or null — never a shadowing control. */
+    function attr(el, name) {
+        const value = callElement(el, 'getAttribute', [name]);
+        return typeof value === 'string' ? value : null;
+    }
+
+    function hasAttr(el, name) {
+        return callElement(el, 'hasAttribute', [name]) === true;
+    }
+
+    function queryOne(el, selector) {
+        return callElement(el, 'querySelector', [selector]);
+    }
+
+    function queryAll(el, selector) {
+        return callElement(el, 'querySelectorAll', [selector]) || [];
+    }
+
+    function closestOf(el, selector) {
+        return callElement(el, 'closest', [selector]);
+    }
+
+    /** An element's tag name, upper-cased; '' for anything that is not one. */
+    function tagOf(el) {
+        if (!el) {
+            return '';
+        }
+        try {
+            const tag = GET_TAG_NAME ? GET_TAG_NAME.call(el) : el.tagName;
+            return typeof tag === 'string' ? tag.toUpperCase() : '';
+        } catch (e) {
+            return '';
+        }
+    }
+
+    function isForm(el) {
+        return tagOf(el) === 'FORM';
+    }
+
+    /** One method value as form submission reads it: missing and unknown
+     *  values are GET, per the spec. */
+    function normalizedMethod(value) {
+        const method = String(value || '').toLowerCase();
+        return method === 'post' || method === 'dialog' ? method : 'get';
+    }
+
+    /**
+     * The method a submission will actually use. A submit button's formmethod
+     * overrides the form's own; the native getter reads the form's attribute,
+     * not a control named "method".
+     */
+    function submissionMethod(form, submitter) {
+        if (submitter && hasAttr(submitter, 'formmethod')) {
+            return normalizedMethod(attr(submitter, 'formmethod'));
+        }
+        if (GET_FORM_METHOD) {
+            try {
+                return normalizedMethod(GET_FORM_METHOD.call(form));
+            } catch (e) {
+                return 'get';
+            }
+        }
+        return normalizedMethod(attr(form, 'method'));
+    }
+
+    /**
+     * The URL a submission will actually go to, resolved exactly as the
+     * browser resolves it — so the browser's own getters are used wherever
+     * they exist. A submit button's formaction overrides the form's action. A
+     * missing or empty action posts back to the document's own URL; anything
+     * else resolves against the document's BASE URL, so a <base href> counts.
+     */
+    function submissionUrl(form, submitter) {
+        let raw;
+        if (submitter && hasAttr(submitter, 'formaction')) {
+            // A button cannot be shadowed by a named control; only a form can.
+            if (typeof submitter.formAction === 'string') {
+                return submitter.formAction;
+            }
+            raw = attr(submitter, 'formaction');
+        } else if (GET_FORM_ACTION) {
+            return GET_FORM_ACTION.call(form);
+        } else {
+            raw = attr(form, 'action');
+        }
+        if (!raw) {
+            return document.URL || location.href;
+        }
+        return new URL(raw, document.baseURI || location.href).href;
     }
 
     /* ------------------------------------------------------------------ *
      *  Event queue and delivery
      * ------------------------------------------------------------------ */
 
-    /** Collapses whitespace and truncates a label to a storable length. */
+    /** Collapses whitespace and truncates a label to a storable length.
+     *  Only a string or a number is a label: a control shadowing a form
+     *  property (<input name="id">) is an element, and neither it nor its
+     *  "[object HTMLInputElement]" may become one. */
     function cleanLabel(text) {
-        return (text || '').replace(/\s+/g, ' ').trim().slice(0, 120);
+        const raw = typeof text === 'string' || typeof text === 'number' ? String(text) : '';
+        return raw.replace(/\s+/g, ' ').trim().slice(0, 120);
     }
 
     /** Best human-readable label for an element: aria-label > text/value > id. */
     function labelFor(el) {
-        return cleanLabel(el.getAttribute('aria-label'))
+        return cleanLabel(attr(el, 'aria-label'))
             || cleanLabel(el.innerText || el.value)
-            || cleanLabel(el.id);
+            || cleanLabel(attr(el, 'id'));
     }
 
     /** True when the element lives inside the WP admin bar (never tracked). */
     function inAdminBar(el) {
-        return !!(el.closest && el.closest('#wpadminbar'));
+        return !!closestOf(el, '#wpadminbar');
     }
 
     /**
@@ -465,13 +616,15 @@
      * snapshot are attached here so callers only supply the event-specific
      * fields — every event type can be segmented by campaign and channel.
      */
-    function track(type, data) {
+    function track(type, data, correlation) {
         if (!config.events[type]) {
             return;
         }
 
         const event = data || {};
-        const attribution = campaignSnapshot();
+        // A provider retry/late confirmation belongs to the original attempt,
+        // even if this tab has since entered a new analytics session.
+        const attribution = correlation ? correlation.attribution : campaignSnapshot();
         for (const key in attribution) {
             if (attribution.hasOwnProperty(key) && !event[key]) {
                 event[key] = attribution[key];
@@ -481,7 +634,7 @@
         event.page_url = PAGE_URL;
         event.page_title = document.title || '';
         event.referrer = REFERRER;
-        event.session_id = sessionId();
+        event.session_id = correlation ? correlation.session : sessionId();
 
         // The session's landing page rides along on the three event types a
         // goal can be matched against, so a goal completion can record where the
@@ -869,13 +1022,13 @@
      * ------------------------------------------------------------------ */
 
     document.addEventListener('click', function (e) {
-        const el = e.target && e.target.closest ? e.target.closest(INTERACTIVE) : null;
+        const el = closestOf(e.target, INTERACTIVE);
         if (!el || inAdminBar(el)) {
             return;
         }
 
         const clickEvent = {
-            element_tag: el.tagName.toLowerCase(),
+            element_tag: tagOf(el).toLowerCase(),
             element_label: labelFor(el),
             target_url: cleanTarget(el.href)
         };
@@ -931,23 +1084,94 @@
      *  instead of silently re-reporting the previous conversion. */
     const freshTokens = (typeof WeakSet === 'function') ? new WeakSet() : null;
 
+    // Atomic and Ninja serialize their own request bodies. A native submit
+    // reserves a token; the transport records the attempt once its authoritative
+    // form identity is known. A repeated send of the SAME payload is a retry,
+    // whereas a new payload (or a new native submit) is a new attempt.
+    const pendingTransportAttempts = (typeof WeakMap === 'function') ? new WeakMap() : null;
+    const transportRequests = (typeof WeakMap === 'function') ? new WeakMap() : null;
+
+    function usesFormTransport(form) {
+        return attr(form, 'data-element_type') === 'e-form' ||
+            closestOf(form, '.nf-form-cont') !== null;
+    }
+
+    function newTransportAttempt() {
+        return {
+            token: 'c' + randomHex(16),
+            session: sessionId(),
+            attribution: campaignSnapshot(),
+            context: JSON.stringify(correlationContext()),
+            confirmed: false
+        };
+    }
+
+    /** Records only the first send of a provider request. Neither pre-seeded
+     *  fields nor a previous completed submission can supply this token. */
+    function transportAttempt(form, request, formKey, label) {
+        const pending = form && pendingTransportAttempts ? pendingTransportAttempts.get(form) : null;
+        const previous = transportRequests ? transportRequests.get(request) : null;
+        if (!pending && previous) {
+            return previous;
+        }
+
+        // Validation may have kept a native submit pending across a session
+        // rotation. Nothing was sent yet, so start in the current session.
+        const attempt = pending && pending.session === sessionId() ? pending : newTransportAttempt();
+        if (form && pendingTransportAttempts) {
+            pendingTransportAttempts.delete(form);
+        }
+        if (form && formTokens) {
+            formTokens.set(form, attempt.token);
+        }
+        if (transportRequests) {
+            transportRequests.set(request, attempt);
+        }
+
+        track('form_submit', {
+            element_tag: 'form',
+            element_label: cleanLabel(label) || (form ? formLabel(form) : 'form'),
+            form_key: formKey,
+            event_value: attempt.token
+        }, attempt);
+        flush('normal');
+        return attempt;
+    }
+
     /** Creates or updates one hidden input on a form. */
     function setHiddenField(form, name, value) {
-        let input = null;
-        try {
-            const candidates = form.querySelectorAll('input[name="' + name + '"]');
-            input = candidates.length ? candidates[0] : null;
-        } catch (e) {
-            input = null;
-        }
+        const candidates = queryAll(form, 'input[name="' + name + '"]');
+        let input = candidates.length ? candidates[0] : null;
 
         if (!input) {
             input = document.createElement('input');
             input.type = 'hidden';
             input.name = name;
-            form.appendChild(input);
+            if (typeof Node === 'function') {
+                Node.prototype.appendChild.call(form, input);
+            } else {
+                form.appendChild(input);
+            }
         }
         input.value = value;
+    }
+
+    /** Takes the correlation fields back out of a form whose submission must
+     *  not carry them. The names are Convermetry's own, so nothing else's
+     *  data is touched. */
+    function clearCorrelationFields(form) {
+        const names = [FIELD_CONVERSION, FIELD_SESSION, FIELD_CONTEXT];
+        for (let i = 0; i < names.length; i++) {
+            const inputs = queryAll(form, 'input[name="' + names[i] + '"]');
+            for (let j = inputs.length - 1; j >= 0; j--) {
+                if (typeof inputs[j].remove === 'function') {
+                    inputs[j].remove();
+                }
+            }
+        }
+        if (formTokens) {
+            formTokens.delete(form); // That token never travelled.
+        }
     }
 
     /** The compact attribution snapshot serialized into cvmtry_context. */
@@ -980,7 +1204,7 @@
      * submission that bypasses the submit event still carries stable fields.
      */
     function ensureCorrelationFields(form, fresh) {
-        if (!form || form.tagName !== 'FORM') {
+        if (!isForm(form)) {
             return null;
         }
 
@@ -998,7 +1222,7 @@
             // JSON serialization failed — the token and session still travel.
         }
 
-        const gfMatch = /^gform_(\d+)$/.exec(form.id || '');
+        const gfMatch = /^gform_(\d+)$/.exec(attr(form, 'id') || '');
         if (gfMatch) {
             gfTokens[gfMatch[1]] = token;
         }
@@ -1041,63 +1265,67 @@
      * So the rule is: a form the server actually correlates, submitted as a
      * same-origin POST, that the site owner has not opted out.
      *
+     * "Submitted as" means the submission the browser will really make: the
+     * method and destination are read through the native getters, so a field
+     * named "method" or "action" cannot stand in for them, and a submit
+     * button's formmethod / formaction count when one is pressed.
+     *
      * Note Elementor is matched here but deliberately absent from
      * formIdentity(), which answers a different question: its server side still
      * keys per-form settings by form NAME, so a derived REPORTING key would
      * never join. It does read the correlation fields, and its jQuery success
      * event correlates through tokenFor(), so it must still be seeded.
+     *
+     * @param {Element} form
+     * @param {Element|null} submitter The submit button pressed, when known.
      */
-    function correlatableForm(form) {
-        if (!form || form.tagName !== 'FORM') {
+    function correlatableForm(form, submitter) {
+        if (!isForm(form)) {
             return false;
         }
-        if (inAdminBar(form) || form.hasAttribute('data-cvmtry-ignore')) {
+        if (inAdminBar(form) || hasAttr(form, 'data-cvmtry-ignore')) {
             return false;
         }
 
         // A form the server correlates: a supported provider, or one the site
         // declared for the custom-form API with data-cvmtry-form-key.
-        let recognized = formIdentity(form) !== '';
-        if (!recognized) {
-            try {
-                recognized = form.matches(PROVIDER_FORM_SELECTOR) ||
-                    form.closest(PROVIDER_FORM_SELECTOR) !== null;
-            } catch (e) {
-                recognized = false; // No matches/closest — leave the form alone.
-            }
-        }
+        const recognized = formIdentity(form) !== '' ||
+            callElement(form, 'matches', [PROVIDER_FORM_SELECTOR]) === true ||
+            closestOf(form, PROVIDER_FORM_SELECTOR) !== null;
         if (!recognized) {
             return false;
         }
 
-        // Never put correlation data in a query string. The form.method IDL
-        // attribute normalizes to 'get' when unset or unrecognized.
-        if ((form.method || '').toLowerCase() !== 'post') {
+        // Never put correlation data in a query string — and a dialog
+        // "submission" sends nothing anywhere.
+        if (submissionMethod(form, submitter) !== 'post') {
             return false;
         }
 
-        // Never hand it to another origin. An empty action posts to the current
-        // URL; form.action resolves relative values against the document.
+        // Never hand it to another origin.
         try {
-            const action = form.getAttribute('action');
-            if (action && new URL(form.action, location.href).origin !== location.origin) {
-                return false;
-            }
+            return new URL(submissionUrl(form, submitter), location.href).origin === location.origin;
         } catch (e) {
-            return false; // Unparseable action — treat as untrusted.
+            return false; // Unparseable destination — treat as untrusted.
         }
-
-        return true;
     }
 
     /** Seeds correlation fields into every correlatable form currently in the
      *  DOM, so non-AJAX submissions (and plugins that serialize early) carry
-     *  them even if the submit-capture refresh never runs. */
+     *  them even if the submit-capture refresh never runs.
+     *
+     *  Each form is handled on its own. This first runs synchronously while
+     *  the tracker initializes, so one form's markup must be able to stop
+     *  neither the forms after it nor the tracker itself. */
     function seedCorrelationFields() {
         const forms = document.querySelectorAll('form');
         for (let i = 0; i < forms.length; i++) {
-            if (correlatableForm(forms[i])) {
-                ensureCorrelationFields(forms[i], false);
+            try {
+                if (correlatableForm(forms[i], null)) {
+                    ensureCorrelationFields(forms[i], false);
+                }
+            } catch (e) {
+                // Leave this form unseeded; the submit listener tries again.
             }
         }
     }
@@ -1144,7 +1372,7 @@
         try {
             const forms = document.querySelectorAll(ATOMIC_FORM_SELECTOR);
             for (let i = 0; i < forms.length; i++) {
-                if (forms[i].getAttribute('data-id') === String(formId)) {
+                if (attr(forms[i], 'data-id') === String(formId)) {
                     return forms[i];
                 }
             }
@@ -1155,8 +1383,8 @@
     }
 
     /**
-     * Appends the correlation values to an Atomic submission and returns the
-     * conversion token that travelled, or null when the request was left alone.
+     * Appends the correlation values to an Atomic submission and returns its
+     * attempt, or null when the request was left alone.
      *
      * Returns null — changing nothing — for a form the site owner opted out of
      * with data-cvmtry-ignore, and for one inside the admin bar, matching the rule
@@ -1165,27 +1393,23 @@
     function correlateAtomicRequest(body, formId) {
         const form = atomicFormElement(formId);
 
-        if (form && (inAdminBar(form) || form.hasAttribute('data-cvmtry-ignore'))) {
+        if (form && (inAdminBar(form) || hasAttr(form, 'data-cvmtry-ignore'))) {
             return null;
         }
 
-        // A fresh token per submission attempt, remembered against the form
-        // element so the success handler below reports the SAME conversion the
-        // server just recorded rather than inventing a second one.
-        const token = 'c' + randomHex(16);
-        if (form && formTokens) {
-            formTokens.set(form, token);
-        }
+        // Mirror AtomicFormsBridge::nativeId(): document id + element id.
+        // The outgoing payload is authoritative, including reused templates.
+        const elementId = typeof formId === 'string' ? formId.trim() : '';
+        const rawPostId = body.get('post_id');
+        const postId = typeof rawPostId === 'string' ? rawPostId.trim() : '';
+        const key = elementId ? ('elementor_atomic:' + (postId ? postId + ':' : '') + elementId).slice(0, 191) : '';
+        const attempt = transportAttempt(form, body, key, body.get('form_name'));
 
-        body.set(FIELD_CONVERSION, token);
-        body.set(FIELD_SESSION, sessionId());
-        try {
-            body.set(FIELD_CONTEXT, JSON.stringify(correlationContext()));
-        } catch (e) {
-            // The token and session still travel without the snapshot.
-        }
+        body.set(FIELD_CONVERSION, attempt.token);
+        body.set(FIELD_SESSION, attempt.session);
+        body.set(FIELD_CONTEXT, attempt.context);
 
-        return token;
+        return attempt;
     }
 
     /** Whether a fetch call is Elementor's Atomic form submission. */
@@ -1195,6 +1419,9 @@
         }
 
         try {
+            if (String(init.method || 'GET').toUpperCase() !== 'POST') {
+                return false;
+            }
             if (init.body.get('action') !== ATOMIC_ACTION) {
                 return false;
             }
@@ -1215,14 +1442,14 @@
         const nativeFetch = window.fetch;
 
         window.fetch = function (input, init) {
-            let token = null;
+            let attempt = null;
 
             try {
                 if (isAtomicSubmission(input, init)) {
-                    token = correlateAtomicRequest(init.body, init.body.get('form_id'));
+                    attempt = correlateAtomicRequest(init.body, init.body.get('form_id'));
                 }
             } catch (e) {
-                token = null; // Never let instrumentation break a submission.
+                attempt = null; // Never let instrumentation break a submission.
             }
 
             // Bound to window, not to `this`: the tracker runs in strict mode,
@@ -1230,20 +1457,21 @@
             // browser rejects the invocation.
             const response = nativeFetch.apply(window, arguments);
 
-            if (!token || !response || typeof response.then !== 'function') {
+            if (!attempt || !response || typeof response.then !== 'function') {
                 return response;
             }
 
             // A CONFIRMED conversion only: Elementor answers this request after
             // its server side ran the form's actions, and the body reports
-            // whether it accepted the submission. An attempt is already tracked
-            // by the submit listener below and is not a conversion.
+            // whether it accepted the submission. A retry may return success
+            // twice; both responses belong to the same attempt.
             return response.then(function (res) {
                 try {
                     if (res && res.ok && typeof res.clone === 'function') {
                         res.clone().json().then(function (data) {
-                            if (data && data.success) {
-                                trackConversion('elementor-atomic-form', token);
+                            if (data && data.success && !attempt.confirmed) {
+                                attempt.confirmed = true;
+                                trackConversion('elementor-atomic-form', attempt.token, attempt);
                             }
                         }).catch(function () {
                             // Not JSON, or already consumed — no conversion claimed.
@@ -1273,25 +1501,63 @@
             return;
         }
 
+        // These providers send their own AJAX payload, not the form's fields.
+        // Reserve in memory only (their HTML method may be GET), then let that
+        // request hook record one attempt with the server's actual form key.
+        // Client validation that sends no request does not become an AJAX
+        // submission attempt. bindJQuery also covers a late-loading Ninja UI.
+        if (usesFormTransport(form)) {
+            try {
+                clearCorrelationFields(form);
+                if (pendingTransportAttempts) {
+                    pendingTransportAttempts.set(form, newTransportAttempt());
+                }
+            } catch (err) {
+                // The request hook can still create the attempt independently.
+            }
+            bindJQueryFormEvents();
+            return;
+        }
+
+        // The button that was pressed, when the browser says (SubmitEvent).
+        // Its formaction / formmethod decide where THIS submission goes.
+        const submitter = e.submitter || null;
+        let token = '';
+
         // Refresh the correlation fields with a fresh conversion token for
         // THIS attempt — capture phase runs before the form plugin's own
         // submit handler serializes the form, so the AJAX request carries
-        // the fields. Only for forms the server actually correlates.
-        if (correlatableForm(form)) {
-            ensureCorrelationFields(form, true);
-            if (freshTokens) {
-                freshTokens.add(form);
+        // the fields. Only for forms the server actually correlates, and only
+        // when this submission is a same-origin POST. A form seeded at load
+        // can still be sent elsewhere — by a button's formaction or
+        // formmethod, or by script that changed its action since — so
+        // anything seeded is taken back out before the browser reads the
+        // form. Guarded so the attempt below is recorded whatever happens.
+        try {
+            if (correlatableForm(form, submitter)) {
+                token = ensureCorrelationFields(form, true) || '';
+                if (freshTokens) {
+                    freshTokens.add(form);
+                }
+            } else {
+                clearCorrelationFields(form);
             }
+        } catch (err) {
+            token = '';
         }
 
         // form_key is what the Forms screen's Attempts column counts by, as
-        // form_view and form_start already carry it.
-        track('form_submit', {
-            element_tag: 'form',
-            element_label: cleanLabel(form.getAttribute('name') || form.id || form.getAttribute('aria-label')) || 'form',
-            target_url: cleanTarget(form.getAttribute('action')),
-            form_key: formIdentity(form)
-        });
+        // form_view and form_start already carry it, under the same label.
+        // event_value is this attempt's conversion token: the id the server
+        // records the confirmed success under, which is how the reports know
+        // the success came AFTER this attempt even when the server's write
+        // lands first (see EventOrder on the server).
+        const attempt = formEventData(form);
+        attempt.target_url = cleanTarget(attr(form, 'action'));
+        if (token) {
+            attempt.event_value = token;
+        }
+        track('form_submit', attempt);
 
         // A submit is also the moment jQuery (if used at all) has almost
         // certainly finished loading, even past the fixed attempts below —
@@ -1314,7 +1580,7 @@
      *  record is self-contained even days after the tagged landing.
      * ------------------------------------------------------------------ */
 
-    function trackConversion(label, token) {
+    function trackConversion(label, token, correlation) {
         // Reuse the submission attempt's correlation token when the success
         // event could be tied back to its form — the server-side provider
         // hook records the conversion under the same id, so the two paths
@@ -1325,13 +1591,13 @@
             element_tag: 'form',
             element_label: cleanLabel(label) || 'form',
             event_value: valid ? token : 'c' + randomHex(16)
-        });
+        }, correlation);
         flush('normal');
     }
 
     /** The form element a plugin's success event fired on, or null. */
     function eventForm(e) {
-        return e.target && e.target.tagName === 'FORM' ? e.target : null;
+        return isForm(e.target) ? e.target : null;
     }
 
     /** The correlation token remembered for a form element, or null. */
@@ -1344,10 +1610,7 @@
     document.addEventListener('wpcf7mailsent', function (e) {
         const id = e.detail && e.detail.contactFormId;
         const wrapper = e.target;
-        let form = null;
-        if (wrapper) {
-            form = wrapper.tagName === 'FORM' ? wrapper : (wrapper.querySelector ? wrapper.querySelector('form') : null);
-        }
+        const form = isForm(wrapper) ? wrapper : queryOne(wrapper, 'form');
         trackConversion(id ? 'cf7-' + id : 'cf7', tokenFor(form));
     });
 
@@ -1375,9 +1638,8 @@
      * values must never be stored there, nor be submitted data anywhere.
      *
      * One fresh token per request = one per attempt, as for every other
-     * provider. Ninja Forms has no client-side success event the tracker
-     * reports, so nothing is remembered: the server records the conversion
-     * under the token it received. */
+     * provider. The request hook records the attempt even when Ninja emits no
+     * native submit. The server records the success under that same token. */
     function correlateNinjaFormsRequest(options, originalOptions) {
         try {
             const data = originalOptions && originalOptions.data;
@@ -1395,21 +1657,38 @@
             // the request Ninja Forms built; it is only ever passed to
             // getElementById, never interpolated into a selector.
             let formId = '';
+            let formName = '';
             try {
-                formId = String(JSON.parse(data.formData).id || '');
+                const model = JSON.parse(data.formData);
+                formId = String(model.id || '');
+                formName = model.settings && model.settings.title;
             } catch (e) {
                 formId = '';
             }
             const container = formId ? document.getElementById('nf-form-' + formId + '-cont') : null;
-            if (container && container.hasAttribute('data-cvmtry-ignore')) {
+            const form = isForm(container) ? container : queryOne(container, 'form');
+            if ((container && (inAdminBar(container) || hasAttr(container, 'data-cvmtry-ignore'))) ||
+                (form && !trackableForm(form))) {
                 return;
             }
 
+            // Multiple embeds use ids such as "3_2"; the server keys those as
+            // ninjaforms:3 (NinjaFormsProvider::normalizeFormId()).
+            const nativeId = formId.split('_')[0];
+            const key = /^\d+$/.test(nativeId) ? ('ninjaforms:' + nativeId).slice(0, 191) : '';
+            const attempt = transportAttempt(form, data, key, formName);
+
             const pairs = [
-                [FIELD_CONVERSION, 'c' + randomHex(16)],
-                [FIELD_SESSION, sessionId()],
-                [FIELD_CONTEXT, JSON.stringify(correlationContext())]
+                [FIELD_CONVERSION, attempt.token],
+                [FIELD_SESSION, attempt.session],
+                [FIELD_CONTEXT, attempt.context]
             ];
+            // Reusing the same options object must replace our values rather
+            // than append duplicates PHP would resolve ambiguously.
+            options.data = options.data.split('&').filter(function (pair) {
+                const name = pair.split('=')[0];
+                return name !== FIELD_CONVERSION && name !== FIELD_SESSION && name !== FIELD_CONTEXT;
+            }).join('&');
             options.data += (options.data === '' ? '' : '&') + pairs.map(function (pair) {
                 return encodeURIComponent(pair[0]) + '=' + encodeURIComponent(pair[1]);
             }).join('&');
@@ -1435,12 +1714,12 @@
 
         window.jQuery(document).on('submit_success', function (e) {
             const form = eventForm(e);
-            trackConversion((form && (form.getAttribute('name') || form.id)) || 'elementor-form', tokenFor(form));
+            trackConversion((form && formName(form)) || 'elementor-form', tokenFor(form));
         });
 
         window.jQuery(document).on('wpformsAjaxSubmitSuccess', function (e) {
             const form = eventForm(e);
-            trackConversion((form && (form.getAttribute('name') || form.id)) || 'wpforms', tokenFor(form));
+            trackConversion((form && formName(form)) || 'wpforms', tokenFor(form));
         });
 
         window.jQuery(document).on('gform_confirmation_loaded', function (e, formId) {
@@ -1570,7 +1849,7 @@
             const form = bricksFormElement(elementId);
 
             // The same rules every other form on the page is held to.
-            if (form && (inAdminBar(form) || form.hasAttribute('data-cvmtry-ignore'))) {
+            if (form && (inAdminBar(form) || hasAttr(form, 'data-cvmtry-ignore'))) {
                 return;
             }
 
@@ -1713,68 +1992,81 @@
      * page level with an honest gap beats a number that silently means nothing.
      */
     function formIdentity(form) {
-        const declared = form.getAttribute(FORM_ATTR);
+        const declared = attr(form, FORM_ATTR);
         if (declared) {
-            return String(declared).slice(0, 191);
+            return declared.slice(0, 191);
         }
 
+        const id = attr(form, 'id') || '';
         let match;
 
         // Gravity Forms — <form id="gform_7">
-        match = /^gform_(\d+)$/.exec(form.id || '');
+        match = /^gform_(\d+)$/.exec(id);
         if (match) {
             return 'gravityforms:' + match[1];
         }
 
         // WPForms — <form id="wpforms-form-123">
-        match = /^wpforms-form-(\d+)$/.exec(form.id || '');
+        match = /^wpforms-form-(\d+)$/.exec(id);
         if (match) {
             return 'wpforms:' + match[1];
         }
 
         // Contact Form 7 — hidden _wpcf7 input carries the post id.
-        const cf7 = form.querySelector('input[name="_wpcf7"]');
+        const cf7 = queryOne(form, 'input[name="_wpcf7"]');
         if (cf7 && cf7.value) {
             return 'contactform7:' + cf7.value;
         }
 
         // Fluent Forms — data-form_id on the form element.
-        const fluent = form.getAttribute('data-form_id');
+        const fluent = attr(form, 'data-form_id');
         if (fluent) {
             return 'fluentforms:' + fluent;
         }
 
         // Ninja Forms 3 — the id is on the wrapper, <div id="nf-form-3-cont">,
         // not on the <form> inside it.
-        let ninjaWrapper = null;
-        try {
-            ninjaWrapper = form.closest ? form.closest('.nf-form-cont') : null;
-        } catch (e) {
-            ninjaWrapper = null;
-        }
-        match = /^nf-form-(\d+)-cont$/.exec(form.id || (ninjaWrapper && ninjaWrapper.id) || '');
+        const ninjaWrapper = closestOf(form, '.nf-form-cont');
+        match = /^nf-form-(\d+)-cont$/.exec(id || attr(ninjaWrapper, 'id') || '');
         if (match) {
             return 'ninjaforms:' + match[1];
         }
 
         // Formidable — <form id="form_contactform" class="frm-show-form"> plus a
         // hidden form_id. The prefix is the server's provider key, 'formidable'.
-        const frm = form.querySelector('input[name="form_id"]');
-        if (frm && frm.value && /formidable|frm[_-]/.test(form.className || '')) {
+        const frm = queryOne(form, 'input[name="form_id"]');
+        if (frm && frm.value && /formidable|frm[_-]/.test(attr(form, 'class') || '')) {
             return 'formidable:' + frm.value;
         }
 
         return '';
     }
 
+    /**
+     * The name a form is reported under, or '' when it has none: the site's
+     * own data-cvmtry-form-name, then the form's name, id, or aria-label.
+     *
+     * Every lifecycle event of a form — view, start and attempt, and the
+     * browser's own success where that event fires on the form itself
+     * (Elementor, WPForms) — takes its name from here, so one form is one
+     * label in every report. When form_submit had its own copy that skipped
+     * data-cvmtry-form-name, a form named "Footer Feedback" for its views was
+     * recorded as "form" for its attempts, and the report had to choose.
+     */
+    function formName(form) {
+        const sources = ['data-cvmtry-form-name', 'name', 'id', 'aria-label'];
+        for (let i = 0; i < sources.length; i++) {
+            const name = cleanLabel(attr(form, sources[i]));
+            if (name) {
+                return name;
+            }
+        }
+        return '';
+    }
+
     /** A readable name for a form, for report rows. */
     function formLabel(form) {
-        return cleanLabel(
-            form.getAttribute('data-cvmtry-form-name') ||
-            form.getAttribute('name') ||
-            form.id ||
-            form.getAttribute('aria-label')
-        ) || 'form';
+        return formName(form) || 'form';
     }
 
     /** Common fields for every form lifecycle event. */
@@ -1788,8 +2080,7 @@
 
     /** Whether a form is one this tracker should observe at all. */
     function trackableForm(form) {
-        return form && form.tagName === 'FORM' && !inAdminBar(form) &&
-            !form.hasAttribute('data-cvmtry-ignore');
+        return isForm(form) && !inAdminBar(form) && !hasAttr(form, 'data-cvmtry-ignore');
     }
 
     /* form_view — an IntersectionObserver, so a form below the fold only
@@ -1806,25 +2097,36 @@
                     continue;
                 }
                 const form = entry.target;
-                const state = stateFor(form);
-                if (state && !state.viewed) {
-                    state.viewed = true;
-                    track('form_view', formEventData(form));
-                }
                 formObserver.unobserve(form);
+                // One form's failure must not cost the other entries their view.
+                try {
+                    const state = stateFor(form);
+                    if (state && !state.viewed) {
+                        state.viewed = true;
+                        track('form_view', formEventData(form));
+                    }
+                } catch (e) {
+                    // Nothing recorded for this form.
+                }
             }
         }, { threshold: 0.25 })
         : null;
 
-    /** Begins observing one form, if it is one this tracker should watch. */
+    /** Begins observing one form, if it is one this tracker should watch.
+     *  Never throws: callers walk every form on the page, and one form's
+     *  markup must not stop the rest from being observed. */
     function observeForm(form) {
-        if (!trackableForm(form)) {
-            return;
-        }
-        const state = stateFor(form);
-        if (state && !state.viewed && !state.observed) {
-            state.observed = true;
-            formObserver.observe(form);
+        try {
+            if (!trackableForm(form)) {
+                return;
+            }
+            const state = stateFor(form);
+            if (state && !state.viewed && !state.observed) {
+                state.observed = true;
+                formObserver.observe(form);
+            }
+        } catch (e) {
+            // This form goes unobserved.
         }
     }
 
@@ -1917,7 +2219,7 @@
 
     /** A field's developer-chosen identifier — never its value. */
     function fieldIdentifier(field) {
-        return String(field.getAttribute('name') || field.id || '').slice(0, 64);
+        return (attr(field, 'name') || attr(field, 'id') || '').slice(0, 64);
     }
 
     if (config.events.form_error) {
@@ -1979,10 +2281,10 @@
                 pendingRoots = [];
                 for (let i = 0; i < roots.length; i++) {
                     const node = roots[i];
-                    if (node.tagName === 'FORM') {
+                    if (isForm(node)) {
                         observeForm(node);
-                    } else if (node.querySelectorAll) {
-                        const forms = node.querySelectorAll('form');
+                    } else {
+                        const forms = queryAll(node, 'form');
                         for (let j = 0; j < forms.length; j++) {
                             observeForm(forms[j]);
                         }
@@ -2037,13 +2339,10 @@
             if (!Object.prototype.hasOwnProperty.call(selectorGoals, goalId)) {
                 continue;
             }
-            try {
-                if (el.closest && el.closest(selectorGoals[goalId])) {
-                    matched.push(goalId);
-                }
-            } catch (e) {
-                // An invalid selector must not break click tracking for
-                // everything else on the page.
+            // closestOf() answers null for an invalid selector, which must
+            // not break click tracking for everything else on the page.
+            if (closestOf(el, selectorGoals[goalId])) {
+                matched.push(goalId);
             }
         }
         return matched;
@@ -2081,9 +2380,7 @@
     let hoverEl = null;
 
     document.addEventListener('mouseover', function (e) {
-        const el = e.target && e.target.closest
-            ? e.target.closest(INTERACTIVE + ', [data-cvmtry-hover]')
-            : null;
+        const el = closestOf(e.target, INTERACTIVE + ', [data-cvmtry-hover]');
 
         if (!el || el === hoverEl || inAdminBar(el)) {
             return;
@@ -2104,8 +2401,8 @@
             // cache busters) — strip query and fragment before using it as
             // the fallback label, like every other stored URL.
             track('hover', {
-                element_tag: el.tagName.toLowerCase(),
-                element_label: labelFor(el) || cleanLabel(String(el.src || '').split('#')[0].split('?')[0]),
+                element_tag: tagOf(el).toLowerCase(),
+                element_label: labelFor(el) || cleanLabel(cleanTarget(el.src)),
                 target_url: cleanTarget(el.href),
                 event_value: String(HOVER_DWELL)
             });

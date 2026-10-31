@@ -136,6 +136,141 @@ final class ReportQueryTest extends IntegrationTestCase
     }
 
     /**
+     * The server's confirmation can be stored before the browser batch holding
+     * the start and the attempt. Ordered by row id alone, that converted start
+     * was counted as abandoned. The attempt carries the conversion token, and
+     * a success is never placed before its own attempt.
+     */
+    public function testASuccessStoredBeforeItsStartIsNotAbandonment(): void
+    {
+        $this->formEvent('form_success', 'race1', '2026-08-10 09:02:00', ['event_value' => 'craceone00000001']);
+        $this->formEvent('form_view', 'race1', '2026-08-10 09:02:01');
+        $this->formEvent('form_start', 'race1', '2026-08-10 09:02:01');
+        $this->formEvent('form_submit', 'race1', '2026-08-10 09:02:01', ['event_value' => 'craceone00000001']);
+
+        $forms = FormEngagementReport::totals(self::START, self::END);
+
+        self::assertSame(1, $forms[0]['started']);
+        self::assertSame(1, $forms[0]['successful']);
+        self::assertSame(0, $forms[0]['abandoned']);
+    }
+
+    /**
+     * Historical rows: an attempt stored before attempts carried their token
+     * links to nothing, and the start keeps the verdict it always had.
+     */
+    public function testAbandonmentForUnlinkedHistoryIsUnchanged(): void
+    {
+        $this->formEvent('form_success', 'old1', '2026-08-10 09:02:00', ['event_value' => 'coldone000000001']);
+        $this->formEvent('form_start', 'old1', '2026-08-10 09:02:01');
+        $this->formEvent('form_submit', 'old1', '2026-08-10 09:02:01');
+
+        self::assertSame(1, FormEngagementReport::totals(self::START, self::END)[0]['abandoned']);
+    }
+
+    // ── Which name a form is listed under ────────────────────────────────────
+    //
+    // The rows below mix labels the way real history does: older trackers
+    // labelled attempts differently from views, and the server labels its
+    // confirmations with the form plugin's own title.
+
+    /**
+     * @return array<string, string> form_key => form_name
+     */
+    private function namesByKey(): array
+    {
+        $out = [];
+        foreach (FormEngagementReport::totals(self::START, self::END) as $form) {
+            $out[$form['form_key']] = $form['form_name'];
+        }
+
+        return $out;
+    }
+
+    public function testTheGenericFallbackNoLongerWinsOnCollationOrder(): void
+    {
+        foreach (['custom:footer' => 'Footer Feedback', 'custom:signup' => 'Cloud Signup'] as $key => $name) {
+            $this->formEvent('form_view', 'n-' . $key, '2026-08-10 09:00:00', ['form_key' => $key, 'element_label' => $name]);
+            $this->formEvent('form_start', 'n-' . $key, '2026-08-10 09:01:00', ['form_key' => $key, 'element_label' => $name]);
+            for ($i = 0; $i < 3; $i++) {
+                // An older tracker labelled attempts 'form' whatever the form was called.
+                $this->formEvent('form_submit', 'n-' . $key, '2026-08-10 09:02:00', ['form_key' => $key, 'element_label' => 'form']);
+            }
+        }
+
+        $names = $this->namesByKey();
+
+        self::assertSame('Footer Feedback', $names['custom:footer']);
+        self::assertSame('Cloud Signup', $names['custom:signup']);
+
+        $kept = (int) self::$db->get_var("SELECT COUNT(*) FROM wp_cvmtry_events WHERE element_label = 'form'");
+        self::assertSame(6, $kept, 'Historical rows are read, never rewritten or deleted.');
+    }
+
+    /**
+     * The form plugin's own title on its confirmed successes beats the slug the
+     * markup carried — even though the slug has more rows and sorts later.
+     */
+    public function testTheConfirmedTitleBeatsTheMarkupsSlug(): void
+    {
+        $key = 'gravityforms:4';
+        for ($i = 0; $i < 6; $i++) {
+            $this->formEvent('form_view', 'q' . $i, '2026-08-10 09:00:00', ['form_key' => $key, 'element_label' => 'demo-quote-request']);
+        }
+        $this->formEvent('form_success', 'q1', '2026-08-10 09:05:00', ['form_key' => $key, 'element_label' => 'Demo Quote Request', 'event_value' => 'cquoteone0000001']);
+        $this->formEvent('form_success', 'q2', '2026-08-10 09:06:00', ['form_key' => $key, 'element_label' => 'Demo Quote Request', 'event_value' => 'cquotetwo0000001']);
+
+        self::assertSame('Demo Quote Request', $this->namesByKey()[$key]);
+    }
+
+    /**
+     * The latest submission row carries the form's CURRENT title, so a renamed
+     * form is listed under its new name while the range's events still carry
+     * the old one. It is read from the submission rows even with no event of
+     * the new name in the range.
+     */
+    public function testTheLatestSubmissionTitleNamesARenamedForm(): void
+    {
+        $key = 'gravityforms:5';
+        $this->formEvent('form_view', 'r1', '2026-08-10 09:00:00', ['form_key' => $key, 'element_label' => 'Quote']);
+        $this->formEvent('form_success', 'r1', '2026-08-10 09:05:00', ['form_key' => $key, 'element_label' => 'Quote', 'event_value' => 'crenamed00000001']);
+
+        $this->insertSubmission(['provider' => 'gravityforms', 'form_key' => $key, 'form_name' => 'Quote', 'created_at' => '2026-08-10 09:05:00']);
+        $this->insertSubmission(['provider' => 'gravityforms', 'form_key' => $key, 'form_name' => 'Quote Request', 'created_at' => '2026-09-20 09:00:00']);
+
+        self::assertSame('Quote Request', $this->namesByKey()[$key]);
+    }
+
+    /**
+     * When the form plugin had no title, the server recorded the element id.
+     * That placeholder loses to the name the site put in its markup.
+     */
+    public function testAServerPlaceholderLosesToTheSitesOwnName(): void
+    {
+        $key = 'bricks:ab12cd';
+        $this->formEvent('form_view', 'b1', '2026-08-10 09:00:00', ['form_key' => $key, 'element_label' => 'Newsletter']);
+        $this->formEvent('form_success', 'b1', '2026-08-10 09:05:00', ['form_key' => $key, 'element_label' => 'ab12cd', 'event_value' => 'cbricksone000001']);
+        $this->insertSubmission(['provider' => 'bricks', 'form_key' => $key, 'form_name' => 'ab12cd']);
+
+        self::assertSame('Newsletter', $this->namesByKey()[$key]);
+    }
+
+    /**
+     * Labels differing only by case are distinct candidates (a *_ci collation
+     * would have merged them and returned either), and the choice among them
+     * is the same on every run.
+     */
+    public function testCaseVariantsResolveDeterministically(): void
+    {
+        $key = 'custom:case';
+        $this->formEvent('form_view', 'c1', '2026-08-10 09:00:00', ['form_key' => $key, 'element_label' => 'contact form']);
+        $this->formEvent('form_view', 'c2', '2026-08-10 09:00:00', ['form_key' => $key, 'element_label' => 'Contact Form']);
+        $this->formEvent('form_view', 'c3', '2026-08-10 09:00:00', ['form_key' => $key, 'element_label' => 'Contact Form']);
+
+        self::assertSame('Contact Form', $this->namesByKey()[$key], 'The spelling seen most often.');
+    }
+
+    /**
      * Friction points must expose field metadata and nothing else. The column
      * that would hold a typed value does not exist, which is the strongest form
      * this guarantee can take.

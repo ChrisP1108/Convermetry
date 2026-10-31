@@ -22,7 +22,7 @@ Was the lead successfully delivered to external systems?
 
 Convermetry works standalone — full analytics dashboard, form integrations, and webhook delivery inside one WordPress install — and is architected so a future Convermetry SaaS can receive `analytics_report` and `form_submission` messages from many installations, keyed by a shared, versioned payload schema.
 
-- **Version:** 1.1.1
+- **Version:** 1.1.2
 - **Requires WordPress:** 6.3+
 - **Requires PHP:** 8.3+
 - **License:** GPL-2.0-or-later
@@ -371,6 +371,10 @@ Earliest-occurrence comparison: MIN(B)=09:00 < A, so it reports failure.
 
 Ordering uses the event id rather than the timestamp, because the events table's `created_at` is the moment the row was *inserted* (the tracker sends no client timestamp) — so the two are the same order by construction, and the id is the finer, tie-free version of it. **A consequence worth knowing:** funnel order is *ingestion* order. Within one batch the browser's order is preserved; a batch that failed and was resent from a later page sorts by when it arrived.
 
+**One exception, and it is causal.** A server-confirmed `form_success` is written by the form plugin's own request, while the browser's batch holding the attempt — usually with that form's view and start — travels separately, and either can be stored first. So each `form_submit` carries its attempt's conversion token in `event_value`, and a success is placed **no earlier than the attempt with the same token** (in the same session): just after it, and before anything stored after it. No timestamp is consulted, nothing is delayed, and nothing else moves. Ninja Forms and Elementor Atomic serialize their own requests rather than the `<form>`, so for them the attempt is recorded from that outgoing request, with the same token, session and form key the server receives. A success with no linked attempt keeps its ingestion position — that covers events recorded before 1.1.2 (attempts carried no token), pages still serving an older cached tracker, JavaScript-off submissions, and disabled attempt tracking. The same rule decides whether a start was [abandoned](#form-engagement--abandonment).
+
+**Ninja Forms and Elementor Atomic** record their attempt when their outgoing AJAX request is prepared, including submissions that bypass the native submit event. That request supplies the server's form key and shares the attempt's conversion token and session. A native submit reserves a token without emitting a duplicate attempt; client validation that sends no request does not count as an AJAX attempt. Retrying the same payload object keeps its token, session and attribution; a new payload or a new native submit starts a new attempt. Atomic keys include the document id when supplied, and repeated Ninja embeds use the same normalized form id as the server.
+
 Sessions with no session id are excluded — an empty session id is not one visitor, it is every visitor whose session could not be established, and grouping on it would produce one enormous pseudo-session that appears to complete every funnel.
 
 ### Cohorts and the completion window
@@ -407,15 +411,17 @@ Mixing units here would make every rate meaningless and the mix would be invisib
 |---|---|---|
 | Views | **sessions** in which the form scrolled into view | browser-observed |
 | Started | **sessions** in which someone began filling it in | browser-observed |
-| Attempts | **raw submit presses** — one visitor fighting a validation error produces several, which is the point | browser-observed |
+| Attempts | **raw submit presses** — one visitor fighting a validation error produces several, which is the point. For Ninja Forms and Elementor Atomic, an attempt is a submission request actually sent: client-side validation that stops the request is not counted | browser-observed |
 | Successful | **distinct conversion ids** | **server-confirmed** by the form plugin |
 | Abandoned | **sessions** that started and did not succeed | browser-observed |
 
 A **completion rate above 100% is not an error.** It means confirmed submissions outnumbered observed starts, which happens when visitors submit with JavaScript blocked — the browser-observed columns are undercounting, and clamping the number to 100 would hide the one figure that tells you so.
 
+**The name a form is listed under** is chosen, not sorted. A form collects several labels — the form plugin's own title on its confirmed submissions, and whatever the browser read from the markup (`data-cvmtry-form-name`, the `name` or `id` attribute, or the generic `form`). The report prefers, in order: any real name over a placeholder (`form`, the provider key, a bare form id, `Form <id>`); the title on the form's most recent submission, then labels on confirmed successes, then labels from the markup; a label that reads as a name over a slug; then the label seen on more successes, more often, more recently. Older events keep the labels they were recorded with — only the choice among them changed.
+
 ### Abandonment has a grace period
 
-A form started ninety seconds ago is being filled in, not abandoned. A start counts as abandoned only after **30 minutes** pass with no confirmed submission; anything more recent is shown as *still in progress*. Without that, abandonment would spike towards 100% for the most recent hour of any window and then decay — an artifact that looks exactly like a real problem. The 30 minutes matches the tracker's session idle window: past it the visitor's session has rotated, so a success could no longer be attributed to the same session as the start.
+A form started ninety seconds ago is being filled in, not abandoned. A start counts as abandoned only after **30 minutes** pass with no confirmed submission after it — "after" in the [causal order](#ordering-is-real) funnels use, so a confirmation the server stored before the browser's batch arrived still rescues its start; anything more recent is shown as *still in progress*. Without that, abandonment would spike towards 100% for the most recent hour of any window and then decay — an artifact that looks exactly like a real problem. The 30 minutes matches the tracker's session idle window: past it the visitor's session has rotated, so a success could no longer be attributed to the same session as the start.
 
 ### Friction points — and what is never recorded
 
@@ -435,6 +441,8 @@ email            email    Wrong format (e.g. not an email address)    131
 ### Elementor is excluded from form-level engagement
 
 Elementor identifies a form by its **display name** on the server while exposing a **widget id** in the browser, so the two cannot be matched reliably — and an engagement figure attributed to the wrong form is worse than none. Elementor submissions are recorded, attributed, delivered, and reported normally everywhere else in Convermetry. The other six providers are fully supported.
+
+Elementor **Atomic** forms are keyed by document and element id on both sides, so their attempts and confirmed successes are reported per form. Their views and starts are not: the browser has no key for an Atomic form until it builds the submission request.
 
 ---
 
@@ -533,7 +541,7 @@ A single dependency-free script (`assets/js/tracker.js`) is enqueued deferred on
 
 **Delivery reliability** — batches flush every 5 seconds, at 20 events, and on page exit via `navigator.sendBeacon`. Every batch is persisted to a bounded `sessionStorage` store *before* it is sent (in-memory fallback when unavailable) and removed only on server acknowledgment (2xx, or a 4xx other than 429). Failed sends back off exponentially with jitter; a 429 pauses the whole tab and honors `Retry-After`. Fetch-delivered batches are **at-least-once** and replays are **idempotent**: rows are stored under a unique `(batch_id, event ordinal)` key, so a replayed batch never inflates counts. Fresh page-exit beacon hand-offs are best-effort; a batch that already survived a failed send stays persisted through a beacon hand-off.
 
-**Endpoint defenses** — whitelisted, currently-enabled event types only; tracked page URLs must be `http(s)` on this site's host and are canonicalized to scheme+host+path; foreign `Origin`/`Referer` rejected; bots and empty user agents ignored; DNT/GPC enforced server-side when enabled; request bodies and batch sizes capped; scalar-only field values, sanitized and truncated; rate limits charged **per event** — 300/IP/minute plus 3,000/minute site-wide (`convermetry_rate_limits` filter) — via atomic object-cache counters, falling back (and failing **closed**) to an atomic single-statement database counter. The per-IP check runs first so a flooding IP never consumes the site-wide budget. A dashboard warning appears for 24 hours after the site-wide cap is hit. The rate-limit key itself is a hashed, short-lived derivative of the IP; the address is separately stored on each event row when IP storage is enabled (see [Privacy](#privacy)).
+**Endpoint defenses** — whitelisted, currently-enabled event types only; tracked page URLs must be `http(s)` on this site's host and are canonicalized to scheme+host+path; foreign `Origin`/`Referer` rejected; bots and empty user agents ignored (matched by how a crawler, headless browser or scripted client names itself — `Googlebot/2.1`, a `+https://…` contact URL, `HeadlessChrome`, `curl/` — so a handset such as a CUBOT is not mistaken for one); DNT/GPC enforced server-side when enabled; request bodies and batch sizes capped; scalar-only field values, sanitized and truncated; rate limits charged **per event** — 300/IP/minute plus 3,000/minute site-wide (`convermetry_rate_limits` filter) — via atomic object-cache counters, falling back (and failing **closed**) to an atomic single-statement database counter. The per-IP check runs first so a flooding IP never consumes the site-wide budget. A dashboard warning appears for 24 hours after the site-wide cap is hit. The rate-limit key itself is a hashed, short-lived derivative of the IP; the address is separately stored on each event row when IP storage is enabled (see [Privacy](#privacy)).
 
 **Tracked events** (each individually toggleable): `pageview`, `click`, `form_submit` (attempts), `form_success` (confirmed conversions), `hover` (configurable dwell, opt-in via `data-cvmtry-hover`), `scroll_depth` (50/100%). Custom server-side events via `cvmtry_track_event()`.
 
@@ -543,9 +551,9 @@ A single dependency-free script (`assets/js/tracker.js`) is enqueued deferred on
 |---|---|
 | `data-cvmtry-ignore` | Excludes the form from tracking entirely: no `form_view`, `form_start`, `form_error`, `form_submit` or `form_success`, and no correlation fields injected. |
 | `data-cvmtry-form-key` | Declares the form's reporting identity (e.g. `mysite:contact`), and marks a hand-built form as one the correlation fields belong on. Authoritative — it overrides provider auto-detection. |
-| `data-cvmtry-form-name` | A readable label for report rows. |
+| `data-cvmtry-form-name` | A readable label for report rows, used by every lifecycle event of the form (view, start, attempt). |
 
-**Correlation fields** — `cvmtry_conversion_id`, `cvmtry_session_id` and `cvmtry_context` are injected as hidden inputs so a submission can be joined to its analytics session. Only into forms that actually read them: a supported provider or a `data-cvmtry-form-key` form, posting via `POST` to this site's own origin, not marked `data-cvmtry-ignore`. Your search, login, comment and third-party forms are left untouched — see [Upgrading to 0.6.0](#upgrading-to-060).
+**Correlation fields** — `cvmtry_conversion_id`, `cvmtry_session_id` and `cvmtry_context` are injected as hidden inputs so a submission can be joined to its analytics session. Only into forms that actually read them: a supported provider or a `data-cvmtry-form-key` form, posting via `POST` to this site's own origin, not marked `data-cvmtry-ignore`. Method and destination are read the way the browser reads them — a field named `method` or `action` cannot stand in for the form's own, a `<base href>` counts, and so does the `formaction` / `formmethod` of the button pressed. A submission that turns out not to be a same-origin `POST` has the fields taken back out before the browser reads the form. Your search, login, comment and third-party forms are left untouched — see [Upgrading to 0.6.0](#upgrading-to-060).
 
 **Sessions** are cookie-free: the id lives in `localStorage` and rotates after 30 minutes of inactivity.
 
@@ -1138,7 +1146,7 @@ Every outbound message shares one versioned envelope:
 {
     "schema_version": "1.0 | 2.0",
     "source": "convermetry",
-    "plugin_version": "1.1.1",
+    "plugin_version": "1.1.2",
     "message_type": "analytics_report | form_submission",
     "website_info": { },
     "generated_at": "2026-08-22T14:00:00+00:00",
@@ -1166,7 +1174,7 @@ Every outbound message shares one versioned envelope:
 {
     "schema_version": "1.1",
     "source": "convermetry",
-    "plugin_version": "1.1.1",
+    "plugin_version": "1.1.2",
     "message_type": "analytics_report",
     "website_info": {
         "name": "Example Financial", "url": "https://example.com", "domain": "example.com",
@@ -1286,7 +1294,7 @@ Every outbound message shares one versioned envelope:
 {
     "schema_version": "2.0",
     "source": "convermetry",
-    "plugin_version": "1.1.1",
+    "plugin_version": "1.1.2",
     "message_type": "form_submission",
     "website_info": {
         "name": "Example Financial", "url": "https://example.com", "domain": "example.com",
@@ -1870,7 +1878,7 @@ Helper functions: `convermetry_submit_form()` (result-aware submission) and `cvm
 
 | Table | Purpose |
 |---|---|
-| `{$prefix}cvmtry_events` | One row per visitor interaction (analytics engine). Unique `(batch_id, batch_seq)` makes tracker replays idempotent; indexed by type/date, type/session/date, date, page URL, `form_key`/type/date, and session/type/id (the funnel step chain). `form_success` rows carry the `conversion_id` in `event_value`. `form_key` is the form lifecycle's shared dimension across `form_view` → `form_start` → `form_error` → `form_submit` → `form_success`, and is empty on every other type. Stores the visitor `ip_address` unless disabled in Settings. |
+| `{$prefix}cvmtry_events` | One row per visitor interaction (analytics engine). Unique `(batch_id, batch_seq)` makes tracker replays idempotent; indexed by type/date, type/session/date, date, page URL, `form_key`/type/date, and session/type/id (the funnel step chain). `form_success` rows carry the `conversion_id` in `event_value`; `form_submit` rows carry their attempt's conversion token there, which is what orders a confirmed success after its own attempt (see [Ordering is real](#ordering-is-real)). `form_key` is the form lifecycle's shared dimension across `form_view` → `form_start` → `form_error` → `form_submit` → `form_success`, and is empty on every other type. Stores the visitor `ip_address` unless disabled in Settings. |
 | `{$prefix}cvmtry_form_submissions` | One row per server-confirmed submission: `submission_id` (unique), `conversion_id` (unique — the dedup point), session id, provider/form identity, page URL + query, submitter `ip_address` (empty when disabled in Settings), sanitized `submission_data`, frozen `analytics_context`, runtime overrides, plus the indexed `channel`, `utm_campaign`, `utm_source`, `utm_medium`, `utm_id` and `landing_page` columns the Submissions page filters on and the lead reports group by, the `lead_status` / `lead_value` / `lead_currency` / `lead_status_at` outcome columns, and the recorded `delivery_state` / `delivery_json` webhook outcome. |
 | `{$prefix}cvmtry_delivery_queue` | The background form-delivery queue: one row per submission × endpoint with status, attempt, next-attempt time, claim token, and the frozen URL/headers/body. Rows are deleted on acknowledgment or abandonment. |
 | `{$prefix}cvmtry_notification_queue` | The background email-notification queue: one row per submission × recipient with the frozen settings snapshot, status, attempt, next-attempt time, claim token, and last failure reason. Carries **no lead data** — the submission is read at send time. Rows are deleted on send, on abandonment, when the submission is deleted, or when their two-hour TTL expires. |
@@ -1920,7 +1928,7 @@ an explicit ZIP selection.
 
 ```bash
 bash bin/prepare-svn.sh                           # prepare the newest build
-bash bin/prepare-svn.sh build/convermetry-1.1.1.zip # prepare a specific build
+bash bin/prepare-svn.sh build/convermetry-1.1.2.zip # prepare a specific build
 bash bin/prepare-svn.sh --publish                 # prepare and commit newest build
 ```
 
@@ -2009,6 +2017,8 @@ composer test:wordpress    # a real WordPress: activation, cron, delivery, admin
 The **unit** suite is deliberately database-free. There is no hand-rolled `$wpdb` mock anywhere in it: a mock only ever proves the test author's model of MySQL, and a green "delete cascade" built on one would make an unverified erasure guarantee look verified.
 
 The **JavaScript** suite boots the real `assets/js/tracker.js` in a minimal shimmed browser under Node, dispatches the CustomEvents a form plugin fires, and asserts what actually happens to the outgoing request and to the conversion token. Everything the PHP suites can say about the tracker is a *source* assertion — the code contains this string — which is genuinely useful and genuinely blind: it caught none of the two defects executing the same code found immediately (a repeated success event re-reporting a conversion, and a success with no attempt in flight inventing one). It needs only Node; there is no build step and no dependency.
+
+The shim cannot model one thing a real form does: expose each named control as a property of itself, *winning* over the form's own property — `<input name="method">` makes `form.method` an element. `tests/js/tracker-browser.test.mjs` therefore runs the tracker in **real headless Chrome**, driven over the DevTools protocol by Node alone, loaded deferred exactly as WordPress loads it. Every page, the analytics endpoint and every form destination are local listeners that record each request, so batches and serialized submissions are inspected and nothing reaches a real site. It finds Chrome through `CVMTRY_CHROME`, a Playwright browser cache, or the usual install paths, and reports itself skipped when there is none — except in CI, where `CVMTRY_REQUIRE_BROWSER=1` makes a missing browser a failure. `CVMTRY_TRACKER=/path/to/tracker.js` runs it against another build, which is how each regression test was shown to fail against the code it guards.
 
 The **integration** suite exists because that boundary has a cost, and 0.5.0 paid it. The funnel report's statement is assembled outside-in, so the last step's placeholders appear first in the finished SQL; parameters were bound in step order and every one landed on the wrong placeholder. Nothing errored — they are all `%s` — so the query compared a page URL against a timestamp, matched nothing, and reported every funnel as zero, while a unit test asserting the SQL's *structure* stayed green. It now runs the generated SQL against a real server.
 

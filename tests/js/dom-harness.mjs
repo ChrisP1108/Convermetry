@@ -78,8 +78,13 @@ export class FakeElement {
         return child;
     }
 
-    /** Supports only input[name="…"], which is all the tracker asks for. */
+    /** The form lookup and named-input queries used by the tracker. */
     querySelectorAll(selector) {
+        if (selector === 'form') {
+            return this.children.flatMap((child) => [
+                ...(child.tagName === 'FORM' ? [child] : []), ...child.querySelectorAll(selector),
+            ]);
+        }
         const match = /^input\[name="(.+)"\]$/.exec(selector);
         if (!match) {
             return [];
@@ -166,7 +171,7 @@ function makeEventTarget(self) {
  *                                 ajaxPrefilter callbacks the tracker registers.
  * @returns {object} The harness: { window, document, forms, sent, dispatch, trackedEvents, prefilters }
  */
-export function bootTracker({ forms = [], config = {}, jquery = false } = {}) {
+export function bootTracker({ forms = [], config = {}, jquery = false, fetchResponse = null } = {}) {
     const sent = [];
     const timers = [];
     const prefilters = [];
@@ -180,13 +185,20 @@ export function bootTracker({ forms = [], config = {}, jquery = false } = {}) {
         documentElement,
         body: new FakeElement('body'),
         createElement: (tag) => new FakeElement(tag),
-        getElementById: (id) => forms.find((form) => form.id === id) || null,
+        getElementById: (id) => {
+            for (const form of forms) {
+                for (let node = form; node; node = node.parent) {
+                    if (node.id === id) return node;
+                }
+            }
+            return null;
+        },
         querySelector: (selector) => document.querySelectorAll(selector)[0] || null,
         querySelectorAll: (selector) => {
             if (selector === 'form') {
                 return forms;
             }
-            const attr = /^\[([a-z-]+)="(.*)"\]$/.exec(selector);
+            const attr = /^\[([a-z_-]+)="(.*)"\]$/.exec(selector);
             if (attr) {
                 return forms.filter((form) => form.getAttribute(attr[1]) === attr[2]);
             }
@@ -279,6 +291,9 @@ export function bootTracker({ forms = [], config = {}, jquery = false } = {}) {
     context.globalThis = context;
     window.fetch = (url, init) => {
         sent.push({ transport: 'fetch', url, body: init && init.body });
+        if (fetchResponse) {
+            return Promise.resolve().then(() => fetchResponse(url, init));
+        }
         return Promise.resolve({
             ok: true,
             status: 204,
