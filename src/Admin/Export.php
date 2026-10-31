@@ -46,11 +46,11 @@ final class Export
      */
     public static function nonceIsValid(string $action): bool
     {
-        // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- type-checked here, sanitized on the next line.
-        $nonce = $_GET['_wpnonce'] ?? null;
+        if (!isset($_GET['_wpnonce']) || !is_string($_GET['_wpnonce'])) {
+            return false;
+        }
 
-        return is_string($nonce)
-            && wp_verify_nonce(sanitize_text_field(wp_unslash($nonce)), $action) !== false;
+        return wp_verify_nonce(sanitize_text_field(wp_unslash($_GET['_wpnonce'])), $action) !== false;
     }
 
     /**

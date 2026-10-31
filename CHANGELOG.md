@@ -5,6 +5,24 @@ All notable changes to Convermetry are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 1.1.1
+
+Resolves the two warnings WordPress Plugin Check reported against 1.1.0. No
+behavior, permission, setting or data change.
+
+### Security
+
+- **Submissions JSON exports** (`cvmtry_submissions_export_json` and
+  `cvmtry_submissions_export_json_filtered`) check the nonce inline — present
+  as one string, then `wp_verify_nonce()` — in the same function that then
+  reads the filters from `$_GET`, exactly as the CSV export handlers do,
+  instead of through `Export::nonceIsValid()`
+  (`WordPress.Security.NonceVerification.Recommended`).
+- **`Export::nonceIsValid()`**, still used by the Analytics, Goals and Funnels
+  exports, type-checks `$_GET['_wpnonce']` and passes it straight through
+  `wp_unslash()` and `sanitize_text_field()` rather than through a local copy
+  (`WordPress.Security.ValidatedSanitizedInput.MissingUnslash`).
+
 ## 1.1.0
 
 CSV and JSON exports for every reporting screen, charts drawn from the reports

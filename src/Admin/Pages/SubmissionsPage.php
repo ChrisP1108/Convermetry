@@ -9,7 +9,6 @@ use Convermetry\Admin\ActivityLogSection;
 use Convermetry\Admin\AdminAssets;
 use Convermetry\Admin\AdminRequest;
 use Convermetry\Admin\Capability;
-use Convermetry\Admin\Export;
 use Convermetry\Admin\HomeStatus;
 use Convermetry\Analytics\SubmissionContext;
 use Convermetry\Database\FormSubmissions;
@@ -329,9 +328,14 @@ final class SubmissionsPage
             AdminRequest::deny(AdminRequest::forbiddenMessage());
         }
 
-        // 3 and 4. Nonce present, as one string, and issued for the full JSON
-        // export — no other link's nonce opens it.
-        if (!Export::nonceIsValid(self::EXPORT_JSON_ALL_ACTION)) {
+        // 3. Nonce present, as one string.
+        if (!isset($_GET['_wpnonce']) || !is_string($_GET['_wpnonce'])) {
+            AdminRequest::deny(__('Invalid or expired export link.', 'convermetry'));
+        }
+
+        // 4. Nonce issued for the full JSON export — no other link's nonce
+        // opens it.
+        if (!wp_verify_nonce(sanitize_text_field(wp_unslash($_GET['_wpnonce'])), self::EXPORT_JSON_ALL_ACTION)) {
             AdminRequest::deny(__('Invalid or expired export link.', 'convermetry'));
         }
 
@@ -357,9 +361,14 @@ final class SubmissionsPage
             AdminRequest::deny(AdminRequest::forbiddenMessage());
         }
 
-        // 3 and 4. Nonce present, as one string, and issued for the filtered
-        // JSON export.
-        if (!Export::nonceIsValid(self::EXPORT_JSON_FILTERED_ACTION)) {
+        // 3. Nonce present, as one string.
+        if (!isset($_GET['_wpnonce']) || !is_string($_GET['_wpnonce'])) {
+            AdminRequest::deny(__('Invalid or expired export link.', 'convermetry'));
+        }
+
+        // 4. Nonce issued for the filtered JSON export, checked here — in
+        // the same function that then reads the filters from $_GET.
+        if (!wp_verify_nonce(sanitize_text_field(wp_unslash($_GET['_wpnonce'])), self::EXPORT_JSON_FILTERED_ACTION)) {
             AdminRequest::deny(__('Invalid or expired export link.', 'convermetry'));
         }
 

@@ -4,7 +4,7 @@ Tags: analytics, lead tracking, utm, webhooks, forms
 Requires at least: 6.3
 Tested up to: 7.1
 Requires PHP: 8.3
-Stable tag: 1.1.0
+Stable tag: 1.1.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -153,6 +153,9 @@ Deactivating stops tracking and scheduled tasks but keeps your data. Deleting th
 
 == Changelog ==
 
+= 1.1.1 =
+* Hardening: the JSON export handlers on the Submissions screen verify their nonce in the same step that reads the request, and the shared export nonce check reads and unslashes the nonce directly, resolving two WordPress Plugin Check warnings. Export behavior and permissions are unchanged.
+
 = 1.1.0 =
 * New: CSV and JSON export on the Analytics, Goals and Funnels screens, covering the period you are viewing with the same figures the screen shows. Submissions adds JSON export alongside its CSV export, for everything or for the current filters. Each export needs the same permission as its screen (Submissions: `submissions.export`).
 * New: Analytics shows a device-share doughnut beside the daily page-view chart and summary charts of top pages, clicked elements, channels, goal completions and lead outcomes. Each chart links to its full table, and every value is printed beside its mark.
@@ -191,6 +194,9 @@ Deactivating stops tracking and scheduled tasks but keeps your data. Deleting th
 * Changed: first public release on WordPress.org. Earlier 0.x versions were distributed privately; their full history is in CHANGELOG.md, included with the plugin.
 
 == Upgrade Notice ==
+
+= 1.1.1 =
+Resolves two Plugin Check warnings in the export handlers. No settings, data or behavior change on upgrade.
 
 = 1.1.0 =
 Adds CSV and JSON exports and charts, and reorganizes the admin screens. No settings or data change on upgrade.
