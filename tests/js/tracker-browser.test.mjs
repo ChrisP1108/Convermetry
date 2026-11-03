@@ -56,14 +56,24 @@ let fixtures = 0;
 const failures = [];
 
 async function test(name, fn) {
+    let timer;
     try {
-        await fn();
+        // A DevTools call can go unanswered forever. That has to fail the test it
+        // belongs to rather than stall the whole run.
+        await Promise.race([
+            fn(),
+            new Promise((_, reject) => {
+                timer = setTimeout(() => reject(new Error('Timed out after 60 s')), 60000);
+            }),
+        ]);
         passed++;
         console.log(`  ✓ ${name}`);
     } catch (error) {
         failures.push({ name, error });
         console.log(`  ✗ ${name}`);
         console.log(`      ${String(error.message).split('\n')[0]}`);
+    } finally {
+        clearTimeout(timer);
     }
 }
 
@@ -464,6 +474,272 @@ for (const provider of ['atomic', 'ninja']) {
         });
     });
 }
+
+// ───────────────── 8. page views the browser shows without a load ───────────
+
+/** A page that reports to the local listener: what it says, in arrival order. */
+function probes() {
+    return site.requests.filter((request) => request.path === '/probe').map((request) => request.query.slice(1));
+}
+
+/**
+ * A page that prerenders `target` and, unless told otherwise, opens it.
+ *
+ * Opened with NO DevTools session on the tab: an attached one disables
+ * prerendering (PrerenderingDisabledByDevTools), so the pages drive themselves
+ * and everything is read from what reaches the listener. The tracker loads as
+ * it does in production, and the browser's real activation runs.
+ */
+async function prerender(body, { open = true } = {}) {
+    const say = `(what) => fetch('/probe?' + what, { keepalive: true })`;
+    const target = fixture(body, { head: `<script>
+        const say = ${say};
+        say('loaded&prerendering=' + !!document.prerendering);
+        document.addEventListener('prerenderingchange', () => say('activated'));
+        document.addEventListener('DOMContentLoaded', () => window.Convermetry && window.Convermetry.track('early_call', { value: 7 }));
+    </script>` });
+    const rules = JSON.stringify({ prerender: [{ source: 'list', urls: [target.path], eagerness: 'immediate' }] });
+    const start = fixture('', { head: `<script type="speculationrules">${rules}</script><script>
+        const say = ${say};
+        setTimeout(() => say('ready-to-open'), 1500);
+        ${open ? `setTimeout(() => { location.href = ${JSON.stringify(target.path)}; }, 2000);` : ''}
+    </script>` });
+
+    const seenBefore = site.requests.length;
+    const { browserContextId } = await browser.cdp.send('Target.createBrowserContext');
+    await browser.cdp.send('Target.createTarget', { url: start.url, browserContextId });
+    const heard = () => site.requests.slice(seenBefore).filter((r) => r.path === '/probe').map((r) => r.query.slice(1));
+    await waitFor(() => heard().includes('ready-to-open'), 'the start page to be ready', 10000);
+
+    return {
+        url: target.url,
+        heard,
+        close: () => browser.cdp.send('Target.disposeBrowserContext', { browserContextId }),
+    };
+}
+
+await test('a prerendered page the visitor never opens records nothing', async () => {
+    const page = await prerender('<p>Never opened.</p>', { open: false });
+    try {
+        if (!page.heard().includes('loaded&prerendering=true')) {
+            console.log('      (this Chrome declined to prerender; not conclusive)');
+            return;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 1200));
+        assert.deepEqual(site.trackedEvents(page.url), [], 'no pageview, no goal, nothing at all');
+    } finally {
+        await page.close();
+    }
+});
+
+await test('a prerendered page counts once when opened, and a call made while it loaded is kept', async () => {
+    const page = await prerender('<p>Opened.</p>');
+    try {
+        if (!page.heard().includes('loaded&prerendering=true')) {
+            console.log('      (this Chrome declined to prerender; not conclusive)');
+            return;
+        }
+        assert.deepEqual(site.trackedEvents(page.url), [], 'still nothing while it is only prerendered');
+        await waitFor(() => page.heard().includes('activated'), 'the page to be activated', 10000);
+        await delivered(page.url, 'pageview');
+        const calls = await delivered(page.url, 'custom_event');
+        await new Promise((resolve) => setTimeout(resolve, 500));
+        const events = site.trackedEvents(page.url);
+        assert.equal(events.filter((event) => event.type === 'pageview').length, 1);
+        assert.equal(calls.length, 1, 'Convermetry.track() made during the prerender is replayed once');
+        assert.equal(calls[0].name, 'early_call');
+    } finally {
+        await page.close();
+    }
+});
+
+/** Two pages that link to each other, kept eligible for the back/forward cache. */
+function restorablePages(body = '') {
+    const second = fixture('<a id="back-link" href="#">Page two</a>');
+    const first = fixture(`<a id="next" href="${second.path}">Next</a>${body}`);
+    site.cacheablePages.add(first.path);
+    site.cacheablePages.add(second.path);
+    return { first, second };
+}
+
+/** Marks the page, so a restored one can be told from one that was reloaded. */
+function markLoaded(page) {
+    return page.evaluate(() => {
+        window.__loadMark = true;
+    });
+}
+
+/** Whether this page is the same document as before, or was loaded anew. */
+function wasRestored(page) {
+    return page.evaluate(() => window.__loadMark === true);
+}
+
+/**
+ * Leaves the page from a later task, so the evaluate that asks for it has already
+ * been answered. A DevTools call still open while the browser swaps documents may
+ * never get a reply, which is also why these tests wait on what reaches the
+ * listener instead of asking the page where it is.
+ */
+function goTo(page, direction) {
+    return page.evaluate((go) => {
+        setTimeout(() => history.go(go), 0);
+    }, direction);
+}
+
+function follow(page, linkId) {
+    return page.evaluate((id) => {
+        setTimeout(() => document.getElementById(id).click(), 0);
+    }, linkId);
+}
+
+await test('Back and Forward count as page views when the browser restores from its cache', async () => {
+    const { first, second } = restorablePages();
+
+    await withPage(first.url, async (page) => {
+        await delivered(first.url, 'pageview');
+        await markLoaded(page);
+        await follow(page, 'next');
+        await delivered(second.url, 'pageview');
+
+        await goTo(page, -1);
+        await delivered(first.url, 'pageview', 2);
+        if (!(await wasRestored(page))) {
+            console.log('      (this Chrome did not use its back/forward cache; not conclusive)');
+            return;
+        }
+
+        await goTo(page, 1);
+        await delivered(second.url, 'pageview', 2);
+
+        // The page being left runs its exit handlers just after the restored one
+        // starts, sees that page's batch waiting in the tab's shared store, and
+        // resends it. That is at-least-once delivery working as documented, so
+        // this counts what the server keeps rather than what crossed the wire.
+        await new Promise((resolve) => setTimeout(resolve, 400));
+        const views = (url) => site.storedEvents(url).filter((event) => event.type === 'pageview').length;
+        assert.equal(views(first.url), 2, 'exactly one for the load and one for the restore');
+        assert.equal(views(second.url), 2);
+        assert.deepEqual(page.exceptions, []);
+    });
+});
+
+await test('coming back to a form through the cache and starting again is a second form_start', async () => {
+    const { first, second } = restorablePages(`
+        <form id="again" method="post" action="/submit/again" data-cvmtry-form-key="custom:again"><input id="again-email" name="email"></form>`);
+
+    await withPage(first.url, async (page) => {
+        await type(page, 'again-email');
+        await delivered(first.url, 'form_start');
+        await markLoaded(page);
+        await follow(page, 'next');
+        await delivered(second.url, 'pageview');
+        await goTo(page, -1);
+        await delivered(first.url, 'pageview', 2);
+        if (!(await wasRestored(page))) {
+            console.log('      (this Chrome did not use its back/forward cache; not conclusive)');
+            return;
+        }
+        await type(page, 'again-email');
+        await delivered(first.url, 'form_start', 2);
+        await delivered(first.url, 'form_view', 2);
+    });
+});
+
+await test('a page view starts its scroll milestones over after a restore', async () => {
+    const { url } = fixture('<p>Short page.</p>');
+
+    await withPage(url, async (page) => {
+        await delivered(url, 'scroll_depth');
+        await page.evaluate(() => window.dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true })));
+        await delivered(url, 'scroll_depth', 2);
+        await delivered(url, 'pageview', 2);
+    });
+});
+
+await test('an ordinary pageshow is not a second page view', async () => {
+    const { url } = fixture('<p>Loaded normally.</p>');
+
+    await withPage(url, async (page) => {
+        await delivered(url, 'pageview');
+        await page.evaluate(() => window.dispatchEvent(new PageTransitionEvent('pageshow', { persisted: false })));
+        await new Promise((resolve) => setTimeout(resolve, 400));
+        assert.equal(site.trackedEvents(url).filter((event) => event.type === 'pageview').length, 1);
+    });
+});
+
+// ─────────────────────── 9. a batch has to fit the request ───────────────────
+
+/** Every /track request delivered from one page, as raw bodies. */
+function batchBodies(pageUrl) {
+    return site.requests
+        .filter((request) => request.path === '/track' && request.body.includes(pageUrl))
+        .map((request) => request.body);
+}
+
+/** Presses a button `count` times in one go, filling batches past the flush size. */
+function pressRepeatedly(page, id, count) {
+    return page.evaluate((button, times) => {
+        for (let i = 0; i < times; i++) {
+            document.getElementById(button).click();
+        }
+    }, id, count);
+}
+
+await test('a very long page title does not cost the batch its events', async () => {
+    const { path, n } = fixture('<button id="go">Go</button>');
+    const url = site.origin + path;
+    site.pages.set(path, site.pages.get(path).replace(`<title>Fixture ${n}</title>`, `<title>${'H'.repeat(3400)}</title>`));
+
+    await withPage(url, async (page) => {
+        await pressRepeatedly(page, 'go', 22);
+        const clicks = await delivered(url, 'click', 22);
+        assert.equal(clicks.length, 22, 'all of them, once');
+        assert.ok(clicks.every((event) => event.page_title.length === 255), 'cut to the width the server stores');
+    });
+});
+
+await test('events that cannot fit one request are split across several and none are lost', async () => {
+    // The longest utm values and title the tracker keeps, in three-byte characters:
+    // about 4 KB an event, so a flush of 20 is well over the 64 KB limit.
+    const wide = '語'.repeat(190);
+    const utm = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_id', 'utm_term', 'utm_content']
+        .map((name) => `${name}=${encodeURIComponent(wide)}`).join('&');
+    const { path, n } = fixture('<button id="go">Go</button>');
+    const url = site.origin + path;
+    site.pages.set(path, site.pages.get(path).replace(`<title>Fixture ${n}</title>`, `<title>${wide}</title>`));
+
+    await withPage(`${url}?${utm}`, async (page) => {
+        await pressRepeatedly(page, 'go', 20);
+        await waitFor(() => site.storedEvents(url).filter((event) => event.type === 'click').length === 20,
+            'every click, retries included', 20000);
+    });
+
+    const bodies = batchBodies(url);
+    assert.ok(bodies.length >= 2, 'more than one request was needed');
+    assert.ok(bodies.every((body) => Buffer.byteLength(body) <= 65536), 'no request over the server limit');
+    assert.ok(new Set(bodies.map((body) => JSON.parse(body).batch_id)).size >= 2, 'under separate batch ids');
+});
+
+await test('text cut at a limit never splits an emoji, which would make the server refuse the batch', async () => {
+    // The emoji straddles each limit, so a plain slice leaves half of it behind.
+    const title = `${'t'.repeat(254)}😀 tail`;
+    const label = `${'b'.repeat(119)}😀 tail`;
+    const { path, n } = fixture(`<button id="go">${label}</button>`);
+    const url = site.origin + path;
+    site.pages.set(path, site.pages.get(path).replace(`<title>Fixture ${n}</title>`, `<title>${title}</title>`));
+
+    await withPage(url, async (page) => {
+        await page.evaluate(() => document.getElementById('go').click());
+        const [click] = await delivered(url, 'click');
+        assert.equal(click.page_title, 't'.repeat(254));
+        assert.equal(click.element_label, 'b'.repeat(119));
+    });
+
+    for (const body of batchBodies(url)) {
+        // PHP's json_decode() fails the whole body on an unpaired surrogate escape.
+        assert.doesNotMatch(body, /\\ud[89ab][0-9a-f]{2}(?!\\ud[c-f][0-9a-f]{2})/i);
+    }
+});
 
 // ──────────────────────────────────────────────────────────────────────────────
 

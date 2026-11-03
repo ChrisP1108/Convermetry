@@ -22,9 +22,9 @@ use Convermetry\Support\SensitiveKeys;
  * came back.
  *
  * Stored bodies are a REDACTED REPRESENTATION of the request, not a
- * byte-exact copy: sensitive-key values are replaced (see below), form
- * submission_data can be dropped by a setting, and both bodies are capped at
- * 64 KB so a misbehaving endpoint cannot balloon the table. A stored body
+ * byte-exact copy: sensitive-key values are replaced (see below), the
+ * visitor's data and the endpoint's response can be dropped by a setting, and
+ * both bodies are capped at 64 KB so a misbehaving endpoint cannot balloon the table. A stored body
  * therefore cannot be used to re-verify the delivery's HMAC signature — that
  * signature was computed over the bytes actually sent.
  *
@@ -35,8 +35,8 @@ use Convermetry\Support\SensitiveKeys;
  *
  * Security: values of sensitive-looking keys in JSON bodies are redacted
  * before storage, stored request headers have credential-bearing values
- * masked, and the visitor's submission_data can be excluded from the log
- * entirely via a setting. The 'convermetry_delivery_log_row' filter runs
+ * masked, and everything of the visitor's can be excluded from the log
+ * entirely via a setting, including a response that echoes it. The 'convermetry_delivery_log_row' filter runs
  * before each row is written for site-specific redaction (return false to
  * skip logging an attempt).
  *
@@ -222,7 +222,7 @@ final class DeliveryLog
      *
      * This method owns everything about STORAGE: header and body redaction,
      * the 64 KB cap, the column widths, the optional stripping of the
-     * visitor's field values, and the 'convermetry_delivery_log_row' veto.
+     * visitor's data, and the 'convermetry_delivery_log_row' veto.
      * {@see DeliveryLogEntry} owns only what happened.
      *
      * @param DeliveryLogEntry $entry The attempt to record.
@@ -236,14 +236,17 @@ final class DeliveryLog
     {
         global $wpdb;
 
-        $requestData = $entry->requestData;
+        $requestData  = $entry->requestData;
+        $requestUrl   = $entry->requestUrl !== '' ? $entry->requestUrl : $entry->endpointUrl;
+        $responseData = $entry->responseData();
 
-        // Optionally strip the visitor's field values from the stored copy
-        // of a form-submission payload — delivery metadata remains, the
-        // second copy of the lead data does not. The payload actually SENT
-        // is unaffected.
+        // Optionally strip the visitor's data from the stored copy of a
+        // form-submission delivery — delivery metadata remains, the second copy
+        // of the lead data does not. What was actually SENT is unaffected.
         if ($entry->messageType === MessageType::FormSubmission && !Options::logSubmissionData()) {
-            $requestData = self::stripSubmissionData($requestData);
+            $requestUrl   = self::stripForwardedParams($requestUrl, $requestData);
+            $requestData  = self::stripSubmissionData($requestData);
+            $responseData = self::stripResponseBody($entry);
         }
 
         $row = [
@@ -258,11 +261,11 @@ final class DeliveryLog
             'conversion_id'   => $entry->conversionId,
             'form_provider'   => mb_substr($entry->formProvider, 0, 32),
             'form_name'       => mb_substr($entry->formName, 0, 191),
-            'request_url'     => $entry->requestUrl !== '' ? $entry->requestUrl : $entry->endpointUrl,
+            'request_url'     => $requestUrl,
             'request_headers' => (string) wp_json_encode(self::redactHeaders($entry->requestHeaders)),
             'request_data'    => self::capBody(self::redactSensitiveJson($requestData)),
             'response_code'   => $entry->result->code,
-            'response_data'   => self::capBody(self::redactSensitiveJson($entry->responseData())),
+            'response_data'   => self::capBody(self::redactSensitiveJson($responseData)),
             'created_at'      => gmdate('Y-m-d H:i:s'),
         ];
 
@@ -290,9 +293,10 @@ final class DeliveryLog
     }
 
     /**
-     * Replaces a form-submission payload's submission_data — and the
-     * submitter's ip_address — with a placeholder before storage, when the
-     * admin has disabled storing lead data in the Activity Log.
+     * Replaces a form-submission payload's submission_data, the submitter's
+     * ip_address, and the page's URL parameters with a placeholder before
+     * storage, when the admin has disabled storing lead data in the Activity
+     * Log.
      *
      * @param string $requestData JSON request payload.
      * @return string
@@ -318,7 +322,54 @@ final class DeliveryLog
             }
         }
 
+        if (!empty($decoded['website_info']['page']['query'])) {
+            $decoded['website_info']['page']['query'] = '[NOT STORED — disabled in Settings]';
+        }
+
         return (string) wp_json_encode($decoded);
+    }
+
+    /**
+     * Removes the page's forwarded URL parameters from a stored request URL.
+     *
+     * The payload names them: a forwarded parameter is on the URL under the same
+     * key it has in website_info.page.query. A configured parameter that shares
+     * a key goes with it, which is the safe direction to err in a log copy.
+     *
+     * @param string $requestUrl  Request URL as sent.
+     * @param string $requestData JSON request payload, before stripping.
+     * @return string
+     */
+    private static function stripForwardedParams(string $requestUrl, string $requestData): string
+    {
+        $decoded = json_validate($requestData) ? json_decode($requestData, true) : null;
+        $query   = is_array($decoded) ? ($decoded['website_info']['page']['query'] ?? null) : null;
+
+        if (!is_array($query) || $query === []) {
+            return $requestUrl;
+        }
+
+        return remove_query_arg(array_map('strval', array_keys($query)), $requestUrl);
+    }
+
+    /**
+     * The response column for an attempt whose lead data must not be stored.
+     *
+     * The whole body goes, not just the values it can be seen to repeat. A
+     * receiver that echoes its input can reformat it, nest it inside a string,
+     * or render it into an HTML error page, and no scrubbing can promise to
+     * recognize all of those. The status code stays, and so does a transport
+     * error, which is the plugin's own message about a request that never got a
+     * response.
+     *
+     * @param DeliveryLogEntry $entry The attempt being recorded.
+     * @return string
+     */
+    private static function stripResponseBody(DeliveryLogEntry $entry): string
+    {
+        return $entry->result->body === ''
+            ? $entry->responseData()
+            : '[NOT STORED — disabled in Settings]';
     }
 
     /**

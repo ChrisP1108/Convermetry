@@ -394,7 +394,8 @@ final class Options
     /**
      * Whether the Activity Log stores each form-submission payload's
      * submission_data. When off, delivery metadata is still recorded but the
-     * visitor's field values are replaced with a placeholder before the log
+     * visitor's field values, IP address and page URL parameters, and the
+     * endpoint's response body, are replaced with a placeholder before the log
      * row is written — useful when compliance rules forbid keeping a second
      * copy of lead data in the log table.
      *

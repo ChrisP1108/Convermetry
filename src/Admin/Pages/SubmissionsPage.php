@@ -12,6 +12,7 @@ use Convermetry\Admin\Capability;
 use Convermetry\Admin\HomeStatus;
 use Convermetry\Analytics\SubmissionContext;
 use Convermetry\Database\FormSubmissions;
+use Convermetry\Forms\PageQuery;
 use Convermetry\Forms\SubmissionFieldList;
 use Convermetry\Forms\SubmissionFields;
 use Convermetry\Leads\LeadEvents;
@@ -1048,7 +1049,7 @@ final class SubmissionsPage
         // Historical rows still hold the pre-2.0 associative map; the
         // normalizer reads either shape, so both render identically here.
         $fields      = SubmissionFields::fromStoredJson((string) ($row['submission_data'] ?? ''));
-        $pageQuery   = self::decodeJson((string) ($row['page_query'] ?? ''));
+        $pageQuery   = PageQuery::forForm(self::decodeJson((string) ($row['page_query'] ?? '')), (string) ($row['form_key'] ?? ''));
         $landing     = is_array($context['landing_page'] ?? null)
             ? (string) ($context['landing_page']['url'] ?? '')
             : '';

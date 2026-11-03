@@ -22,7 +22,7 @@ Was the lead successfully delivered to external systems?
 
 Convermetry works standalone — full analytics dashboard, form integrations, and webhook delivery inside one WordPress install — and is architected so a future Convermetry SaaS can receive `analytics_report` and `form_submission` messages from many installations, keyed by a shared, versioned payload schema.
 
-- **Version:** 1.1.2
+- **Version:** 1.1.3
 - **Requires WordPress:** 6.3+
 - **Requires PHP:** 8.3+
 - **License:** GPL-2.0-or-later
@@ -239,7 +239,7 @@ Expanding a row loads its detail over `cvmtry_get_submission_detail` (once per r
 - **Analytics & attribution** — channel, the full UTM set, ad-click type, entrance referrer, landing page, device, session id, session start, pageviews, and the visitor's IP when IP storage is on. When the tracker's correlation fields never reached the server (JavaScript blocked, tracking off, a privacy signal honored, a server-to-server submission) the panel says so rather than showing blanks.
 - **Visitor journey** — the session's recent pages in order, ending at the submission.
 - **Submitted fields** — every field name and the value the visitor entered.
-- **Page query parameters** — when the submitting URL carried any.
+- **Page query parameters** — the submitting URL's campaign (`utm_*`) parameters, plus whatever else [page parameter forwarding](#webhooks) keeps when it is on.
 - **Webhook delivery** — per-endpoint ✓/✕/⏳ with the response code, and a link into the Activity Log for the full payload and response.
 
 The session summary behind *Visitor journey* is normally computed when a webhook delivery freezes its payload. On a site with no endpoints that never happens, so the detail handler computes it lazily on first expand and persists the result — at most one extra query per submission, ever.
@@ -423,6 +423,8 @@ A **completion rate above 100% is not an error.** It means confirmed submissions
 
 A form started ninety seconds ago is being filled in, not abandoned. A start counts as abandoned only after **30 minutes** pass with no confirmed submission after it — "after" in the [causal order](#ordering-is-real) funnels use, so a confirmation the server stored before the browser's batch arrived still rescues its start; anything more recent is shown as *still in progress*. Without that, abandonment would spike towards 100% for the most recent hour of any window and then decay — an artifact that looks exactly like a real problem. The 30 minutes matches the tracker's session idle window: past it the visitor's session has rotated, so a success could no longer be attributed to the same session as the start.
 
+Starts are counted per session, and **the session's latest start is the one judged**. A visitor who submits, comes back, starts again and leaves has abandoned that second attempt, even though they also converted, so one session can show as both a success and an abandonment. A visitor who leaves a first attempt and finishes a later one has abandoned nothing.
+
 ### Friction points — and what is never recorded
 
 Where a form provider uses native browser validation, Convermetry records **which field failed and why**:
@@ -545,6 +547,8 @@ A single dependency-free script (`assets/js/tracker.js`) is enqueued deferred on
 
 **Tracked events** (each individually toggleable): `pageview`, `click`, `form_submit` (attempts), `form_success` (confirmed conversions), `hover` (configurable dwell, opt-in via `data-cvmtry-hover`), `scroll_depth` (50/100%). Custom server-side events via `cvmtry_track_event()`.
 
+A `pageview` is one page **shown**, which is not the same as one page load. Back and Forward can restore a page from the browser's back/forward cache without reloading it: that counts as a page view, and scroll milestones, hovers and form events start over as they would after a reload. A page the browser prerendered on speculation records nothing at all until the visitor opens it, so a page they never open costs no pageview and completes no goal.
+
 **Form attributes** — three opt-in/opt-out hooks on any `<form>`:
 
 | Attribute | Effect |
@@ -579,7 +583,7 @@ The critical link between analytics and leads is **token-based — never timesta
 
 Three providers do not serialize the `<form>`, so a hidden input would be dropped: Elementor Atomic's request is amended as it is built, Bricks' three values are set on the prepared `event.detail.formData` at its documented `bricks/form/submit` event, and Ninja Forms' `nf_ajax_submit` request (one `formData` JSON document built from its own models) is amended by a `jQuery.ajaxPrefilter`. All three carry them as **top-level** entries, never as submitted fields. Atomic and Bricks reuse the token the native submit listener already minted for that attempt rather than creating a second one; Ninja Forms gets a fresh token per request, since it has no client-side success event to share one with. The values are deliberately not put in the Ninja form model's `extra` data, which Ninja Forms saves with its own submission records.
 
-AJAX forms are fully supported (the capture-phase refresh runs before provider serialization). When the fields are absent (tracker disabled, privacy signals honored, JavaScript blocked, server-to-server submissions), the conversion id is generated server-side and the submission still records and delivers — just with an empty `analytics_context`. No cookies are used at any point.
+AJAX forms are fully supported (the capture-phase refresh runs before provider serialization). When the fields are absent (tracker disabled, privacy signals honored, JavaScript blocked, server-to-server submissions), the conversion id is generated server-side and the submission still records and delivers — just with an empty `analytics_context`. Its `form_success` event takes the page from the request's `Referer` when that is on this site, and has no channel, matching the lead: with no tracker there is no evidence of how the visitor arrived, so neither claims Direct. In the channel report those conversions are listed under a blank channel rather than dropped. No cookies are used at any point.
 
 Duplicate protection at every layer: a double-fired provider callback hits the `UNIQUE conversion_id` index and records nothing twice; queue rows are unique per `(submission_id, endpoint)`; reports count `DISTINCT conversion_id`; receivers deduplicate by `delivery_id`.
 
@@ -1111,7 +1115,10 @@ Reporting Data Warehouse    Analytics ✓   Form Submissions ✗   (analytics on
 
 - **Global headers** (e.g. `Authorization`) on every request — sent intact, redacted in the Activity Log.
 - **Global URL query parameters** on every request.
-- **Page URL parameters** — optionally pass the submitting page's query string through to form-submission webhook URLs (global default plus per-form override).
+- **Page URL parameters** — optionally pass the submitting page's URL parameters through to form-submission webhook URLs (global default plus per-form override). This decides what is kept at all, not only what goes on the URL. Whatever survives is what is stored on the submission, shown on the Submissions screen and sent as `website_info.page.query`:
+  - **Off (the default):** only the campaign parameters, `utm_source`, `utm_medium`, `utm_campaign`, `utm_id`, `utm_term` and `utm_content`. Everything else is discarded when the submission is recorded.
+  - **On:** every other parameter too, **including ad-click ids** such as `gclid` and `fbclid`, because passing those to a CRM for offline conversion imports is what the setting is for. Names that look like a secret or contact details (`token`, `password`, `key`, `reset_key`, `nonce`, `email`, `phone`, `first_name`, …) are still dropped. That is a name check and so best effort: a token in a parameter called `ref` cannot be recognized. `convermetry_sensitive_keys` adds names of your own.
+  - **Either way,** a value containing `@` is dropped as a likely email address, and a `Referer` on another site is ignored.
 - **Per-form query parameters and headers** (Forms page), **runtime** parameters/headers (custom API calls).
 
 Merge precedence for query parameters (later overrides earlier for shared keys):
@@ -1146,7 +1153,7 @@ Every outbound message shares one versioned envelope:
 {
     "schema_version": "1.0 | 2.0",
     "source": "convermetry",
-    "plugin_version": "1.1.2",
+    "plugin_version": "1.1.3",
     "message_type": "analytics_report | form_submission",
     "website_info": { },
     "generated_at": "2026-08-22T14:00:00+00:00",
@@ -1174,7 +1181,7 @@ Every outbound message shares one versioned envelope:
 {
     "schema_version": "1.1",
     "source": "convermetry",
-    "plugin_version": "1.1.2",
+    "plugin_version": "1.1.3",
     "message_type": "analytics_report",
     "website_info": {
         "name": "Example Financial", "url": "https://example.com", "domain": "example.com",
@@ -1294,7 +1301,7 @@ Every outbound message shares one versioned envelope:
 {
     "schema_version": "2.0",
     "source": "convermetry",
-    "plugin_version": "1.1.2",
+    "plugin_version": "1.1.3",
     "message_type": "form_submission",
     "website_info": {
         "name": "Example Financial", "url": "https://example.com", "domain": "example.com",
@@ -1456,7 +1463,7 @@ Three headers are *not* frozen; they are regenerated on each attempt from the fr
 
 The **Activity Log** — the last section of **Convermetry → Webhooks** (`admin.php?page=convermetry-webhooks#cvmtry-activity-log`; the retired `admin.php?page=convermetry-activity` redirects there) — records every delivery attempt — analytics report or form submission; scheduled, immediate, retry, or test — as normalized columns (`message_type`, `kind`, `attempt`; never parsed from display labels), with: timestamp, endpoint URL + label, delivery/submission/conversion ids, form provider and name, HTTP status, final request URL, request headers (credential values redacted), the **JSON payload sent**, the response body, and transport errors.
 
-Stored bodies are a **redacted representation of the request, not a byte-exact copy**: values under sensitive-looking keys (`password`, `token`, `secret`, `api_key`, …) are replaced with `[REDACTED]` in both request and response before storage, form `submission_data` is replaced entirely when *Store form submission data in the Activity Log* is off, and both bodies are capped at 64 KB. A stored body therefore will **not** reproduce the original `X-Convermetry-Signature` — verify signatures against what your endpoint received, never against a log copy.
+Stored bodies are a **redacted representation of the request, not a byte-exact copy**: values under sensitive-looking keys (`password`, `token`, `secret`, `api_key`, …) are replaced with `[REDACTED]` in both request and response before storage, form `submission_data`, the submitter's IP, the page's URL parameters and the endpoint's whole response body are replaced when *Store form submission data in the Activity Log* is off (the status code and any transport error stay), and both bodies are capped at 64 KB. A stored body therefore will **not** reproduce the original `X-Convermetry-Signature` — verify signatures against what your endpoint received, never against a log copy.
 
 Two paginated accordions (Successful / Failed) offer year/month, message-type, endpoint, provider, and form filters, debounced payload search, a per-page selector (5–100), and per-entry delete. The toolbar provides **Clear All Logs** and **CSV/JSON export** — the exports stream in keyset-paginated chunks, so even huge logs export in bounded memory. Entries share the analytics retention window.
 
@@ -1846,13 +1853,14 @@ Helper functions: `convermetry_submit_form()` (result-aware submission) and `cvm
 - **No cookies — but browser storage.** The tracker keeps a random visit id (`cvmtry_session`) and the visit's attribution (`cvmtry_campaign`) in `localStorage`, and events not yet sent (`cvmtry_pending`) in `sessionStorage`. The visit id rotates after 30 minutes of inactivity. In the EU/UK the rules that govern cookies also apply to this storage.
 - **Tracking starts on activation, with no consent integration.** There is no consent banner and no consent-plugin integration. Where consent is required, have your consent tool block the `cvmtry-tracker` script handle, or return `false` from `convermetry_should_enqueue_tracker` until consent is given. Server-confirmed form submissions are still recorded — without analytics context — when the tracker does not run.
 - Tracked URLs are canonicalized to scheme + host + path — **no query strings are ever stored**. Referrers and click/form destinations are likewise stripped (whole `mailto:`/`tel:` destinations are kept — the address *is* the destination; strip via `convermetry_tracked_event` if unacceptable).
-- Campaign values are stored after sanitization, except values containing `@` (dropped as likely emails) — never put personal data in UTM parameters. Ad-click identifiers store only the parameter **name**; the value never leaves the browser.
+- Campaign values are stored after sanitization, except values containing `@` (dropped as likely emails) — never put personal data in UTM parameters. The tracker keeps only an ad-click identifier's parameter **name** and never sends its value. The one exception is one you opt into: with **Include page URL parameters** on, the value on the submitting page's URL is stored with the submission and forwarded to your endpoints, because that is what the setting does.
+- **A submitting page's other URL parameters are discarded by default.** Only the campaign parameters are kept, so a reset token or an email address in a page URL goes no further. See [Page URL parameters](#webhooks) for what forwarding keeps when you turn it on. Submissions recorded by 1.1.2 or earlier can still hold every parameter in their stored row until retention removes them, but those values are no longer shown or sent. Activity Log rows written by those versions are unchanged and age out the same way.
 - **Visitor IP addresses are stored by default**, on both write paths: every analytics event (page views, clicks, hovers, scroll milestones, conversions) and every server-confirmed form submission. Turn it off with **Settings → Tracking → IP addresses**; new rows then record an empty value while existing rows are untouched and age out with retention. User agents are never stored on either path.
   - **In the EU/UK an IP address is personal data.** Retaining it for general visitor activity — not only for leads someone actively submitted — normally has to be disclosed in your privacy policy and rest on a lawful basis. Consider whether your consent tooling should gate the tracker.
   - Addresses come from `REMOTE_ADDR` and are validated as real IPv4/IPv6 — remap behind a proxy or CDN with `convermetry_client_ip`.
   - To **anonymize rather than disable**, use `convermetry_tracked_event` to rewrite `ip_address` (e.g. zero the last octet) before the row is written; it runs on every analytics row.
   - When the site honors **Do Not Track / Global Privacy Control** and a visitor sends one, **no IP is stored on either path**. For analytics that visitor produces no rows at all; a form they submit is still recorded and delivered — they actively submitted it — but its `ip_address` is empty. Both paths go through one gate (`ClientIp::forStorage()`), so the setting, the signal, and this documentation cannot drift apart.
-  - The Activity Log stores a redacted copy of each delivery's request payload, so IPs appear there too: the form payload's copy is replaced when *Store form submission data in the Activity Log* is off, but an **analytics report's** `conversions.recent[].ip_address` is logged regardless. Log rows age out with the same retention window, and `convermetry_delivery_log_row` can redact anything further.
+  - The Activity Log stores a redacted copy of each delivery's request payload, so IPs appear there too: the form payload's copy is replaced when *Store form submission data in the Activity Log* is off, along with the endpoint's response, which a receiver can use to echo the values back, but an **analytics report's** `conversions.recent[].ip_address` is logged regardless. Log rows age out with the same retention window, and `convermetry_delivery_log_row` can redact anything further.
 - **No external geolocation service is ever contacted** — the legacy synchronous ipapi.co lookup was deliberately removed; a form submission never waits on any third party, and a stored IP is never sent anywhere except your own webhook endpoints.
 - Optional **Do Not Track / Global Privacy Control** handling (off by default), enforced in the tracker, at the REST endpoint, and in the server-side conversion recorder. DNT/GPC is an opt-out signal, not a consent mechanism — gate the tracker with your consent tool if your jurisdiction requires consent.
 - Logged-in users are excluded from tracking by default.
@@ -1928,7 +1936,7 @@ an explicit ZIP selection.
 
 ```bash
 bash bin/prepare-svn.sh                           # prepare the newest build
-bash bin/prepare-svn.sh build/convermetry-1.1.2.zip # prepare a specific build
+bash bin/prepare-svn.sh build/convermetry-1.1.3.zip # prepare a specific build
 bash bin/prepare-svn.sh --publish                 # prepare and commit newest build
 ```
 

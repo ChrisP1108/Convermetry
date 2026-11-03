@@ -13,11 +13,9 @@ if (!defined('ABSPATH')) exit;
  * {@see WebsiteInfo::$page} is nullable and this is a separate object rather
  * than two more fields on it.
  *
- * The URL has already been same-host validated by
- * {@see \Convermetry\Tracking\Correlation}, and the query parameters have
- * already been sanitized, by the time one of these is built — nothing here
- * re-validates, because the submission row it is read from was written from
- * validated values.
+ * The URL has already been same-host validated, and the query parameters have
+ * already been through {@see \Convermetry\Forms\PageQuery}, by the time one of
+ * these is built — nothing here re-validates.
  */
 final readonly class PageInfo
 {

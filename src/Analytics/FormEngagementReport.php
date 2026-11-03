@@ -177,8 +177,10 @@ final class FormEngagementReport
         }
 
         if ($lookups !== []) {
-            // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- one fixed, fully-placeholdered SELECT per form key, joined by UNION ALL; every table name and value is bound.
-            $rows = ReportQuery::rows($wpdb->prepare(implode(' UNION ALL ', $lookups), $params));
+            $sql = implode(' UNION ALL ', $lookups);
+
+            // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- $sql is one fixed, fully-placeholdered SELECT per form key, joined by UNION ALL; every table name and value is bound.
+            $rows = ReportQuery::rows($wpdb->prepare($sql, $params));
 
             foreach ($rows as $row) {
                 $formKey = (string) $row['form_key'];
@@ -308,7 +310,9 @@ final class FormEngagementReport
      * session and form within the completion window. The success must come
      * AFTER the start — a visitor who submits a form, sees the thank-you page,
      * then comes back and starts filling it in again has genuinely abandoned
-     * the second attempt, and matching the earlier success would hide that.
+     * the second attempt, and matching the earlier success would hide that. So
+     * the session's LATEST start is the one judged: an unfinished restart counts,
+     * and a start followed by a restart that was finished does not.
      *
      * "After" is the success's causal position, not merely its row id: the
      * server's confirmation can be stored before the browser batch holding the
@@ -334,7 +338,7 @@ final class FormEngagementReport
                     SUM(CASE WHEN s.created_at < %s THEN 1 ELSE 0 END) AS abandoned,
                     SUM(CASE WHEN s.created_at >= %s THEN 1 ELSE 0 END) AS in_progress
              FROM (
-                 SELECT DISTINCT e.form_key, e.session_id, MIN(e.id) AS id, MIN(e.created_at) AS created_at
+                 SELECT e.form_key, e.session_id, MAX(e.id) AS id, MAX(e.created_at) AS created_at
                  FROM %i AS e
                  WHERE e.event_type = 'form_start' AND e.form_key <> '' AND e.session_id <> ''
                    AND e.created_at >= %s AND e.created_at < %s

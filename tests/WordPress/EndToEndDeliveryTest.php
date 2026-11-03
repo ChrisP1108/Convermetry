@@ -367,6 +367,79 @@ final class EndToEndDeliveryTest extends WordPressTestCase
     }
 
     /**
+     * A visitor with JavaScript off posts a form with nothing but a Referer. The
+     * request is real, so this runs WordPress's own URL parsing and sanitizing —
+     * which is what mangled '%40' — and what the receiver gets is what left.
+     */
+    public function testAVisitorWithoutJavaScriptIsRecordedWithoutLeakingTheirUrl(): void
+    {
+        global $wpdb;
+
+        $this->configureEndpoint();
+
+        $_SERVER['HTTP_REFERER'] = home_url(
+            '/quote/?utm_source=news&gclid=CLKSECRET&email=leak.check%40example.com&token=TOKSECRET&reset_key=RKSECRET'
+        );
+
+        try {
+            $this->submit();
+        } finally {
+            unset($_SERVER['HTTP_REFERER']);
+        }
+
+        $row = $wpdb->get_row('SELECT * FROM ' . $wpdb->prefix . 'cvmtry_form_submissions LIMIT 1', ARRAY_A);
+        self::assertIsArray($row);
+        self::assertSame(home_url('/quote/'), $row['page_url']);
+        self::assertSame('{"utm_source":"news"}', $row['page_query']);
+        self::assertSame('', (string) $row['channel'], 'No evidence, so no channel');
+
+        $event = $wpdb->get_row(
+            'SELECT page_url, channel FROM ' . $wpdb->prefix . "cvmtry_events WHERE event_type = 'form_success' LIMIT 1",
+            ARRAY_A
+        );
+        self::assertIsArray($event);
+        self::assertSame(home_url('/quote/'), $event['page_url'], 'The event has the same page as the lead');
+        self::assertSame('', $event['channel'], 'and the same channel: not an invented Direct');
+
+        do_action(FormDeliveryQueue::WORKER_HOOK);
+        self::assertTrue($this->receiver()->waitFor(1));
+
+        $received = $this->receiver()->received()[0];
+        foreach (['CLKSECRET', 'TOKSECRET', 'RKSECRET', 'leak.check', 'checkexample'] as $leak) {
+            self::assertStringNotContainsString($leak, (string) json_encode($received));
+        }
+    }
+
+    /**
+     * Forwarding on is the administrator asking for the page's parameters, and
+     * click ids are why it exists. It still does not carry a secret or an address.
+     */
+    public function testForwardingSendsClickIdsButNotSecretsToTheEndpoint(): void
+    {
+        $this->configureEndpoint();
+
+        $settings = (array) get_option(Options::WEBHOOK_OPTION_KEY, []);
+        update_option(Options::WEBHOOK_OPTION_KEY, array_merge($settings, ['include_page_params' => true]));
+
+        $_SERVER['HTTP_REFERER'] = home_url('/quote/?gclid=CLKVALUE&email=leak.check%40example.com&reset_key=RKSECRET&ref=a%2Fb');
+
+        try {
+            $this->submit();
+        } finally {
+            unset($_SERVER['HTTP_REFERER']);
+        }
+
+        do_action(FormDeliveryQueue::WORKER_HOOK);
+        self::assertTrue($this->receiver()->waitFor(1));
+
+        $encoded = (string) json_encode($this->receiver()->received()[0]);
+
+        self::assertStringContainsString('CLKVALUE', $encoded);
+        self::assertStringNotContainsString('RKSECRET', $encoded);
+        self::assertStringNotContainsString('leak.check', $encoded);
+    }
+
+    /**
      * A site with no endpoint configured records the lead and sends nothing —
      * the neutral state the repair record exists so as not to confuse with a
      * failed enqueue.

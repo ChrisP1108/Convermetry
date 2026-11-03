@@ -184,6 +184,7 @@ export async function launchBrowser(executable) {
 export async function startSite() {
     const requests = [];
     const pages = new Map();
+    const cacheablePages = new Set();
 
     const handler = (port) => (req, res) => {
         const chunks = [];
@@ -195,6 +196,7 @@ export async function startSite() {
                 method: req.method,
                 path: url.pathname,
                 query: url.search,
+                purpose: req.headers['sec-purpose'] || '',
                 body: Buffer.concat(chunks).toString('utf8'),
             });
 
@@ -202,13 +204,18 @@ export async function startSite() {
                 res.writeHead(200, { 'Content-Type': 'text/javascript', 'Cache-Control': 'no-store' });
                 res.end(readFileSync(TRACKER));
             } else if (url.pathname === '/track') {
-                res.writeHead(202, { 'Content-Type': 'application/json' });
-                res.end('{"stored":0}');
+                // The real endpoint's limit: TrackingController refuses a larger body.
+                const tooLarge = Buffer.concat(chunks).length > 65536;
+                res.writeHead(tooLarge ? 413 : 202, { 'Content-Type': 'application/json' });
+                res.end(tooLarge ? '{"error":"payload_too_large"}' : '{"stored":0}');
             } else if (req.method === 'POST' && url.pathname === '/ajax-success') {
                 res.writeHead(200, { 'Content-Type': 'application/json' });
                 res.end('{"success":true}');
             } else if (req.method === 'GET' && pages.has(url.pathname)) {
-                res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });
+                // no-store keeps a page out of the back/forward cache, so a page a
+                // test wants restored from it is served without.
+                const caching = cacheablePages.has(url.pathname) ? {} : { 'Cache-Control': 'no-store' };
+                res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', ...caching });
                 res.end(pages.get(url.pathname));
             } else {
                 res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
@@ -237,6 +244,7 @@ export async function startSite() {
         externalPort,
         requests,
         pages,
+        cacheablePages,
 
         /** Every event the tracker delivered from one page, in arrival order. */
         trackedEvents(pageUrl) {
@@ -250,6 +258,27 @@ export async function startSite() {
                     }
                 })
                 .filter((event) => event.page_url === pageUrl);
+        },
+
+        /**
+         * The events the server would store from one page. Delivery is
+         * at-least-once and the server keeps one row per (batch id, position),
+         * so a batch sent twice counts once here, as it does there.
+         */
+        storedEvents(pageUrl) {
+            const rows = new Map();
+            for (const request of requests) {
+                if (request.port !== sitePort || request.path !== '/track') {
+                    continue;
+                }
+                try {
+                    const { batch_id: batchId, events } = JSON.parse(request.body);
+                    (events || []).forEach((event, position) => rows.set(`${batchId}:${position}`, event));
+                } catch {
+                    // Not a batch.
+                }
+            }
+            return [...rows.values()].filter((event) => event.page_url === pageUrl);
         },
 
         close: () => Promise.all([site, external].map((server) => new Promise((resolve) => {

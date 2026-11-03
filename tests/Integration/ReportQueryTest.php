@@ -117,8 +117,7 @@ final class ReportQueryTest extends IntegrationTestCase
     /**
      * A visitor who submits, then returns and starts the form again, has
      * genuinely abandoned the second attempt — matching the EARLIER success
-     * would hide that, which is why the query requires the success to come
-     * after the start.
+     * would hide that, which is why the session's latest start is the one judged.
      */
     public function testARestartAfterASuccessCountsAsAbandoned(): void
     {
@@ -128,11 +127,57 @@ final class ReportQueryTest extends IntegrationTestCase
 
         $forms = FormEngagementReport::totals(self::START, self::END);
 
-        // The session's FIRST start is the one the query groups on, and it was
-        // satisfied — so this session is not abandoned. The assertion documents
-        // the actual semantics rather than an assumption about them.
         self::assertSame(1, $forms[0]['started'], 'Starts are counted per session, not per attempt.');
-        self::assertSame(0, $forms[0]['abandoned']);
+        self::assertSame(1, $forms[0]['successful']);
+        self::assertSame(1, $forms[0]['abandoned']);
+    }
+
+    /**
+     * Returning after a first success and finishing the second attempt as well
+     * leaves nothing unfinished.
+     */
+    public function testARestartThatIsFinishedIsNotAbandoned(): void
+    {
+        $this->formEvent('form_start', 'j1', '2026-08-10 09:00:00');
+        $this->formEvent('form_success', 'j1', '2026-08-10 09:01:00', ['event_value' => 'convJ1first']);
+        $this->formEvent('form_start', 'j1', '2026-08-10 14:00:00');
+        $this->formEvent('form_success', 'j1', '2026-08-10 14:01:00', ['event_value' => 'convJ1second']);
+
+        self::assertSame(0, FormEngagementReport::totals(self::START, self::END)[0]['abandoned']);
+    }
+
+    /**
+     * Leaving a first attempt and finishing a later one is one completed form,
+     * however long the gap between the two starts was.
+     */
+    public function testAFinishedRestartRescuesAnEarlierUnfinishedStart(): void
+    {
+        $this->formEvent('form_start', 'k1', '2026-08-10 09:00:00');
+        $this->formEvent('form_start', 'k1', '2026-08-10 14:00:00');
+        $this->formEvent('form_success', 'k1', '2026-08-10 14:01:00', ['event_value' => 'convK1']);
+
+        self::assertSame(0, FormEngagementReport::totals(self::START, self::END)[0]['abandoned']);
+    }
+
+    /**
+     * A restart still inside the completion window is being filled in. It is not
+     * counted against the form yet, whatever happened to the session's first
+     * start.
+     */
+    public function testARecentRestartIsInProgressNotAbandoned(): void
+    {
+        $recent = gmdate('Y-m-d H:i:s', time() - 60);
+        $start  = gmdate('Y-m-d 00:00:00', time() - DAY_IN_SECONDS);
+        $end    = gmdate('Y-m-d H:i:s', time() + DAY_IN_SECONDS);
+
+        $this->formEvent('form_start', 'l1', gmdate('Y-m-d H:i:s', time() - 3600));
+        $this->formEvent('form_success', 'l1', gmdate('Y-m-d H:i:s', time() - 3540), ['event_value' => 'convL1']);
+        $this->formEvent('form_start', 'l1', $recent);
+
+        $form = FormEngagementReport::totals($start, $end)[0];
+
+        self::assertSame(0, $form['abandoned']);
+        self::assertSame(1, $form['in_progress']);
     }
 
     /**
@@ -153,6 +198,22 @@ final class ReportQueryTest extends IntegrationTestCase
         self::assertSame(1, $forms[0]['started']);
         self::assertSame(1, $forms[0]['successful']);
         self::assertSame(0, $forms[0]['abandoned']);
+    }
+
+    /**
+     * A form submitted with the tracker absent has no channel, and it is still a
+     * conversion. It must not vanish from the channel table, nor be counted as
+     * Direct.
+     */
+    public function testAConversionWithNoChannelStillSurfaces(): void
+    {
+        $this->formEvent('form_success', 'nojs', '2026-08-10 09:00:00', ['event_value' => 'cnojs00000000001', 'channel' => '']);
+
+        $rows = Reports::channelBreakdown(self::START, self::END);
+
+        self::assertCount(1, $rows);
+        self::assertSame('', $rows[0]['channel']);
+        self::assertSame(1, $rows[0]['conversions']);
     }
 
     /**

@@ -421,7 +421,7 @@ final class SettingsPage
         <tr><th scope="row"><?php esc_html_e('Activity Log privacy', 'convermetry'); ?></th><td>
         <label><input type="checkbox" name="<?php echo esc_attr(Options::OPTION_KEY . '[log_submission_data]'); ?>" value="1" <?php echo checked(!empty($settings['log_submission_data']), true, false); ?>>
         <?php esc_html_e('Store form submission data in the Activity Log', 'convermetry'); ?></label>
-        <p class="description"><?php esc_html_e('When disabled, the Activity Log records every delivery\'s metadata but replaces the visitor\'s field values with a placeholder — useful when compliance rules forbid a second copy of lead data. The payload actually delivered to endpoints is unaffected.', 'convermetry'); ?></p></td></tr>
+        <p class="description"><?php esc_html_e('When disabled, the Activity Log records every delivery\'s metadata but replaces the visitor\'s field values, IP address and page URL parameters, and the endpoint\'s response, with a placeholder — useful when compliance rules forbid a second copy of lead data. The response goes because a receiver can echo back what it was sent. The payload actually delivered to endpoints is unaffected.', 'convermetry'); ?></p></td></tr>
         </tbody></table></section>
         <?php
     }

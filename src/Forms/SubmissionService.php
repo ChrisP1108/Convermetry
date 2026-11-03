@@ -14,6 +14,7 @@ use Convermetry\Support\ClientIp;
 use Convermetry\Support\Extensions;
 use Convermetry\Support\Http;
 use Convermetry\Support\PrivacySignal;
+use Convermetry\Support\Url;
 use Convermetry\Tracking\Correlation;
 use Convermetry\Webhook\DeliveryContext;
 use Convermetry\Webhook\DeliveryDetails;
@@ -172,13 +173,13 @@ final class SubmissionService
         }
 
         $device = wp_is_mobile() ? 'mobile' : 'desktop';
-        $page   = $this->pageInfo($correlation, $pageUrl);
+        $page   = $this->pageInfo($correlation, $formKey, $pageUrl);
 
         // The confirmed conversion, recorded through the shared analytics
         // write path under the tracker's own conversion token — the frontend
         // form_success event (if it also fires) carries the same id, so
         // every conversion report deduplicates the two into one.
-        $this->recordConversionEvent($provider, $formName, $formKey, $correlation);
+        $this->recordConversionEvent($provider, $formName, $formKey, $correlation, $page['url']);
 
         $submissionId = 's' . substr(md5(wp_generate_uuid4() . wp_rand()), 0, 20);
 
@@ -550,13 +551,15 @@ final class SubmissionService
      * @param string      $formName    Form name (becomes element_label).
      * @param string      $formKey     Provider-qualified form key (becomes form_key).
      * @param Correlation $correlation Correlation data (conversion id, session, attribution).
+     * @param string      $pageUrl     The submitting page, from {@see pageInfo()}.
      * @return void
      */
     private function recordConversionEvent(
         string $provider,
         string $formName,
         string $formKey,
-        Correlation $correlation
+        Correlation $correlation,
+        string $pageUrl
     ): void {
         if (!Options::isTypeEnabled('form_success')) {
             return;
@@ -573,13 +576,17 @@ final class SubmissionService
         DatabaseManager::insertEvent('form_success', array_merge($correlation->attribution->toArray(), [
             'event_value'      => $correlation->conversionId,
             'session_id'       => $correlation->sessionId,
-            'page_url'         => $correlation->pageUrl,
+            'page_url'         => $pageUrl,
             'element_tag'      => 'form',
             'element_label'    => $formName !== '' ? $formName : $provider,
             'form_key'         => $formKey,
             'device'           => wp_is_mobile() ? 'mobile' : 'desktop',
             'session_referrer' => $correlation->sessionReferrer,
             'session_direct'   => $correlation->sessionDirect,
+            // With no tracker there is no evidence of how this visitor arrived.
+            // Classifying that as Direct would invent attribution the lead's
+            // own record deliberately leaves blank.
+            'no_attribution'   => !$correlation->fromTracker,
         ]));
     }
 
@@ -600,7 +607,8 @@ final class SubmissionService
      * The tracker-supplied page URL (same-host validated) wins; the HTTP
      * referrer fills the gaps — AJAX form plugins submit from the page the
      * form is on, so the referrer reliably carries the originating URL and
-     * its query string (the legacy behavior this preserves).
+     * its query string (the legacy behavior this preserves). A referrer on
+     * another host is not the submitting page, so nothing is read from it.
      *
      * $providerPageUrl is the last resort, below both: a URL the form plugin
      * itself reported for this submission, already validated by the provider
@@ -609,50 +617,38 @@ final class SubmissionService
      * provider's idea of the page is hearsay compared to the tracker's own
      * same-host-checked value.
      *
+     * The referrer is sanitized as a URL because sanitize_text_field() strips
+     * percent-encoded octets: it took '%40' out of a query value and '%C3%A9'
+     * out of a path. What survives into the query is {@see PageQuery}'s call.
+     *
      * @param Correlation $correlation     Correlation data.
+     * @param string      $formKey         Provider-scoped form key.
      * @param string      $providerPageUrl Provider-reported page URL, or ''.
      * @return array{url: string, query: array<string, string>}
      */
-    private function pageInfo(Correlation $correlation, string $providerPageUrl = ''): array
+    private function pageInfo(Correlation $correlation, string $formKey, string $providerPageUrl = ''): array
     {
         $referer = isset($_SERVER['HTTP_REFERER'])
-            ? sanitize_text_field(wp_unslash((string) $_SERVER['HTTP_REFERER']))
+            ? esc_url_raw(wp_unslash((string) $_SERVER['HTTP_REFERER']))
             : '';
 
         if ($referer === '') {
             $referer = $providerPageUrl;
         }
 
-        $url   = $correlation->pageUrl;
-        $query = [];
+        $refererPage = Url::pageUrl($referer);
+        $query       = [];
 
-        if ($referer !== '') {
-            $parts = wp_parse_url($referer);
-
-            if ($url === '' && is_array($parts) && !empty($parts['host'])) {
-                $scheme = strtolower((string) ($parts['scheme'] ?? ''));
-                if ($scheme === 'http' || $scheme === 'https') {
-                    $url = esc_url_raw(
-                        $scheme . '://' . $parts['host']
-                        . (isset($parts['port']) ? ':' . (int) $parts['port'] : '')
-                        . ($parts['path'] ?? '')
-                    );
-                }
-            }
-
-            if (is_array($parts) && !empty($parts['query'])) {
-                $rawParams = [];
-                wp_parse_str((string) $parts['query'], $rawParams);
-                foreach ($rawParams as $key => $value) {
-                    $cleanKey = sanitize_text_field((string) $key);
-                    if ($cleanKey !== '' && is_scalar($value)) {
-                        $query[$cleanKey] = sanitize_text_field((string) $value);
-                    }
-                }
-            }
+        if ($refererPage !== '') {
+            $rawParams = [];
+            wp_parse_str((string) wp_parse_url($referer, PHP_URL_QUERY), $rawParams);
+            $query = PageQuery::forForm($rawParams, $formKey);
         }
 
-        return ['url' => $url, 'query' => $query];
+        return [
+            'url'   => $correlation->pageUrl !== '' ? $correlation->pageUrl : $refererPage,
+            'query' => $query,
+        ];
     }
 
     /**

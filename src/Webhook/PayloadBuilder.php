@@ -6,6 +6,7 @@ namespace Convermetry\Webhook;
 if (!defined('ABSPATH')) exit;
 
 use Convermetry\Analytics\Reports;
+use Convermetry\Forms\PageQuery;
 use Convermetry\Forms\SubmissionFields;
 use Convermetry\Support\Extensions;
 
@@ -18,7 +19,7 @@ use Convermetry\Support\Extensions;
  *     {
  *         "schema_version": "1.0" | "1.1" | "2.0",
  *         "source": "convermetry",
- *         "plugin_version": "1.1.2",
+ *         "plugin_version": "1.1.3",
  *         "message_type": "analytics_report" | "form_submission",
  *         "website_info": { ... },
  *         "generated_at": "...",
@@ -183,7 +184,10 @@ final class PayloadBuilder
      */
     public static function formSubmission(array $submission): array
     {
-        $pageQuery = self::decodeJson((string) ($submission['page_query'] ?? ''));
+        $pageQuery = PageQuery::forForm(
+            self::decodeJson((string) ($submission['page_query'] ?? '')),
+            (string) ($submission['form_key'] ?? '')
+        );
         $stored    = self::decodeJson((string) ($submission['submission_data'] ?? ''));
         $context   = self::decodeJson((string) ($submission['context'] ?? ''));
 
@@ -204,7 +208,7 @@ final class PayloadBuilder
             'message_type'   => 'form_submission',
             'website_info'   => WebsiteInfo::current(new PageInfo(
                 url: (string) ($submission['page_url'] ?? ''),
-                query: self::stringMap($pageQuery),
+                query: $pageQuery,
             ))->toArray(),
             'generated_at'   => $generatedAt,
             'delivery_id'    => '',
@@ -359,29 +363,6 @@ final class PayloadBuilder
          *                                          ['submission_id' => string] for submissions.
          */
         return (array) apply_filters('convermetry_webhook_payload', $payload, $messageType, $meta);
-    }
-
-    /**
-     * Reduces a decoded JSON object to string keys with string values.
-     *
-     * The page_query column was written from already-sanitized scalars, so
-     * this is a type narrowing rather than a sanitizer — but the column is
-     * still JSON on disk, and a row hand-edited (or written by an older
-     * version) can hold anything.
-     *
-     * @param array<string, mixed> $map Decoded map.
-     * @return array<string, string>
-     */
-    private static function stringMap(array $map): array
-    {
-        $out = [];
-        foreach ($map as $key => $value) {
-            if (is_scalar($value)) {
-                $out[$key] = (string) $value;
-            }
-        }
-
-        return $out;
     }
 
     /**

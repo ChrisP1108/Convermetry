@@ -6,6 +6,7 @@ namespace Convermetry\Webhook;
 if (!defined('ABSPATH')) exit;
 
 use Convermetry\Forms\FormSettings;
+use Convermetry\Forms\PageQuery;
 use Convermetry\Settings\Options;
 use Convermetry\Support\KeyValuePairs;
 
@@ -251,8 +252,8 @@ final class RequestFactory
         if ($formKey !== '') {
             $config = FormSettings::forForm($formKey);
 
-            if ($pageQuery !== [] && (Options::includePageParams() || $config['include_page_params'])) {
-                $params = array_merge($params, $pageQuery);
+            if ($pageQuery !== [] && PageQuery::isForwarded($formKey)) {
+                $params = array_merge($params, PageQuery::filter($pageQuery, true));
             }
 
             $params = array_merge($params, KeyValuePairs::toMap($config['query_params']));

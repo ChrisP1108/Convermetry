@@ -739,7 +739,7 @@ final class WebhooksPage
 
         ?>
         <p style="margin-top:12px;"><label><input type="checkbox" name="cvmtry_include_page_params" value="1" <?php echo checked(!empty($settings['include_page_params']), true, false); ?>>
-        <?php echo wp_kses_post(__('Include page URL parameters — query parameters present on the page a form was submitted from (e.g. <code>?utm_source=google&amp;gclid=…</code>) are appended to the webhook URL for that submission.', 'convermetry')); ?></label></p></div>
+        <?php echo wp_kses_post(__('Include page URL parameters — parameters on the page a form was submitted from (e.g. <code>?utm_source=google&amp;gclid=…</code>) are stored with the submission and appended to the webhook URL. This includes ad-click ids. Names that look like a secret or contact details, and values containing an email address, are never kept. When this is off, only <code>utm_*</code> parameters are kept.', 'convermetry')); ?></label></p></div>
         <div class="cvmtry-savebar">
         <?php
         submit_button(__('Save Webhook Settings', 'convermetry'));

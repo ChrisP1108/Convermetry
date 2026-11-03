@@ -4,7 +4,7 @@ Tags: analytics, lead tracking, utm, webhooks, forms
 Requires at least: 6.3
 Tested up to: 7.1
 Requires PHP: 8.3
-Stable tag: 1.1.2
+Stable tag: 1.1.3
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -58,7 +58,7 @@ This section describes what Convermetry does. It is not legal advice, and Conver
 
 * For each tracked interaction: the event type, the page address without its query string, page title, clicked element text and link target, referrer (without query string), campaign parameters, a traffic channel, a device type (desktop, tablet or mobile), a random visit identifier and a timestamp.
 * **IP addresses are stored by default** with analytics events and form submissions. You can turn this off under Convermetry → Settings ("Store visitor IP addresses"). User agents are never stored.
-* For each confirmed form submission: the values the visitor submitted, the page and its query parameters, and the analytics context of the visit (channel, campaign, landing page, pages viewed). Fields that look like passwords or other credentials are withheld from email notifications and redacted in the Activity Log.
+* For each confirmed form submission: the values the visitor submitted, the page, its campaign (UTM) parameters, and the analytics context of the visit (channel, campaign, landing page, pages viewed). Fields that look like passwords or other credentials are withheld from email notifications and redacted in the Activity Log. If you turn on "Include page URL parameters", the page's other URL parameters are stored as well, including ad-click identifiers such as gclid, except those whose names look like secrets or contact details and any value containing an email address.
 * Logged-in users are excluded from tracking by default.
 * **Do Not Track / Global Privacy Control are not honored by default.** When you enable that setting, visitors who send either signal are not tracked, and no IP address is stored with a form they submit.
 
@@ -74,7 +74,7 @@ This section describes what Convermetry does. It is not legal advice, and Conver
 
 Convermetry does **not** contact any server by default, and it never sends data to the plugin's author. All fonts, scripts and styles are bundled with the plugin. Information leaves your site only through features a site administrator configures:
 
-* **Webhook endpoints.** When you add an endpoint under Convermetry → Webhooks, Convermetry sends it HTTPS POST requests to the URL you entered. Form submission messages contain the submitted form values, the submitter's IP address (when IP storage is on), the page and its query parameters, and the visit's analytics context. Analytics report messages contain aggregated statistics plus a list of individual conversions, each with its IP address (when stored) and visit identifier. You choose which endpoints receive which message type. The receiving service is chosen by you, so its terms of use and privacy policy are the ones you agreed to with that service.
+* **Webhook endpoints.** When you add an endpoint under Convermetry → Webhooks, Convermetry sends it HTTPS POST requests to the URL you entered. Form submission messages contain the submitted form values, the submitter's IP address (when IP storage is on), the page, its campaign (UTM) parameters (and its other URL parameters when you turn on "Include page URL parameters"), and the visit's analytics context. Analytics report messages contain aggregated statistics plus a list of individual conversions, each with its IP address (when stored) and visit identifier. You choose which endpoints receive which message type. The receiving service is chosen by you, so its terms of use and privacy policy are the ones you agreed to with that service.
 * **Email notifications.** When enabled, a notification for each new submission is sent through your site's own mail system (`wp_mail()`, and any SMTP plugin you use) to the recipients you enter. It can include the submitted values, analytics context and, only if you enable it, the visitor journey and IP address.
 
 Copies that have already been delivered to a webhook endpoint or sent by email are outside Convermetry's control. Deleting a submission, retention and the eraser cannot recall them; they are kept according to the receiving system's own policies.
@@ -153,6 +153,16 @@ Deactivating stops tracking and scheduled tasks but keeps your data. Deleting th
 
 == Changelog ==
 
+= 1.1.3 =
+* Security: URL parameters on the page a form was submitted from are no longer stored or sent to webhooks unless you ask for them. By default only campaign (UTM) parameters are kept, so ad-click IDs, email addresses and reset tokens in a page URL are discarded. With "Include page URL parameters" on, other parameters are kept too, including ad-click IDs, except names that look like secrets or contact details and any value containing an email address.
+* Security: with "Store form submission data in the Activity Log" off, the Activity Log no longer stores the endpoint's response, because a receiver can echo the visitor's values back. The status code and connection errors are kept. The page's URL parameters are removed from the stored copy too.
+* Fix: percent-encoded characters in a page address are no longer stripped.
+* Fix: a page the browser prerenders no longer counts as a visit or completes a goal unless the visitor opens it.
+* Fix: Back and Forward now count as page views when the browser restores a page from its cache.
+* Fix: a visitor who submits a form, comes back, starts it again and leaves now counts as abandoned. Abandonment is calculated when a report is viewed, so figures for past periods can rise.
+* Fix: a very long page title, or an emoji at a length limit, no longer loses a whole batch of tracked events.
+* Fix: a form submitted without JavaScript now records its page and no longer counts as Direct traffic. The channel report lists these conversions under a blank channel.
+
 = 1.1.2 =
 * Fix: a form field named `method` no longer stops the tracker from starting. Previously no events were recorded on that page and later forms lost their session link. One form's markup can no longer affect the others.
 * Fix: a form field named `action` can no longer make an external form look like one on your site. Session and campaign data is only added to forms that post to your own site, as the browser actually sends them — including a `<base>` URL and the submit button's own destination.
@@ -202,6 +212,9 @@ Deactivating stops tracking and scheduled tasks but keeps your data. Deleting th
 * Changed: first public release on WordPress.org. Earlier 0.x versions were distributed privately; their full history is in CHANGELOG.md, included with the plugin.
 
 == Upgrade Notice ==
+
+= 1.1.3 =
+Privacy fix: page URL parameters such as ad-click IDs and tokens are no longer stored or sent by default. Also fixes prerender, Back/Forward and abandonment counts, so reported figures can change. No migration.
 
 = 1.1.2 =
 Fixes form tracking for fields named method, action or id, form names on the Forms screen, funnel completions, and CUBOT phones being treated as bots. No settings or data change on upgrade.

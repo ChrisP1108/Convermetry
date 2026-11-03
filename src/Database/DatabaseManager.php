@@ -703,7 +703,11 @@ final class DatabaseManager
             $row['click_id_type'] = '';
         }
 
-        if ($row['channel'] === '' && in_array($type, self::ATTRIBUTED_TYPES, true)) {
+        // no_attribution is SubmissionService's marker for a conversion recorded
+        // with no tracker at all. Like the two below it feeds this decision only
+        // and never reaches the INSERT: such a row stays unclassified, rather
+        // than falling through to the Direct every other conversion falls back to.
+        if ($row['channel'] === '' && empty($data['no_attribution']) && in_array($type, self::ATTRIBUTED_TYPES, true)) {
             // session_referrer — the referrer the session entered through,
             // persisted by the tracker — feeds classification only; it is
             // not a stored column, so it never reaches the INSERT. Likewise

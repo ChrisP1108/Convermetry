@@ -2,14 +2,14 @@
 # This file is distributed under the GPL-2.0-or-later.
 msgid ""
 msgstr ""
-"Project-Id-Version: Convermetry 1.1.2\n"
+"Project-Id-Version: Convermetry 1.1.3\n"
 "Report-Msgid-Bugs-To: https://wordpress.org/support/plugin/convermetry\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"POT-Creation-Date: 2026-10-31T19:33:09+00:00\n"
+"POT-Creation-Date: 2026-11-03T04:21:23+00:00\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "X-Generator: WP-CLI 2.12.0\n"
 "X-Domain: convermetry\n"
@@ -54,14 +54,14 @@ msgstr ""
 #: src/Admin/Pages/FunnelsPage.php:340
 #: src/Admin/Pages/GoalsPage.php:310
 #: src/Admin/Pages/GoalsPage.php:317
-#: src/Admin/Pages/SubmissionsPage.php:267
-#: src/Admin/Pages/SubmissionsPage.php:273
-#: src/Admin/Pages/SubmissionsPage.php:300
-#: src/Admin/Pages/SubmissionsPage.php:305
-#: src/Admin/Pages/SubmissionsPage.php:333
-#: src/Admin/Pages/SubmissionsPage.php:339
-#: src/Admin/Pages/SubmissionsPage.php:366
-#: src/Admin/Pages/SubmissionsPage.php:372
+#: src/Admin/Pages/SubmissionsPage.php:268
+#: src/Admin/Pages/SubmissionsPage.php:274
+#: src/Admin/Pages/SubmissionsPage.php:301
+#: src/Admin/Pages/SubmissionsPage.php:306
+#: src/Admin/Pages/SubmissionsPage.php:334
+#: src/Admin/Pages/SubmissionsPage.php:340
+#: src/Admin/Pages/SubmissionsPage.php:367
+#: src/Admin/Pages/SubmissionsPage.php:373
 msgid "Invalid or expired export link."
 msgstr ""
 
@@ -71,12 +71,12 @@ msgstr ""
 #: src/Admin/ActivityLogSection.php:483
 #: src/Admin/ActivityLogSection.php:506
 #: src/Admin/Pages/NotificationsPage.php:314
-#: src/Admin/Pages/SubmissionsPage.php:391
-#: src/Admin/Pages/SubmissionsPage.php:456
-#: src/Admin/Pages/SubmissionsPage.php:510
-#: src/Admin/Pages/SubmissionsPage.php:556
-#: src/Admin/Pages/SubmissionsPage.php:587
-#: src/Admin/Pages/SubmissionsPage.php:596
+#: src/Admin/Pages/SubmissionsPage.php:392
+#: src/Admin/Pages/SubmissionsPage.php:457
+#: src/Admin/Pages/SubmissionsPage.php:511
+#: src/Admin/Pages/SubmissionsPage.php:557
+#: src/Admin/Pages/SubmissionsPage.php:588
+#: src/Admin/Pages/SubmissionsPage.php:597
 #: src/Admin/Pages/WebhooksPage.php:356
 #: src/Admin/Pages/WebhooksPage.php:382
 msgid "Invalid request."
@@ -93,12 +93,12 @@ msgid "Activity Log"
 msgstr ""
 
 #: src/Admin/ActivityLogSection.php:572
-#: src/Admin/Pages/SubmissionsPage.php:861
+#: src/Admin/Pages/SubmissionsPage.php:862
 msgid "Export All To CSV"
 msgstr ""
 
 #: src/Admin/ActivityLogSection.php:578
-#: src/Admin/Pages/SubmissionsPage.php:870
+#: src/Admin/Pages/SubmissionsPage.php:871
 msgid "Export All To JSON"
 msgstr ""
 
@@ -232,7 +232,7 @@ msgstr ""
 #. translators: %s: date and time in UTC.
 #: src/Admin/ActivityLogSection.php:826
 #: src/Admin/Pages/AnalyticsPage.php:1964
-#: src/Admin/Pages/SubmissionsPage.php:1066
+#: src/Admin/Pages/SubmissionsPage.php:1067
 #, php-format
 msgid "%s UTC"
 msgstr ""
@@ -387,7 +387,7 @@ msgstr ""
 #: src/Admin/AnalyticsExport.php:290
 #: src/Admin/Pages/AnalyticsPage.php:1933
 #: src/Admin/Pages/AnalyticsPage.php:2220
-#: src/Admin/Pages/SubmissionsPage.php:1082
+#: src/Admin/Pages/SubmissionsPage.php:1083
 #: src/Notifications/EmailBuilder.php:231
 #: src/Privacy/PersonalDataExporter.php:164
 #: src/Privacy/PersonalDataExporter.php:219
@@ -520,7 +520,7 @@ msgstr ""
 #: src/Admin/Pages/AnalyticsPage.php:2078
 #: src/Admin/Pages/FormsPage.php:400
 #: src/Admin/Pages/NotificationsPage.php:587
-#: src/Admin/Pages/SubmissionsPage.php:1134
+#: src/Admin/Pages/SubmissionsPage.php:1135
 #: src/Notifications/EmailBuilder.php:116
 #: src/Privacy/PersonalDataExporter.php:193
 #: assets/js/submissions.js:83
@@ -536,7 +536,7 @@ msgstr ""
 
 #: src/Admin/AnalyticsExport.php:133
 #: src/Admin/Pages/AnalyticsPage.php:1745
-#: src/Admin/Pages/SubmissionsPage.php:949
+#: src/Admin/Pages/SubmissionsPage.php:950
 msgid "(unnamed form)"
 msgstr ""
 
@@ -548,8 +548,8 @@ msgstr ""
 
 #: src/Admin/AnalyticsExport.php:140
 #: src/Admin/Pages/AboutPage.php:1936
-#: src/Admin/Pages/AboutPage.php:2394
-#: src/Admin/Pages/AboutPage.php:2585
+#: src/Admin/Pages/AboutPage.php:2395
+#: src/Admin/Pages/AboutPage.php:2586
 #: src/Admin/Pages/AnalyticsPage.php:1767
 #: src/Admin/Pages/FormsPage.php:479
 msgid "Type"
@@ -589,7 +589,7 @@ msgstr ""
 #: src/Admin/Pages/AnalyticsPage.php:1893
 #: src/Admin/Pages/AnalyticsPage.php:1982
 #: src/Admin/Pages/AnalyticsPage.php:2075
-#: src/Admin/Pages/SubmissionsPage.php:1072
+#: src/Admin/Pages/SubmissionsPage.php:1073
 #: src/Notifications/EmailBuilder.php:226
 msgid "Channel"
 msgstr ""
@@ -617,7 +617,7 @@ msgstr ""
 #: src/Admin/Pages/AnalyticsPage.php:1816
 #: src/Admin/Pages/AnalyticsPage.php:1854
 #: src/Admin/Pages/AnalyticsPage.php:1981
-#: src/Admin/Pages/SubmissionsPage.php:1073
+#: src/Admin/Pages/SubmissionsPage.php:1074
 #: assets/js/submissions.js:85
 msgid "Source"
 msgstr ""
@@ -625,7 +625,7 @@ msgstr ""
 #: src/Admin/AnalyticsExport.php:166
 #: src/Admin/Pages/AnalyticsPage.php:1817
 #: src/Admin/Pages/AnalyticsPage.php:1855
-#: src/Admin/Pages/SubmissionsPage.php:1074
+#: src/Admin/Pages/SubmissionsPage.php:1075
 msgid "Medium"
 msgstr ""
 
@@ -636,7 +636,7 @@ msgstr ""
 #: src/Admin/Pages/AnalyticsPage.php:1856
 #: src/Admin/Pages/AnalyticsPage.php:1983
 #: src/Admin/Pages/AnalyticsPage.php:2076
-#: src/Admin/Pages/SubmissionsPage.php:1075
+#: src/Admin/Pages/SubmissionsPage.php:1076
 #: assets/js/submissions.js:86
 msgid "Campaign"
 msgstr ""
@@ -661,14 +661,14 @@ msgstr ""
 
 #: src/Admin/AnalyticsExport.php:179
 #: src/Admin/Pages/AnalyticsPage.php:1858
-#: src/Admin/Pages/SubmissionsPage.php:1077
+#: src/Admin/Pages/SubmissionsPage.php:1078
 msgid "Term"
 msgstr ""
 
 #: src/Admin/AnalyticsExport.php:180
 #: src/Admin/Pages/AnalyticsPage.php:364
 #: src/Admin/Pages/AnalyticsPage.php:1859
-#: src/Admin/Pages/SubmissionsPage.php:1078
+#: src/Admin/Pages/SubmissionsPage.php:1079
 msgid "Content"
 msgstr ""
 
@@ -709,7 +709,7 @@ msgstr ""
 #: src/Admin/Pages/GoalsPage.php:339
 #: src/Admin/Pages/GoalsPage.php:759
 #: src/Admin/Pages/GoalsPage.php:983
-#: src/Admin/Pages/SubmissionsPage.php:1291
+#: src/Admin/Pages/SubmissionsPage.php:1292
 #: src/Admin/Pages/WebhooksPage.php:848
 #: src/Privacy/PersonalDataExporter.php:111
 #: assets/js/admin.js:62
@@ -809,7 +809,7 @@ msgstr ""
 
 #: src/Admin/AnalyticsExport.php:263
 #: src/Admin/Pages/AnalyticsPage.php:1986
-#: src/Admin/Pages/SubmissionsPage.php:1068
+#: src/Admin/Pages/SubmissionsPage.php:1069
 msgid "Conversion ID"
 msgstr ""
 
@@ -853,10 +853,10 @@ msgstr[1] ""
 
 #: src/Admin/HomeStatus.php:135
 #: src/Admin/Pages/AboutPage.php:1880
-#: src/Admin/Pages/AboutPage.php:2137
+#: src/Admin/Pages/AboutPage.php:2138
 #: src/Admin/Pages/HomePage.php:523
-#: src/Admin/Pages/SubmissionsPage.php:106
-#: src/Admin/Pages/SubmissionsPage.php:793
+#: src/Admin/Pages/SubmissionsPage.php:107
+#: src/Admin/Pages/SubmissionsPage.php:794
 msgid "Submissions"
 msgstr ""
 
@@ -1227,7 +1227,7 @@ msgid "Privacy & data"
 msgstr ""
 
 #: src/Admin/Pages/AboutPage.php:67
-#: src/Admin/Pages/SubmissionsPage.php:1172
+#: src/Admin/Pages/SubmissionsPage.php:1173
 msgid "Webhook delivery"
 msgstr ""
 
@@ -2411,15 +2411,15 @@ msgid "Exists without webhooks"
 msgstr ""
 
 #: src/Admin/Pages/AboutPage.php:1882
-#: src/Admin/Pages/AboutPage.php:2529
-#: src/Admin/Pages/AboutPage.php:2551
+#: src/Admin/Pages/AboutPage.php:2530
+#: src/Admin/Pages/AboutPage.php:2552
 msgid "Yes"
 msgstr ""
 
 #: src/Admin/Pages/AboutPage.php:1882
-#: src/Admin/Pages/AboutPage.php:2530
-#: src/Admin/Pages/AboutPage.php:2552
+#: src/Admin/Pages/AboutPage.php:2531
 #: src/Admin/Pages/AboutPage.php:2553
+#: src/Admin/Pages/AboutPage.php:2554
 msgid "No"
 msgstr ""
 
@@ -2440,7 +2440,7 @@ msgid "Cleared by"
 msgstr ""
 
 #: src/Admin/Pages/AboutPage.php:1884
-#: src/Admin/Pages/SubmissionsPage.php:890
+#: src/Admin/Pages/SubmissionsPage.php:891
 msgid "Clear All Submissions"
 msgstr ""
 
@@ -2481,8 +2481,8 @@ msgid "Every Convermetry screen resolves its required capability through one nam
 msgstr ""
 
 #: src/Admin/Pages/AboutPage.php:1903
-#: src/Admin/Pages/AboutPage.php:2159
-#: src/Admin/Pages/AboutPage.php:2457
+#: src/Admin/Pages/AboutPage.php:2160
+#: src/Admin/Pages/AboutPage.php:2458
 #: src/Admin/Pages/NotificationsPage.php:568
 msgid "Scope"
 msgstr ""
@@ -2560,7 +2560,7 @@ msgid "Records"
 msgstr ""
 
 #: src/Admin/Pages/AboutPage.php:1937
-msgid "One per page view, with the session's attribution snapshot."
+msgid "One per page shown, with the session's attribution snapshot. A restore from the browser's back/forward cache counts, and starts the page's scroll, hover and form events over. A prerendered page records nothing until the visitor opens it."
 msgstr ""
 
 #: src/Admin/Pages/AboutPage.php:1938
@@ -2600,7 +2600,7 @@ msgid "A named event from <code>Convermetry.track()</code>, kept only when a goa
 msgstr ""
 
 #: src/Admin/Pages/AboutPage.php:1947
-msgid "<strong>Delivery reliability.</strong> Batches flush every 5 seconds, at 20 events, and on page exit via <code>navigator.sendBeacon</code>. Every batch is persisted to a bounded <code>sessionStorage</code> store <em>before</em> it is sent and removed only on server acknowledgment. Failed sends back off exponentially with jitter; a 429 pauses the whole tab and honors <code>Retry-After</code>. Delivery is <strong>at-least-once</strong> and replays are <strong>idempotent</strong> — rows are stored under a unique (batch id, event ordinal) key, so a replayed batch never inflates counts."
+msgid "<strong>Delivery reliability.</strong> Batches flush every 5 seconds, at 20 events, and on page exit via <code>navigator.sendBeacon</code>. Page fields are cut to the width the server stores, and a flush that would still pass the endpoint's 64 KB limit is split across several requests. Every batch is persisted to a bounded <code>sessionStorage</code> store <em>before</em> it is sent and removed only on server acknowledgment. Failed sends back off exponentially with jitter; a 429 pauses the whole tab and honors <code>Retry-After</code>. Delivery is <strong>at-least-once</strong> and replays are <strong>idempotent</strong> — rows are stored under a unique (batch id, event ordinal) key, so a replayed batch never inflates counts."
 msgstr ""
 
 #: src/Admin/Pages/AboutPage.php:1948
@@ -2652,7 +2652,7 @@ msgid "The tracker's own frontend success listeners reuse the <strong>same token
 msgstr ""
 
 #: src/Admin/Pages/AboutPage.php:1969
-msgid "AJAX forms are fully supported. When the fields are absent — tracker disabled, privacy signals honored, JavaScript blocked, server-to-server submissions — the conversion id is generated on the server and the submission still records and delivers, just with an empty <code>analytics_context</code>. No cookies are used at any point."
+msgid "AJAX forms are fully supported. When the fields are absent — tracker disabled, privacy signals honored, JavaScript blocked, server-to-server submissions — the conversion id is generated on the server and the submission still records and delivers, just with an empty <code>analytics_context</code>. Its <code>form_success</code> event takes the page from a same-site <code>Referer</code> and has no channel, matching the lead: with no tracker there is no evidence of how the visitor arrived, so neither claims Direct. The channel report lists those conversions under a blank channel. No cookies are used at any point."
 msgstr ""
 
 #: src/Admin/Pages/AboutPage.php:1970
@@ -2708,7 +2708,7 @@ msgid "Goal type"
 msgstr ""
 
 #: src/Admin/Pages/AboutPage.php:2005
-#: src/Admin/Pages/AboutPage.php:2550
+#: src/Admin/Pages/AboutPage.php:2551
 msgid "Rules"
 msgstr ""
 
@@ -2854,1461 +2854,1469 @@ msgid "<strong>Abandonment has a grace period.</strong> A form started ninety se
 msgstr ""
 
 #: src/Admin/Pages/AboutPage.php:2056
+msgid "<strong>The latest start is the one judged.</strong> Starts are counted per session. A visitor who submits, comes back, starts again and leaves has abandoned that second attempt, even though they also converted, so one session can show as both a success and an abandonment. A visitor who leaves a first attempt and finishes a later one has abandoned nothing."
+msgstr ""
+
+#: src/Admin/Pages/AboutPage.php:2057
 msgid "<strong>Friction points.</strong> Where a provider uses native browser validation, Convermetry records which field failed and why:"
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2065
+#: src/Admin/Pages/AboutPage.php:2066
 msgid "<strong>No value a visitor typed is ever recorded.</strong> A validation event is rebuilt on the server from exactly three whitelisted pieces — the field's developer-chosen id, its type, and which <code>ValidityState</code> flag failed — and every other key in the request is discarded <em>by construction</em> rather than by a blocklist. Field ids are character-restricted and truncated to 64 characters, so an implementation that mistakenly sent a typed value would be stripped to something unrecognizable rather than quietly stored."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2066
+#: src/Admin/Pages/AboutPage.php:2067
 msgid "<strong>Elementor is excluded from form-level engagement.</strong> It identifies a form by its display <em>name</em> on the server while exposing a widget <em>id</em> in the browser, so the two cannot be matched reliably — and an engagement figure attributed to the wrong form is worse than none. Elementor submissions are recorded, attributed, delivered and reported normally everywhere else. The other six providers are fully supported."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2070
+#: src/Admin/Pages/AboutPage.php:2071
 msgid "Lead status & value"
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2072
+#: src/Admin/Pages/AboutPage.php:2073
 msgid "Set both on the <strong>Submissions</strong> detail panel; both are filterable in the list."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2073
+#: src/Admin/Pages/AboutPage.php:2074
 #: src/Admin/Pages/FormsPage.php:830
 #: src/Admin/Pages/FunnelsPage.php:243
 #: src/Admin/Pages/FunnelsPage.php:810
 #: src/Admin/Pages/GoalsPage.php:332
 #: src/Admin/Pages/GoalsPage.php:1008
-#: src/Admin/Pages/SubmissionsPage.php:1276
+#: src/Admin/Pages/SubmissionsPage.php:1277
 msgid "Status"
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2073
-#: src/Admin/Pages/AboutPage.php:2122
-#: src/Admin/Pages/AboutPage.php:2528
-#: src/Admin/Pages/AboutPage.php:2585
+#: src/Admin/Pages/AboutPage.php:2074
+#: src/Admin/Pages/AboutPage.php:2123
+#: src/Admin/Pages/AboutPage.php:2529
+#: src/Admin/Pages/AboutPage.php:2586
 msgid "Meaning"
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2074
+#: src/Admin/Pages/AboutPage.php:2075
 msgid "Not yet assessed — the default for every submission."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2075
+#: src/Admin/Pages/AboutPage.php:2076
 msgid "A real, well-matched lead."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2076
+#: src/Admin/Pages/AboutPage.php:2077
 msgid "A genuine person who was not a fit."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2077
+#: src/Admin/Pages/AboutPage.php:2078
 msgid "Converted into business."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2078
+#: src/Admin/Pages/AboutPage.php:2079
 msgid "A real lead that did not convert."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2079
+#: src/Admin/Pages/AboutPage.php:2080
 msgid "Never a lead at all."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2080
+#: src/Admin/Pages/AboutPage.php:2081
 msgid "<strong>This is deliberately not a CRM.</strong> Six statuses; no assignees, pipeline stages, follow-up dates, or activity notes. Every one of those would be a worse version of a tool you already have, and none changes the answer to <em>\"which marketing produced valuable leads?\"</em>"
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2082
+#: src/Admin/Pages/AboutPage.php:2083
 msgid "<strong><code>won</code> counts as qualified.</strong> A lead that converted was self-evidently qualified, and requiring it to pass through <code>qualified</code> first would under-report every site that records the final outcome in one step."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2083
+#: src/Admin/Pages/AboutPage.php:2084
 msgid "<strong>Only <code>spam</code> leaves the denominator.</strong> An unqualified or lost lead was still a lead your marketing produced. Excluding those would make a channel look better the more poor-quality leads it sent — which is exactly why <code>spam</code> is separate from <code>unqualified</code>."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2084
+#: src/Admin/Pages/AboutPage.php:2085
 msgid "<strong>Value and currency.</strong> Values are stored as exact <code>DECIMAL(13,2)</code> and handled as decimal <strong>strings</strong> end to end — never floating point. A lead worth 0.10 recorded ten thousand times totals exactly 1000.00. Input is forgiving about presentation and strict about value: <code>$12,500.00</code>, <code>12 500</code>, <code>&euro;1.234,56</code> and <code>1234.56 USD</code> all parse; <code>12abc</code> is <strong>rejected</strong> rather than silently read as 12. The site currency is <strong>stamped onto each lead</strong> when you first record a value, so changing the setting later never rewrites what is already recorded — and reports group by currency and <strong>never sum across codes</strong>."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2085
+#: src/Admin/Pages/AboutPage.php:2086
 msgid "<strong>History.</strong> Every status or value change records who made it and when. The change and its history row are written in a single transaction, so a lead can never end up in a state its history disagrees with."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2086
+#: src/Admin/Pages/AboutPage.php:2087
 msgid "<strong>Reporting.</strong> <em>Analytics → Lead outcomes</em> breaks leads down by channel, campaign, landing page, and form: Lead Qualification Rate = (qualified + won) ÷ total; Lead-to-Win Rate = won ÷ total; Attributed Lead Value; Attributed Revenue (the same, restricted to <code>won</code>). <strong>Nothing is called ROI or ROAS</strong> — both are ratios against ad <em>spend</em>, Convermetry has no cost data, and a \"return\" computed without the investment half is not a weaker version of the metric, it is a different number wearing its name. <strong>Time to lead</strong> is measured from the first page view of the session that converted, and reported as medians rather than averages, because the distribution is heavily right-skewed."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2087
+#: src/Admin/Pages/AboutPage.php:2088
 msgid "Lead status and value are recorded <strong>locally only</strong> in this version. A form payload is frozen when it is first delivered and scheduled analytics windows never revisit, so a lead field on either could only ever report “new” — wrong for every lead you qualify, and a field that lies is worse than an absent one. Use the <code>convermetry_lead_status_updated</code> action to push outcomes to your own systems today. Goal completions <em>do</em> travel, in the analytics report payload, because a completion either happened in the window or it did not."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2103
+#: src/Admin/Pages/AboutPage.php:2104
 #: src/Admin/Pages/FormsPage.php:571
 msgid "Supported form providers"
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2105
+#: src/Admin/Pages/AboutPage.php:2106
 msgid "Providers are feature-detected — nothing breaks when a plugin is absent, and activation never fatals on a site with no form plugin at all — and their forms are discovered automatically. Detected forms are <strong>included by default</strong>, so a new form needs no setup; exclusions and per-form configuration live on the <strong>Forms</strong> page."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2106
-#: src/Admin/Pages/AboutPage.php:2400
+#: src/Admin/Pages/AboutPage.php:2107
+#: src/Admin/Pages/AboutPage.php:2401
 #: src/Admin/Pages/NotificationsPage.php:587
-#: src/Admin/Pages/SubmissionsPage.php:1060
+#: src/Admin/Pages/SubmissionsPage.php:1061
 #: src/Notifications/EmailBuilder.php:117
 msgid "Provider"
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2106
+#: src/Admin/Pages/AboutPage.php:2107
 msgid "Server-side hook and notes"
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2107
+#: src/Admin/Pages/AboutPage.php:2108
 msgid "Elementor Pro"
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2107
+#: src/Admin/Pages/AboutPage.php:2108
 msgid "<code>elementor_pro/forms/new_record</code>. Per-form settings key by the widget id, falling back to the legacy form <strong>name</strong> key until the next save."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2108
+#: src/Admin/Pages/AboutPage.php:2109
 msgid "Elementor Pro — Atomic Forms"
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2108
+#: src/Admin/Pages/AboutPage.php:2109
 msgid "The <code>convermetry</code> action, registered on <code>elementor_pro/atomic_forms/actions/register</code>. <strong>Opt in per form</strong>: nothing is captured until <em>Convermetry</em> is added under <em>Actions after submit</em> in the Elementor editor. Settings key by <code>&lt;document id&gt;:&lt;element id&gt;</code>."
-msgstr ""
-
-#: src/Admin/Pages/AboutPage.php:2109
-#: src/Admin/Pages/AboutPage.php:2403
-msgid "Bricks Builder"
-msgstr ""
-
-#: src/Admin/Pages/AboutPage.php:2109
-msgid "The <code>convermetry</code> action, dispatched on <code>bricks/form/action/convermetry</code> (Bricks 1.12.2+). <strong>Opt in per form</strong>: nothing is captured until <em>Convermetry</em> is ticked under <em>Actions after successful form submit</em> in Bricks. Settings key by the form <strong>element id</strong>. Native Bricks Form element only."
 msgstr ""
 
 #: src/Admin/Pages/AboutPage.php:2110
 #: src/Admin/Pages/AboutPage.php:2404
-msgid "Gravity Forms"
+msgid "Bricks Builder"
 msgstr ""
 
 #: src/Admin/Pages/AboutPage.php:2110
-msgid "<code>gform_after_submission</code>, via public APIs."
+msgid "The <code>convermetry</code> action, dispatched on <code>bricks/form/action/convermetry</code> (Bricks 1.12.2+). <strong>Opt in per form</strong>: nothing is captured until <em>Convermetry</em> is ticked under <em>Actions after successful form submit</em> in Bricks. Settings key by the form <strong>element id</strong>. Native Bricks Form element only."
 msgstr ""
 
 #: src/Admin/Pages/AboutPage.php:2111
 #: src/Admin/Pages/AboutPage.php:2405
-msgid "WPForms"
+msgid "Gravity Forms"
+msgstr ""
+
+#: src/Admin/Pages/AboutPage.php:2111
+msgid "<code>gform_after_submission</code>, via public APIs."
 msgstr ""
 
 #: src/Admin/Pages/AboutPage.php:2112
-#: src/Admin/Pages/AboutPage.php:2408
-msgid "Contact Form 7"
+#: src/Admin/Pages/AboutPage.php:2406
+msgid "WPForms"
 msgstr ""
 
 #: src/Admin/Pages/AboutPage.php:2113
 #: src/Admin/Pages/AboutPage.php:2409
+msgid "Contact Form 7"
+msgstr ""
+
+#: src/Admin/Pages/AboutPage.php:2114
+#: src/Admin/Pages/AboutPage.php:2410
 msgid "Fluent Forms"
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2113
+#: src/Admin/Pages/AboutPage.php:2114
 msgid "<code>fluentform/submission_inserted</code>, plus the legacy alias, guarded against the double fire."
-msgstr ""
-
-#: src/Admin/Pages/AboutPage.php:2114
-#: src/Admin/Pages/AboutPage.php:2406
-msgid "Ninja Forms"
-msgstr ""
-
-#: src/Admin/Pages/AboutPage.php:2114
-msgid "<code>ninja_forms_after_submission</code>. Admin form previews are skipped, and multi-instance form ids are normalized to the numeric form id."
 msgstr ""
 
 #: src/Admin/Pages/AboutPage.php:2115
 #: src/Admin/Pages/AboutPage.php:2407
-msgid "Formidable Forms"
+msgid "Ninja Forms"
 msgstr ""
 
 #: src/Admin/Pages/AboutPage.php:2115
-msgid "<code>frm_after_create_entry</code> at priority 30. Repeater/embedded child entries and saved drafts are skipped."
+msgid "<code>ninja_forms_after_submission</code>. Admin form previews are skipped, and multi-instance form ids are normalized to the numeric form id."
 msgstr ""
 
 #: src/Admin/Pages/AboutPage.php:2116
+#: src/Admin/Pages/AboutPage.php:2408
+msgid "Formidable Forms"
+msgstr ""
+
+#: src/Admin/Pages/AboutPage.php:2116
+msgid "<code>frm_after_create_entry</code> at priority 30. Repeater/embedded child entries and saved drafts are skipped."
+msgstr ""
+
+#: src/Admin/Pages/AboutPage.php:2117
 msgid "Per-form settings key by the provider's own most stable form identity. <strong>Two providers are opt in per form</strong> — Elementor Atomic and Bricks Builder both run an explicit list of actions after submit, so a form of theirs captures nothing until the Convermetry action is selected in that builder's editor. Convermetry never edits saved builder content to add it, and cannot tell from the outside which forms have it; the <strong>Forms</strong> page says so beside those rows. Custom forms integrate through the <a href=\"#developer\">public API</a>, and third-party adapters register with the <a href=\"#hook-convermetry_form_providers\"><code>convermetry_form_providers</code></a> filter."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2120
+#: src/Admin/Pages/AboutPage.php:2121
 #: src/Admin/Pages/FormsPage.php:610
 msgid "Per-form configuration"
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2122
-#: src/Admin/Pages/AboutPage.php:2453
+#: src/Admin/Pages/AboutPage.php:2123
+#: src/Admin/Pages/AboutPage.php:2454
 msgid "Setting"
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2123
+#: src/Admin/Pages/AboutPage.php:2124
 #: src/Admin/Pages/FormsPage.php:826
 msgid "Native Form ID"
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2123
+#: src/Admin/Pages/AboutPage.php:2124
 msgid "The provider's own identity (read-only)."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2124
+#: src/Admin/Pages/AboutPage.php:2125
 #: src/Admin/Pages/FormsPage.php:827
 msgid "Custom/External Form ID"
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2124
+#: src/Admin/Pages/AboutPage.php:2125
 msgid "Sent as <code>form_id</code> in payloads; the native id is the fallback."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2125
+#: src/Admin/Pages/AboutPage.php:2126
 msgid "Enabled / Excluded"
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2125
+#: src/Admin/Pages/AboutPage.php:2126
 msgid "Detected forms are included by default. Exclusion stops processing; configuration is <strong>preserved</strong> while excluded."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2126
+#: src/Admin/Pages/AboutPage.php:2127
 msgid "Include page URL query parameters"
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2126
-msgid "Per-form override of the global setting."
+#: src/Admin/Pages/AboutPage.php:2127
+msgid "Per-form override of the global setting. When off, only utm_* parameters are kept. When on, others are stored and forwarded too, ad-click ids included, except names that look like a secret or contact details and values containing an email address."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2127
+#: src/Admin/Pages/AboutPage.php:2128
 #: src/Admin/Pages/FormsPage.php:851
 msgid "URL Query Parameters"
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2127
+#: src/Admin/Pages/AboutPage.php:2128
 msgid "Per-form parameters, appended to outbound webhook URLs."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2128
+#: src/Admin/Pages/AboutPage.php:2129
 #: src/Admin/Pages/FormsPage.php:856
 msgid "Request Headers"
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2128
+#: src/Admin/Pages/AboutPage.php:2129
 msgid "Per-form headers, added to outbound requests."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2129
+#: src/Admin/Pages/AboutPage.php:2130
 msgid "Merge precedence for query parameters, later overriding earlier for shared keys:"
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2139
+#: src/Admin/Pages/AboutPage.php:2140
 msgid "<strong>Convermetry → Submissions</strong> lists every server-confirmed lead with its date, form, provider, channel and campaign, delivery status, lead status and value. Filters cover date range, provider, form, channel, campaign, delivery state, lead status, and free-text search; the detail panel is loaded on demand and shows the submitted answers, the full analytics context, the delivery outcome per endpoint, and the lead's status history. CSV and JSON exports — of the current filters or of everything — stream in keyset-paginated chunks, so even a very large table exports in bounded memory."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2140
+#: src/Admin/Pages/AboutPage.php:2141
 msgid "Deleting a submission also cancels anything still queued for it — webhook queue rows and email notifications alike — and cascades its lead history away, firing <code>convermetry_submission_deleted</code> once everything attached to it is gone."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2141
+#: src/Admin/Pages/AboutPage.php:2142
 msgid "Every submission — bundled provider or custom API — passes the same two extension points before anything is written: <a href=\"#hook-convermetry_should_record_submission\"><code>convermetry_should_record_submission</code></a> can veto the whole write (the visitor still sees success), and <a href=\"#hook-convermetry_submission_fields\"><code>convermetry_submission_fields</code></a> sees the normalized descriptors, with any change re-normalized so the <code>cvmtry_*</code> strip and the descriptor shape hold."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2159
+#: src/Admin/Pages/AboutPage.php:2160
 msgid "Identifier"
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2159
+#: src/Admin/Pages/AboutPage.php:2160
 msgid "Identifies"
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2160
+#: src/Admin/Pages/AboutPage.php:2161
 msgid "The form submission itself."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2160
+#: src/Admin/Pages/AboutPage.php:2161
 msgid "<strong>Global</strong> — identical in every delivery of that submission, to every endpoint. Deduplicate by it when aggregating the same lead arriving via multiple endpoints."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2161
+#: src/Admin/Pages/AboutPage.php:2162
 msgid "The analytics conversion joined to the submission, and its session."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2161
+#: src/Admin/Pages/AboutPage.php:2162
 msgid "Shared between the frontend <code>form_success</code> event and the server-confirmed record, so the two detection paths can never double-count. Every Convermetry conversion report deduplicates by it."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2162
+#: src/Admin/Pages/AboutPage.php:2163
 msgid "One outbound webhook delivery."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2162
+#: src/Admin/Pages/AboutPage.php:2163
 msgid "<strong>Endpoint-specific</strong>; stable across every retry; echoed as the <code>Idempotency-Key</code> header. <strong>Receivers deduplicate by this alone.</strong>"
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2163
+#: src/Admin/Pages/AboutPage.php:2164
 msgid "Supporting identifiers: a batch id plus each event's ordinal make tracker ingestion idempotent, <code>session_id</code> groups one visit, <code>completion_id</code> identifies one goal completion, and <code>lead_event_id</code> identifies one lead status change."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2179
+#: src/Admin/Pages/AboutPage.php:2180
 msgid "The two outbound message types"
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2181
+#: src/Admin/Pages/AboutPage.php:2182
 msgid "Convermetry sends two kinds of webhook message. Every endpoint on the <strong>Webhooks</strong> page chooses which it receives, and the two are fully independent — an endpoint may take either one on its own, or both."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2183
+#: src/Admin/Pages/AboutPage.php:2184
 msgid "<strong>Analytics Reports</strong> — <code>message_type: analytics_report</code>. Scheduled, <em>aggregated</em> reporting for a time window, sent on the site-wide schedule you pick: hourly, twice daily, daily, or weekly. This is <em>not</em> one webhook per page view or click — an entire window is summarized into a single delivery. Each endpoint tracks its own delivery window, so a payload covers the time since <em>that</em> endpoint's last successful delivery, and a newly added endpoint can optionally be backfilled with the retained history. <strong>Send analytics test</strong> delivers one on demand."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2184
+#: src/Admin/Pages/AboutPage.php:2185
 msgid "<strong>Form Submissions</strong> — <code>message_type: form_submission</code>. One message per server-confirmed lead, delivered immediately through the background form-delivery queue instead of on a schedule. <strong>Send form test</strong> delivers one on demand."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2190
+#: src/Admin/Pages/AboutPage.php:2191
 msgid "<strong>For an analytics-only endpoint</strong>, check <strong>Analytics Reports</strong> and leave <strong>Form Submissions</strong> unchecked — no submitted form field values are ever sent to that endpoint. Analytics reports do still describe individual conversions (<code>conversions.recent[]</code>: conversion id, form name and ids, provider, and the visitor's IP when IP storage is on), so \"analytics-only\" means no field values, not no lead identifiers. The reverse works the same way. Both message types appear in the <strong>Activity Log</strong>, where you can tell them apart by their <code>message_type</code>."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2191
+#: src/Admin/Pages/AboutPage.php:2192
 msgid "<strong>Internal email notifications are a third, separate path</strong> with its own master switch and its own queue — see <a href=\"#notifications\">Notifications</a>. Notification sends do not appear in the Activity Log, which covers webhook deliveries only."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2195
+#: src/Admin/Pages/AboutPage.php:2196
 msgid "Endpoint configuration"
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2197
+#: src/Admin/Pages/AboutPage.php:2198
 #: src/Admin/Pages/FormsPage.php:479
 msgid "Field"
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2197
-#: src/Admin/Pages/AboutPage.php:2649
-#: src/Admin/Pages/AboutPage.php:2916
+#: src/Admin/Pages/AboutPage.php:2198
+#: src/Admin/Pages/AboutPage.php:2650
+#: src/Admin/Pages/AboutPage.php:2918
 msgid "Purpose"
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2198
+#: src/Admin/Pages/AboutPage.php:2199
 msgid "Webhook URL"
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2198
+#: src/Admin/Pages/AboutPage.php:2199
 msgid "HTTPS required. The <code>convermetry_allow_insecure_webhooks</code> filter permits <code>http://</code> for development."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2199
+#: src/Admin/Pages/AboutPage.php:2200
 #: src/Admin/Pages/FunnelsPage.php:246
 msgid "Label"
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2199
+#: src/Admin/Pages/AboutPage.php:2200
 msgid "Optional; badges Activity Log entries and identifies endpoints in the REST API."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2200
+#: src/Admin/Pages/AboutPage.php:2201
 msgid "Signing Secret"
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2200
+#: src/Admin/Pages/AboutPage.php:2201
 msgid "Optional per-endpoint HMAC key; overrides the shared secret for this endpoint only, so one receiver never learns the key that signs payloads for others."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2201
+#: src/Admin/Pages/AboutPage.php:2202
 msgid "Delivery Types"
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2201
+#: src/Admin/Pages/AboutPage.php:2202
 msgid "<strong>Analytics Reports</strong> and/or <strong>Form Submissions</strong>."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2202
+#: src/Admin/Pages/AboutPage.php:2203
 msgid "All requests go through one transport: <code>wp_safe_remote_post()</code> with the URL re-validated at request time (SSRF protection even if DNS changed after saving), redirects disabled, response downloads capped at 64 KB at the transport layer, and a 15-second timeout."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2206
+#: src/Admin/Pages/AboutPage.php:2207
 msgid "Delivery, retries & idempotency"
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2208
+#: src/Admin/Pages/AboutPage.php:2209
 msgid "Both message types share one delivery pipeline — an Analytics Report is frozen per reporting window, a Form Submission per submission, and from there the guarantees are identical."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2212
+#: src/Admin/Pages/AboutPage.php:2213
 msgid "<strong>Frozen requests.</strong> On the first attempt the final URL (all query-parameter layers merged), the configured headers, and the serialized JSON body are frozen and replayed byte-for-byte under the same <code>delivery_id</code>. A configuration change after a failure never mutates them, and endpoints that already acknowledged a delivery are never re-sent."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2213
+#: src/Admin/Pages/AboutPage.php:2214
 msgid "<strong>Three headers are regenerated per attempt</strong> from that frozen body: <code>Idempotency-Key</code> (always the same delivery id), <code>User-Agent</code> (carries the plugin version, so it changes if the site updates mid-chain), and <code>X-Convermetry-Signature</code>, computed with the secret <em>current at send time</em> — so rotating a secret changes a retry's signature, intentionally, so a rotated key still verifies."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2215
+#: src/Admin/Pages/AboutPage.php:2216
 msgid "<strong>Analytics reports</strong> retry through per-endpoint single-event crons. An exhausted chain — or one whose cron could not be scheduled, detected as <em>orphaned</em> — keeps its frozen delivery; the next scheduled dispatch re-sends it under the original id first, and only after acknowledgment does the endpoint's marker advance, exactly to the frozen window's end, so consecutive deliveries never overlap. Dispatch runs under a site-wide mutex (MySQL named lock, with a lease-based fallback), and each site's schedule is anchored at a stable random offset so fleets sharing one endpoint never stampede it."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2216
+#: src/Admin/Pages/AboutPage.php:2217
 msgid "<strong>Form submissions</strong> use one queue row per submission × endpoint. Rows are claimed atomically by a token-stamped conditional <code>UPDATE</code>, so overlapping workers cannot double-send, and rows stranded by a dead worker are reclaimed after 10 minutes. Acknowledged endpoints are deleted from the queue and never re-sent when a sibling endpoint fails."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2217
+#: src/Admin/Pages/AboutPage.php:2218
 msgid "<strong>Conversion delivery inside Analytics Reports is lossless</strong> — a window holding more than 100 individual conversions is split into consecutive deliveries rather than truncated. Each <code>top_*</code> list holds up to 200 rows."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2218
+#: src/Admin/Pages/AboutPage.php:2219
 msgid "<strong>Delivery is at-least-once.</strong> Any duplicate a receiver can ever see carries a <code>delivery_id</code> it has already processed — deduplicating by <code>delivery_id</code> is sufficient to never double-process."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2219
+#: src/Admin/Pages/AboutPage.php:2220
 msgid "Every stage is observable and most are customizable: the URL, headers, timeout and payload are composed through filters that run <strong>once, before the freeze</strong> (<code>convermetry_webhook_query_args</code>, <code>convermetry_webhook_headers</code>, <code>convermetry_webhook_timeout</code>, <code>convermetry_webhook_payload</code>), and the lifecycle — queued, frozen, about to send, attempted, logged, succeeded, retry scheduled, chain exhausted, abandoned, canceled — is reported by ten actions that all carry the same credential-free context. See <a href=\"#hooks\">Hooks</a>."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2223
+#: src/Admin/Pages/AboutPage.php:2224
 msgid "HMAC signatures"
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2225
+#: src/Admin/Pages/AboutPage.php:2226
 msgid "When a signing secret is configured — shared, or per-endpoint, where the endpoint's own secret wins — every request carries the HMAC-SHA256 of the <strong>raw JSON body bytes</strong>:"
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2234
+#: src/Admin/Pages/AboutPage.php:2235
 msgid "Verify by recomputing over the exact received bytes and comparing with a constant-time function. Note that the Activity Log stores a <em>redacted</em> representation of the request, not a byte-exact copy — so a stored body will not reproduce its signature. Verify against what your endpoint received, never against a log copy."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2250
+#: src/Admin/Pages/AboutPage.php:2251
 msgid "The shared envelope"
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2252
+#: src/Admin/Pages/AboutPage.php:2253
 msgid "Every outbound message carries the same envelope, whatever its type."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2265
+#: src/Admin/Pages/AboutPage.php:2266
 msgid "The two message types version <strong>independently</strong>: analytics reports are at <code>1.1</code> (<code>1.0</code> plus an additive <code>analytics.goals</code> section), and form submissions at <code>2.0</code> — except rows recorded before the field-descriptor change, which keep emitting <code>1.0</code> forever. <strong>Branch on <code>schema_version</code>, never on <code>plugin_version</code>.</strong>"
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2269
+#: src/Admin/Pages/AboutPage.php:2270
 msgid "Analytics report payload (excerpt)"
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2271
+#: src/Admin/Pages/AboutPage.php:2272
 msgid "Reporting data for one time window — aggregates plus the individual conversions that occurred in it. No other lead data is included."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2339
+#: src/Admin/Pages/AboutPage.php:2340
 msgid "<code>period</code> is the UTC window the report covers — <code>start</code> inclusive, <code>end</code> exclusive."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2340
+#: src/Admin/Pages/AboutPage.php:2341
 msgid "The <code>analytics</code> section comes from the same reporting query layer the dashboard uses, so a payload and the admin screens cannot disagree."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2341
+#: src/Admin/Pages/AboutPage.php:2342
 msgid "<code>analytics.conversions.recent</code> lists the <em>individual</em> conversions inside the window — each with the visitor's <code>ip_address</code> when IP storage is on — while every other section is aggregate reporting data. <code>total</code> is deduplicated by conversion id, and <code>server_confirmed</code> counts the stored server-confirmed submissions."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2342
+#: src/Admin/Pages/AboutPage.php:2343
 msgid "Deduplicate received deliveries by <code>delivery_id</code> (echoed as the <code>Idempotency-Key</code> header) — never by <code>period</code>."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2343
+#: src/Admin/Pages/AboutPage.php:2344
 msgid "An <strong>analytics test</strong> covers the last 7 days, carries <code>\"test\": true</code>, is never retried, and does not advance the endpoint's normal delivery marker — so testing an endpoint never creates a gap in its scheduled reporting."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2347
+#: src/Admin/Pages/AboutPage.php:2348
 msgid "Form submission payload (excerpt)"
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2349
+#: src/Admin/Pages/AboutPage.php:2350
 msgid "One lead's own data plus the analytics context correlated to it. An Analytics Report is the mirror image: reporting data for a window, with no submitted field values — though its <code>conversions.recent[]</code> does identify individual conversions. <code>ip_address</code> is the submitter's address, captured during the visitor's own request and frozen with the record; it is always present, and empty when disabled in Settings or when no valid address could be determined."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2391
+#: src/Admin/Pages/AboutPage.php:2392
 msgid "submission_data: schema 2.0"
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2393
+#: src/Admin/Pages/AboutPage.php:2394
 msgid "<code>submission_data</code> is an <strong>ordered list of field descriptors</strong>, not an object. Match on <code>id</code>; show <code>label</code>."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2394
-#: src/Admin/Pages/AboutPage.php:2528
-#: src/Admin/Pages/AboutPage.php:2550
+#: src/Admin/Pages/AboutPage.php:2395
+#: src/Admin/Pages/AboutPage.php:2529
+#: src/Admin/Pages/AboutPage.php:2551
 #: src/Admin/Pages/FormsPage.php:882
 #: assets/js/admin.js:55
 msgid "Key"
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2394
-#: src/Admin/Pages/AboutPage.php:2453
+#: src/Admin/Pages/AboutPage.php:2395
+#: src/Admin/Pages/AboutPage.php:2454
 msgid "Notes"
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2395
 #: src/Admin/Pages/AboutPage.php:2396
-#: src/Admin/Pages/AboutPage.php:2587
+#: src/Admin/Pages/AboutPage.php:2397
 #: src/Admin/Pages/AboutPage.php:2588
-#: src/Admin/Pages/AboutPage.php:2590
+#: src/Admin/Pages/AboutPage.php:2589
+#: src/Admin/Pages/AboutPage.php:2591
 msgid "string"
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2395
+#: src/Admin/Pages/AboutPage.php:2396
 msgid "The provider-native field ID or key. Stable across renames. <strong>Never empty</strong> — an entry without one is dropped."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2396
+#: src/Admin/Pages/AboutPage.php:2397
 msgid "The human-readable label captured at submission time. <strong>Falls back to <code>id</code></strong> when the provider exposes no reliable label."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2397
+#: src/Admin/Pages/AboutPage.php:2398
 msgid "string | string[]"
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2397
+#: src/Admin/Pages/AboutPage.php:2398
 msgid "A sanitized string, or a list of sanitized strings for multi-value fields. <strong>Never a nested object.</strong>"
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2398
+#: src/Admin/Pages/AboutPage.php:2399
 msgid "<strong>Why a list.</strong> The pre-2.0 format was a <code>label =&gt; value</code> object, which forced every provider to discard either the stable ID (Gravity Forms, WPForms, Ninja Forms and Formidable key by label) or the human label (Elementor keys by ID). It also <strong>silently merged two fields that shared a label</strong> — two fields both called \"Name\" became one. A list preserves provider order, preserves duplicates, and keeps the ID for automation alongside the label for humans."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2399
+#: src/Admin/Pages/AboutPage.php:2400
 msgid "Label availability differs by provider, and Convermetry does not guess:"
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2401
+#: src/Admin/Pages/AboutPage.php:2402
 msgid "Elementor"
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2401
-#: src/Admin/Pages/AboutPage.php:2403
+#: src/Admin/Pages/AboutPage.php:2402
 #: src/Admin/Pages/AboutPage.php:2404
 #: src/Admin/Pages/AboutPage.php:2405
-#: src/Admin/Pages/AboutPage.php:2407
+#: src/Admin/Pages/AboutPage.php:2406
+#: src/Admin/Pages/AboutPage.php:2408
 msgid "field ID"
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2401
+#: src/Admin/Pages/AboutPage.php:2402
 msgid "the field's title"
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2402
+#: src/Admin/Pages/AboutPage.php:2403
 msgid "Elementor Atomic"
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2402
+#: src/Admin/Pages/AboutPage.php:2403
 msgid "field (element) ID"
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2402
+#: src/Admin/Pages/AboutPage.php:2403
 msgid "the field's editor label, else the ID"
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2403
+#: src/Admin/Pages/AboutPage.php:2404
 msgid "the field label, else the ID. Only fields Bricks <em>defines</em> are mapped, and <strong>password</strong> fields are dropped outright — Bricks field IDs are opaque, so the field type is the only thing that can tell a credential from a comment"
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2404
+#: src/Admin/Pages/AboutPage.php:2405
 msgid "the field label"
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2405
+#: src/Admin/Pages/AboutPage.php:2406
 msgid "the field name"
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2406
+#: src/Admin/Pages/AboutPage.php:2407
 msgid "field ID (or key)"
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2406
+#: src/Admin/Pages/AboutPage.php:2407
 msgid "the field label, else its key"
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2407
+#: src/Admin/Pages/AboutPage.php:2408
 msgid "the field name, else its key"
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2408
+#: src/Admin/Pages/AboutPage.php:2409
 msgid "posted field name"
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2408
+#: src/Admin/Pages/AboutPage.php:2409
 msgid "<strong>same as <code>id</code></strong> — CF7 exposes no reliable label without parsing form markup"
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2409
+#: src/Admin/Pages/AboutPage.php:2410
 msgid "submitted key"
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2409
+#: src/Admin/Pages/AboutPage.php:2410
 msgid "<strong>same as <code>id</code></strong> — labels live in an internal JSON blob, not a public API"
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2410
+#: src/Admin/Pages/AboutPage.php:2411
 msgid "Convermetry's own correlation fields (<code>cvmtry_conversion_id</code>, <code>cvmtry_session_id</code>, <code>cvmtry_context</code>) are stripped before storage and never appear here."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2411
+#: src/Admin/Pages/AboutPage.php:2412
 msgid "<strong>Migrating from schema 1.0.</strong> Historical rows are <strong>never</strong> rewritten, in the database or on the wire — otherwise one <code>submission_id</code> could arrive in two different shapes, and a frozen retry could deliver a <code>1.0</code> body long after the upgrade. Branch on <code>schema_version</code>:"
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2424
+#: src/Admin/Pages/AboutPage.php:2425
 msgid "The <strong>Send form test</strong> button on the Webhooks page sends schema <code>2.0</code>, so you can verify a receiver against the current format before real leads arrive."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2440
+#: src/Admin/Pages/AboutPage.php:2441
 msgid "Internal email alerts"
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2442
+#: src/Admin/Pages/AboutPage.php:2443
 msgid "<strong>Convermetry → Notifications</strong> emails a chosen internal address when a form submission is recorded, enriched with the attribution Convermetry already captured for that visitor. It is <strong>off by default</strong> and has its own master switch — it works with no webhook endpoints configured, and disabling webhooks does not disable it. These are <strong>internal</strong> notifications: Convermetry never emails the person who submitted the form, and visitor autoresponders are out of scope."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2444
+#: src/Admin/Pages/AboutPage.php:2445
 msgid "<strong>Email creates a copy of lead data outside Convermetry's controls.</strong> Deleting a submission — or letting retention expire it — cancels anything still queued and guarantees no queued message can be rendered afterwards, because the queue stores no lead data of its own. It <strong>cannot recall a message already sent</strong>. If you are relying on Convermetry's retention window for a compliance story, enabling this changes that story."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2445
+#: src/Admin/Pages/AboutPage.php:2446
 msgid "<strong>Your form plugin probably already emails you.</strong> These are in addition, not a replacement."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2446
+#: src/Admin/Pages/AboutPage.php:2447
 msgid "<strong>\"Sent\" means handed to your mail system.</strong> Convermetry uses <code>wp_mail()</code>; a <code>true</code> return means the local transport <em>accepted</em> the message. Nothing in the plugin claims a notification was \"delivered\" — that word is reserved for webhooks, where a receiver actually returned 2xx."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2447
+#: src/Admin/Pages/AboutPage.php:2448
 msgid "Convermetry stores <strong>no mail credentials</strong> and implements no SMTP transport of its own. Any SMTP plugin you already run keeps working unchanged."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2451
+#: src/Admin/Pages/AboutPage.php:2452
 #: src/Admin/Pages/HomePage.php:553
 #: src/Admin/Pages/SettingsPage.php:75
 msgid "Settings"
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2453
+#: src/Admin/Pages/AboutPage.php:2454
 msgid "Default"
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2454
+#: src/Admin/Pages/AboutPage.php:2455
 msgid "Enable notifications"
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2454
-#: src/Admin/Pages/AboutPage.php:2460
+#: src/Admin/Pages/AboutPage.php:2455
 #: src/Admin/Pages/AboutPage.php:2461
+#: src/Admin/Pages/AboutPage.php:2462
 msgid "Off"
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2454
+#: src/Admin/Pages/AboutPage.php:2455
 msgid "Master switch."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2455
+#: src/Admin/Pages/AboutPage.php:2456
 msgid "Recipients"
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2455
+#: src/Admin/Pages/AboutPage.php:2456
 msgid "none"
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2455
+#: src/Admin/Pages/AboutPage.php:2456
 msgid "One address per line. Validated, deduplicated case-insensitively, capped at 20. Each recipient gets a <strong>separate message</strong>, so nobody sees the rest of the list. Never derived from submitted data."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2456
+#: src/Admin/Pages/AboutPage.php:2457
 #: src/Admin/Pages/NotificationsPage.php:514
 msgid "Subject"
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2456
+#: src/Admin/Pages/AboutPage.php:2457
 msgid "Token allowlist below."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2457
+#: src/Admin/Pages/AboutPage.php:2458
 msgid "Every form"
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2457
+#: src/Admin/Pages/AboutPage.php:2458
 msgid "<em>Every form</em> notifies unless a form is switched off; <em>Only selected forms</em> notifies only forms switched on. Per-form rules are inherit / always / never."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2458
+#: src/Admin/Pages/AboutPage.php:2459
 #: src/Admin/Pages/NotificationsPage.php:537
-#: src/Admin/Pages/SubmissionsPage.php:1111
+#: src/Admin/Pages/SubmissionsPage.php:1112
 #: src/Notifications/EmailBuilder.php:125
 msgid "Submitted fields"
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2458
 #: src/Admin/Pages/AboutPage.php:2459
+#: src/Admin/Pages/AboutPage.php:2460
 msgid "On"
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2458
+#: src/Admin/Pages/AboutPage.php:2459
 msgid "The visitor's answers, as label/value rows."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2459
+#: src/Admin/Pages/AboutPage.php:2460
 #: src/Admin/Pages/NotificationsPage.php:541
 msgid "Analytics summary"
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2459
+#: src/Admin/Pages/AboutPage.php:2460
 msgid "Channel, UTM source/medium/campaign, landing page, conversion page, device, pages viewed, session start."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2460
+#: src/Admin/Pages/AboutPage.php:2461
 #: src/Admin/Pages/NotificationsPage.php:545
-#: src/Admin/Pages/SubmissionsPage.php:1150
+#: src/Admin/Pages/SubmissionsPage.php:1151
 msgid "Visitor journey"
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2460
+#: src/Admin/Pages/AboutPage.php:2461
 msgid "The pages this visitor viewed — browsing history for an identifiable person."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2461
+#: src/Admin/Pages/AboutPage.php:2462
 #: src/Admin/Pages/NotificationsPage.php:549
-#: src/Admin/Pages/SubmissionsPage.php:1094
+#: src/Admin/Pages/SubmissionsPage.php:1095
 #: src/Notifications/EmailBuilder.php:144
 #: src/Privacy/PersonalDataExporter.php:169
 #: src/Privacy/PersonalDataExporter.php:196
 msgid "IP address"
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2461
+#: src/Admin/Pages/AboutPage.php:2462
 msgid "Personal data in the EU/UK; only available when IP storage is on in Settings."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2462
+#: src/Admin/Pages/AboutPage.php:2463
 msgid "Subject tokens are a fixed allowlist, substituted literally — there is no expression language and no PHP evaluation: <code>{site_name}</code>, <code>{form_name}</code>, <code>{provider}</code>, <code>{channel}</code>, <code>{submission_id}</code>, <code>{form_id}</code>, <code>{campaign}</code>, <code>{date}</code>. Anything else stays literal text, and CR/LF and NUL are stripped <em>after</em> substitution, so a form named <code>Contact\\r\\nBcc: …</code> cannot inject a mail header."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2466
+#: src/Admin/Pages/AboutPage.php:2467
 msgid "What is never emailed, and how sending works"
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2468
+#: src/Admin/Pages/AboutPage.php:2469
 msgid "Fields whose ID <strong>or</strong> label looks credential-bearing — passwords, tokens, API keys, secrets, authorization values — are <strong>omitted entirely</strong>, even with <em>Submitted fields</em> on. They are not shown as <code>[REDACTED]</code>: a placeholder would tell every recipient that a secret exists. This is the same policy as Activity Log redaction, so <code>convermetry_sensitive_keys</code> extends both at once. Convermetry's <code>cvmtry_*</code> fields never appear either."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2470
+#: src/Admin/Pages/AboutPage.php:2471
 msgid "Notifications are <strong>queued, never sent during the visitor's request</strong>. No <code>wp_mail()</code>, payload build, or analytics query happens while they wait."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2471
+#: src/Admin/Pages/AboutPage.php:2472
 msgid "One queue row per <strong>(submission, recipient)</strong>, unique — a double-fired submission cannot produce two emails to one address, and one failing address does not re-mail the others."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2472
+#: src/Admin/Pages/AboutPage.php:2473
 msgid "The queue stores a recipient, a settings snapshot, and scheduling state — <strong>never the rendered email or the lead's answers</strong>. The submission is fetched fresh at send time, which is what makes deletion effective."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2473
+#: src/Admin/Pages/AboutPage.php:2474
 msgid "Settings are <strong>snapshotted when the lead arrives</strong>. Turning the master switch off stops new notifications but does not pause queued ones — there is an explicit <strong>Discard queued notifications</strong> button for that."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2474
+#: src/Admin/Pages/AboutPage.php:2475
 msgid "Retries are bounded and short: 5 min, 15 min, 1 h, then the row is abandoned and a wp-admin warning appears. Every row also carries a hard <strong>two-hour time-to-live</strong>, so a notification that could not be sent inside it is dropped rather than delivered days late as though it just arrived."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2475
+#: src/Admin/Pages/AboutPage.php:2476
 msgid "Only a short failure reason is retained. The rendered body and the submitted values are never logged, and notification sends do not appear in the Activity Log."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2476
+#: src/Admin/Pages/AboutPage.php:2477
 msgid "<strong>Send test email</strong> builds its message entirely from fabricated data — a <code>Convermetry Test Form</code>, <code>test@example.com</code>, and the RFC 5737 documentation address <code>203.0.113.42</code>. It never loads a real submission, so testing cannot expose a lead."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2492
+#: src/Admin/Pages/AboutPage.php:2493
 msgid "Custom form integration — two entry points"
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2494
+#: src/Admin/Pages/AboutPage.php:2495
 msgid "Any form Convermetry has no bundled provider for — a hand-rolled <code>&lt;form&gt;</code>, a headless front end, a booking widget, a server-to-server lead post — goes through one of two public entry points. Both run the <strong>same pipeline</strong>; they differ only in who handles a failed delivery."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2496
+#: src/Admin/Pages/AboutPage.php:2497
 msgid "Semantics"
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2496
+#: src/Admin/Pages/AboutPage.php:2497
 msgid "Fire-and-forget"
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2496
+#: src/Admin/Pages/AboutPage.php:2497
 msgid "Result-aware"
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2497
+#: src/Admin/Pages/AboutPage.php:2498
 #: src/Admin/Pages/NotificationsPage.php:500
 #: assets/js/submissions.js:88
 msgid "Delivery"
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2497
+#: src/Admin/Pages/AboutPage.php:2498
 msgid "Queued, sent by the background worker"
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2497
+#: src/Admin/Pages/AboutPage.php:2498
 msgid "<strong>Synchronous</strong>, inside your request"
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2498
+#: src/Admin/Pages/AboutPage.php:2499
 msgid "Retries"
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2498
+#: src/Admin/Pages/AboutPage.php:2499
 msgid "Automatic — the full webhook retry chain"
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2498
+#: src/Admin/Pages/AboutPage.php:2499
 msgid "<strong>None</strong> — failures are handed back to you"
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2499
+#: src/Admin/Pages/AboutPage.php:2500
 msgid "Returns"
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2499
+#: src/Admin/Pages/AboutPage.php:2500
 msgid "Nothing"
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2499
+#: src/Admin/Pages/AboutPage.php:2500
 msgid "A readonly <code>SubmissionResult</code>"
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2500
+#: src/Admin/Pages/AboutPage.php:2501
 msgid "Use when"
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2500
+#: src/Admin/Pages/AboutPage.php:2501
 msgid "A visitor is waiting, and reliability matters more than immediacy"
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2500
+#: src/Admin/Pages/AboutPage.php:2501
 msgid "You must know the outcome before responding"
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2501
+#: src/Admin/Pages/AboutPage.php:2502
 msgid "<strong>Prefer the action.</strong> Synchronous delivery puts every configured endpoint's latency inside your request, and a failed synchronous delivery is <em>yours</em> to retry — Convermetry deliberately does not queue it behind your back, because that would deliver the same lead twice to a caller that already retried."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2526
+#: src/Admin/Pages/AboutPage.php:2527
 msgid "The form identifier"
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2528
-#: src/Admin/Pages/AboutPage.php:2550
+#: src/Admin/Pages/AboutPage.php:2529
+#: src/Admin/Pages/AboutPage.php:2551
 msgid "Required"
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2529
+#: src/Admin/Pages/AboutPage.php:2530
 msgid "The human name of the form. Travels as <code>form_submission.form_name</code>, titles notification emails, and labels the Submissions list. An empty <code>form_name</code> is rejected outright."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2530
+#: src/Admin/Pages/AboutPage.php:2531
 msgid "Your own stable identifier. Travels as <code>native_form_id</code>, and as <code>form_id</code> unless a Custom/External Form ID is set for it on the Forms page."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2531
+#: src/Admin/Pages/AboutPage.php:2532
 msgid "Per-form settings — exclusion, URL parameters, headers, notification rules — key these submissions as <code>custom:&lt;form_id&gt;</code> when you pass a <code>form_id</code>, and <code>custom:&lt;form_name&gt;</code> when you do not. Passing a stable <code>form_id</code> is therefore what lets you rename the form later without resetting its configuration."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2535
+#: src/Admin/Pages/AboutPage.php:2536
 msgid "Submission fields — id, label, value"
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2537
+#: src/Admin/Pages/AboutPage.php:2538
 msgid "<strong>Two shapes are accepted, and both are fully supported.</strong> The richer descriptor list is preferred; the historical map is not deprecated."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2538
+#: src/Admin/Pages/AboutPage.php:2539
 msgid "(a) Descriptor list — preferred"
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2539
+#: src/Admin/Pages/AboutPage.php:2540
 msgid "An ordered list of <code>{id, label, value}</code> arrays, matching the <a href=\"#payloads\"><code>submission_data</code> schema 2.0</a> wire format one-for-one:"
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2551
+#: src/Admin/Pages/AboutPage.php:2552
 msgid "The field's stable, machine-readable identifier — what a receiver should match on. Passed through <code>sanitize_text_field()</code>. An entry whose <code>id</code> is empty after sanitizing is <strong>dropped</strong>, as is any <code>id</code> beginning with <code>cvmtry_</code> in any letter case."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2552
+#: src/Admin/Pages/AboutPage.php:2553
 msgid "The human-readable label — what a person reads in the Submissions panel, a CSV export, or a notification email. Sanitized the same way, and <strong>falls back to <code>id</code></strong> when missing, blank, or not a scalar."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2553
+#: src/Admin/Pages/AboutPage.php:2554
 msgid "A scalar (cast to string) or a <strong>list of scalars</strong>, each sanitized. Arrays are reindexed with <code>array_values()</code>, so a multi-select's own keys are not part of the contract. Anything non-scalar — an object, a nested array — becomes an empty string rather than nested data. A missing <code>value</code> is an empty string."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2554
+#: src/Admin/Pages/AboutPage.php:2555
 msgid "(b) name =&gt; value map — the long-standing shape"
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2555
+#: src/Admin/Pages/AboutPage.php:2556
 msgid "Every key becomes both the field's <code>id</code> <strong>and</strong> its <code>label</code>:"
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2569
+#: src/Admin/Pages/AboutPage.php:2570
 msgid "That is the only difference between the two shapes: the map cannot express a label distinct from the id. Use it when you have no separate label to give; reach for the descriptor list the moment you do."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2570
+#: src/Admin/Pages/AboutPage.php:2571
 msgid "<strong>Shape detection is strict, and deliberately so.</strong> An array is treated as a descriptor list only when it is list-keyed <em>and every entry</em> is an array carrying a scalar <code>id</code>. One entry that fails sends the whole array down the map path, where nothing is lost — a permissive test that sniffed only the first entry would misread a map whose values happen to be arrays with an <code>id</code> key and silently discard your data."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2571
+#: src/Admin/Pages/AboutPage.php:2572
 msgid "Rules that apply to both shapes"
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2573
+#: src/Admin/Pages/AboutPage.php:2574
 msgid "<strong><code>cvmtry_*</code> keys are always stripped</strong>, from either shape, in any letter case. Convermetry's correlation fields never reach storage, payloads, exports, emails, or the Activity Log."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2574
+#: src/Admin/Pages/AboutPage.php:2575
 msgid "<strong>Duplicate labels are preserved as separate fields.</strong> Nothing keys or deduplicates by label; two fields both labelled \"Name\" stay two fields. This is the whole reason the wire format is a list."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2575
+#: src/Admin/Pages/AboutPage.php:2576
 msgid "<strong>Order is preserved</strong> exactly as you passed it."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2576
+#: src/Admin/Pages/AboutPage.php:2577
 msgid "<strong>An empty field list is valid</strong> — it records a submission with an empty schema 2.0 list, not a legacy-shaped payload."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2577
+#: src/Admin/Pages/AboutPage.php:2578
 msgid "Values are <strong>sanitized, never validated</strong>. Convermetry is not your form's validator; it records what the form accepted."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2581
+#: src/Admin/Pages/AboutPage.php:2582
 msgid "Runtime parameters and the result object"
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2583
+#: src/Admin/Pages/AboutPage.php:2584
 msgid "Both entry points accept extra query parameters and headers for <strong>this submission only</strong>. They are scalar maps (non-scalar values are dropped) and sit at the end of the merge precedence chain, so they win over everything configured in wp-admin. The action takes them as one <code>$context</code> array; the function takes them as two arguments."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2584
+#: src/Admin/Pages/AboutPage.php:2585
 msgid "<code>convermetry_submit_form()</code> returns a readonly <code>Convermetry\\Forms\\SubmissionResult</code>:"
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2585
+#: src/Admin/Pages/AboutPage.php:2586
 msgid "Property"
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2586
-#: src/Admin/Pages/AboutPage.php:2592
+#: src/Admin/Pages/AboutPage.php:2587
+#: src/Admin/Pages/AboutPage.php:2593
 msgid "bool"
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2586
+#: src/Admin/Pages/AboutPage.php:2587
 msgid "True when the submission was recorded <strong>and</strong> every attempted delivery succeeded (or was queued)."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2587
+#: src/Admin/Pages/AboutPage.php:2588
 msgid "The globally unique submission id; empty when nothing was recorded."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2588
+#: src/Admin/Pages/AboutPage.php:2589
 msgid "The conversion id shared with analytics; empty when nothing was recorded."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2589
+#: src/Admin/Pages/AboutPage.php:2590
 msgid "int"
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2589
+#: src/Admin/Pages/AboutPage.php:2590
 msgid "HTTP status of the <strong>last</strong> synchronous delivery. <code>0</code> for early exits, transport errors, and queued deliveries."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2590
+#: src/Admin/Pages/AboutPage.php:2591
 msgid "User-facing failure description; empty on success."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2591
+#: src/Admin/Pages/AboutPage.php:2592
 msgid "mixed"
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2591
+#: src/Admin/Pages/AboutPage.php:2592
 msgid "The last endpoint's response body — JSON-decoded when valid JSON, raw string otherwise; <code>null</code> for early exits and background deliveries. Diagnostic, not for public display."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2592
+#: src/Admin/Pages/AboutPage.php:2593
 msgid "True when deliveries were queued rather than sent inline."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2593
+#: src/Admin/Pages/AboutPage.php:2594
 msgid "array"
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2593
+#: src/Admin/Pages/AboutPage.php:2594
 msgid "One entry per endpoint whose <strong>synchronous</strong> dispatch failed — <code>url</code>, <code>endpoint_url</code>, <code>headers</code>, <code>body</code>, <code>label</code>: the exact request that was sent, so you can implement your own retry. Always empty for early exits and queued deliveries, whose retries Convermetry owns."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2594
+#: src/Admin/Pages/AboutPage.php:2595
 msgid "<code>ok === false</code> covers three genuinely different situations, distinguishable by the other fields: nothing was recorded (<code>submissionId</code> empty — a missing <code>form_name</code>, an excluded form, an insert failure), or it was recorded and some delivery failed (<code>failedDeliveries</code> non-empty), or it was recorded with nothing to deliver."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2598
+#: src/Admin/Pages/AboutPage.php:2599
 msgid "What both paths do"
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2601
+#: src/Admin/Pages/AboutPage.php:2602
 msgid "<strong>Per-form settings are honored.</strong> An excluded <code>custom:…</code> form records nothing and reports why."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2602
+#: src/Admin/Pages/AboutPage.php:2603
 msgid "<strong>Correlation fields are read from the current request</strong>, so a submission posted from a page the tracker ran on carries the visitor's real session, channel, campaign, entrance referrer, and landing page. When they are absent, a conversion id is generated server-side and the submission still records and delivers, with an empty <code>analytics_context</code>."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2603
+#: src/Admin/Pages/AboutPage.php:2604
 msgid "<strong>A <code>form_success</code> analytics event is recorded</strong> under the same conversion token, so the dashboard's conversion count includes it exactly once."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2604
+#: src/Admin/Pages/AboutPage.php:2605
 msgid "<strong>The submission row is written</strong>, with the denormalized channel, campaign and landing-page columns the Submissions filters and lead reports use, and the submitter's IP when IP storage is on."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2605
+#: src/Admin/Pages/AboutPage.php:2606
 msgid "<strong><code>convermetry_submission_recorded</code> fires</strong> — notifications queue here, and listeners run even with no webhook endpoints configured."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2606
+#: src/Admin/Pages/AboutPage.php:2607
 msgid "<strong>Delivery</strong>: queued for the background worker (action), or dispatched synchronously to every form endpoint (function)."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2607
+#: src/Admin/Pages/AboutPage.php:2608
 msgid "Duplicate protection is the same as for bundled providers: a repeated <code>cvmtry_conversion_id</code> hits the <code>UNIQUE conversion_id</code> index, and the second call reports success <strong>without recording or delivering anything twice</strong>."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2611
+#: src/Admin/Pages/AboutPage.php:2612
 msgid "Extending Convermetry — the extensions buckets"
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2613
+#: src/Admin/Pages/AboutPage.php:2614
 msgid "Five surfaces accept <strong>namespaced extension data</strong> from other plugins. Each is a filter that starts empty, and <strong>nothing appears until something fills it</strong> — with no callbacks registered, no <code>extensions</code> property exists anywhere."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2614
+#: src/Admin/Pages/AboutPage.php:2615
 msgid "Surface"
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2614
+#: src/Admin/Pages/AboutPage.php:2615
 msgid "Filter"
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2614
+#: src/Admin/Pages/AboutPage.php:2615
 msgid "Budget"
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2615
+#: src/Admin/Pages/AboutPage.php:2616
 msgid "Outbound webhook payloads"
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2615
 #: src/Admin/Pages/AboutPage.php:2616
+#: src/Admin/Pages/AboutPage.php:2617
 msgid "32 KB · 50 keys"
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2616
+#: src/Admin/Pages/AboutPage.php:2617
 msgid "Analytics summaries (dashboard + payload)"
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2617
+#: src/Admin/Pages/AboutPage.php:2618
 msgid "A submission's stored analytics context"
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2617
 #: src/Admin/Pages/AboutPage.php:2618
+#: src/Admin/Pages/AboutPage.php:2619
 msgid "8 KB · 20 keys"
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2619
+#: src/Admin/Pages/AboutPage.php:2620
 msgid "One delivery-log REST item"
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2619
+#: src/Admin/Pages/AboutPage.php:2620
 msgid "4 KB · 10 keys"
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2621
+#: src/Admin/Pages/AboutPage.php:2622
 msgid "<strong>Keys must be namespaced</strong> as <code>vendor/thing</code>, so two plugins writing to the same payload cannot collide."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2622
+#: src/Admin/Pages/AboutPage.php:2623
 msgid "Values must be <strong>JSON primitives</strong> — no objects, no resources, bounded depth. Anything over budget is dropped rather than truncated into invalid data."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2623
+#: src/Admin/Pages/AboutPage.php:2624
 msgid "<strong>Core keys are never replaceable.</strong> A filter cannot rewrite a conversion id, a session id, attribution, timestamps, form identity, or a REST item's <code>success</code> flag — a plugin that could would be able to lie to a monitoring dashboard."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2624
+#: src/Admin/Pages/AboutPage.php:2625
 msgid "The tracker bucket is inlined into <strong>every page view and is public</strong>. Never put a key, a token, or anything visitor-specific there."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2625
+#: src/Admin/Pages/AboutPage.php:2626
 msgid "A dashboard panel that also travels on the wire"
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2626
+#: src/Admin/Pages/AboutPage.php:2627
 msgid "Register an <code>AnalyticsSectionInterface</code> adapter and it contributes both a panel on the Analytics screen and an entry in <code>analytics.extensions</code> — from one implementation, so the screen and the payload cannot disagree."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2641
+#: src/Admin/Pages/AboutPage.php:2642
 msgid "It is a <strong>typed registry, never SQL</strong>: there is deliberately no way to pass a query fragment or a table name to a path that runs unattended on cron. A section that throws is dropped and reported through <code>convermetry_analytics_report_failed</code> rather than taking the report down with it."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2642
+#: src/Admin/Pages/AboutPage.php:2643
 msgid "Admin surfaces"
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2643
+#: src/Admin/Pages/AboutPage.php:2644
 msgid "Actions exist to render extra panels on the dashboard (<code>convermetry_analytics_admin_panels</code>), extra blocks and buttons on a submission (<code>convermetry_submission_detail_sections</code>, <code>convermetry_submission_row_actions</code>), extra content on the Forms screen (<code>convermetry_forms_admin_sections</code>), and filters to add list columns and CSV columns (<code>convermetry_submissions_columns</code>, <code>convermetry_submission_csv_columns</code> / <code>_values</code>). They run after this screen's capability check — but <strong>your callback must escape its own output</strong>, and CSV values go through the same formula-injection escaping as core ones."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2647
+#: src/Admin/Pages/AboutPage.php:2648
 msgid "Helper functions and the browser API"
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2649
+#: src/Admin/Pages/AboutPage.php:2650
 msgid "Call"
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2650
+#: src/Admin/Pages/AboutPage.php:2651
 msgid "Result-aware, synchronous custom-form submission — see above."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2651
+#: src/Admin/Pages/AboutPage.php:2652
 msgid "Records a custom server-side analytics event. <code>$type</code> is at most 20 characters of lowercase letters, digits, dashes and underscores; recognized <code>$data</code> keys are the event row's own columns and unknown keys are ignored. A <code>form_success</code> event <strong>requires</strong> <code>event_value</code> to be a unique conversion id (8–100 chars of <code>A-Za-z0-9_.:-</code>), so conversion dedup stays consistent."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2652
+#: src/Admin/Pages/AboutPage.php:2653
 msgid "Reports a named custom event that <a href=\"#conversions\">goals</a> can match. Only the name — and a numeric <code>value</code> where the matching goal accepts one — is transmitted; an event matching no configured goal is discarded and never stored."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2653
+#: src/Admin/Pages/AboutPage.php:2654
 msgid "<code>convermetry:conversion</code> DOM event"
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2653
+#: src/Admin/Pages/AboutPage.php:2654
 msgid "The pre-existing custom frontend conversion event, unchanged. Pass a <code>conversion_id</code> in its detail to correlate it with a server-side record."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2687
+#: src/Admin/Pages/AboutPage.php:2688
 msgid "How the hook API behaves"
 msgstr ""
 
 #. translators: %d: number of public hooks.
-#: src/Admin/Pages/AboutPage.php:2693
+#: src/Admin/Pages/AboutPage.php:2694
 #, php-format
 msgid "Convermetry exposes a public hook API for plugins and code snippets — <strong>%d hook</strong> in all. Two rules hold across every one of them."
 msgid_plural "Convermetry exposes a public hook API for plugins and code snippets — <strong>%d hooks</strong> in all. Two rules hold across every one of them."
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/Admin/Pages/AboutPage.php:2702
+#: src/Admin/Pages/AboutPage.php:2703
 msgid "Each entry below lists its name, type, purpose and signature. <strong>Learn More</strong> expands what every argument actually holds — including the keys of the array ones — plus a runnable example you can paste into an mu-plugin."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2704
+#: src/Admin/Pages/AboutPage.php:2705
 msgid "<strong>Nothing registered means nothing changes.</strong> With no callbacks, payload bytes, request URLs and headers, delivery ids, signatures, retry schedules, analytics results, admin HTML, REST output, CSV files, and tracker configuration are all exactly what they were. No <code>extensions</code> property appears anywhere until something fills it."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2705
+#: src/Admin/Pages/AboutPage.php:2706
 msgid "<strong>Filters that customize data may see that data; observers may not.</strong> A filter whose job is to change an email body necessarily sees the email body. The observational actions deliberately carry ids, counts, and outcomes — never submitted fields, rendered emails, request or response bodies, signing secrets, credential-bearing URLs, or raw IP addresses. Where an argument does carry personal data, its entry says so."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2706
+#: src/Admin/Pages/AboutPage.php:2707
 msgid "Three kinds of hook"
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2708
+#: src/Admin/Pages/AboutPage.php:2709
 msgid "<strong>Decision filters</strong> (<code>convermetry_should_*</code>) answer one yes/no question. The data is passed for inspection and nothing you return from them changes it — a gate that could also rewrite a dedupe key or a completion id would be able to silently defeat the guarantees built on them."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2709
+#: src/Admin/Pages/AboutPage.php:2710
 msgid "<strong>Composition filters</strong> shape data on its way out: payloads, URLs, headers, fields, recipients, columns. They run <strong>once per logical delivery, before the request is frozen</strong> — a retry re-sends frozen bytes and re-runs none of them, so a callback added mid-chain cannot reach a delivery already in flight."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2710
+#: src/Admin/Pages/AboutPage.php:2711
 msgid "<strong>Observational actions</strong> report what happened, after it is durably true. They never fire speculatively: a retry action fires once the next attempt is persisted, a success action once the bookkeeping committed."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2711
+#: src/Admin/Pages/AboutPage.php:2712
 msgid "<strong>Where to register them.</strong> A theme's <code>functions.php</code> loads after <code>plugins_loaded</code>, which is late for the ingestion path. Put anything that must be in place for <em>every</em> request — <code>convermetry_client_ip</code>, <code>convermetry_stored_ip</code>, <code>convermetry_allowed_hosts</code>, <code>convermetry_rate_limits</code>, <code>convermetry_tracked_event</code>, <code>convermetry_should_track_event</code> — in an <strong>mu-plugin</strong>, or in a plugin file that registers at load time. Three filters are <strong>memoized per request</strong> and run only on their first use: <code>convermetry_client_ip</code>, <code>convermetry_allowed_hosts</code> and <code>convermetry_form_providers</code>; registering those later has no effect for the rest of the request. And <strong>do not throw from a callback</strong> — several run while a lease is held or immediately before a network request, where an exception costs the work the hook was announcing."
 msgstr ""
 
 #. translators: 1: hook group name, 2: number of hooks in the group.
-#: src/Admin/Pages/AboutPage.php:2725
+#: src/Admin/Pages/AboutPage.php:2726
 #, php-format
 msgid "%1$s — %2$d hook"
 msgid_plural "%1$s — %2$d hooks"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/Admin/Pages/AboutPage.php:2744
+#: src/Admin/Pages/AboutPage.php:2745
 msgid "Worked examples"
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2746
+#: src/Admin/Pages/AboutPage.php:2747
 msgid "Submit a custom form"
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2747
+#: src/Admin/Pages/AboutPage.php:2748
 msgid "Fire-and-forget, with background delivery and automatic retries. <code>$fields</code> takes either a list of <code>['id', 'label', 'value']</code> descriptors or the historical <code>name =&gt; value</code> map — see <a href=\"#developer\">Developer API</a>."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2759
+#: src/Admin/Pages/AboutPage.php:2760
 msgid "Add data to every outbound webhook payload"
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2760
+#: src/Admin/Pages/AboutPage.php:2761
 msgid "Runs before the payload is frozen, so retries re-send it unchanged. Keys must be namespaced <code>vendor/thing</code>, and an empty result adds no property at all."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2771
+#: src/Admin/Pages/AboutPage.php:2772
 msgid "Add a header to one endpoint only"
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2772
+#: src/Admin/Pages/AboutPage.php:2773
 msgid "The context identifies the endpoint without exposing its URL. A callback may not touch the protocol headers — <code>Content-Type</code>, <code>Host</code>, <code>Content-Length</code>, <code>Transfer-Encoding</code>, <code>Connection</code>, <code>User-Agent</code>, <code>Idempotency-Key</code>, <code>X-Convermetry-Signature</code> — which are restored to their pre-filter state."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2783
+#: src/Admin/Pages/AboutPage.php:2784
 msgid "Skip recording a submission"
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2784
+#: src/Admin/Pages/AboutPage.php:2785
 msgid "Runs after normalization, so spam rules can read the fields, and before <strong>any</strong> write — the conversion event, the row, the queue, and the notifications are all skipped. The visitor still sees success: returning a failure would make Elementor's synchronous mode reject a valid form."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2797
+#: src/Admin/Pages/AboutPage.php:2798
 msgid "Pseudonymize the stored IP address"
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2798
+#: src/Admin/Pages/AboutPage.php:2799
 msgid "<code>convermetry_stored_ip</code> runs after the privacy gates, on the address about to be persisted. It deliberately does not affect the rate-limit identity, which would collapse every visitor into one bucket."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2808
+#: src/Admin/Pages/AboutPage.php:2809
 msgid "Observe deliveries, and react to a lead outcome"
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2809
+#: src/Admin/Pages/AboutPage.php:2810
 msgid "Note which action means what: an exhausted <em>analytics</em> chain is resumable, an abandoned <em>form</em> delivery is not. Lead values are exact decimal strings, never floats."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2823
+#: src/Admin/Pages/AboutPage.php:2824
 msgid "Scope an admin screen to a narrower capability"
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2824
+#: src/Admin/Pages/AboutPage.php:2825
 msgid "Applied to menu visibility <strong>and</strong> every handler behind it. Grant deliberately: <code>submissions.export</code> is every lead's name and email in one file."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2846
+#: src/Admin/Pages/AboutPage.php:2847
 msgid "<strong>Public.</strong> The tracker's ingestion endpoint: idempotent batches, per-IP and site-wide rate limits, same-host URL validation, Origin/Referer protection, bot filtering, and DNT/GPC enforcement. It answers <code>202</code> with <code>{\"stored\": n}</code>, <code>400</code>/<code>403</code>/<code>413</code>/<code>429</code> (with <code>Retry-After</code>) on rejection, and <code>503</code> when storage failed — in which case the tracker keeps the batch and retries."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2847
+#: src/Admin/Pages/AboutPage.php:2848
 msgid "It accepts events from this site's own tracker into the local database only. It never forwards anything to a webhook receiver; everything a receiver gets is produced later by the two outbound paths."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2853
+#: src/Admin/Pages/AboutPage.php:2854
 msgid "<strong>API-key authenticated, read-only, and off by default</strong> — enable it and manage its key in the Deliveries API card of the Activity Log, at the foot of <strong>Convermetry → Webhooks</strong>."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2858
+#: src/Admin/Pages/AboutPage.php:2859
 msgid "Parameter"
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2858
+#: src/Admin/Pages/AboutPage.php:2859
 msgid "Values"
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2859
+#: src/Admin/Pages/AboutPage.php:2860
 msgid "Pagination; <code>per_page</code> max 100."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2862
+#: src/Admin/Pages/AboutPage.php:2863
 msgid "An endpoint <strong>label</strong>, or the <code>endpoint_key</code> echoed in responses."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2863
+#: src/Admin/Pages/AboutPage.php:2864
 msgid "Form provider key."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2864
+#: src/Admin/Pages/AboutPage.php:2865
 msgid "Exact form name."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2865
+#: src/Admin/Pages/AboutPage.php:2866
 msgid "<code>YYYY-MM</code> or <code>YYYY-MM-DD</code>."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2866
+#: src/Admin/Pages/AboutPage.php:2867
 msgid "Pagination metadata returns in <code>X-WP-Total</code>, <code>X-WP-TotalPages</code> and <code>X-CVMTRY-Page</code> headers. Only a SHA-256 hash of the key is stored — the raw key is shown <strong>once</strong> at generation, and regenerating invalidates the old key immediately. Wrong keys get <code>401</code>, throttled per IP after repeated failures; a disabled API answers <code>403</code>."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2867
+#: src/Admin/Pages/AboutPage.php:2868
 msgid "In responses, <code>endpoint_url</code> is <strong>redacted to scheme + host</strong> — webhook URLs frequently embed bearer tokens, and this read-only key must never hand out downstream write credentials. Identify endpoints by <code>endpoint_label</code> or <code>endpoint_key</code>; full URLs stay visible to admins in wp-admin. Intended for <strong>server-to-server</strong> use — never embed the key in public frontend JavaScript."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2883
+#: src/Admin/Pages/AboutPage.php:2884
 msgid "Privacy posture"
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2886
+#: src/Admin/Pages/AboutPage.php:2887
 msgid "<strong>Email notifications are opt-in and leave your retention window.</strong> When enabled, each notification is a copy of lead data in a mailbox Convermetry does not control. Deleting a submission cancels anything still queued, but <strong>cannot recall a message already sent</strong>."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2887
+#: src/Admin/Pages/AboutPage.php:2888
 msgid "<strong>No cookies — but browser storage.</strong> The tracker keeps a random visit id (<code>cvmtry_session</code>) and the visit's attribution (<code>cvmtry_campaign</code>) in <code>localStorage</code>, and events not yet sent (<code>cvmtry_pending</code>) in <code>sessionStorage</code>. The visit id rotates after 30 minutes of inactivity. In the EU and UK the rules that govern cookies also apply to this storage."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2888
+#: src/Admin/Pages/AboutPage.php:2889
 msgid "Tracked URLs are canonicalized to scheme + host + path — <strong>query strings never reach the database</strong>. Referrers and click/form destinations are likewise stripped; whole <code>mailto:</code>/<code>tel:</code> destinations are kept, because for those links the address <em>is</em> the destination."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2889
-msgid "Campaign values are stored after sanitization, except values containing <code>@</code>, which are dropped as likely email addresses — never put personal data in UTM parameters. Ad-click identifiers store only the parameter <strong>name</strong>; the value never leaves the browser."
-msgstr ""
-
 #: src/Admin/Pages/AboutPage.php:2890
-msgid "<strong>Visitor IP addresses are stored by default</strong>, on both write paths: every analytics event and every server-confirmed form submission. Turn it off with <strong>Settings → Tracking → IP addresses</strong>; new rows then record an empty value while existing rows are untouched and age out with retention. User agents are never stored on either path."
+msgid "Campaign values are stored after sanitization, except values containing <code>@</code>, which are dropped as likely email addresses — never put personal data in UTM parameters. The tracker keeps only an ad-click identifier's parameter <strong>name</strong> and never sends its value. The exception is one you opt into: with <strong>Include page URL parameters</strong> on, the value on the submitting page's URL is stored with the submission and forwarded to your endpoints."
 msgstr ""
 
 #: src/Admin/Pages/AboutPage.php:2891
-msgid "<strong>In the EU/UK an IP address is personal data.</strong> Retaining it for general visitor activity — not only for leads someone actively submitted — normally has to be disclosed in your privacy policy and rest on a lawful basis. Consider whether your consent tooling should gate the tracker."
+msgid "<strong>A submitting page's other URL parameters are discarded by default.</strong> Only <code>utm_*</code> parameters are kept, so a reset token or an email address in a page URL goes no further. With <strong>Include page URL parameters</strong> on, others are kept too, except names that look like a secret or contact details, which is a best-effort name check, and any value containing <code>@</code>."
 msgstr ""
 
 #: src/Admin/Pages/AboutPage.php:2892
-msgid "To <strong>anonymize rather than disable</strong>, use <a href=\"#hook-convermetry_stored_ip\"><code>convermetry_stored_ip</code></a> — it runs after the privacy gates on the address about to be persisted, covers both write paths at once, and deliberately does not touch the rate-limit identity, which would collapse every visitor into one bucket. Behind a proxy or CDN, map the real address with <a href=\"#hook-convermetry_client_ip\"><code>convermetry_client_ip</code></a> instead."
+msgid "<strong>Visitor IP addresses are stored by default</strong>, on both write paths: every analytics event and every server-confirmed form submission. Turn it off with <strong>Settings → Tracking → IP addresses</strong>; new rows then record an empty value while existing rows are untouched and age out with retention. User agents are never stored on either path."
 msgstr ""
 
 #: src/Admin/Pages/AboutPage.php:2893
-msgid "When the site honors <strong>Do Not Track / Global Privacy Control</strong> and a visitor sends one, <strong>no IP is stored on either path</strong>: their analytics events are not recorded at all, and a form they submit is still recorded and delivered — they actively submitted it — but carries an empty <code>ip_address</code>. Both paths go through one gate, so the setting, the signal, and this documentation cannot drift apart. DNT/GPC is an opt-out signal, not a consent mechanism."
+msgid "<strong>In the EU/UK an IP address is personal data.</strong> Retaining it for general visitor activity — not only for leads someone actively submitted — normally has to be disclosed in your privacy policy and rest on a lawful basis. Consider whether your consent tooling should gate the tracker."
 msgstr ""
 
 #: src/Admin/Pages/AboutPage.php:2894
-msgid "<strong>No external geolocation service is ever contacted.</strong> A form submission never waits on any third party, and a stored IP is never sent anywhere except your own webhook endpoints."
+msgid "To <strong>anonymize rather than disable</strong>, use <a href=\"#hook-convermetry_stored_ip\"><code>convermetry_stored_ip</code></a> — it runs after the privacy gates on the address about to be persisted, covers both write paths at once, and deliberately does not touch the rate-limit identity, which would collapse every visitor into one bucket. Behind a proxy or CDN, map the real address with <a href=\"#hook-convermetry_client_ip\"><code>convermetry_client_ip</code></a> instead."
 msgstr ""
 
 #: src/Admin/Pages/AboutPage.php:2895
-msgid "Logged-in users are excluded from tracking by default."
+msgid "When the site honors <strong>Do Not Track / Global Privacy Control</strong> and a visitor sends one, <strong>no IP is stored on either path</strong>: their analytics events are not recorded at all, and a form they submit is still recorded and delivered — they actively submitted it — but carries an empty <code>ip_address</code>. Both paths go through one gate, so the setting, the signal, and this documentation cannot drift apart. DNT/GPC is an opt-out signal, not a consent mechanism."
 msgstr ""
 
 #: src/Admin/Pages/AboutPage.php:2896
-msgid "<strong>Form abandonment records no field values, ever</strong> — only a field id, a field type, and which validity flag failed. <strong>Custom event payloads are not storage</strong> — only the event name, and a numeric value where a goal accepts one. <strong>Goal and funnel records carry no PII</strong> — only normalized URLs, the attribution snapshot, and a device bucket. <strong>Lead status and value stay on the submission record</strong> and its history table."
+msgid "<strong>No external geolocation service is ever contacted.</strong> A form submission never waits on any third party, and a stored IP is never sent anywhere except your own webhook endpoints."
 msgstr ""
 
 #: src/Admin/Pages/AboutPage.php:2897
-msgid "<strong>Goal definitions are not published to visitors.</strong> The one exception is a CSS selector goal, whose selector must reach the browser to be evaluated; the ids reported back are re-validated server-side before anything is recorded."
+msgid "Logged-in users are excluded from tracking by default."
 msgstr ""
 
 #: src/Admin/Pages/AboutPage.php:2898
-msgid "The Activity Log stores a <strong>redacted</strong> copy of each delivery's request payload. A form payload's copy is replaced when <em>Store form submission data in the Activity Log</em> is off; an analytics report's <code>conversions.recent[].ip_address</code> is logged regardless. Log rows age out with the same retention window, and <a href=\"#hook-convermetry_delivery_log_row\"><code>convermetry_delivery_log_row</code></a> can redact anything further."
+msgid "<strong>Form abandonment records no field values, ever</strong> — only a field id, a field type, and which validity flag failed. <strong>Custom event payloads are not storage</strong> — only the event name, and a numeric value where a goal accepts one. <strong>Goal and funnel records carry no PII</strong> — only normalized URLs, the attribution snapshot, and a device bucket. <strong>Lead status and value stay on the submission record</strong> and its history table."
 msgstr ""
 
 #: src/Admin/Pages/AboutPage.php:2899
+msgid "<strong>Goal definitions are not published to visitors.</strong> The one exception is a CSS selector goal, whose selector must reach the browser to be evaluated; the ids reported back are re-validated server-side before anything is recorded."
+msgstr ""
+
+#: src/Admin/Pages/AboutPage.php:2900
+msgid "The Activity Log stores a <strong>redacted</strong> copy of each delivery's request payload. A form payload's copy is replaced when <em>Store form submission data in the Activity Log</em> is off, along with the endpoint's response, which a receiver can use to echo the values back; an analytics report's <code>conversions.recent[].ip_address</code> is logged regardless. Log rows age out with the same retention window, and <a href=\"#hook-convermetry_delivery_log_row\"><code>convermetry_delivery_log_row</code></a> can redact anything further."
+msgstr ""
+
+#: src/Admin/Pages/AboutPage.php:2901
 msgid "Everything is deleted after the configurable retention window (7–365 days, default 90) by bounded, chunked cleanup jobs."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2903
+#: src/Admin/Pages/AboutPage.php:2905
 msgid "Consent and WordPress privacy tools"
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2906
+#: src/Admin/Pages/AboutPage.php:2908
 msgid "<strong>Tracking starts on activation.</strong> Convermetry has no consent banner of its own and no consent-plugin integration. Where your site needs consent first, have your consent tool block the <code>cvmtry-tracker</code> script until it is given, or return <code>false</code> from <a href=\"#hook-convermetry_should_enqueue_tracker\"><code>convermetry_should_enqueue_tracker</code></a> until your consent check passes. Server-confirmed form submissions are still recorded — without analytics context — when the tracker does not run."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2907
+#: src/Admin/Pages/AboutPage.php:2909
 msgid "<strong>Suggested policy text.</strong> Settings → Privacy → Policy Guide carries a Convermetry section generated from the current settings — IP storage, Do Not Track / Global Privacy Control, retention, webhooks and email notifications. WordPress flags the guide when that text changes, so a site that later switches IP storage on is told its policy may be stale. It is a starting point, not legal advice."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2908
+#: src/Admin/Pages/AboutPage.php:2910
 msgid "<strong>Export and erasure.</strong> Tools → Export Personal Data and Tools → Erase Personal Data find the form submissions whose submitted values contain the requested email address <em>exactly</em> — a field that merely mentions the address inside other text is somebody else's lead and is left alone. The export includes each submission, its lead history, where it was delivered (destination host only — endpoint URLs often embed secrets), and the analytics of the visit it came from."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2909
+#: src/Admin/Pages/AboutPage.php:2911
 msgid "<strong>What erasure removes.</strong> The submission, through the same path as the Delete button — its queued webhook deliveries, queued notifications and lead history go with it. Activity Log rows for it keep their audit metadata but lose the request and response bodies; logged analytics reports lose that conversion's IP address and session id; and the visit's analytics events lose their IP address while remaining as anonymous traffic."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2910
+#: src/Admin/Pages/AboutPage.php:2912
 msgid "<strong>What erasure cannot do.</strong> It cannot recall a webhook payload a receiver already accepted or an email already handed to your mail system, and it does not rewrite an analytics report frozen for retry (those bytes are replayed exactly, under one delivery id). It says so on the Erase Personal Data screen, naming the webhook destinations the data had reached. A delivery already in flight at that moment may still complete, and analytics from visits without a form submission cannot be linked to an email address at all — retention removes it."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2914
+#: src/Admin/Pages/AboutPage.php:2916
 msgid "What is stored, and where"
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2916
+#: src/Admin/Pages/AboutPage.php:2918
 msgid "Table"
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2917
+#: src/Admin/Pages/AboutPage.php:2919
 msgid "One row per visitor interaction — the analytics engine. A unique (batch id, sequence) makes tracker replays idempotent."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2918
+#: src/Admin/Pages/AboutPage.php:2920
 msgid "One row per server-confirmed submission: identifiers, form identity, page URL and query, IP, sanitized <code>submission_data</code>, the frozen analytics context, the indexed campaign/channel/landing-page columns, the lead outcome columns, and the recorded delivery state."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2919
+#: src/Admin/Pages/AboutPage.php:2921
 msgid "The background form-delivery queue: one row per submission × endpoint, holding the frozen URL, headers and body. Deleted on acknowledgment or abandonment."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2920
+#: src/Admin/Pages/AboutPage.php:2922
 msgid "The email queue: one row per submission × recipient, carrying <strong>no lead data</strong> — the submission is read at send time."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2921
+#: src/Admin/Pages/AboutPage.php:2923
 msgid "The Activity Log: one row per delivery attempt with redacted headers and bodies, capped at 64 KB each."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2922
+#: src/Admin/Pages/AboutPage.php:2924
 msgid "One row per goal completion. <code>dedupe_key</code> carries a UNIQUE index and is the entire deduplication mechanism."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2923
+#: src/Admin/Pages/AboutPage.php:2925
 msgid "Lead status-change history: one row per transition, cascaded away when the submission is deleted."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2924
+#: src/Admin/Pages/AboutPage.php:2926
 msgid "<strong>Schema migrations never run inside a visitor's request.</strong> Adding an index is a table rebuild on every engine, so migrations run only in WP-Cron, WP-CLI, or a genuine admin page view, one at a time under a lease. While one is outstanding the Goals and Funnels screens say so plainly rather than querying a column that does not exist yet."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2925
+#: src/Admin/Pages/AboutPage.php:2927
 msgid "<strong>Deactivation preserves everything:</strong> tables and data are kept, analytics retry chains are suspended and resume under their original delivery ids, and queued form deliveries wait for the re-armed worker. <strong>Deleting the plugin</strong> drops all seven tables and deletes every option, transient, rate-limit counter row, and scheduled cron event — per site across a whole multisite network. No trace remains."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2929
+#: src/Admin/Pages/AboutPage.php:2931
 msgid "Watching the unattended work"
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2931
+#: src/Admin/Pages/AboutPage.php:2933
 msgid "Retention passes, schema migrations, and queue workers all run without anyone looking. Four observational actions report what they did, so a monitoring integration does not have to infer it from row counts."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2933
+#: src/Admin/Pages/AboutPage.php:2935
 msgid "<code>convermetry_retention_cleanup_started</code> / <code>_completed</code> — one store begins and finishes deleting past the cutoff. The completion carries how many rows went, whether more remain, and an outcome of <code>completed</code>, <code>truncated</code>, <code>query_failed</code>, or <code>lock_lost</code>. Observational only: a listener cannot cancel a pass, change the cutoff, or extend retention, and Convermetry schedules any follow-up pass itself."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2934
+#: src/Admin/Pages/AboutPage.php:2936
 msgid "<code>convermetry_migration_started</code> / <code>_completed</code> / <code>_failed</code> — a migration pass, with its context (<code>cli</code>, <code>cron</code>, or <code>admin</code>). A failure carries the exception <strong>class name</strong>, never a message: a database error quotes the failing statement. <strong>No SQL is passed to any migration hook</strong>, and a migration that merely has not landed yet is not a failure."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2935
+#: src/Admin/Pages/AboutPage.php:2937
 msgid "<code>convermetry_storage_error</code> — a database operation Convermetry needed <em>verifiably</em> failed. Reserved for real failures: a duplicate <code>INSERT IGNORE</code>, an abandoned notification, or a still-pending migration do not fire it. It never carries SQL, the raw database error, submitted fields, IP addresses, or secrets."
 msgstr ""
 
-#: src/Admin/Pages/AboutPage.php:2936
+#: src/Admin/Pages/AboutPage.php:2938
 msgid "<code>convermetry_settings_saved</code> — a settings section was written, listening on WordPress's own option-write hooks so it fires on a real write only (never for a form submitted without edits) and catches CLI and migration writers too. <strong>Key names only, never values</strong>: two sections hold signing secrets and token-bearing endpoint URLs."
 msgstr ""
 
@@ -6196,161 +6204,161 @@ msgid "Store form submission data in the Activity Log"
 msgstr ""
 
 #: src/Admin/Pages/SettingsPage.php:424
-msgid "When disabled, the Activity Log records every delivery's metadata but replaces the visitor's field values with a placeholder — useful when compliance rules forbid a second copy of lead data. The payload actually delivered to endpoints is unaffected."
+msgid "When disabled, the Activity Log records every delivery's metadata but replaces the visitor's field values, IP address and page URL parameters, and the endpoint's response, with a placeholder — useful when compliance rules forbid a second copy of lead data. The response goes because a receiver can echo back what it was sent. The payload actually delivered to endpoints is unaffected."
 msgstr ""
 
-#: src/Admin/Pages/SubmissionsPage.php:105
+#: src/Admin/Pages/SubmissionsPage.php:106
 msgid "Convermetry Submissions"
 msgstr ""
 
-#: src/Admin/Pages/SubmissionsPage.php:220
+#: src/Admin/Pages/SubmissionsPage.php:221
 msgid "Submissions can only be cleared from the Submissions screen."
 msgstr ""
 
-#: src/Admin/Pages/SubmissionsPage.php:257
-#: src/Admin/Pages/SubmissionsPage.php:290
-#: src/Admin/Pages/SubmissionsPage.php:323
-#: src/Admin/Pages/SubmissionsPage.php:356
+#: src/Admin/Pages/SubmissionsPage.php:258
+#: src/Admin/Pages/SubmissionsPage.php:291
+#: src/Admin/Pages/SubmissionsPage.php:324
+#: src/Admin/Pages/SubmissionsPage.php:357
 msgid "Exports are downloaded from the Submissions screen."
 msgstr ""
 
-#: src/Admin/Pages/SubmissionsPage.php:480
-#: src/Admin/Pages/SubmissionsPage.php:535
-#: src/Admin/Pages/SubmissionsPage.php:581
+#: src/Admin/Pages/SubmissionsPage.php:481
+#: src/Admin/Pages/SubmissionsPage.php:536
+#: src/Admin/Pages/SubmissionsPage.php:582
 msgid "Invalid submission id."
 msgstr ""
 
-#: src/Admin/Pages/SubmissionsPage.php:486
+#: src/Admin/Pages/SubmissionsPage.php:487
 #: src/Leads/LeadService.php:63
 msgid "That submission no longer exists."
 msgstr ""
 
 #. translators: %d: retry attempt number.
-#: src/Admin/Pages/SubmissionsPage.php:739
+#: src/Admin/Pages/SubmissionsPage.php:740
 #, php-format
 msgid "Queued · retry %d"
 msgstr ""
 
-#: src/Admin/Pages/SubmissionsPage.php:740
-#: src/Admin/Pages/SubmissionsPage.php:1406
+#: src/Admin/Pages/SubmissionsPage.php:741
+#: src/Admin/Pages/SubmissionsPage.php:1407
 #: assets/js/submissions.js:612
 msgid "Queued"
 msgstr ""
 
-#: src/Admin/Pages/SubmissionsPage.php:745
+#: src/Admin/Pages/SubmissionsPage.php:746
 msgid "Not sent — no form webhook"
 msgstr ""
 
-#: src/Admin/Pages/SubmissionsPage.php:746
+#: src/Admin/Pages/SubmissionsPage.php:747
 msgid "Not sent — webhooks paused"
 msgstr ""
 
-#: src/Admin/Pages/SubmissionsPage.php:747
-#: src/Admin/Pages/SubmissionsPage.php:920
-#: src/Admin/Pages/SubmissionsPage.php:1731
+#: src/Admin/Pages/SubmissionsPage.php:748
+#: src/Admin/Pages/SubmissionsPage.php:921
+#: src/Admin/Pages/SubmissionsPage.php:1732
 #: assets/js/submissions.js:613
 msgid "Not sent"
 msgstr ""
 
 #. translators: %d: number of endpoints the submission was delivered to.
-#: src/Admin/Pages/SubmissionsPage.php:756
+#: src/Admin/Pages/SubmissionsPage.php:757
 #, php-format
 msgid "Delivered (%d)"
 msgstr ""
 
-#: src/Admin/Pages/SubmissionsPage.php:757
-#: src/Admin/Pages/SubmissionsPage.php:1411
+#: src/Admin/Pages/SubmissionsPage.php:758
+#: src/Admin/Pages/SubmissionsPage.php:1412
 #: src/Privacy/PersonalDataExporter.php:127
 #: assets/js/submissions.js:609
 msgid "Delivered"
 msgstr ""
 
 #. translators: 1: endpoints delivered to, 2: endpoints attempted.
-#: src/Admin/Pages/SubmissionsPage.php:759
+#: src/Admin/Pages/SubmissionsPage.php:760
 #, php-format
 msgid "Partial (%1$d/%2$d)"
 msgstr ""
 
-#: src/Admin/Pages/SubmissionsPage.php:760
-#: src/Admin/Pages/SubmissionsPage.php:1416
+#: src/Admin/Pages/SubmissionsPage.php:761
+#: src/Admin/Pages/SubmissionsPage.php:1417
 #: assets/js/submissions.js:611
 msgid "Failed"
 msgstr ""
 
-#: src/Admin/Pages/SubmissionsPage.php:797
+#: src/Admin/Pages/SubmissionsPage.php:798
 msgid "All submissions have been deleted."
 msgstr ""
 
-#: src/Admin/Pages/SubmissionsPage.php:801
+#: src/Admin/Pages/SubmissionsPage.php:802
 msgid "Every form submission Convermetry confirmed server-side, joined to the analytics session that produced it. Submissions are recorded whether or not a webhook is configured — expand a row to see the form, its attribution, and the visitor's answers."
 msgstr ""
 
 #. translators: %s: URL of the Webhooks screen.
-#: src/Admin/Pages/SubmissionsPage.php:810
+#: src/Admin/Pages/SubmissionsPage.php:811
 #, php-format
 msgid "No webhook endpoint is currently set to receive form submissions, so every row below shows <strong>Not sent</strong>. That is expected — recording and attribution work independently of delivery. Add an endpoint under <a href=\"%s\">Webhooks</a> to forward leads onward."
 msgstr ""
 
 #. translators: %s: URL of the Webhooks screen.
-#: src/Admin/Pages/SubmissionsPage.php:822
+#: src/Admin/Pages/SubmissionsPage.php:823
 #, php-format
 msgid "Webhook delivery is currently <strong>paused</strong>, so new submissions are recorded here but not forwarded. Resume it under <a href=\"%s\">Webhooks</a>; queued deliveries are kept, not discarded."
 msgstr ""
 
 #. translators: %d: retention period in days.
-#: src/Admin/Pages/SubmissionsPage.php:835
+#: src/Admin/Pages/SubmissionsPage.php:836
 #, php-format
 msgid "<strong>Data retention:</strong> Submissions older than %d day are automatically removed daily. The retention period is shared with the analytics data and can be changed under <strong>Settings</strong>. Submissions contain the information visitors typed into your forms — treat exports accordingly."
 msgid_plural "<strong>Data retention:</strong> Submissions older than %d days are automatically removed daily. The retention period is shared with the analytics data and can be changed under <strong>Settings</strong>. Submissions contain the information visitors typed into your forms — treat exports accordingly."
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/Admin/Pages/SubmissionsPage.php:856
+#: src/Admin/Pages/SubmissionsPage.php:857
 msgid "Export Current Filters"
 msgstr ""
 
-#: src/Admin/Pages/SubmissionsPage.php:865
+#: src/Admin/Pages/SubmissionsPage.php:866
 msgid "Export Current Filters To JSON"
 msgstr ""
 
-#: src/Admin/Pages/SubmissionsPage.php:887
+#: src/Admin/Pages/SubmissionsPage.php:888
 msgid "Delete every stored submission? This permanently removes the lead data and cannot be undone. Activity Log entries are not affected."
 msgstr ""
 
 #. translators: 1: the lead's name or contact, 2: form name, 3: submission date, 4: delivery status.
-#: src/Admin/Pages/SubmissionsPage.php:939
+#: src/Admin/Pages/SubmissionsPage.php:940
 #, php-format
 msgid "Submission from %1$s via %2$s on %3$s — %4$s. Expand for details."
 msgstr ""
 
-#: src/Admin/Pages/SubmissionsPage.php:941
+#: src/Admin/Pages/SubmissionsPage.php:942
 msgid "an unnamed form"
 msgstr ""
 
-#: src/Admin/Pages/SubmissionsPage.php:1061
+#: src/Admin/Pages/SubmissionsPage.php:1062
 msgid "Form name"
 msgstr ""
 
-#: src/Admin/Pages/SubmissionsPage.php:1062
+#: src/Admin/Pages/SubmissionsPage.php:1063
 msgid "Form ID"
 msgstr ""
 
-#: src/Admin/Pages/SubmissionsPage.php:1063
+#: src/Admin/Pages/SubmissionsPage.php:1064
 msgid "Native form ID"
 msgstr ""
 
-#: src/Admin/Pages/SubmissionsPage.php:1064
+#: src/Admin/Pages/SubmissionsPage.php:1065
 #: src/Notifications/EmailBuilder.php:118
 msgid "Conversion page"
 msgstr ""
 
 #. translators: %s: date and time in UTC.
-#: src/Admin/Pages/SubmissionsPage.php:1066
+#: src/Admin/Pages/SubmissionsPage.php:1067
 #: src/Privacy/PersonalDataExporter.php:192
 msgid "Submitted"
 msgstr ""
 
-#: src/Admin/Pages/SubmissionsPage.php:1067
+#: src/Admin/Pages/SubmissionsPage.php:1068
 #: src/Notifications/EmailBuilder.php:119
 #: src/Privacy/PersonalDataExporter.php:107
 #: src/Privacy/PersonalDataExporter.php:123
@@ -6359,126 +6367,126 @@ msgstr ""
 msgid "Submission ID"
 msgstr ""
 
-#: src/Admin/Pages/SubmissionsPage.php:1076
+#: src/Admin/Pages/SubmissionsPage.php:1077
 msgid "Campaign ID"
 msgstr ""
 
-#: src/Admin/Pages/SubmissionsPage.php:1079
+#: src/Admin/Pages/SubmissionsPage.php:1080
 msgid "Ad click type"
 msgstr ""
 
-#: src/Admin/Pages/SubmissionsPage.php:1080
+#: src/Admin/Pages/SubmissionsPage.php:1081
 #: src/Privacy/PersonalDataExporter.php:217
 msgid "Entrance referrer"
 msgstr ""
 
-#: src/Admin/Pages/SubmissionsPage.php:1081
+#: src/Admin/Pages/SubmissionsPage.php:1082
 #: src/Notifications/EmailBuilder.php:230
 #: src/Privacy/PersonalDataExporter.php:218
 msgid "Landing page"
 msgstr ""
 
-#: src/Admin/Pages/SubmissionsPage.php:1083
+#: src/Admin/Pages/SubmissionsPage.php:1084
 msgid "Session ID"
 msgstr ""
 
-#: src/Admin/Pages/SubmissionsPage.php:1084
+#: src/Admin/Pages/SubmissionsPage.php:1085
 msgid "Session started"
 msgstr ""
 
-#: src/Admin/Pages/SubmissionsPage.php:1085
+#: src/Admin/Pages/SubmissionsPage.php:1086
 #: src/Notifications/EmailBuilder.php:232
 msgid "Pages viewed"
 msgstr ""
 
-#: src/Admin/Pages/SubmissionsPage.php:1113
+#: src/Admin/Pages/SubmissionsPage.php:1114
 #: src/Notifications/EmailBuilder.php:127
 msgid "This submission recorded no field values."
 msgstr ""
 
-#: src/Admin/Pages/SubmissionsPage.php:1139
+#: src/Admin/Pages/SubmissionsPage.php:1140
 #: src/Notifications/EmailBuilder.php:149
 msgid "Analytics & attribution"
 msgstr ""
 
-#: src/Admin/Pages/SubmissionsPage.php:1142
+#: src/Admin/Pages/SubmissionsPage.php:1143
 msgid "No analytics context was captured for this submission — the tracker's correlation fields did not reach the server (JavaScript blocked, tracking disabled, a privacy signal honored, or a server-to-server submission)."
 msgstr ""
 
-#: src/Admin/Pages/SubmissionsPage.php:1155
+#: src/Admin/Pages/SubmissionsPage.php:1156
 #: src/Privacy/PersonalDataExporter.php:329
 msgid "Form submitted"
 msgstr ""
 
-#: src/Admin/Pages/SubmissionsPage.php:1162
+#: src/Admin/Pages/SubmissionsPage.php:1163
 msgid "Page query parameters"
 msgstr ""
 
-#: src/Admin/Pages/SubmissionsPage.php:1205
+#: src/Admin/Pages/SubmissionsPage.php:1206
 #: assets/js/submissions.js:306
 msgid "Delete Submission"
 msgstr ""
 
-#: src/Admin/Pages/SubmissionsPage.php:1258
+#: src/Admin/Pages/SubmissionsPage.php:1259
 msgid "Lead outcome"
 msgstr ""
 
 #. translators: %s: lead status, such as "Qualified".
-#: src/Admin/Pages/SubmissionsPage.php:1265
+#: src/Admin/Pages/SubmissionsPage.php:1266
 #, php-format
 msgid "Status: <strong>%s</strong>"
 msgstr ""
 
 #. translators: %s: ISO currency code, such as USD.
-#: src/Admin/Pages/SubmissionsPage.php:1290
+#: src/Admin/Pages/SubmissionsPage.php:1291
 #, php-format
 msgid "Value (%s)"
 msgstr ""
 
-#: src/Admin/Pages/SubmissionsPage.php:1302
+#: src/Admin/Pages/SubmissionsPage.php:1303
 #: assets/js/submissions.js:243
 #: assets/js/submissions.js:267
 msgid "Save"
 msgstr ""
 
-#: src/Admin/Pages/SubmissionsPage.php:1307
+#: src/Admin/Pages/SubmissionsPage.php:1308
 msgid "Recorded here only — lead outcomes are never sent to webhook endpoints in this version, because a submission's payload is frozen when it is first delivered and could never reflect a change made afterwards. Clear the value field to remove a recorded amount."
 msgstr ""
 
-#: src/Admin/Pages/SubmissionsPage.php:1313
+#: src/Admin/Pages/SubmissionsPage.php:1314
 msgid "History"
 msgstr ""
 
-#: src/Admin/Pages/SubmissionsPage.php:1319
+#: src/Admin/Pages/SubmissionsPage.php:1320
 msgid "someone"
 msgstr ""
 
 #. translators: 1: previous lead status, 2: new lead status.
-#: src/Admin/Pages/SubmissionsPage.php:1323
+#: src/Admin/Pages/SubmissionsPage.php:1324
 #, php-format
 msgid "%1$s → %2$s"
 msgstr ""
 
 #. translators: 1: status change (and value), 2: date, 3: name of the user who made the change.
-#: src/Admin/Pages/SubmissionsPage.php:1334
+#: src/Admin/Pages/SubmissionsPage.php:1335
 #, php-format
 msgid "%1$s · %2$s by %3$s"
 msgstr ""
 
-#: src/Admin/Pages/SubmissionsPage.php:1368
+#: src/Admin/Pages/SubmissionsPage.php:1369
 msgid "Not sent — no webhook endpoint is configured to receive form submissions. The submission is still fully recorded here."
 msgstr ""
 
-#: src/Admin/Pages/SubmissionsPage.php:1371
+#: src/Admin/Pages/SubmissionsPage.php:1372
 msgid "Not sent — webhook delivery is currently paused. The submission is fully recorded here and will not be delivered until delivery is resumed."
 msgstr ""
 
-#: src/Admin/Pages/SubmissionsPage.php:1374
+#: src/Admin/Pages/SubmissionsPage.php:1375
 msgid "No delivery has been attempted for this submission yet."
 msgstr ""
 
 #. translators: %d: number of failed delivery attempts.
-#: src/Admin/Pages/SubmissionsPage.php:1403
+#: src/Admin/Pages/SubmissionsPage.php:1404
 #, php-format
 msgid "Queued · %d failed attempt"
 msgid_plural "Queued · %d failed attempts"
@@ -6486,31 +6494,31 @@ msgstr[0] ""
 msgstr[1] ""
 
 #. translators: %d: HTTP response status code.
-#: src/Admin/Pages/SubmissionsPage.php:1410
+#: src/Admin/Pages/SubmissionsPage.php:1411
 #, php-format
 msgctxt "with an HTTP status code"
 msgid "Delivered (%d)"
 msgstr ""
 
 #. translators: %d: HTTP response status code.
-#: src/Admin/Pages/SubmissionsPage.php:1415
+#: src/Admin/Pages/SubmissionsPage.php:1416
 #, php-format
 msgctxt "with an HTTP status code"
 msgid "Failed (%d)"
 msgstr ""
 
 #. translators: 1: URL of the Activity Log section of the Webhooks screen, 2: the submission id.
-#: src/Admin/Pages/SubmissionsPage.php:1428
+#: src/Admin/Pages/SubmissionsPage.php:1429
 #, php-format
 msgid "<a href=\"%1$s\">Open the Activity Log</a> and search for %2$s to see every attempt, its payload, and the endpoint's response."
 msgstr ""
 
-#: src/Admin/Pages/SubmissionsPage.php:1882
+#: src/Admin/Pages/SubmissionsPage.php:1883
 msgid "(no contact details)"
 msgstr ""
 
 #. translators: compact date and time format for the Submissions list, see https://www.php.net/manual/datetime.format.php
-#: src/Admin/Pages/SubmissionsPage.php:1937
+#: src/Admin/Pages/SubmissionsPage.php:1938
 msgid "M j, Y H:i"
 msgstr ""
 
@@ -6687,7 +6695,7 @@ msgid "e.g. source"
 msgstr ""
 
 #: src/Admin/Pages/WebhooksPage.php:742
-msgid "Include page URL parameters — query parameters present on the page a form was submitted from (e.g. <code>?utm_source=google&amp;gclid=…</code>) are appended to the webhook URL for that submission."
+msgid "Include page URL parameters — parameters on the page a form was submitted from (e.g. <code>?utm_source=google&amp;gclid=…</code>) are stored with the submission and appended to the webhook URL. This includes ad-click ids. Names that look like a secret or contact details, and values containing an email address, are never kept. When this is off, only <code>utm_*</code> parameters are kept."
 msgstr ""
 
 #: src/Admin/Pages/WebhooksPage.php:745
@@ -6880,7 +6888,7 @@ msgstr ""
 #: src/Forms/Atomic/AtomicFormsBridge.php:310
 #: src/Forms/Bricks/BricksFormsBridge.php:531
 #: src/Forms/Providers/ElementorProvider.php:191
-#: src/Forms/SubmissionService.php:529
+#: src/Forms/SubmissionService.php:530
 msgid "There was an issue submitting the form data through the webhook."
 msgstr ""
 
@@ -6888,19 +6896,19 @@ msgstr ""
 msgid "Submissions from this form are recorded by Convermetry as soon as this action is selected and the page is saved. Configure the form — custom form ID, exclusion, per-form webhook headers and query parameters — under Convermetry → Forms, where it is listed by its Bricks element ID."
 msgstr ""
 
-#: src/Forms/SubmissionService.php:109
+#: src/Forms/SubmissionService.php:110
 msgid "This form is excluded from Convermetry by the current settings."
 msgstr ""
 
-#: src/Forms/SubmissionService.php:288
+#: src/Forms/SubmissionService.php:289
 msgid "The submission could not be recorded."
 msgstr ""
 
-#: src/Forms/SubmissionService.php:391
+#: src/Forms/SubmissionService.php:392
 msgid "A form_name is required."
 msgstr ""
 
-#: src/Forms/SubmissionService.php:424
+#: src/Forms/SubmissionService.php:425
 msgid "The submission record could not be loaded."
 msgstr ""
 

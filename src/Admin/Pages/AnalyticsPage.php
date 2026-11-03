@@ -767,7 +767,7 @@ final class AnalyticsPage
         }
         ?>
         </div>
-        <div class="cvmtry-cards cvmtry-kpi-group cvmtry-kpi-group--forms">
+        <div class="cvmtry-cards cvmtry-kpi-group">
         <?php
         foreach ($forms as $type => [$label, $desc]) {
             self::renderStatCard(number_format_i18n($totals[$type] ?? 0), $label, $desc);

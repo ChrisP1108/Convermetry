@@ -47,6 +47,9 @@ final class RequestFactoryTest extends TestCase
             return $default;
         });
 
+        Functions\when('sanitize_text_field')->returnArg(1);
+        Functions\when('apply_filters')->returnArg(2);
+
         Functions\when('add_query_arg')->alias(static function (array $args, string $url): string {
             return $url . (str_contains($url, '?') ? '&' : '?') . http_build_query($args);
         });
@@ -105,6 +108,26 @@ final class RequestFactoryTest extends TestCase
 
         self::assertArrayNotHasKey('p', $query);
         self::assertSame('global', $query['src']);
+    }
+
+    /**
+     * A row recorded before the page-parameter policy still holds everything,
+     * and forwarding being on must not send its secrets to the endpoint.
+     */
+    public function testForwardingNeverSendsASecretFromAnOlderRow(): void
+    {
+        $url = RequestFactory::buildUrl(
+            'https://receiver.test/hook',
+            self::FORM_KEY,
+            ['gclid' => 'keep', 'reset_key' => 'secret', 'token' => 'secret', 'email' => 'a@example.com']
+        );
+
+        parse_str((string) parse_url($url, PHP_URL_QUERY), $query);
+
+        self::assertSame('keep', $query['gclid']);
+        self::assertArrayNotHasKey('reset_key', $query);
+        self::assertArrayNotHasKey('token', $query);
+        self::assertArrayNotHasKey('email', $query);
     }
 
     public function testEndpointUrlIsReturnedUnchangedWhenNothingToMerge(): void

@@ -93,3 +93,12 @@ if (!defined('CVMTRY_PLUGIN_URL')) {
     // which is stubbed in this suite — the value just has to be a URL.
     define('CVMTRY_PLUGIN_URL', 'https://example.test/wp-content/plugins/convermetry/');
 }
+
+// Defined for real rather than stubbed per test: it returns through a reference
+// parameter, and Brain Monkey's aliases cannot pass one through.
+if (!function_exists('wp_parse_str')) {
+    function wp_parse_str(string $input_string, mixed &$result): void
+    {
+        parse_str($input_string, $result);
+    }
+}

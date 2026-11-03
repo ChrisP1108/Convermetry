@@ -30,7 +30,9 @@
  * slow down generally, not just reject one batch.
  *
  * Tracked interactions (each individually toggleable in plugin settings):
- *  - pageview     : one event per page load
+ *  - pageview     : one event per page shown — a load, or a restore from the
+ *                   back/forward cache. A prerendered page counts only once the
+ *                   visitor actually opens it.
  *  - click        : links, buttons, and elements with role="button"
  *  - form_submit  : native form submit events, captured before any handler
  *                   can preventDefault — note these are submission *attempts*
@@ -96,7 +98,7 @@
  * Do Not Track / Global Privacy Control signals are skipped entirely when
  * the site has enabled that option.
  */
-(function () {
+(function boot() {
     'use strict';
 
     const config = window.ConvermetryConfig;
@@ -113,8 +115,50 @@
         return;
     }
 
+    /* A prerendered page is one the browser built on speculation, and the
+     * visitor may never open it. Nothing runs until they do: no pageview, no
+     * goal, no scroll or form events, and no touch of the session's idle timer.
+     * The whole tracker starts over at activation, so every value it reads from
+     * the page is the one the visitor actually arrived with.
+     *
+     * Convermetry.track() is a documented public call that a theme can make while
+     * its page loads, so it has to exist here too; those calls wait in order and
+     * are replayed once the real one is in place. */
+    if (document.prerendering) {
+        const earlyCalls = [];
+        window.Convermetry = window.Convermetry || {};
+        window.Convermetry.track = function () {
+            earlyCalls.push(arguments);
+        };
+        document.addEventListener('prerenderingchange', function () {
+            boot();
+            for (let i = 0; i < earlyCalls.length; i++) {
+                window.Convermetry.track.apply(window.Convermetry, earlyCalls[i]);
+            }
+        }, { once: true });
+        return;
+    }
+
     const MAX_BATCH = config.maxBatch || 20;
     const MAX_QUEUE = 100;
+
+    /* The tracking endpoint refuses a body over 64 KB, and a 413 is not retried;
+     * the browser refuses a keepalive request of that size outright. One batch
+     * over the line used to lose every event in it, so flush() splits on this,
+     * which leaves room for the envelope around the events. */
+    const MAX_BATCH_BYTES = 60000;
+
+    /* The longest value the server stores for each free-form page field. A longer
+     * one would only be cut there, after costing every event in the batch its
+     * length on the wire. */
+    const FIELD_LIMITS = {
+        page_title: 255,
+        page_url: 255,
+        referrer: 255,
+        target_url: 255,
+        session_referrer: 255,
+        session_landing: 255
+    };
     const FLUSH_INTERVAL = config.flushIntervalMs || 5000;
     const HOVER_DWELL = config.hoverDwellMs || 800;
     const SESSION_IDLE_MS = 30 * 60 * 1000;
@@ -322,6 +366,16 @@
      *  URL hygiene — canonical URLs, separate campaign fields
      * ------------------------------------------------------------------ */
 
+    /** Cuts text to a length without splitting a surrogate pair. A lone half of
+     *  an emoji serializes as an unpaired \ud83d escape, which PHP's JSON parser
+     *  rejects — and the server then refuses the entire batch, not just the one
+     *  value. */
+    function clip(text, max) {
+        const cut = String(text).slice(0, max);
+        const last = cut.charCodeAt(cut.length - 1);
+        return last >= 0xD800 && last <= 0xDBFF ? cut.slice(0, -1) : cut;
+    }
+
     /** Campaign parameters from the landing URL, as separate fields attached
      *  to pageview and conversion events (the tracked URL itself carries no
      *  query data). */
@@ -332,7 +386,7 @@
             for (let i = 0; i < UTM_KEYS.length; i++) {
                 const value = params.get(UTM_KEYS[i]);
                 if (value) {
-                    out[UTM_KEYS[i]] = value.slice(0, 190);
+                    out[UTM_KEYS[i]] = clip(value, 190);
                 }
             }
             for (const key in CLICK_IDS) {
@@ -435,7 +489,7 @@
             return '';
         }
         if (/^(mailto:|tel:)/i.test(url)) {
-            return url.slice(0, 255);
+            return clip(url, 255);
         }
         return url.split('#')[0].split('?')[0];
     }
@@ -595,7 +649,7 @@
      *  "[object HTMLInputElement]" may become one. */
     function cleanLabel(text) {
         const raw = typeof text === 'string' || typeof text === 'number' ? String(text) : '';
-        return raw.replace(/\s+/g, ' ').trim().slice(0, 120);
+        return clip(raw.replace(/\s+/g, ' ').trim(), 120);
     }
 
     /** Best human-readable label for an element: aria-label > text/value > id. */
@@ -645,6 +699,12 @@
             const acquisition = currentAcquisition(event.session_id);
             if (acquisition && acquisition.l) {
                 event.session_landing = String(acquisition.l);
+            }
+        }
+
+        for (const field in FIELD_LIMITS) {
+            if (typeof event[field] === 'string' && event[field].length > FIELD_LIMITS[field]) {
+                event[field] = clip(event[field], FIELD_LIMITS[field]);
             }
         }
 
@@ -1005,9 +1065,33 @@
             return;
         }
 
-        // 'b' prefix: purely-numeric keys would be reordered by the JS
-        // engine, breaking oldest-first eviction in stashBatch().
-        sendBatch('b' + randomHex(12), queue.splice(0, queue.length), mode);
+        const batches = sizedBatches(queue.splice(0, queue.length));
+        for (let i = 0; i < batches.length; i++) {
+            // 'b' prefix: purely-numeric keys would be reordered by the JS
+            // engine, breaking oldest-first eviction in stashBatch().
+            sendBatch('b' + randomHex(12), batches[i], mode);
+        }
+    }
+
+    /** Divides events, in order, into batches that each fit MAX_BATCH_BYTES. */
+    function sizedBatches(events) {
+        const batches = [];
+        let current = [];
+        let bytes = 0;
+
+        for (let i = 0; i < events.length; i++) {
+            const size = new Blob([JSON.stringify(events[i])]).size;
+            if (current.length > 0 && bytes + size > MAX_BATCH_BYTES) {
+                batches.push(current);
+                current = [];
+                bytes = 0;
+            }
+            current.push(events[i]);
+            bytes += size;
+        }
+
+        batches.push(current);
+        return batches;
     }
 
     /* ------------------------------------------------------------------ *
@@ -1402,7 +1486,7 @@
         const elementId = typeof formId === 'string' ? formId.trim() : '';
         const rawPostId = body.get('post_id');
         const postId = typeof rawPostId === 'string' ? rawPostId.trim() : '';
-        const key = elementId ? ('elementor_atomic:' + (postId ? postId + ':' : '') + elementId).slice(0, 191) : '';
+        const key = elementId ? clip('elementor_atomic:' + (postId ? postId + ':' : '') + elementId, 191) : '';
         const attempt = transportAttempt(form, body, key, body.get('form_name'));
 
         body.set(FIELD_CONVERSION, attempt.token);
@@ -1963,7 +2047,7 @@
     const MAX_ERRORS_PER_FORM = 10;
 
     /** Per-form state for this page view: {viewed, started, errors}. */
-    const formState = (typeof WeakMap === 'function') ? new WeakMap() : null;
+    let formState = (typeof WeakMap === 'function') ? new WeakMap() : null;
 
     /** Returns (creating if needed) the tracking state for one form. */
     function stateFor(form) {
@@ -1994,7 +2078,7 @@
     function formIdentity(form) {
         const declared = attr(form, FORM_ATTR);
         if (declared) {
-            return declared.slice(0, 191);
+            return clip(declared, 191);
         }
 
         const id = attr(form, 'id') || '';
@@ -2219,7 +2303,7 @@
 
     /** A field's developer-chosen identifier — never its value. */
     function fieldIdentifier(field) {
-        return (attr(field, 'name') || attr(field, 'id') || '').slice(0, 64);
+        return clip(attr(field, 'name') || attr(field, 'id') || '', 64);
     }
 
     if (config.events.form_error) {
@@ -2375,7 +2459,7 @@
      *  Hovers — pointer resting on an element for the dwell threshold
      * ------------------------------------------------------------------ */
 
-    const hoverTracked = (typeof WeakSet === 'function') ? new WeakSet() : null;
+    let hoverTracked = (typeof WeakSet === 'function') ? new WeakSet() : null;
     let hoverTimer = null;
     let hoverEl = null;
 
@@ -2482,6 +2566,35 @@
 
     window.addEventListener('pagehide', function () {
         flush('lifecycle-exit');
+    });
+
+    /* Back and Forward can restore a page from the back/forward cache without
+     * reloading it, so none of the code above runs again — but the visitor is
+     * looking at a page, exactly as if it had loaded. It counts as a new page view
+     * and everything scoped to one starts over, as a reload would: returning to a
+     * form and starting it again is a second form_start, which is what lets the
+     * abandonment report see an unfinished second attempt. */
+    window.addEventListener('pageshow', function (e) {
+        if (!e.persisted) {
+            return;
+        }
+
+        track('pageview', {});
+
+        for (let i = 0; i < milestones.length; i++) {
+            delete reached[milestones[i]];
+        }
+        setTimeout(checkScrollDepth, 800);
+
+        if (hoverTracked) {
+            hoverTracked = new WeakSet();
+        }
+        if (formState) {
+            formState = new WeakMap();
+        }
+        if (formObserver && formState) {
+            observeForms();
+        }
     });
 
     document.addEventListener('visibilitychange', function () {

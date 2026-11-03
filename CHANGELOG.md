@@ -5,6 +5,64 @@ All notable changes to Convermetry are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 1.1.3
+
+No schema change and no migration. Stored rows are not rewritten: a submission
+recorded before this version can still hold every URL parameter until retention
+removes it, but its values are filtered wherever they are read, so they are no
+longer shown or sent. Activity Log rows from before this version are unchanged
+and age out the same way.
+
+### Security
+
+- **URL parameters on the submitting page were stored and sent to webhooks.**
+  Every parameter on the `Referer` reached `page_query`, the Submissions screen
+  and `website_info.page.query`, whatever the page-parameters setting said, so
+  ad-click ids, email addresses and reset tokens all left with the lead. One
+  policy (`PageQuery`) now decides at every one of those places. With forwarding
+  off, only `utm_*` parameters survive. With it on, ad-click ids are kept
+  because forwarding them is the setting's purpose, but names that look like a
+  secret or contact details are dropped, and so is any value containing `@`. A
+  `Referer` on another site is no longer read at all.
+- **The Activity Log kept visitor data in the response when told not to.** With
+  *Store form submission data* off, a receiver that echoed its input put the
+  values back into `response_data`. The response body is now not stored in that
+  mode, because no scrubbing can recognize every way a receiver reformats what
+  it echoes; the status code and any transport error stay. The page's URL
+  parameters are removed from the stored payload and request URL as well.
+
+### Fixed
+
+- **Percent-encoded characters were stripped from the page URL.**
+  `sanitize_text_field()` ran over the raw `Referer`, so
+  `leak.check%40example.com` became `leak.checkexample.com` and `/caf%C3%A9/`
+  became `/caf/`. Values are now decoded before they are sanitized.
+- **Prerendered pages counted as visits.** A page the browser prerendered and
+  the visitor never opened recorded a pageview and could complete a goal. The
+  tracker now starts when the page is activated. `Convermetry.track()` calls
+  made while it is prerendered wait and are replayed once.
+- **Back and Forward were not counted when the browser restored a page from its
+  back/forward cache.** A restore now records a pageview and starts the page's
+  scroll, hover and form state over, so returning to a form and starting it
+  again is a second `form_start`.
+- **Abandonment missed a second attempt.** Submit, come back, start again, leave
+  counted as nothing unfinished, because the query judged a session's first
+  start. It now judges the latest, as the report's documentation always said.
+- **Long values could lose a whole batch of events.** `page_title` was not
+  shortened in the browser, so a very long title pushed a full batch past the
+  64 KB limit, and the batch was refused. Page fields are cut to the width the
+  server stores, and a flush splits into several requests when it still would
+  not fit.
+- **An emoji at a length limit could lose a whole batch of events.** Cutting text
+  through a surrogate pair serialized half a character, PHP's JSON parser
+  rejected the entire body, and the tracker does not retry a 400. Labels, titles,
+  campaign values and destinations are now cut on a character boundary.
+- **A visitor without JavaScript got a conversion with no page and an invented
+  channel.** Their `form_success` event had a blank page URL and was classified
+  Direct while their lead had no channel. The event now takes its page from a
+  same-site `Referer` and has no channel, like the lead. The channel report lists
+  those conversions under a blank channel, where before they added to Direct.
+
 ## 1.1.2
 
 No schema change and no migration. Stored events are never rewritten.

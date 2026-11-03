@@ -689,18 +689,18 @@ final class Reports
         }
 
         // Channels that converted without a pageview in the window (e.g. a
-        // session that landed just before the window started) still surface.
+        // session that landed just before the window started) still surface,
+        // and so does the blank channel: a form submitted with the tracker
+        // absent has no attribution, but it is still a conversion.
         foreach ($conversions as $channel => $counts) {
-            if ($channel !== '') {
-                $out[] = [
-                    'channel'             => $channel,
-                    'views'               => 0,
-                    'sessions'            => 0,
-                    'conversions'         => $counts['conversions'],
-                    'converting_sessions' => $counts['converting_sessions'],
-                    'conversion_rate'     => 0.0,
-                ];
-            }
+            $out[] = [
+                'channel'             => (string) $channel,
+                'views'               => 0,
+                'sessions'            => 0,
+                'conversions'         => $counts['conversions'],
+                'converting_sessions' => $counts['converting_sessions'],
+                'conversion_rate'     => 0.0,
+            ];
         }
 
         return $out;
