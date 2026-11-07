@@ -139,12 +139,97 @@ final class MoneyTest extends TestCase
         self::assertSame('0.30', Money::parse(0.1 + 0.2));
     }
 
-    public function testPrecisionBeyondTwoDecimalsIsTruncatedNotRounded(): void
+    /**
+     * More places than a cent are rounded half-up, in string arithmetic.
+     *
+     * Regression origin: a string was truncated ("12.345" → 12.34) while a float
+     * went through number_format() and was rounded (12.345 → 12.35), so one
+     * amount recorded two ways depending on how it arrived. Truncation also
+     * misstated amounts silently — "0.005" became 0.00 — in a class whose own
+     * rule is that it never silently misstates one.
+     *
+     * @dataProvider extraDecimalPlaces
+     */
+    public function testPrecisionBeyondTwoDecimalsIsRoundedHalfUp(mixed $input, string $expected): void
     {
-        // Truncation is the conservative choice: rounding 0.999 up to 1.00
-        // invents a penny that was never entered.
-        self::assertSame('0.99', Money::parse('0.999'));
-        self::assertSame('12.34', Money::parse('12.3456'));
+        self::assertSame($expected, Money::parse($input));
+    }
+
+    /**
+     * @return array<string, array{0: mixed, 1: string}>
+     */
+    public static function extraDecimalPlaces(): array
+    {
+        return [
+            'third place five rounds up' => ['12.345', '12.35'],
+            'third place four stays'     => ['12.344', '12.34'],
+            'only the next place counts' => ['0.9949', '0.99'],
+            'half a cent is a cent'      => ['0.005', '0.01'],
+            'carry into the integer'     => ['0.999', '1.00'],
+            'carry through nines'        => ['9.995', '10.00'],
+            'thousands and decimals'     => ['1,234.567', '1234.57'],
+            'european with extra places' => ['€1.234,567', '1234.57'],
+            'negative rounds away'       => ['-12.345', '-12.35'],
+            'negative to zero is zero'   => ['-0.004', '0.00'],
+            'long fraction'              => ['12.3456', '12.35'],
+        ];
+    }
+
+    /**
+     * The tracker sends a dynamic goal value as String(Number(value)), and page
+     * code that computes an amount produces binary noise. Truncating that loses
+     * the cent the page meant; rounding keeps it.
+     */
+    public function testFloatNoiseFromPageJavaScriptRoundsToTheIntendedCent(): void
+    {
+        self::assertSame('1.71', Money::parse('1.7099999999999997'));
+        self::assertSame('0.30', Money::parse('0.30000000000000004'));
+    }
+
+    /**
+     * @dataProvider sameAmountTwoWays
+     */
+    public function testAStringAndAFloatOfOneAmountParseIdentically(string $string, float $float): void
+    {
+        self::assertSame(Money::parse($string), Money::parse($float));
+    }
+
+    /**
+     * @return array<string, array{0: string, 1: float}>
+     */
+    public static function sameAmountTwoWays(): array
+    {
+        return [
+            'half a cent above'  => ['12.345', 12.345],
+            'binary-awkward'     => ['1.005', 1.005],
+            'just below half'    => ['12.344', 12.344],
+            'half a cent'        => ['0.005', 0.005],
+            'negative'           => ['-12.345', -12.345],
+            'two places exactly' => ['1999.99', 1999.99],
+        ];
+    }
+
+    public function testRoundingThatCarriesPastTheColumnCapacityIsRefused(): void
+    {
+        self::assertSame('99999999999.99', Money::parse('99999999999.994'));
+        self::assertNull(Money::parse('99999999999.995'), 'rounds to twelve integer digits, which the column cannot hold');
+    }
+
+    public function testANonFiniteFloatIsNotAnAmount(): void
+    {
+        self::assertNull(Money::parse(INF));
+        self::assertNull(Money::parse(-INF));
+        self::assertNull(Money::parse(NAN));
+    }
+
+    public function testNegativityIsReadFromTheParsedAmount(): void
+    {
+        self::assertTrue(Money::isNegative(Money::parse('-5')));
+        self::assertTrue(Money::isNegative('-0.01'));
+        self::assertFalse(Money::isNegative(Money::parse('0')));
+        self::assertFalse(Money::isNegative(Money::parse('-0')), 'negative zero is just zero');
+        self::assertFalse(Money::isNegative('250.00'));
+        self::assertFalse(Money::isNegative(null));
     }
 
     public function testTheColumnCapacityIsEnforced(): void

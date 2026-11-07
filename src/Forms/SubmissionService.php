@@ -37,14 +37,16 @@ use Convermetry\Webhook\RequestFactory;
  *
  *  1. Checks the form is not excluded (per-form configuration).
  *  2. Extracts the tracker's correlation fields from the request (or
-     *  accepts a caller-provided {@see Correlation}), strips them from the
+ *     accepts a caller-provided {@see Correlation}), strips them from the
  *     submission data, and sanitizes every field value.
- *  3. Records the confirmed conversion as a form_success analytics event
+ *  3. Inserts the durable submission record (deduplicated by conversion_id,
+ *     so a double-fired provider callback or a replayed request records
+ *     once, and stops here).
+ *  4. Records the confirmed conversion as a form_success analytics event
  *     under the SAME conversion_id the frontend tracker holds for this
  *     submission attempt — so the two detection paths deduplicate into one
- *     conversion in every report.
- *  4. Inserts the durable submission record (deduplicated by conversion_id,
- *     so a double-fired provider callback records once).
+ *     conversion in every report. A failed insert that is not a duplicate
+ *     still records it: the submission happened.
  *  5. Queues one background webhook delivery per form endpoint and returns
  *     immediately (default) — or delivers synchronously when the caller
  *     needs the real result (Elementor 'show_error' mode,
@@ -151,7 +153,7 @@ final class SubmissionService
          * Runs after the form identity is sanitized and the fields are
          * normalized — so a spam or business rule can inspect what was actually
          * submitted — and before ANY write happens. Returning false skips the
-         * analytics conversion event, the submission row, the webhook queue
+         * submission row, the analytics conversion event, the webhook queue
          * rows, and the notifications, in that order, by never reaching them.
          *
          * The visitor sees nothing. A skipped submission returns a successful,
@@ -174,12 +176,6 @@ final class SubmissionService
 
         $device = wp_is_mobile() ? 'mobile' : 'desktop';
         $page   = $this->pageInfo($correlation, $formKey, $pageUrl);
-
-        // The confirmed conversion, recorded through the shared analytics
-        // write path under the tracker's own conversion token — the frontend
-        // form_success event (if it also fires) carries the same id, so
-        // every conversion report deduplicates the two into one.
-        $this->recordConversionEvent($provider, $formName, $formKey, $correlation, $page['url']);
 
         $submissionId = 's' . substr(md5(wp_generate_uuid4() . wp_rand()), 0, 20);
 
@@ -286,8 +282,28 @@ final class SubmissionService
                 );
             }
 
+            // Not a duplicate: the row could not be written. The form plugin
+            // still accepted the visitor's submission, so the conversion
+            // happened and is still counted, even though Convermetry has no
+            // record of it to deliver.
+            $this->recordConversionEvent($provider, $formName, $formKey, $correlation, $page['url']);
+
             return new SubmissionResult(ok: false, msg: __('The submission could not be recorded.', 'convermetry'));
         }
+
+        // The confirmed conversion, recorded through the shared analytics write
+        // path under the tracker's own conversion token — the frontend
+        // form_success event (if it also fires) carries the same id, so every
+        // conversion report deduplicates the two into one.
+        //
+        // Recorded only once the insert has settled that this is a NEW
+        // submission. It used to be written first, so a replayed request
+        // carrying the same conversion token added another form_success row
+        // before the duplicate check turned it away. Reports count distinct
+        // conversion ids and never showed it, but the raw table and
+        // Reports::totalsByType() did. The unique conversion_id index decides,
+        // so two racing replays cannot both get here.
+        $this->recordConversionEvent($provider, $formName, $formKey, $correlation, $page['url']);
 
         /**
          * Fires after a form submission has been recorded by Convermetry,

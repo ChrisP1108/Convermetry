@@ -231,6 +231,80 @@ final class FormErrorPrivacyTest extends TestCase
     }
 
     /**
+     * The field id a form_error event would be stored under.
+     */
+    private function storedFieldId(string $reported): string
+    {
+        $event             = $this->hostileErrorEvent();
+        $event['field_id'] = $reported;
+
+        $sanitized = $this->sanitize($event);
+        self::assertNotNull($sanitized);
+
+        return (string) $sanitized['data']['element_label'];
+    }
+
+    /**
+     * Regression origin: the filter kept ASCII only, so a field named 邮箱 was
+     * stored as '' — and every such field, with every unnamed one, merged into
+     * a single blank row of "Most common friction points".
+     *
+     * @dataProvider namesInOtherScripts
+     */
+    public function testFieldNamesInAnyScriptAreKept(string $name): void
+    {
+        self::assertSame($name, $this->storedFieldId($name));
+    }
+
+    /**
+     * @return array<string, array{0: string}>
+     */
+    public static function namesInOtherScripts(): array
+    {
+        return [
+            'chinese'                => ['邮箱'],
+            'cyrillic'               => ['телефон'],
+            'devanagari with marks'  => ['ईमेल'],
+            'accented latin'         => ['téléphone'],
+            'arabic with an index'   => ['هاتف_2'],
+            'mixed with brackets'    => ['联系[电话]'],
+        ];
+    }
+
+    public function testDistinctNamesStayDistinctAndNoneIsBlank(): void
+    {
+        $stored = array_map(
+            fn(string $name): string => $this->storedFieldId($name),
+            ['邮箱', '电话', 'email#1', 'text#3', 'select-one#4']
+        );
+
+        self::assertSame(['邮箱', '电话', 'email#1', 'text#3', 'select-one#4'], $stored,
+            "the tracker's positional id for an unnamed field survives as sent");
+        self::assertNotContains('', $stored);
+    }
+
+    public function testFreeTextInAnyScriptStillLosesItsSpacesAndAddresses(): void
+    {
+        $stored = $this->storedFieldId('请 致电 我 ada@example.com 13800138000');
+
+        self::assertStringNotContainsString(' ', $stored);
+        self::assertStringNotContainsString('@', $stored);
+    }
+
+    public function testTheLimitCountsCharactersAndNeverSplitsOne(): void
+    {
+        $stored = $this->storedFieldId(str_repeat('邮', 70));
+
+        self::assertSame(64, mb_strlen($stored), 'sixty-four characters, not sixty-four bytes');
+        self::assertTrue(mb_check_encoding($stored, 'UTF-8'), 'no character is cut in half');
+    }
+
+    public function testInvalidUtf8LeavesNothingRatherThanBytes(): void
+    {
+        self::assertSame('', $this->storedFieldId("\xC3\x28\xA0\xA1"));
+    }
+
+    /**
      * A custom event's payload is not storage. Only its name can match a goal,
      * and only a numeric value is read — so an object of arbitrary properties
      * cannot become a row of arbitrary text.

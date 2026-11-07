@@ -181,6 +181,15 @@ final class GoalSettings
             return null;
         }
 
+        $goalValue = Money::parse($raw['goal_value'] ?? null);
+        if (Money::isNegative($goalValue)) {
+            // A completion cannot be worth less than nothing, and a negative
+            // value would be subtracted from every attributed total the goal
+            // feeds. Refused rather than dropped, so the goal is not saved
+            // looking as if it had no value at all.
+            return null;
+        }
+
         $goal['goal_id']          = self::immutableId($existing);
         $goal['name']             = $name;
         $goal['type']             = $type;
@@ -188,7 +197,7 @@ final class GoalSettings
         $goal['value']            = in_array($operator, self::VALUELESS_OPERATORS, true) ? '' : $value;
         $goal['enabled']          = !empty($raw['enabled']);
         $goal['once_per_session'] = !empty($raw['once_per_session']);
-        $goal['goal_value']       = Money::parse($raw['goal_value'] ?? null);
+        $goal['goal_value']       = $goalValue;
         // A dynamic value is only meaningful for custom events: a URL or a click
         // has nowhere to carry one. Accepting the flag elsewhere would let the
         // UI offer a control that can never do anything.

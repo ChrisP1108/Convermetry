@@ -33,8 +33,9 @@
  *  - pageview     : one event per page shown — a load, or a restore from the
  *                   back/forward cache. A prerendered page counts only once the
  *                   visitor actually opens it.
- *  - click        : links, buttons, and elements with role="button"
- *  - form_submit  : native form submit events, captured before any handler
+ *  - click        : links, buttons, and elements with role="button"; a
+ *                   middle-click that opens a link in a new tab counts too
+ *  - form_submit: native form submit events, captured before any handler
  *                   can preventDefault — note these are submission *attempts*
  *  - form_success : CONFIRMED form submissions — recorded only when the form
  *                   plugin reports that the server accepted the submission
@@ -227,6 +228,9 @@
     const sessionStore = pickStore();
     let memorySession = null;
 
+    /** The only session id this tracker mints: randomHex(32). */
+    const SESSION_ID = /^[a-f0-9]{32}$/;
+
     /** Returns the first usable storage, preferring localStorage so the
      *  session spans tabs; sessionStorage keeps it per-tab; null falls back
      *  to an in-memory id for this page view only. */
@@ -259,7 +263,15 @@
                 const raw = sessionStore.getItem('cvmtry_session');
                 if (raw) {
                     const parts = raw.split('.');
-                    if (parts.length === 2 && now - parseInt(parts[1], 10) < SESSION_IDLE_MS) {
+                    // Only an id this tracker could have minted is reused. The
+                    // server keeps just the hex characters of whatever it is
+                    // sent, so "not-a-hex-id" became the session "aed",
+                    // shared by every visitor holding such a value, while a
+                    // form submission rejected the same id outright and the
+                    // lead lost its session. Anything else starts a new
+                    // session, and the campaign record keyed by the old id
+                    // goes with it.
+                    if (parts.length === 2 && SESSION_ID.test(parts[0]) && now - parseInt(parts[1], 10) < SESSION_IDLE_MS) {
                         id = parts[0];
                     }
                 }
@@ -337,7 +349,7 @@
 
         if (sessionStore) {
             try {
-                sessionStore.setItem('cvmtry_campaign', JSON.stringify(record));
+                sessionStore.setItem('cvmtry_campaign', safeStringify(record));
             } catch (e) {
                 // Storage full or blocked — attribution lasts this page only.
             }
@@ -360,6 +372,38 @@
             }
         }
         return out;
+    }
+
+    /**
+     * JSON.stringify, unaffected by a toJSON an old library put on
+     * Array.prototype or Object.prototype.
+     *
+     * Prototype.js 1.6 defines Array.prototype.toJSON returning a STRING, so
+     * { batch_id, events } went out with "events" as a string. The endpoint
+     * refused it with a 400, which retrying cannot fix, so the batch was
+     * dropped and nothing on any page loading that library was recorded. A
+     * replacer cannot help, because toJSON runs before a replacer sees the
+     * value. So each such method is set aside for this one call and put back
+     * exactly as it was, whatever happens. Primitives never consult toJSON,
+     * so String and Number need nothing.
+     */
+    function safeStringify(value) {
+        const protos = [Array.prototype, Object.prototype];
+        const saved = [];
+        for (let i = 0; i < protos.length; i++) {
+            const descriptor = Object.getOwnPropertyDescriptor(protos[i], 'toJSON');
+            if (descriptor && descriptor.configurable) {
+                saved.push([protos[i], descriptor]);
+                delete protos[i].toJSON;
+            }
+        }
+        try {
+            return JSON.stringify(value);
+        } finally {
+            for (let i = 0; i < saved.length; i++) {
+                Object.defineProperty(saved[i][0], 'toJSON', saved[i][1]);
+            }
+        }
     }
 
     /* ------------------------------------------------------------------ *
@@ -794,7 +838,7 @@
             if (Object.keys(root.batches).length === 0 && !root.globalNotBefore) {
                 pendingStore.removeItem(PENDING_KEY);
             } else {
-                pendingStore.setItem(PENDING_KEY, JSON.stringify(root));
+                pendingStore.setItem(PENDING_KEY, safeStringify(root));
             }
         } catch (e) {
             // sessionStorage filled up or got blocked mid-page — fall back to
@@ -986,7 +1030,7 @@
 
         inFlight[id] = true;
 
-        const body = JSON.stringify({ batch_id: id, events: events });
+        const body = safeStringify({ batch_id: id, events: events });
 
         if ((mode === 'lifecycle-exit' || mode === 'navigation-interaction') && navigator.sendBeacon) {
             let accepted = false;
@@ -1080,7 +1124,7 @@
         let bytes = 0;
 
         for (let i = 0; i < events.length; i++) {
-            const size = new Blob([JSON.stringify(events[i])]).size;
+            const size = new Blob([safeStringify(events[i])]).size;
             if (current.length > 0 && bytes + size > MAX_BATCH_BYTES) {
                 batches.push(current);
                 current = [];
@@ -1105,16 +1149,41 @@
      *  Clicks — links, buttons, and role="button" elements
      * ------------------------------------------------------------------ */
 
-    document.addEventListener('click', function (e) {
+    /* A middle-click opens a link in a new tab, and the browser reports it as
+     * auxclick, not click — so a link opened that way recorded no click and
+     * completed no click goal. Each activation is handled by exactly one of the
+     * two listeners below, decided by the button rather than by timing:
+     * auxclick owns the middle button wherever the browser has it, and click
+     * keeps it only in a browser too old to fire auxclick (older Firefox sent a
+     * middle-click to document listeners as a click). The right button opens
+     * the context menu and is never an activation. */
+    const HAS_AUXCLICK = 'onauxclick' in document;
+
+    /**
+     * Records one activation of a link, button or role="button" element.
+     *
+     * @param {Event}   e      The click or auxclick.
+     * @param {boolean} newTab True for a middle-click, which opens a link in a
+     *                         new tab and does nothing at all to a button.
+     */
+    function trackClick(e, newTab) {
         const el = closestOf(e.target, INTERACTIVE);
         if (!el || inAdminBar(el)) {
+            return;
+        }
+
+        const targetUrl = cleanTarget(el.href);
+
+        // On anything but a link a middle-click activates nothing, so it is
+        // not a click and must not complete a goal.
+        if (newTab && !targetUrl) {
             return;
         }
 
         const clickEvent = {
             element_tag: tagOf(el).toLowerCase(),
             element_label: labelFor(el),
-            target_url: cleanTarget(el.href)
+            target_url: targetUrl
         };
 
         // CSS-selector goals are the one rule the server cannot evaluate — it
@@ -1131,8 +1200,23 @@
         track('click', clickEvent);
 
         // A link click may navigate away immediately — get the batch out now.
-        if (el.href) {
+        // A middle-click leaves this page where it is, so the ordinary flush
+        // is soon enough.
+        if (el.href && !newTab) {
             flush('navigation-interaction');
+        }
+    }
+
+    document.addEventListener('click', function (e) {
+        if (e.button === 2 || (e.button === 1 && HAS_AUXCLICK)) {
+            return;
+        }
+        trackClick(e, e.button === 1);
+    }, true);
+
+    document.addEventListener('auxclick', function (e) {
+        if (e.button === 1) {
+            trackClick(e, true);
         }
     }, true);
 
@@ -1185,7 +1269,7 @@
             token: 'c' + randomHex(16),
             session: sessionId(),
             attribution: campaignSnapshot(),
-            context: JSON.stringify(correlationContext()),
+            context: safeStringify(correlationContext()),
             confirmed: false
         };
     }
@@ -1301,7 +1385,7 @@
         setHiddenField(form, FIELD_CONVERSION, token);
         setHiddenField(form, FIELD_SESSION, sessionId());
         try {
-            setHiddenField(form, FIELD_CONTEXT, JSON.stringify(correlationContext()));
+            setHiddenField(form, FIELD_CONTEXT, safeStringify(correlationContext()));
         } catch (e) {
             // JSON serialization failed — the token and session still travel.
         }
@@ -1941,7 +2025,7 @@
 
             formData.set(FIELD_CONVERSION, token);
             formData.set(FIELD_SESSION, sessionId());
-            formData.set(FIELD_CONTEXT, JSON.stringify(correlationContext()));
+            formData.set(FIELD_CONTEXT, safeStringify(correlationContext()));
         } catch (err) {
             // Instrumentation must never break a visitor's submission: the
             // token and session may already have travelled, and Bricks sends
@@ -2301,9 +2385,50 @@
         return 'invalid';
     }
 
-    /** A field's developer-chosen identifier — never its value. */
-    function fieldIdentifier(field) {
-        return clip(attr(field, 'name') || attr(field, 'id') || '', 64);
+    const GET_FORM_ELEMENTS = nativeGetter(typeof HTMLFormElement === 'function' ? HTMLFormElement : null, 'elements');
+
+    /** A field's control type as the browser reports it: email, select-one, textarea. */
+    function fieldType(field) {
+        return String(field.type || tagOf(field) || '').toLowerCase().slice(0, 32);
+    }
+
+    /** A field's 1-based position among its form's controls; 0 when not found.
+     *  Read through the native getter, since a control named "elements" would
+     *  shadow form.elements. */
+    function fieldPosition(field, form) {
+        let controls = null;
+        try {
+            controls = GET_FORM_ELEMENTS ? GET_FORM_ELEMENTS.call(form) : null;
+        } catch (e) {
+            controls = null;
+        }
+        if (!controls) {
+            controls = queryAll(form, 'input, select, textarea, button');
+        }
+        for (let i = 0; i < controls.length; i++) {
+            if (controls[i] === field) {
+                return i + 1;
+            }
+        }
+        return 0;
+    }
+
+    /**
+     * A field's developer-chosen identifier — never its value.
+     *
+     * A field with neither a name nor an id used to report a blank identifier,
+     * and every such field on the site merged into one blank row of the
+     * friction report. It is now identified by its type and its position in
+     * its form (email#3), which is stable for one form's markup. Its label is
+     * deliberately not used: label text is translated, so one field would
+     * split into a row per language.
+     */
+    function fieldIdentifier(field, form) {
+        const named = String(attr(field, 'name') || '').trim() || String(attr(field, 'id') || '').trim();
+        if (named) {
+            return clip(named, 64);
+        }
+        return clip(fieldType(field) + '#' + fieldPosition(field, form), 64);
     }
 
     if (config.events.form_error) {
@@ -2325,8 +2450,8 @@
             track('form_error', {
                 element_tag: 'form',
                 form_key: formIdentity(form),
-                field_id: fieldIdentifier(field),
-                field_type: String(field.type || field.tagName || '').toLowerCase().slice(0, 32),
+                field_id: fieldIdentifier(field, form),
+                field_type: fieldType(field),
                 error_type: errorCategory(field)
             });
         }, true);

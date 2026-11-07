@@ -6,6 +6,7 @@ namespace Convermetry\Goals;
 if (!defined('ABSPATH')) exit;
 
 use Convermetry\Database\PreparedEvent;
+use Convermetry\Leads\Money;
 use Convermetry\Settings\Options;
 
 /**
@@ -284,13 +285,22 @@ final class GoalRecorder
      * supplied — which has already been parsed to an exact decimal string by the
      * time it reaches here, so nothing arbitrary from a browser is stored.
      *
+     * A negative supplied value is no usable value, exactly like "abc": the
+     * configured value applies. It comes from page JavaScript, so it is either
+     * a bug in the site's code or someone tampering, and recording it would
+     * subtract from the goal's attributed value. Zero is accepted — a free
+     * booking is a real completion worth nothing.
+     *
      * @param PreparedEvent        $event The triggering event.
      * @param array<string, mixed> $goal  The matched goal.
      * @return string|null A decimal string, or null for "no value".
      */
     private static function resolveValue(PreparedEvent $event, array $goal): ?string
     {
-        if (!empty($goal['dynamic_value']) && $event->dynamicValue !== null) {
+        if (!empty($goal['dynamic_value'])
+            && $event->dynamicValue !== null
+            && !Money::isNegative($event->dynamicValue)
+        ) {
             return $event->dynamicValue;
         }
 

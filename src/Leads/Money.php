@@ -28,6 +28,13 @@ if (!defined('ABSPATH')) exit;
  * rather than being coerced: PHP would happily read "12abc" as 12, and silently
  * recording a twelve-pound lead because someone fat-fingered a field is worse
  * than refusing the input and saying so.
+ *
+ * MORE DECIMALS THAN A CENT ARE ROUNDED HALF-UP, in string arithmetic, so
+ * "12.345" and the float 12.345 both record 12.35. The two used to disagree:
+ * a string was cut ("12.345" → 12.34) while a float went through
+ * number_format(), which rounds. Rounding is the rule because amounts from
+ * page JavaScript carry binary noise — 0.57 * 3 is 1.7099999999999997, which
+ * truncation records as 1.70, a cent short of what the page meant.
  */
 final class Money
 {
@@ -36,6 +43,16 @@ final class Money
 
     /** Digits stored to the right of the decimal point. */
     private const int SCALE = 2;
+
+    /**
+     * Decimal places a float is written out to before it is rounded.
+     *
+     * Far finer than a cent, and coarse enough to discard a double's
+     * representation error for any everyday amount: 12.345 is stored as
+     * 12.3449999999999997513…, which six places write as 12.345000, so the
+     * float rounds exactly as the string "12.345" does.
+     */
+    private const int FLOAT_DECIMALS = 6;
 
     /**
      * Parses an administrator-supplied amount into an exact decimal string.
@@ -52,12 +69,18 @@ final class Money
             return null;
         }
 
+        if (is_float($raw) && !is_finite($raw)) {
+            return null;
+        }
+
         // A float arriving here is already imprecise, but it is a legitimate
-        // input from a filter or a WP-CLI call. Render it at the storage scale
-        // rather than through a locale-dependent string cast, which can emit
-        // scientific notation ("1.0E+15") that the parse below would reject.
+        // input from a filter or a WP-CLI call. It is written out as a plain
+        // decimal string — not through a locale-dependent string cast, which
+        // can emit scientific notation ("1.0E+15") that the parse below would
+        // reject — and then takes exactly the path a typed string takes, so
+        // the two can never round differently.
         $value = is_float($raw)
-            ? number_format($raw, self::SCALE, '.', '')
+            ? number_format($raw, self::FLOAT_DECIMALS, '.', '')
             : trim((string) $raw);
 
         if ($value === '') {
@@ -96,8 +119,9 @@ final class Money
 
         [$integer, $fraction] = array_pad(explode('.', $value, 2), 2, '');
 
-        $integer  = ltrim($integer, '0');
-        $fraction = substr($fraction . '00', 0, self::SCALE);
+        [$integer, $fraction] = self::roundToScale($integer, $fraction);
+
+        $integer = ltrim($integer, '0');
 
         if ($integer === '') {
             $integer = '0';
@@ -105,7 +129,7 @@ final class Money
 
         // Beyond the column's capacity the database would either error or
         // truncate. Refusing is the only answer that cannot silently misstate an
-        // amount.
+        // amount. Checked after rounding, which can carry into a new digit.
         if (strlen($integer) > self::MAX_INTEGER_DIGITS) {
             return null;
         }
@@ -118,6 +142,62 @@ final class Money
         }
 
         return $result;
+    }
+
+    /**
+     * Whether a parsed amount is below zero.
+     *
+     * {@see parse()} keeps a sign because it is a parser, not a policy. The
+     * amounts this plugin records — a lead's worth, a goal's worth — cannot be
+     * below zero, so every place that stores one asks this rather than
+     * repeating the test.
+     *
+     * @param string|null $amount A decimal string from {@see parse()}, or null.
+     * @return bool
+     */
+    public static function isNegative(?string $amount): bool
+    {
+        return $amount !== null && str_starts_with($amount, '-');
+    }
+
+    /**
+     * Rounds an unsigned decimal, given as its two digit strings, half-up to
+     * {@see SCALE} places — in string arithmetic, never through a float.
+     *
+     *     "12" . "345"  → "12" . "35"
+     *     "0"  . "005"  → "0"  . "01"
+     *     "9"  . "995"  → "10" . "00"
+     *
+     * The caller applies the sign afterwards, so a negative amount rounds away
+     * from zero, as number_format() does.
+     *
+     * @param string $integer  Digits left of the point (may be '' or zero-padded).
+     * @param string $fraction Digits right of the point (may be '').
+     * @return array{0: string, 1: string} The integer digits and exactly SCALE fraction digits.
+     */
+    private static function roundToScale(string $integer, string $fraction): array
+    {
+        $kept    = substr(str_pad($fraction, self::SCALE, '0'), 0, self::SCALE);
+        $roundUp = strlen($fraction) > self::SCALE && $fraction[self::SCALE] >= '5';
+
+        if (!$roundUp) {
+            return [$integer, $kept];
+        }
+
+        // Add one in the last kept place, carrying leftwards through any nines.
+        $digits = $integer . $kept;
+        for ($i = strlen($digits) - 1; $i >= 0; $i--) {
+            if ($digits[$i] !== '9') {
+                $digits[$i] = (string) ((int) $digits[$i] + 1);
+                break;
+            }
+            $digits[$i] = '0';
+        }
+        if ($i < 0) {
+            $digits = '1' . $digits;
+        }
+
+        return [substr($digits, 0, -self::SCALE), substr($digits, -self::SCALE)];
     }
 
     /**
@@ -135,7 +215,8 @@ final class Money
      *  2. ONE separator, appearing more than once: all thousands.
      *     "1.234.567" → 1234567.
      *  3. ONE separator, appearing once:
-     *     - a dot is the decimal point, whatever follows it. "0.999" → 0.99.
+     *     - a dot is the decimal point, whatever follows it. "0.999" → 1.00
+     *       (more places than a cent round half-up; see roundToScale()).
      *       This is the convention the plugin stores and displays in, so a bare
      *       dot is read the way the rest of the UI writes it.
      *     - a comma is the decimal point only when one or two digits follow,

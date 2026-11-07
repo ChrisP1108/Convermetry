@@ -208,6 +208,10 @@ export async function startSite() {
                 const tooLarge = Buffer.concat(chunks).length > 65536;
                 res.writeHead(tooLarge ? 413 : 202, { 'Content-Type': 'application/json' });
                 res.end(tooLarge ? '{"error":"payload_too_large"}' : '{"stored":0}');
+            } else if (url.pathname === '/track-unavailable') {
+                // An endpoint that is down: the tracker keeps the batch and backs off.
+                res.writeHead(503, { 'Content-Type': 'application/json' });
+                res.end('{"error":"unavailable"}');
             } else if (req.method === 'POST' && url.pathname === '/ajax-success') {
                 res.writeHead(200, { 'Content-Type': 'application/json' });
                 res.end('{"success":true}');
@@ -326,6 +330,12 @@ export async function openPage(cdp, url) {
                 throw new Error(`In page: ${(details.exception && details.exception.description) || details.text}`);
             }
             return result.result.value;
+        },
+
+        /** Sends one DevTools command to this page — Input.dispatchMouseEvent,
+         *  say, for a click the browser treats as the visitor's own. */
+        send(method, params = {}) {
+            return cdp.send(method, params, sessionId);
         },
 
         async close() {

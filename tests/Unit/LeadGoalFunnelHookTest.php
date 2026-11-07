@@ -64,7 +64,10 @@ final class LeadGoalFunnelHookTest extends TestCase
     public function testTheHistoryIdIsMintedBeforeTheTransactionAndReportedAfterIt(): void
     {
         $service = (string) file_get_contents(self::PLUGIN_DIR . 'src/Leads/LeadService.php');
-        $update  = substr($service, (int) strpos($service, 'public static function update('), 5000);
+        // The whole method, up to the one after it: a fixed-length window
+        // silently stopped short once update() grew.
+        $start   = (int) strpos($service, 'public static function update(');
+        $update  = substr($service, $start, (int) strpos($service, 'public static function userCanEdit(') - $start);
 
         $mint    = strpos($update, 'LeadEvents::mintId()');
         $store   = strpos($update, 'FormSubmissions::updateLead(');

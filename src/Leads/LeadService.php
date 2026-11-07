@@ -95,6 +95,16 @@ final class LeadService
                     );
                 }
 
+                // A lead's worth cannot be below zero, and a negative one would
+                // be subtracted from Attributed Lead Value and Revenue for the
+                // whole cohort. A refund or a lost deal is a lower value, a
+                // cleared one, or a status — not a negative amount.
+                if (Money::isNegative($parsed)) {
+                    return self::failure(
+                        __('A lead value cannot be negative. To reflect a refund or a lost deal, lower or clear the value, or change the status.', 'convermetry')
+                    );
+                }
+
                 $newValue = $parsed;
 
                 // Stamped only when there is an amount to stamp it against, and

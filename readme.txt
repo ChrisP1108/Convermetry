@@ -4,7 +4,7 @@ Tags: analytics, lead tracking, utm, webhooks, forms
 Requires at least: 6.3
 Tested up to: 7.1
 Requires PHP: 8.3
-Stable tag: 1.1.3
+Stable tag: 1.1.4
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -58,8 +58,8 @@ This section describes what Convermetry does. It is not legal advice, and Conver
 
 * For each tracked interaction: the event type, the page address without its query string, page title, clicked element text and link target, referrer (without query string), campaign parameters, a traffic channel, a device type (desktop, tablet or mobile), a random visit identifier and a timestamp.
 * **IP addresses are stored by default** with analytics events and form submissions. You can turn this off under Convermetry → Settings ("Store visitor IP addresses"). User agents are never stored.
-* For each confirmed form submission: the values the visitor submitted, the page, its campaign (UTM) parameters, and the analytics context of the visit (channel, campaign, landing page, pages viewed). Fields that look like passwords or other credentials are withheld from email notifications and redacted in the Activity Log. If you turn on "Include page URL parameters", the page's other URL parameters are stored as well, including ad-click identifiers such as gclid, except those whose names look like secrets or contact details and any value containing an email address.
-* Logged-in users are excluded from tracking by default.
+* For each confirmed form submission: the values the visitor submitted, the page, its campaign (UTM) parameters, and the analytics context of the visit (channel, campaign, landing page, pages viewed). Fields that look like passwords or other credentials are withheld from email notifications and redacted in the Activity Log, but they are still stored and sent to your webhooks, and card numbers are not recognized at all. If you send a form through the developer API, leave passwords and payment details out. If you turn on "Include page URL parameters", the page's other URL parameters are stored as well, including ad-click identifiers such as gclid, except those whose names look like secrets or contact details and any value containing an email address.
+* Logged-in users are excluded from tracking by default. A member who arrived from a campaign and then logged in therefore submits with no campaign or channel; the submission is still recorded and delivered.
 * **Do Not Track / Global Privacy Control are not honored by default.** When you enable that setting, visitors who send either signal are not tracked, and no IP address is stored with a form they submit.
 
 **Browser storage — no cookies.** The tracker sets no cookies. It stores a random visit identifier (`cvmtry_session`) and the visit's attribution (`cvmtry_campaign`) in the browser's localStorage, and briefly holds unsent events (`cvmtry_pending`) in sessionStorage. The visit identifier is replaced after 30 minutes of inactivity. In the EU and UK, the rules that govern cookies also apply to this kind of storage.
@@ -119,6 +119,10 @@ Contact Form 7, WPForms, Gravity Forms, Fluent Forms, Ninja Forms, Formidable Fo
 
 Those builders only run the actions you select for each form. Add **Convermetry** to the form's actions in the builder and save the page. Listing a form on the Forms screen does not add the action for you.
 
+= Are single-page navigation and pages inside iframes counted? =
+
+A page change made by JavaScript with `history.pushState()` is not counted as a page view, and later events keep the address the page was loaded on, so page-address goals and funnel steps cannot fire on those sections. Report such a step with `Convermetry.track()` and a custom-event goal instead. A page of your site shown inside an iframe is counted as its own page view, so a page that embeds another of your pages counts both; use the `convermetry_should_enqueue_tracker` filter to keep the tracker off a page that is only ever embedded.
+
 = What data leaves my site? =
 
 Nothing, unless you configure webhook endpoints or email notifications. See "External services" in the Description for exactly what each one sends.
@@ -152,6 +156,17 @@ Deactivating stops tracking and scheduled tasks but keeps your data. Deleting th
 9. Tracking and privacy settings: interaction types, logged-in users, Do Not Track / Global Privacy Control, IP storage and data retention.
 
 == Changelog ==
+
+= 1.1.4 =
+* Fix: a middle-click that opens a link in a new tab now records the click and completes click goals. A right-click, or a middle-click on something that is not a link, records nothing.
+* Fix: a negative value passed to `Convermetry.track()` no longer lowers a goal's value. It is ignored, like a value that is not a number, and the goal's own value is used.
+* Fix: amounts with more than two decimal places are rounded half-up to the cent (12.345 becomes 12.35), the same way whether they are typed or sent from page code. Previously typed amounts were cut short (0.005 became 0.00).
+* Fix: an old script library that changes how arrays are converted to JSON (Prototype.js 1.6) no longer stops all tracking on the pages that load it.
+* Fix: a damaged visit identifier in the browser's storage is replaced instead of being sent, so visitors holding one are no longer merged into a single visit.
+* Fix: form fields named in a non-Latin script, and fields with no name or id, are listed separately in "Most common friction points" instead of merging into one blank row.
+* Fix: a form submission sent twice no longer stores a second conversion event. Reports were not affected.
+* Changed: lead values and goal values can no longer be negative. The Submissions screen and the goal editor explain why and how to record a refund or lost deal instead.
+* Documentation: what the tracker does not count (single-page navigation, pages inside iframes, logged-in members), visitors who share one network and the per-IP limit, and keeping passwords and payment details out of forms sent through the developer API.
 
 = 1.1.3 =
 * Security: URL parameters on the page a form was submitted from are no longer stored or sent to webhooks unless you ask for them. By default only campaign (UTM) parameters are kept, so ad-click IDs, email addresses and reset tokens in a page URL are discarded. With "Include page URL parameters" on, other parameters are kept too, including ad-click IDs, except names that look like secrets or contact details and any value containing an email address.
@@ -212,6 +227,9 @@ Deactivating stops tracking and scheduled tasks but keeps your data. Deleting th
 * Changed: first public release on WordPress.org. Earlier 0.x versions were distributed privately; their full history is in CHANGELOG.md, included with the plugin.
 
 == Upgrade Notice ==
+
+= 1.1.4 =
+Middle-clicks on links now count as clicks and complete click goals, so click figures can rise. Lead and goal values can no longer be negative, and amounts round to the nearest cent. No migration.
 
 = 1.1.3 =
 Privacy fix: page URL parameters such as ad-click IDs and tokens are no longer stored or sent by default. Also fixes prerender, Back/Forward and abandonment counts, so reported figures can change. No migration.

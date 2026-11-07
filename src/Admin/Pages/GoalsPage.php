@@ -181,6 +181,12 @@ final class GoalsPage
         $postedId = is_string($submitted['goal_id'] ?? null) ? sanitize_text_field($submitted['goal_id']) : '';
         $existing = GoalSettings::isValidId($postedId) ? GoalRepository::find($postedId) : null;
 
+        // Checked before sanitize() so the refusal can say what was wrong;
+        // sanitize() refuses it too, for every other caller.
+        if (Money::isNegative(Money::parse($submitted['goal_value'] ?? null))) {
+            self::redirect(['cvmtry_goal_error' => 'negative_value']);
+        }
+
         $goal = GoalSettings::sanitize($submitted, $existing, gmdate('Y-m-d H:i:s'));
 
         if ($goal === null) {
@@ -548,6 +554,7 @@ final class GoalsPage
                 GoalSettings::MAX_GOALS
             ),
             'missing' => __('That goal could not be found. It may already have been removed.', 'convermetry'),
+            'negative_value' => __('That goal could not be saved. Its value cannot be negative: enter what one completion is worth, or leave it blank.', 'convermetry'),
             default   => '',
         };
 
@@ -999,7 +1006,7 @@ final class GoalsPage
                                 <?php echo wp_kses_post(__('Use the value passed to <code>Convermetry.track()</code> when one is supplied', 'convermetry')); ?>
                             </label>
                             <p class="description">
-                                <?php echo wp_kses_post(__('Custom events only. Your code may pass a number, e.g. <code>Convermetry.track(\'booking\', { value: 250 })</code>. Only a numeric value is read — no other data from that call is ever stored.', 'convermetry')); ?>
+                                <?php echo wp_kses_post(__('Custom events only. Your code may pass a number, e.g. <code>Convermetry.track(\'booking\', { value: 250 })</code>. Only a numeric value is read — no other data from that call is ever stored. A negative or unreadable value is ignored and the value above is used.', 'convermetry')); ?>
                             </p>
                         </td>
                     </tr>

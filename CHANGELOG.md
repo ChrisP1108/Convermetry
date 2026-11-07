@@ -5,6 +5,102 @@ All notable changes to Convermetry are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 1.1.4
+
+No schema change and no migration. Stored rows are not rewritten: a negative
+lead or goal value saved before this version keeps its value, and validation
+errors recorded under a blank field id stay in that row.
+
+### Fixed
+
+- **A middle-click recorded no click and completed no click goal.** A link
+  opened in a new tab with the middle button is reported by the browser as
+  `auxclick`, not `click`, and the tracker only listened for `click`. Both now
+  share one handler. A middle-click counts on a link, where it opens the
+  destination; on a button it activates nothing and is not recorded, and the
+  right button never is. Each activation is handled by exactly one listener,
+  chosen by button rather than by timing, so a browser that reports one
+  middle-click as both events counts it once.
+- **A dynamic-value goal stored negative values from the browser.**
+  `Convermetry.track('booking', { value: -5 })` recorded a completion worth
+  -5.00 and lowered the goal's attributed value. A negative supplied value is
+  now ignored like a non-numeric one, and the goal's configured value applies.
+  Zero is accepted.
+- **`Money::parse()` cut extra decimals from a string but rounded a float.**
+  `"12.345"` became 12.34 while the float `12.345` became 12.35, and `"0.005"`
+  became 0.00 — silently, in a class whose own rule is that it never silently
+  misstates an amount. Both paths now round half-up to the cent in string
+  arithmetic, never through a float: `"12.345"` and `12.345` both give 12.35,
+  and `1.7099999999999997` from page JavaScript gives 1.71 rather than 1.70.
+  Rounding is checked against the column's capacity after any carry.
+- **An old library's `Array.prototype.toJSON` stopped all tracking on a
+  page.** Prototype.js 1.6 makes an array's JSON a string, so a batch went out
+  with `events` as a string, the endpoint refused it with a 400, and the
+  tracker dropped it as unfixable. Every `JSON.stringify` in the tracker — the
+  request body, the stored retry queue, the campaign record, the size estimate
+  and the correlation context — now sets `Array.prototype.toJSON` and
+  `Object.prototype.toJSON` aside for that one call and restores them.
+- **A malformed stored session id was used as-is.** A `cvmtry_session` value
+  such as `not-a-hex-id.<timestamp>` was sent unchanged; the server kept only
+  its hex characters, so it became the session `aed`, shared by everyone
+  holding such a value, while form submissions rejected the same id and the
+  lead lost its session. Only an id the tracker could have minted (32 lowercase
+  hex characters) is reused now; anything else starts a new session.
+- **Fields with a non-ASCII name, or no name or id, merged in "Most common
+  friction points".** The server kept ASCII characters only, so `邮箱` became
+  blank, and a field with neither attribute was blank to begin with. Field ids
+  now keep letters, combining marks and digits in any script, truncated at 64
+  characters rather than bytes, and a field with no name or id is identified
+  by its type and position in its form (`email#3`). Labels are never used:
+  they are translated, and would split one field into a row per language.
+- **A replayed submission wrote a second `form_success` row.**
+  `SubmissionService::record()` stored the conversion event before the insert
+  that detects a duplicate conversion id, so a replayed request added an event
+  row before it was turned away. Reports count distinct conversion ids and
+  never showed it, but the raw events table and `Reports::totalsByType()` did.
+  The event is now recorded once the insert has decided the submission is new.
+  An insert that fails for any other reason still records it, because the
+  visitor's submission happened.
+
+### Changed
+
+- **Lead values and goal values cannot be negative.** A negative amount was
+  subtracted from Attributed Lead Value and Revenue for the whole cohort.
+  The Submissions screen now refuses it with a message, and so does the goal
+  editor's value field. A refund or a lost deal is a lower or cleared value, or
+  a status.
+
+### Documentation
+
+- What the tracker does not count: single-page navigation through
+  `history.pushState()`, pages shown inside an iframe (which count as their own
+  page views), and logged-in members, whose submissions carry no attribution
+  while logged-in users are excluded.
+- The per-IP rate limit counts an address, not a visitor, so many visitors
+  behind one office, school or carrier network can lose events silently; raise
+  `per_ip` with `convermetry_rate_limits` where that is your audience.
+- The custom-form API stores and delivers every field it is given. Integrators
+  are told to leave out passwords and payment details, with a
+  `convermetry_submission_fields` example for removing them.
+- README.md, readme.txt and the About screen describe the new rounding and
+  negative-value rules, middle-clicks, session ids and field identifiers.
+
+### Tests
+
+- The real-browser tracker suite covers a middle-click by script and by the
+  DevTools input API, the right button, a button, one activation reported
+  twice, Prototype.js's `Array.prototype.toJSON` on both the request and the
+  stored retry queue, malformed and valid stored session ids, and unnamed and
+  non-ASCII fields. The six regression tests among them fail against the 1.1.3
+  tracker; the other three guard against over-correcting.
+- Unit tests cover half-up rounding and string/float agreement in `Money`,
+  negative dynamic, goal and lead values, Unicode field ids, and the order of
+  the conversion event in `SubmissionService::record()`. The WordPress suite
+  replays a submission and counts its rows.
+- Two source-contract tests read a fixed number of characters of the method
+  they check, and stopped short as the methods grew; they now read the whole
+  method.
+
 ## 1.1.3
 
 No schema change and no migration. Stored rows are not rewritten: a submission

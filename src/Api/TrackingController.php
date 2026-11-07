@@ -444,19 +444,30 @@ final class TrackingController
      * visitor's answer.
      *
      * A field id is a developer-chosen name ("phone", "desired-service",
-     * "field_a1b2c3"), so it is restricted to the characters those actually use
-     * and truncated hard. An implementation that sent a typed value here instead
-     * would be stripped to nothing recognizable rather than quietly stored, and
-     * the length bound alone rules out message bodies and email addresses.
+     * "field_a1b2c3", "邮箱"), so it is restricted to the characters those
+     * actually use and truncated hard. An implementation that sent a typed value
+     * here instead would be stripped to nothing recognizable rather than quietly
+     * stored, and the length bound alone rules out message bodies and email
+     * addresses.
+     *
+     * Letters, combining marks and digits are accepted in ANY script. The class
+     * used to be ASCII-only, which turned a field named 邮箱 into '' — and
+     * every such field on the site then merged into one blank row of the
+     * friction report. Spaces, '@' and other punctuation are still removed, so
+     * the boundary against recording a typed answer is unchanged. '#' is
+     * allowed for the tracker's positional id for a field with no name or id
+     * ("email#3"). The limit counts characters, not bytes, so a name is never
+     * cut through the middle of one.
      *
      * @param string $raw Reported field id.
      * @return string
      */
     private static function fieldIdentifier(string $raw): string
     {
-        $clean = (string) preg_replace('~[^A-Za-z0-9_.:\[\]-]~', '', $raw);
+        // Null — invalid UTF-8 — becomes '', like any id that leaves nothing.
+        $clean = (string) preg_replace('~[^\p{L}\p{M}\p{N}_.:#\[\]-]~u', '', $raw);
 
-        return substr($clean, 0, self::MAX_FIELD_ID_LEN);
+        return mb_substr($clean, 0, self::MAX_FIELD_ID_LEN);
     }
 
     /**

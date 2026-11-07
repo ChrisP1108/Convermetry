@@ -179,15 +179,30 @@ final class SubmissionHookTest extends TestCase
     // ------------------------------------------------------- source contract
 
     /**
+     * The source of SubmissionService::record(), up to the method after it. A
+     * fixed-length window used to stand in for this and silently stopped short
+     * when the method grew.
+     */
+    private static function recordMethod(string $source): string
+    {
+        $start = strpos($source, 'public function record(');
+        $end   = strpos($source, 'public function submitCustom(');
+        self::assertIsInt($start);
+        self::assertIsInt($end);
+
+        return substr($source, $start, $end - $start);
+    }
+
+    /**
      * Source-contract. The veto has to sit after normalization — so a spam rule
-     * can read what was submitted — and before the conversion event, which is
-     * the first write on the path. Anywhere later and a vetoed submission would
-     * already have left a row behind.
+     * can read what was submitted — and before the submission insert and the
+     * conversion event, the two writes on the path. Anywhere later and a vetoed
+     * submission would already have left a row behind.
      */
     public function testTheSubmissionVetoSitsAfterNormalizationAndBeforeTheFirstWrite(): void
     {
         $source = (string) file_get_contents(self::PLUGIN_DIR . 'src/Forms/SubmissionService.php');
-        $record = substr($source, (int) strpos($source, 'public function record('), 9000);
+        $record = self::recordMethod($source);
 
         $normalize  = strpos($record, 'SubmissionFields::normalize($fields)');
         $veto       = strpos($record, "apply_filters('convermetry_should_record_submission'");
@@ -224,6 +239,38 @@ final class SubmissionHookTest extends TestCase
         self::assertIsInt($gate);
         self::assertGreaterThan($recorded, $details);
         self::assertLessThan($gate, $details);
+    }
+
+    /**
+     * Source-contract. The conversion event is written only once the insert has
+     * decided this is a new submission — after FormSubmissions::insert(), and
+     * never on the duplicate path.
+     *
+     * Regression origin: the event was written first, so a replayed request
+     * carrying the same conversion token stored a second form_success row
+     * before the duplicate check turned it away. The end-to-end suite asserts
+     * the row counts; this pins the order where no database is available.
+     */
+    public function testTheConversionEventIsRecordedOnlyAfterTheInsertDecides(): void
+    {
+        $source = (string) file_get_contents(self::PLUGIN_DIR . 'src/Forms/SubmissionService.php');
+        $record = self::recordMethod($source);
+
+        $insert = strpos($record, 'FormSubmissions::insert(');
+        self::assertIsInt($insert);
+
+        $calls = substr_count($record, '$this->recordConversionEvent(');
+        self::assertSame(2, $calls, 'a new submission, and a failed insert that was not a duplicate');
+
+        $first = strpos($record, '$this->recordConversionEvent(');
+        self::assertGreaterThan($insert, $first, 'nothing is recorded before the insert has decided');
+
+        // The duplicate branch runs from its guard to its own return.
+        $duplicate = (int) strpos($record, 'if ($existing !== null) {');
+        $branch    = substr($record, $duplicate, (int) strpos($record, 'return new SubmissionResult(', $duplicate) - $duplicate);
+        self::assertGreaterThan(0, $duplicate);
+        self::assertStringNotContainsString('recordConversionEvent(', $branch, 'a replay records no second event');
+        self::assertStringContainsString('findByConversionId', substr($record, $insert, $duplicate - $insert));
     }
 
     /**

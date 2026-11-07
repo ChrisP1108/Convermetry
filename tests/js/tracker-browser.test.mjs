@@ -82,9 +82,9 @@ async function test(name, fn) {
  * it — deferred, in the footer — so start-up runs at readyState 'interactive'
  * and seeds forms synchronously, which is the path the "method" defect broke.
  */
-function fixture(body, { head = '' } = {}) {
+function fixture(body, { head = '', config: overrides = {} } = {}) {
     const path = `/fixture/${++fixtures}/`;
-    const config = { endpoint: `${site.origin}/track`, events: ALL_EVENTS, respectDnt: false, flushIntervalMs: 100 };
+    const config = { endpoint: `${site.origin}/track`, events: ALL_EVENTS, respectDnt: false, flushIntervalMs: 100, ...overrides };
     site.pages.set(path, `<!doctype html><html><head><meta charset="utf-8"><title>Fixture ${fixtures}</title>${head}
 <script>window.ConvermetryConfig = ${JSON.stringify(config)};</script>
 </head><body>${body}
@@ -739,6 +739,181 @@ await test('text cut at a limit never splits an emoji, which would make the serv
         // PHP's json_decode() fails the whole body on an unpaired surrogate escape.
         assert.doesNotMatch(body, /\\ud[89ab][0-9a-f]{2}(?!\\ud[c-f][0-9a-f]{2})/i);
     }
+});
+
+// ─────────────────────── 10. a middle-click opens a new tab ──────────────────
+
+const CTA_GOALS = { config: { selectorGoals: { g_demo: '[data-demo-cta]' } } };
+
+/** Keeps a synthetic click on a link from navigating this page away. Runs in
+ *  the bubbling phase, after the tracker's capture-phase listener has seen it. */
+const STAY_HERE = '<script>document.addEventListener("click", (e) => { if (e.target.closest("a")) e.preventDefault(); });</script>';
+
+/** Dispatches one mouse event of a type and button at an element. */
+function mouse(page, id, type, button) {
+    return page.evaluate((target, kind, which) => {
+        document.getElementById(target).dispatchEvent(new MouseEvent(kind, { button: which, bubbles: true, cancelable: true }));
+    }, id, type, button);
+}
+
+/**
+ * Presses a sentinel button and waits for its click to arrive. Events leave in
+ * the order they were tracked, so once the sentinel is in, anything tracked
+ * before it has arrived too: what is absent was never recorded.
+ */
+async function clicksBeforeSentinel(page, url) {
+    await press(page, 'sentinel');
+    await waitFor(() => site.trackedEvents(url).some((event) => event.type === 'click' && event.element_label === 'Sentinel'),
+        'the sentinel click');
+    return site.trackedEvents(url).filter((event) => event.type === 'click' && event.element_label !== 'Sentinel');
+}
+
+await test('a middle-click on a link records the click and completes its selector goal', async () => {
+    const { url } = fixture(`<a id="cta" href="/pricing/?ref=mail#plans" data-demo-cta>See pricing</a>
+        <button id="sentinel">Sentinel</button>${STAY_HERE}`, CTA_GOALS);
+
+    await withPage(url, async (page) => {
+        await mouse(page, 'cta', 'auxclick', 1);
+        const clicks = await clicksBeforeSentinel(page, url);
+        assert.equal(clicks.length, 1);
+        assert.equal(clicks[0].element_tag, 'a');
+        assert.equal(clicks[0].target_url, `${site.origin}/pricing/`, 'the destination, without its query or fragment');
+        assert.deepEqual(clicks[0].selector_goals, ['g_demo']);
+        assert.deepEqual(page.exceptions, []);
+    });
+});
+
+await test("a visitor's real middle-click is recorded once", async () => {
+    const { url } = fixture(`<a id="cta" href="/pricing/" data-demo-cta style="display:inline-block;padding:20px">See pricing</a>
+        <button id="sentinel">Sentinel</button>`, CTA_GOALS);
+
+    await withPage(url, async (page) => {
+        const { x, y } = await page.evaluate(() => {
+            const box = document.getElementById('cta').getBoundingClientRect();
+            return { x: box.left + box.width / 2, y: box.top + box.height / 2 };
+        });
+        for (const type of ['mousePressed', 'mouseReleased']) {
+            await page.send('Input.dispatchMouseEvent', { type, x, y, button: 'middle', buttons: type === 'mousePressed' ? 4 : 0, clickCount: 1 });
+        }
+        const clicks = await clicksBeforeSentinel(page, url);
+        assert.equal(clicks.length, 1, 'the browser reports it as auxclick, and it is counted exactly once');
+        assert.deepEqual(clicks[0].selector_goals, ['g_demo']);
+    });
+});
+
+await test('a right-click, and a middle-click on a button, record nothing', async () => {
+    const { url } = fixture(`<a id="cta" href="/pricing/" data-demo-cta>See pricing</a>
+        <button id="plain" data-demo-cta>Not a link</button>
+        <button id="sentinel">Sentinel</button>${STAY_HERE}`, CTA_GOALS);
+
+    await withPage(url, async (page) => {
+        await mouse(page, 'cta', 'auxclick', 2);
+        await mouse(page, 'plain', 'auxclick', 1);
+        assert.deepEqual(await clicksBeforeSentinel(page, url), [],
+            'the right button opens a menu, and a middle-click activates nothing but a link');
+    });
+});
+
+await test('one activation reported as both click and auxclick is counted once', async () => {
+    const { url } = fixture(`<a id="cta" href="/pricing/" data-demo-cta>See pricing</a>
+        <button id="sentinel">Sentinel</button>${STAY_HERE}`, CTA_GOALS);
+
+    await withPage(url, async (page) => {
+        // What an older Firefox delivered for one middle-click.
+        await mouse(page, 'cta', 'click', 1);
+        await mouse(page, 'cta', 'auxclick', 1);
+        const clicks = await clicksBeforeSentinel(page, url);
+        assert.equal(clicks.length, 1);
+    });
+});
+
+// ──────────── 11. a library that changes how JSON.stringify sees arrays ──────
+
+/** What Prototype.js 1.6 defines: an Array's JSON is a STRING. */
+const PROTOTYPE_JS = `<script>Array.prototype.toJSON = function () {
+    return '[' + this.map(function (v) { return JSON.stringify(v); }).join(', ') + ']';
+};</script>`;
+
+await test('Array.prototype.toJSON from an old library does not turn the events into a string', async () => {
+    const { url, path } = fixture('<button id="go">Go</button>', { head: PROTOTYPE_JS });
+
+    await withPage(url, async (page) => {
+        await press(page, 'go');
+        await delivered(url, 'click');
+        for (const body of site.requests.filter((r) => r.path === '/track' && r.body.includes(path)).map((r) => r.body)) {
+            assert.ok(Array.isArray(JSON.parse(body).events), 'the endpoint refuses a batch whose events are a string');
+        }
+        assert.equal(await page.evaluate(() => [1, 2].toJSON()), '[1, 2]', "the page's own toJSON is put back");
+        assert.deepEqual(page.exceptions, []);
+    });
+});
+
+await test('a batch kept for retry is stored as an array under such a library, and survives the round trip', async () => {
+    const { url, path } = fixture('<button id="go">Go</button>', {
+        head: PROTOTYPE_JS,
+        config: { endpoint: `${site.origin}/track-unavailable` },
+    });
+
+    await withPage(url, async (page) => {
+        await press(page, 'go');
+        await waitFor(() => site.requests.some((r) => r.path === '/track-unavailable' && r.body.includes(path)),
+            'a send to the unavailable endpoint');
+
+        const stored = await page.evaluate(() => {
+            const root = JSON.parse(sessionStorage.getItem('cvmtry_pending'));
+            return Object.values(root.batches).map((batch) => Array.isArray(batch.events) && batch.events.length);
+        });
+        assert.ok(stored.length > 0, 'the failed batch is kept for a retry');
+        assert.ok(stored.every((count) => count > 0), 'every kept batch still holds an array of events');
+    });
+});
+
+// ─────────────────────── 12. a stored session id it did not mint ─────────────
+
+/** Puts a value in the session store before the tracker reads it. */
+function storedSession(value) {
+    return `<script>localStorage.setItem('cvmtry_session', ${JSON.stringify(value)} + '.' + Date.now());</script>`;
+}
+
+await test('a malformed stored session id is replaced, never sent', async () => {
+    const { url } = fixture('<p>Tampered.</p>', { head: storedSession('not-a-hex-id') });
+
+    await withPage(url, async (page) => {
+        const [view] = await delivered(url, 'pageview');
+        assert.match(view.session_id, /^[a-f0-9]{32}$/, 'a fresh id, not the server-side remnant "aed"');
+        const kept = await page.evaluate(() => localStorage.getItem('cvmtry_session'));
+        assert.equal(kept.split('.')[0], view.session_id, 'and it is the one persisted from now on');
+    });
+});
+
+await test('a stored session id the tracker minted is kept', async () => {
+    const id = '0123456789abcdef0123456789abcdef';
+    const { url } = fixture('<p>Returning.</p>', { head: storedSession(id) });
+
+    await withPage(url, async () => {
+        const [view] = await delivered(url, 'pageview');
+        assert.equal(view.session_id, id);
+    });
+});
+
+// ─────────── 13. fields with no name, or a name in another script ────────────
+
+await test('fields with no name or id, and a non-ASCII name, report distinct field ids', async () => {
+    const { url } = fixture(`
+        <form id="signup" method="post" action="/submit/signup" data-cvmtry-form-key="custom:signup">
+            <input type="email" required>
+            <input name="邮箱" required>
+            <input type="text" required>
+            <button id="signup-send">Send</button>
+        </form>`);
+
+    await withPage(url, async (page) => {
+        await press(page, 'signup-send');
+        const errors = await delivered(url, 'form_error', 3);
+        assert.deepEqual(errors.map((event) => event.field_id), ['email#1', '邮箱', 'text#3'],
+            'each field is its own row in the friction report');
+        assert.deepEqual(errors.map((event) => event.field_type), ['email', 'text', 'text']);
+    });
 });
 
 // ──────────────────────────────────────────────────────────────────────────────

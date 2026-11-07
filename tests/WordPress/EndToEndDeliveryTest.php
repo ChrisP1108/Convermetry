@@ -440,6 +440,41 @@ final class EndToEndDeliveryTest extends WordPressTestCase
     }
 
     /**
+     * A replayed request — the same browser submission arriving twice, with the
+     * same conversion token — is one submission and one conversion event. The
+     * event used to be written before the duplicate check, so every replay
+     * added another form_success row. Reports count distinct conversion ids and
+     * never showed it; the raw table and the per-type totals did.
+     */
+    public function testAReplayedSubmissionRecordsOneConversionEvent(): void
+    {
+        global $wpdb;
+
+        $_POST['cvmtry_conversion_id'] = 'c0123456789abcdef';
+        $_POST['cvmtry_session_id']    = str_repeat('ab', 16);
+
+        try {
+            $first  = convermetry_submit_form(['form_name' => 'Contact', 'form_id' => 'e2e-1'], ['email' => 'ada@example.com']);
+            $replay = convermetry_submit_form(['form_name' => 'Contact', 'form_id' => 'e2e-1'], ['email' => 'ada@example.com']);
+        } finally {
+            unset($_POST['cvmtry_conversion_id'], $_POST['cvmtry_session_id']);
+        }
+
+        self::assertTrue($first->ok);
+        self::assertTrue($replay->ok);
+        self::assertNotSame('', $first->submissionId);
+        self::assertSame($first->submissionId, $replay->submissionId, 'the replay answers with the original submission');
+
+        self::assertSame('1', (string) $wpdb->get_var(
+            'SELECT COUNT(*) FROM ' . $wpdb->prefix . 'cvmtry_form_submissions'
+        ));
+        self::assertSame('1', (string) $wpdb->get_var(
+            'SELECT COUNT(*) FROM ' . $wpdb->prefix . "cvmtry_events WHERE event_type = 'form_success'"
+            . " AND event_value = 'c0123456789abcdef'"
+        ), 'one form_success row, not one per request');
+    }
+
+    /**
      * A site with no endpoint configured records the lead and sends nothing —
      * the neutral state the repair record exists so as not to confuse with a
      * failed enqueue.

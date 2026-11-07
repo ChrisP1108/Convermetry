@@ -22,7 +22,7 @@ Was the lead successfully delivered to external systems?
 
 Convermetry works standalone — full analytics dashboard, form integrations, and webhook delivery inside one WordPress install — and is architected so a future Convermetry SaaS can receive `analytics_report` and `form_submission` messages from many installations, keyed by a shared, versioned payload schema.
 
-- **Version:** 1.1.3
+- **Version:** 1.1.4
 - **Requires WordPress:** 6.3+
 - **Requires PHP:** 8.3+
 - **License:** GPL-2.0-or-later
@@ -319,6 +319,8 @@ Convermetry.track('appointment_booked', { value: 250 });
 
 The **name** is the only thing that can match a goal. An event whose name matches no configured goal is **discarded and never stored**, so a typo in your theme's JavaScript costs nothing and cannot fill the events table. Nothing else in the payload is ever stored — only a numeric `value`, and only for a goal set to accept one. This is deliberate: an API that accepted arbitrary properties would become an unaudited route for putting customer data into an analytics table.
 
+A supplied `value` is read like any other amount (see [Value and currency](#value-and-currency)): more than two decimal places round half-up, so `{ value: 0.57 * 3 }` records 1.71, not the 1.70 its binary noise would truncate to. Zero is accepted — a free booking is a real completion worth nothing. A **negative** value, like one that is not a number, is ignored and the goal's own value is used: it can only be a bug in the page's code or someone tampering, and recording it would subtract from the goal's attributed value. For the same reason a goal's own value cannot be saved as negative.
+
 The pre-existing `convermetry:conversion` DOM event and the server-side `cvmtry_track_event()` helper are unchanged.
 
 ### Goals depend on the tracking they are built on
@@ -440,6 +442,8 @@ email            email    Wrong format (e.g. not an email address)    131
 
 **No value a visitor typed is ever recorded.** A validation event is rebuilt on the server from exactly three whitelisted pieces — the field's developer-chosen id, its type, and which `ValidityState` flag failed — and everything else in the request is discarded *by construction*. Field identifiers are additionally character-restricted and truncated to 64 characters, so an implementation that mistakenly sent a value would be stripped to something unrecognizable rather than quietly stored.
 
+**The field is its `name`, else its `id`.** Names in any script are kept as written (`邮箱`, `телефон`): letters, combining marks and digits of every language are allowed, while spaces, `@` and other punctuation are still removed. A field with **neither** is listed by its type and its position among the form's controls — `email#1`, `text#3` — so two unnamed fields stay two rows. Its label is deliberately not used: label text is translated, and one field would split into a row per language. A position follows the form's markup, so a field added or removed earlier in the same form shifts the ones after it.
+
 ### Elementor is excluded from form-level engagement
 
 Elementor identifies a form by its **display name** on the server while exposing a **widget id** in the browser, so the two cannot be matched reliably — and an engagement figure attributed to the wrong form is worse than none. Elementor submissions are recorded, attributed, delivered, and reported normally everywhere else in Convermetry. The other six providers are fully supported.
@@ -479,6 +483,8 @@ Two grouping rules carry real weight:
 Values are stored as exact `DECIMAL(13,2)` and handled as decimal **strings** end to end — never as floating point. A lead worth 0.10 recorded ten thousand times totals exactly 1000.00.
 
 Input is forgiving about presentation and strict about value: `$12,500.00`, `12 500`, `€1.234,56` and `1234.56 USD` all parse; `12abc` is **rejected** rather than silently read as 12.
+
+More than two decimal places are **rounded half-up** to the cent, in decimal arithmetic: `12.345` records 12.35, `0.005` records 0.01, and `1,234.567` records 1234.57. A lead value **cannot be negative** — it would be subtracted from Attributed Lead Value and Revenue for the whole cohort — so `-50` is refused with a message. To reflect a refund or a lost deal, lower or clear the value, or change the status. Values saved before 1.1.4 are left as they were.
 
 The site currency is set under **Settings → Data** and is **stamped onto each lead** when you first record a value — changing the setting later never rewrites what is already recorded. Reports therefore **group by currency and never sum across codes**: a column adding 100 EUR to 100 USD and showing 200 would be a fabricated number.
 
@@ -541,13 +547,19 @@ A single dependency-free script (`assets/js/tracker.js`) is enqueued deferred on
 {"batch_id": "b3f2a9c1b8e0d", "events": [{"type": "pageview", "page_url": "...", ...}]}
 ```
 
-**Delivery reliability** — batches flush every 5 seconds, at 20 events, and on page exit via `navigator.sendBeacon`. Every batch is persisted to a bounded `sessionStorage` store *before* it is sent (in-memory fallback when unavailable) and removed only on server acknowledgment (2xx, or a 4xx other than 429). Failed sends back off exponentially with jitter; a 429 pauses the whole tab and honors `Retry-After`. Fetch-delivered batches are **at-least-once** and replays are **idempotent**: rows are stored under a unique `(batch_id, event ordinal)` key, so a replayed batch never inflates counts. Fresh page-exit beacon hand-offs are best-effort; a batch that already survived a failed send stays persisted through a beacon hand-off.
+**Delivery reliability** — batches flush every 5 seconds, at 20 events, and on page exit via `navigator.sendBeacon`. Every batch is persisted to a bounded `sessionStorage` store *before* it is sent (in-memory fallback when unavailable) and removed only on server acknowledgment (2xx, or a 4xx other than 429). Failed sends back off exponentially with jitter; a 429 pauses the whole tab and honors `Retry-After`. Fetch-delivered batches are **at-least-once** and replays are **idempotent**: rows are stored under a unique `(batch_id, event ordinal)` key, so a replayed batch never inflates counts. Fresh page-exit beacon hand-offs are best-effort; a batch that already survived a failed send stays persisted through a beacon hand-off. Serialization is unaffected by a library that redefines `Array.prototype.toJSON` (Prototype.js 1.6 does, and old themes still bundle it): the tracker sets it aside for each call and puts it back, so batches still reach the server as JSON arrays.
 
-**Endpoint defenses** — whitelisted, currently-enabled event types only; tracked page URLs must be `http(s)` on this site's host and are canonicalized to scheme+host+path; foreign `Origin`/`Referer` rejected; bots and empty user agents ignored (matched by how a crawler, headless browser or scripted client names itself — `Googlebot/2.1`, a `+https://…` contact URL, `HeadlessChrome`, `curl/` — so a handset such as a CUBOT is not mistaken for one); DNT/GPC enforced server-side when enabled; request bodies and batch sizes capped; scalar-only field values, sanitized and truncated; rate limits charged **per event** — 300/IP/minute plus 3,000/minute site-wide (`convermetry_rate_limits` filter) — via atomic object-cache counters, falling back (and failing **closed**) to an atomic single-statement database counter. The per-IP check runs first so a flooding IP never consumes the site-wide budget. A dashboard warning appears for 24 hours after the site-wide cap is hit. The rate-limit key itself is a hashed, short-lived derivative of the IP; the address is separately stored on each event row when IP storage is enabled (see [Privacy](#privacy)).
+**Endpoint defenses** — whitelisted, currently-enabled event types only; tracked page URLs must be `http(s)` on this site's host and are canonicalized to scheme+host+path; foreign `Origin`/`Referer` rejected; bots and empty user agents ignored (matched by how a crawler, headless browser or scripted client names itself — `Googlebot/2.1`, a `+https://…` contact URL, `HeadlessChrome`, `curl/` — so a handset such as a CUBOT is not mistaken for one); DNT/GPC enforced server-side when enabled; request bodies and batch sizes capped; scalar-only field values, sanitized and truncated; rate limits charged **per event** — 300/IP/minute plus 3,000/minute site-wide (`convermetry_rate_limits` filter) — via atomic object-cache counters, falling back (and failing **closed**) to an atomic single-statement database counter. The per-IP check runs first so a flooding IP never consumes the site-wide budget. A dashboard warning appears for 24 hours after the site-wide cap is hit. The per-IP cap raises **no** warning, because a single flooding bot is exactly what it exists to stop — but it is per *address*, not per visitor. An office, a school or a mobile carrier can put many visitors behind one IP, and while that address is over its limit, a visitor on it whose page sends one last batch as they leave loses it (the exit beacon's 429 is never seen). If many of your visitors share a network, raise `per_ip` with the filter; the `convermetry_tracking_rate_limited` action fires for both limits if you want to watch for it. The rate-limit key itself is a hashed, short-lived derivative of the IP; the address is separately stored on each event row when IP storage is enabled (see [Privacy](#privacy)).
 
-**Tracked events** (each individually toggleable): `pageview`, `click`, `form_submit` (attempts), `form_success` (confirmed conversions), `hover` (configurable dwell, opt-in via `data-cvmtry-hover`), `scroll_depth` (50/100%). Custom server-side events via `cvmtry_track_event()`.
+**Tracked events** (each individually toggleable): `pageview`, `click` (links, buttons and `role="button"`; a middle-click that opens a link in a new tab counts too, and completes click goals like any other click — a right-click never does), `form_submit` (attempts), `form_success` (confirmed conversions), `hover` (configurable dwell, opt-in via `data-cvmtry-hover`), `scroll_depth` (50/100%). Custom server-side events via `cvmtry_track_event()`.
 
 A `pageview` is one page **shown**, which is not the same as one page load. Back and Forward can restore a page from the browser's back/forward cache without reloading it: that counts as a page view, and scroll milestones, hovers and form events start over as they would after a reload. A page the browser prerendered on speculation records nothing at all until the visitor opens it, so a page they never open costs no pageview and completes no goal.
+
+**What the tracker does not count** — three cases worth knowing before you build goals and funnels:
+
+- **Single-page navigation.** A page change made with `history.pushState()` (a JavaScript router, an AJAX-paged section) records no pageview, and later events keep the URL the page was loaded on, so URL goals and funnel steps cannot fire on those sections. Report such a step yourself with [`Convermetry.track()`](#custom-events) and match it with a custom-event goal.
+- **Pages inside an iframe.** A page of your site shown in an iframe runs its own tracker: it records its own pageview and can complete a URL goal, so a page embedding another of your pages counts both. To keep the tracker off a page that is only ever embedded, return `false` from `convermetry_should_enqueue_tracker` for it. Frames are not skipped automatically because the same behaviour is what keeps a form you embed elsewhere correlated with its submission.
+- **Logged-in members.** With *Exclude logged-in users from tracking* on (the default), the tracker does not load for anyone logged in. A member who arrived from a tagged campaign and then logged in submits with no session or campaign, so their submission is still recorded and delivered but carries no attribution. Turning the exclusion off restores it, at the cost of counting your own staff's visits too.
 
 **Form attributes** — three opt-in/opt-out hooks on any `<form>`:
 
@@ -559,7 +571,7 @@ A `pageview` is one page **shown**, which is not the same as one page load. Back
 
 **Correlation fields** — `cvmtry_conversion_id`, `cvmtry_session_id` and `cvmtry_context` are injected as hidden inputs so a submission can be joined to its analytics session. Only into forms that actually read them: a supported provider or a `data-cvmtry-form-key` form, posting via `POST` to this site's own origin, not marked `data-cvmtry-ignore`. Method and destination are read the way the browser reads them — a field named `method` or `action` cannot stand in for the form's own, a `<base href>` counts, and so does the `formaction` / `formmethod` of the button pressed. A submission that turns out not to be a same-origin `POST` has the fields taken back out before the browser reads the form. Your search, login, comment and third-party forms are left untouched — see [Upgrading to 0.6.0](#upgrading-to-060).
 
-**Sessions** are cookie-free: the id lives in `localStorage` and rotates after 30 minutes of inactivity.
+**Sessions** are cookie-free: the id lives in `localStorage` and rotates after 30 minutes of inactivity. Only an id the tracker minted itself (32 lowercase hex characters) is reused; a stored value of any other shape — edited, truncated, or written by another script — starts a new session instead of being sent.
 
 ## Campaign & channel attribution
 
@@ -859,6 +871,25 @@ arrays with an `id` key and silently discard the caller's data.
   schema 2.0 list — not a legacy-shaped payload.
 - Values are sanitized, never validated. Convermetry is not your form's
   validator; it records what the form accepted.
+- **Leave secrets and payment details out.** Every field you pass is stored
+  in the clear and delivered to every form endpoint. Only the Activity Log and
+  notification emails redact fields whose names look like secrets (`password`,
+  `token`, `api_key`, …), and nothing recognizes a card number. If your form
+  collects a password, a card number or anything similar, do not pass it — or
+  remove it with [`convermetry_submission_fields`](#forms--submissions) before
+  anything is written:
+
+  ```php
+  add_filter('convermetry_submission_fields', function (array $fields, string $formKey): array {
+      if ($formKey !== 'custom:booking-1') {
+          return $fields;
+      }
+      return array_values(array_filter(
+          $fields,
+          fn(array $field): bool => !in_array($field['id'], ['password', 'card_number', 'cvc'], true)
+      ));
+  }, 10, 2);
+  ```
 
 #### 3. Runtime query parameters and headers — optional, this call only
 
@@ -1153,7 +1184,7 @@ Every outbound message shares one versioned envelope:
 {
     "schema_version": "1.0 | 2.0",
     "source": "convermetry",
-    "plugin_version": "1.1.3",
+    "plugin_version": "1.1.4",
     "message_type": "analytics_report | form_submission",
     "website_info": { },
     "generated_at": "2026-08-22T14:00:00+00:00",
@@ -1181,7 +1212,7 @@ Every outbound message shares one versioned envelope:
 {
     "schema_version": "1.1",
     "source": "convermetry",
-    "plugin_version": "1.1.3",
+    "plugin_version": "1.1.4",
     "message_type": "analytics_report",
     "website_info": {
         "name": "Example Financial", "url": "https://example.com", "domain": "example.com",
@@ -1301,7 +1332,7 @@ Every outbound message shares one versioned envelope:
 {
     "schema_version": "2.0",
     "source": "convermetry",
-    "plugin_version": "1.1.3",
+    "plugin_version": "1.1.4",
     "message_type": "form_submission",
     "website_info": {
         "name": "Example Financial", "url": "https://example.com", "domain": "example.com",
@@ -1674,7 +1705,7 @@ The lifecycle actions all receive the same credential-free `$context`: `message_
 | `convermetry_stored_ip` | filter | The address about to be **persisted**, after the privacy gates. `(string $ip)` — the pseudonymization hook (truncate, hash, or return `''`). Must return a valid IPv4/IPv6 address or `''`. Deliberately does **not** affect the rate-limit identity, which would collapse every visitor into one bucket |
 | `convermetry_tracking_batch_recorded` | action | One batch was written. `(int $stored, int $accepted, int $offered, ?string $batchId)` — one action per batch, never per event, on the plugin's hottest path. The three counts differ: offered → accepted (survived sanitization) → stored (survived deduplication) |
 | `convermetry_tracking_rate_limited` | action | A batch was rejected by the rate limiter. `(int $events, int $window)` — carries no address and no hash of one; the endpoint is public and unauthenticated |
-| `convermetry_rate_limits` | filter | `['per_ip' => 300, 'site_wide' => 3000]` events/minute. `(array $defaults)` — both clamped to a minimum of 1; a non-array return or a missing key falls back. Charged **per event**, so one 20-event batch costs 20, and the per-IP check runs first so a flooding IP never consumes the site-wide budget |
+| `convermetry_rate_limits` | filter | `['per_ip' => 300, 'site_wide' => 3000]` events/minute. `(array $defaults)` — both clamped to a minimum of 1; a non-array return or a missing key falls back. Charged **per event**, so one 20-event batch costs 20, and the per-IP check runs first so a flooding IP never consumes the site-wide budget. The per-IP limit counts an address, not a visitor: raise it when many visitors share one network (an office, a school, a mobile carrier) |
 | `convermetry_source_aliases` | filter | Extend/override the utm_source alias map. `(array $aliases)` — keys are raw lowercase source values, values the canonical name. Return the map with entries **added**: a replacement map loses the defaults, and a source with no entry is stored as submitted |
 | `convermetry_channel` | filter | Override the marketing channel assigned at ingestion. `(string $channel, array $row, string $type)` |
 
@@ -1936,7 +1967,7 @@ an explicit ZIP selection.
 
 ```bash
 bash bin/prepare-svn.sh                           # prepare the newest build
-bash bin/prepare-svn.sh build/convermetry-1.1.3.zip # prepare a specific build
+bash bin/prepare-svn.sh build/convermetry-1.1.4.zip # prepare a specific build
 bash bin/prepare-svn.sh --publish                 # prepare and commit newest build
 ```
 
