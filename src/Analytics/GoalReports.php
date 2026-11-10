@@ -71,6 +71,11 @@ final class GoalReports
     /**
      * Sessions in a range — the denominator for every goal conversion rate.
      *
+     * Only sessions with a pageview in the range count: a rate is completions
+     * per visit that viewed a page. The Home screen's figure,
+     * {@see Reports::sessionCount()}, counts a session with any event, so it
+     * can be the higher of the two; that method says when they differ.
+     *
      * @param string $start UTC datetime (inclusive).
      * @param string $end   UTC datetime (exclusive).
      * @return int

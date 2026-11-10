@@ -941,6 +941,54 @@ final class ReportQueryTest extends IntegrationTestCase
         self::assertSame(2, $rows[0]['sessions']);
     }
 
+    /**
+     * A page is labelled with its newest title, not the one that sorts last.
+     * MAX(page_title) let a single pageview under an odd title (a translated
+     * page, a renamed one, a crafted request) relabel the page for every range
+     * that included it.
+     */
+    public function testTopPagesLabelsEachPageWithItsNewestTitle(): void
+    {
+        $demo = 'https://example.com/demo/';
+
+        $this->insertEvent(['session_id' => 't1', 'page_url' => $demo, 'page_title' => 'Zzz old', 'created_at' => '2026-08-10 09:00:00']);
+        $this->insertEvent(['session_id' => 't2', 'page_url' => $demo, 'page_title' => 'Demo', 'created_at' => '2026-08-11 09:00:00']);
+        // Newer still, but untitled: a blank is not a label.
+        $this->insertEvent(['session_id' => 't3', 'page_url' => $demo, 'page_title' => '', 'created_at' => '2026-08-12 09:00:00']);
+        // Newest of all, but after the range.
+        $this->insertEvent(['session_id' => 't4', 'page_url' => $demo, 'page_title' => 'Later', 'created_at' => '2026-09-02 09:00:00']);
+        // A page that never had a title stays blank, and the order is by views.
+        $this->insertEvent(['session_id' => 't1', 'page_url' => 'https://example.com/plain/', 'page_title' => '', 'created_at' => '2026-08-10 09:01:00']);
+
+        $rows = Reports::topPages(self::START, self::END);
+
+        self::assertSame([
+            ['page_url' => $demo, 'page_title' => 'Demo', 'views' => 3, 'sessions' => 3],
+            ['page_url' => 'https://example.com/plain/', 'page_title' => '', 'views' => 1, 'sessions' => 1],
+        ], $rows);
+
+        self::assertSame([$demo], array_column(Reports::topPages(self::START, self::END, 1), 'page_url'),
+            'The limit still keeps the most viewed');
+    }
+
+    public function testTopLandingPagesLabelsEachPageWithItsNewestTitle(): void
+    {
+        $demo = 'https://example.com/demo/';
+
+        $this->insertEvent(['session_id' => 'm1', 'page_url' => $demo, 'page_title' => 'Zzz old', 'created_at' => '2026-08-10 09:00:00']);
+        $this->insertEvent(['session_id' => 'm2', 'page_url' => $demo, 'page_title' => 'Demo', 'created_at' => '2026-08-11 09:00:00']);
+        // A later pageview in a session that landed elsewhere is not a landing.
+        $this->insertEvent(['session_id' => 'm3', 'page_url' => 'https://example.com/', 'page_title' => 'Home', 'created_at' => '2026-08-12 09:00:00']);
+        $this->insertEvent(['session_id' => 'm3', 'page_url' => $demo, 'page_title' => 'Zzzz newest but not a landing', 'created_at' => '2026-08-12 09:01:00']);
+
+        $rows = Reports::topLandingPages(self::START, self::END);
+
+        self::assertSame([
+            ['page_url' => $demo, 'page_title' => 'Demo', 'sessions' => 2],
+            ['page_url' => 'https://example.com/', 'page_title' => 'Home', 'sessions' => 1],
+        ], $rows);
+    }
+
     public function testHasEventsAnswersForAnEmptyAndANonEmptyTable(): void
     {
         self::assertFalse(Reports::hasEvents());

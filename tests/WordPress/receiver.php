@@ -8,7 +8,8 @@
  * what the plugin believed it sent.
  *
  * The path decides the response: /ok answers 200, /fail answers 500, so the
- * retry and failure paths can be exercised against genuine HTTP statuses.
+ * retry and failure paths can be exercised against genuine HTTP statuses. A
+ * second segment swaps the JSON body for another (see the end of this file).
  * /whoami answers this instance's token and is NOT captured — it is how the
  * caller tells its own server apart from a stale one left on the port.
  */
@@ -47,16 +48,30 @@ if ($log !== '') {
     );
 }
 
-if ($uri === '/fail') {
-    http_response_code(500);
-    header('Content-Type: application/json');
-    echo '{"error":"receiver refused"}';
+// A second segment picks a body other than the default JSON, for the Activity
+// Log's storage tests: /ok/japanese-html, /fail/japanese-html, /fail/latin1-html.
+[$outcome, $variant] = array_pad(explode('/', ltrim($uri, '/'), 2), 2, '');
+
+http_response_code($outcome === 'fail' ? 500 : 200);
+
+if ($variant === 'japanese-html') {
+    // About 90 KB, so the transport's 64 KB download limit cuts it, in bytes,
+    // inside a character.
+    header('Content-Type: text/html; charset=utf-8');
+    echo '<!doctype html><html lang="ja"><body>', str_repeat('<p>日本語のテキストです。</p>', 2300), '</body></html>';
 
     return true;
 }
 
-http_response_code(200);
+if ($variant === 'latin1-html') {
+    // A short error page in ISO-8859-1: each "é" is the single byte 0xE9.
+    header('Content-Type: text/html; charset=iso-8859-1');
+    echo "<html><body><h1>Erreur 500</h1><p>Service momentan\xE9ment indisponible. R\xE9essayez plus tard.</p></body></html>";
+
+    return true;
+}
+
 header('Content-Type: application/json');
-echo '{"ok":true}';
+echo $outcome === 'fail' ? '{"error":"receiver refused"}' : '{"ok":true}';
 
 return true;

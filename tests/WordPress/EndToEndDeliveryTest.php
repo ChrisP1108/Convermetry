@@ -5,6 +5,8 @@ namespace Convermetry\Tests\WordPress;
 
 use Convermetry\Database\FormSubmissions;
 use Convermetry\Settings\Options;
+use Convermetry\Webhook\AnalyticsDispatcher;
+use Convermetry\Webhook\DeliveryLog;
 use Convermetry\Webhook\FormDeliveryQueue;
 use WP_REST_Request;
 
@@ -364,6 +366,157 @@ final class EndToEndDeliveryTest extends WordPressTestCase
                 . " WHERE submission_id = '" . esc_sql($submissionId) . "' ORDER BY id DESC LIMIT 1"
             )
         );
+    }
+
+    // ── What the Activity Log can store ──────────────────────────────────────
+
+    /** The submission recorded by the most recent submit(). */
+    private function submissionId(): string
+    {
+        global $wpdb;
+
+        $submissionId = (string) $wpdb->get_var(
+            'SELECT submission_id FROM ' . $wpdb->prefix . 'cvmtry_form_submissions ORDER BY id DESC LIMIT 1'
+        );
+        self::assertNotSame('', $submissionId, 'The submission must be recorded');
+
+        return $submissionId;
+    }
+
+    /**
+     * The submission's Activity Log rows, oldest first.
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function logRows(string $submissionId): array
+    {
+        global $wpdb;
+
+        return $wpdb->get_results($wpdb->prepare(
+            'SELECT attempt, success, response_code, response_data FROM %i WHERE submission_id = %s ORDER BY id ASC',
+            DeliveryLog::tableName(),
+            $submissionId
+        ), ARRAY_A);
+    }
+
+    /** The submission's recorded delivery state. */
+    private function deliveryState(string $submissionId): string
+    {
+        $submission = FormSubmissions::getBySubmissionId($submissionId);
+        self::assertNotNull($submission);
+
+        return (string) $submission['delivery_state'];
+    }
+
+    /**
+     * The premise, checked against this WordPress: $wpdb refuses the value
+     * outright, so the whole row would be lost if it were stored as received.
+     */
+    private function assertWpdbRefuses(string $value): void
+    {
+        global $wpdb;
+
+        self::assertNotSame(
+            $value,
+            $wpdb->strip_invalid_text_for_column(DeliveryLog::tableName(), 'response_data', $value),
+            'The premise: $wpdb would refuse this value for response_data'
+        );
+    }
+
+    /**
+     * About 90 KB of HTML in Japanese, answered with a 200. WordPress's
+     * transport stops reading at 64 KB, in bytes, inside a character; that
+     * body used to be refused by $wpdb, so the delivery had no log row and
+     * the lead settled on "not_sent" although it had arrived.
+     */
+    public function testALargeMultibyteResponseIsLoggedAndTheLeadIsDelivered(): void
+    {
+        $this->assertWpdbRefuses(substr(
+            '<!doctype html><html lang="ja"><body>' . str_repeat('<p>日本語のテキストです。</p>', 2300),
+            0,
+            DeliveryLog::MAX_BODY_BYTES
+        ));
+
+        $this->configureEndpoint('/ok/japanese-html');
+        $this->submit();
+        $submissionId = $this->submissionId();
+
+        do_action(FormDeliveryQueue::WORKER_HOOK);
+        self::assertTrue($this->receiver()->waitFor(1), 'The webhook never arrived at the receiver');
+
+        $rows = $this->logRows($submissionId);
+        self::assertCount(1, $rows, 'One attempt, one Activity Log row');
+        self::assertSame('200', (string) $rows[0]['response_code']);
+        self::assertSame(1, preg_match('//u', (string) $rows[0]['response_data']));
+        self::assertStringContainsString('日本語のテキストです。', (string) $rows[0]['response_data']);
+        self::assertLessThanOrEqual(DeliveryLog::MAX_BODY_BYTES, strlen((string) $rows[0]['response_data']));
+
+        self::assertSame('delivered', $this->deliveryState($submissionId));
+    }
+
+    /**
+     * The same body with a 500, every time. Each attempt has its row, and when
+     * the retries are spent the lead is "failed" rather than "not_sent", which
+     * is what tells the site owner that it never arrived.
+     */
+    public function testALargeMultibyteErrorIsLoggedOnEveryAttemptAndTheLeadFails(): void
+    {
+        global $wpdb;
+
+        $this->configureEndpoint('/fail/japanese-html');
+        $this->submit();
+        $submissionId = $this->submissionId();
+
+        $attempts = count(AnalyticsDispatcher::retryDelays()) + 1;
+
+        for ($pass = 1; $pass <= $attempts + 2 && FormDeliveryQueue::pendingCountFor($submissionId) > 0; $pass++) {
+            // Each retry is made due now instead of after its backoff.
+            $wpdb->query($wpdb->prepare(
+                "UPDATE %i SET next_attempt_at = '2000-01-01 00:00:00' WHERE submission_id = %s",
+                FormDeliveryQueue::tableName(),
+                $submissionId
+            ));
+
+            do_action(FormDeliveryQueue::WORKER_HOOK);
+        }
+
+        self::assertTrue($this->receiver()->waitFor($attempts), "All {$attempts} attempts must be made");
+        self::assertSame(0, FormDeliveryQueue::pendingCountFor($submissionId), 'The retries are spent');
+
+        $rows = $this->logRows($submissionId);
+        self::assertSame(range(1, $attempts), array_map(static fn(array $row): int => (int) $row['attempt'], $rows),
+            'Every attempt has its Activity Log row');
+
+        foreach ($rows as $row) {
+            self::assertSame('500', (string) $row['response_code']);
+            self::assertSame(1, preg_match('//u', (string) $row['response_data']));
+        }
+
+        self::assertSame('failed', $this->deliveryState($submissionId));
+    }
+
+    /**
+     * A short error page in ISO-8859-1. Nothing is cut, but the body was never
+     * valid UTF-8, and $wpdb refused it just the same.
+     */
+    public function testAnErrorPageInAnotherEncodingIsLogged(): void
+    {
+        $this->assertWpdbRefuses("<p>Service momentan\xE9ment indisponible.</p>");
+
+        $this->configureEndpoint('/fail/latin1-html');
+        $this->submit();
+        $submissionId = $this->submissionId();
+
+        do_action(FormDeliveryQueue::WORKER_HOOK);
+        self::assertTrue($this->receiver()->waitFor(1), 'The attempt must actually be made');
+
+        $rows = $this->logRows($submissionId);
+        self::assertCount(1, $rows);
+        self::assertSame('500', (string) $rows[0]['response_code']);
+        self::assertStringContainsString("Service momentan\u{FFFD}ment indisponible.", (string) $rows[0]['response_data'],
+            'Stored with only the bytes that are not UTF-8 replaced');
+
+        self::assertSame('pending', $this->deliveryState($submissionId), 'A retry is scheduled');
     }
 
     /**

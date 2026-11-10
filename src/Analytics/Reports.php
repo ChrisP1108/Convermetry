@@ -130,6 +130,14 @@ final class Reports
     /**
      * Most-viewed pages within a range.
      *
+     * Each page is labelled with the title of its most recent pageview in the
+     * range that had a title. MAX(page_title) used to pick the title that
+     * sorts last, so one pageview under a translated, renamed or crafted
+     * title relabelled the page for every range that included it. The newest
+     * titled row is found by MAX(id) over the rows already being grouped and
+     * then read by primary key: no window functions, which MySQL 5.7 lacks,
+     * and no index beyond what the counts already use.
+     *
      * @param string $start UTC datetime (inclusive).
      * @param string $end   UTC datetime (exclusive).
      * @param int    $limit Maximum rows to return.
@@ -141,17 +149,23 @@ final class Reports
         $table = DatabaseManager::tableName();
 
         $rows = self::queryRows($wpdb->prepare(
-            "SELECT page_url, MAX(page_title) AS page_title,
-                    COUNT(*) AS views, COUNT(DISTINCT session_id) AS sessions
-             FROM %i
-             WHERE event_type = 'pageview' AND created_at >= %s AND created_at < %s
-             GROUP BY page_url
-             ORDER BY views DESC
-             LIMIT %d",
+            "SELECT p.page_url, COALESCE(t.page_title, '') AS page_title, p.views, p.sessions
+             FROM (
+                 SELECT page_url, COUNT(*) AS views, COUNT(DISTINCT session_id) AS sessions,
+                        MAX(CASE WHEN page_title <> '' THEN id END) AS title_id
+                 FROM %i
+                 WHERE event_type = 'pageview' AND created_at >= %s AND created_at < %s
+                 GROUP BY page_url
+                 ORDER BY views DESC
+                 LIMIT %d
+             ) AS p
+             LEFT JOIN %i AS t ON t.id = p.title_id
+             ORDER BY p.views DESC",
             $table,
             $start,
             $end,
-            $limit
+            $limit,
+            $table
         ));
 
         return array_map(static fn(array $row): array => [
@@ -715,6 +729,10 @@ final class Reports
      * whose first pageview falls inside the requested range. The scan is
      * served by the type_session_date index — a covering, pre-grouped read.
      *
+     * Each page is labelled with the title of its most recent landing that had
+     * a title, read by primary key; see {@see topPages()} for why not
+     * MAX(page_title).
+     *
      * @param string $start UTC datetime (inclusive).
      * @param string $end   UTC datetime (exclusive).
      * @param int    $limit Maximum rows to return.
@@ -726,24 +744,31 @@ final class Reports
         $table = DatabaseManager::tableName();
 
         $rows = self::queryRows($wpdb->prepare(
-            "SELECT e.page_url, MAX(e.page_title) AS page_title, COUNT(*) AS sessions
+            "SELECT l.page_url, COALESCE(t.page_title, '') AS page_title, l.sessions
              FROM (
-                 SELECT MIN(id) AS first_id
-                 FROM %i
-                 WHERE event_type = 'pageview' AND session_id <> ''
-                   AND created_at < %s
-                 GROUP BY session_id
-                 HAVING MIN(created_at) >= %s
-             ) AS f
-             INNER JOIN %i AS e ON e.id = f.first_id
-             GROUP BY e.page_url
-             ORDER BY sessions DESC
-             LIMIT %d",
+                 SELECT e.page_url, COUNT(*) AS sessions,
+                        MAX(CASE WHEN e.page_title <> '' THEN e.id END) AS title_id
+                 FROM (
+                     SELECT MIN(id) AS first_id
+                     FROM %i
+                     WHERE event_type = 'pageview' AND session_id <> ''
+                       AND created_at < %s
+                     GROUP BY session_id
+                     HAVING MIN(created_at) >= %s
+                 ) AS f
+                 INNER JOIN %i AS e ON e.id = f.first_id
+                 GROUP BY e.page_url
+                 ORDER BY sessions DESC
+                 LIMIT %d
+             ) AS l
+             LEFT JOIN %i AS t ON t.id = l.title_id
+             ORDER BY l.sessions DESC",
             $table,
             $end,
             $start,
             $table,
-            $limit
+            $limit,
+            $table
         ));
 
         return array_map(static fn(array $row): array => [
@@ -787,6 +812,17 @@ final class Reports
      * bounded by the created_at index, over a short window. Rows whose
      * session_id is empty (a tracked event that arrived without one) are
      * excluded rather than being collapsed into a phantom session.
+     *
+     * A session with ANY event in the range counts, so this can be higher than
+     * {@see GoalReports::sessionCount()}, the goal conversion-rate denominator
+     * (Goals screen, and goals.sessions in the analytics payload), which counts
+     * only sessions with a pageview in the range. The difference is sessions
+     * whose events in the range include no pageview: one that began before the
+     * range, one that resumed a page after 30 idle minutes (a new session
+     * with a click or scroll but no new pageview), or one whose tracking
+     * requests were blocked while its form still carried the session id to a
+     * server-confirmed submission. Both figures are intended; see the readme
+     * FAQ.
      *
      * @param string $start UTC datetime (inclusive).
      * @param string $end   UTC datetime (exclusive).

@@ -5,6 +5,85 @@ All notable changes to Convermetry are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 1.1.5
+
+No schema change and no migration. Stored rows are not rewritten: a delivery
+attempt that 1.1.4 failed to log stays missing, and its submission keeps the
+delivery state it settled on.
+
+### Fixed
+
+- **A delivery answered with a body that was not valid UTF-8 had no Activity
+  Log row, so its lead showed "not_sent".** `$wpdb->insert()` refuses a whole
+  row when a value is not valid UTF-8 for its utf8mb4 column, and two ordinary
+  responses produced one. WordPress's transport stops reading a response at
+  64 KB, and that cut, made in bytes, split a character of a large page in
+  Japanese or another multibyte script. And a body in another encoding, such
+  as an ISO-8859-1 error page with "é", was stored as received, because only
+  JSON bodies are re-encoded. `DeliveryLog::log()` returned
+  `LogOutcome::Failed`, and the submission's delivery state, computed from the
+  log, settled on `not_sent`: for a lead that was delivered with a 200, and for
+  one whose six attempts all failed, which should have been `failed`. Nothing
+  told the site owner the lead never arrived. Each stored body is now valid
+  UTF-8, with every invalid byte sequence replaced by U+FFFD, and the 64 KB cap
+  cuts on a character boundary. Neither needs mbstring.
+- **Top Pages and Top Landing Pages showed the alphabetically last title ever
+  seen for a page.** `MAX(page_title)` picks the title that sorts last, so one
+  pageview under an unusual title relabelled the page for every range that
+  included it; a single test pageview titled with 254 "t"s replaced the label
+  of a page with 868 views. Chrome's built-in translation rewrites
+  `document.title`, and so can a crafted tracking request. Each page is now
+  labelled with the title of its most recent pageview (for landing pages, its
+  most recent landing) in the range that had a title, found by `MAX(id)` and
+  read by primary key. The Analytics screen, its exports and the analytics
+  webhook's `top_pages` and `top_landing_pages` all change. No window
+  functions and no new index.
+- **`Convermetry.track()` turned non-numbers into values.** The value went
+  through `Number()`, which makes `null`, `""`, `" "` and `false` 0, `true` 1
+  and `[7]` 7, so a dynamic-value goal recorded 0.00 for a page that passed an
+  empty price field. Only a finite number, or a string that is a decimal number
+  once trimmed (`"  42.5  "`, `"1e3"`), is sent now; anything else is ignored
+  and the goal's own value applies, as 1.1.4 already documented. Negative
+  numbers are still sent, and still ignored by the server.
+- **A click on an SVG link recorded no destination.** An SVG `<a>`'s `href`
+  is an `SVGAnimatedString`, not a string, so the click was stored without a
+  `target_url`: no link-click goal could match it, and a middle-click on it
+  was not recorded at all. Its `baseVal` is now resolved against the
+  document's base URL. Hovers use the same destination.
+- **Image-map links recorded no click.** `<area href>` was not among the
+  elements the tracker watches. It is now, labelled by its `alt` text.
+
+### Documentation
+
+- The Home screen's session count includes every session with any event in
+  the range; the goal conversion-rate denominator (the Goals screen and
+  `goals.sessions` in the analytics payload) counts only sessions with a
+  pageview in the range. The difference, and the visits that cause it, is
+  explained in both methods' docblocks, README.md and a readme FAQ entry.
+  Neither figure changes.
+- README.md describes the newest-title rule, which `Convermetry.track()`
+  values are sent, SVG and image-map clicks, and UTF-8 Activity Log bodies.
+- readme.txt screenshot captions 4 and 6 describe the current screenshots.
+
+### Tests
+
+- A unit test stores oversized Japanese bodies (cut by the cap and cut by the
+  transport), an ISO-8859-1 body, an oversized ASCII body and a valid
+  multibyte body through `DeliveryLog::log()`, against a `$wpdb` stand-in that
+  refuses invalid UTF-8 as the real one does.
+- The WordPress suite's receiver can answer with 90 KB of Japanese HTML or an
+  ISO-8859-1 error page. A 200 with the Japanese page gives one log row and
+  `delivered`; a 500, retried until the attempts are spent, gives a row per
+  attempt and `failed`; the ISO-8859-1 page gives its row with U+FFFD in place
+  of each "é". Each first checks that the real `$wpdb` refuses the raw body.
+- Integration tests label a page and a landing page with their newest title,
+  not "Zzz old", and keep a blank title from replacing a real one.
+- A new shimmed-browser suite (`tests/js/custom-event.test.mjs`) covers which
+  `Convermetry.track()` values are sent, and the real-browser suite covers
+  SVG links (click and middle-click) and image-map areas.
+- Every new test except the guards against over-correcting fails against
+  1.1.4.
+
 ## 1.1.4
 
 No schema change and no migration. Stored rows are not rewritten: a negative

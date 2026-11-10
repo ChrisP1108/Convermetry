@@ -22,7 +22,7 @@ Was the lead successfully delivered to external systems?
 
 Convermetry works standalone — full analytics dashboard, form integrations, and webhook delivery inside one WordPress install — and is architected so a future Convermetry SaaS can receive `analytics_report` and `form_submission` messages from many installations, keyed by a shared, versioned payload schema.
 
-- **Version:** 1.1.4
+- **Version:** 1.1.5
 - **Requires WordPress:** 6.3+
 - **Requires PHP:** 8.3+
 - **License:** GPL-2.0-or-later
@@ -145,6 +145,10 @@ The three form metrics are deliberately distinct:
 - **Form Submit Attempts** — frontend `submit` events; success unconfirmed.
 - **Confirmed Conversions** — unique conversions deduplicated by `conversion_id` across both detection paths.
 - **Server-Confirmed Submissions** — submissions a form plugin's own server-side success hook confirmed. When a provider integration is available, this server-side signal is authoritative.
+
+**Page titles.** Top Pages and Top Landing Pages label each address with the title of its most recent view in the period that had a title. A page renamed during the period shows its new title, and a single view under an odd title (a browser's built-in translation rewrites the title; so can a crafted tracking request) cannot relabel the page for the whole period.
+
+**Two session counts.** The Home screen's *Sessions (7 days)* counts visits with any recorded activity in the period. The Goals screen's conversion rates, and `goals.sessions` in the analytics payload, divide by visits with a **page view** in the period, so Home can show more. The difference is visits whose activity in the period includes no page view: one that began before the period, one that resumed a page after 30 idle minutes (which starts a new visit without a new page view), or one whose tracking requests were blocked while its form still carried the visit to a server-confirmed submission. Each figure is right for what it measures.
 
 ### Submissions
 
@@ -319,7 +323,7 @@ Convermetry.track('appointment_booked', { value: 250 });
 
 The **name** is the only thing that can match a goal. An event whose name matches no configured goal is **discarded and never stored**, so a typo in your theme's JavaScript costs nothing and cannot fill the events table. Nothing else in the payload is ever stored — only a numeric `value`, and only for a goal set to accept one. This is deliberate: an API that accepted arbitrary properties would become an unaudited route for putting customer data into an analytics table.
 
-A supplied `value` is read like any other amount (see [Value and currency](#value-and-currency)): more than two decimal places round half-up, so `{ value: 0.57 * 3 }` records 1.71, not the 1.70 its binary noise would truncate to. Zero is accepted — a free booking is a real completion worth nothing. A **negative** value, like one that is not a number, is ignored and the goal's own value is used: it can only be a bug in the page's code or someone tampering, and recording it would subtract from the goal's attributed value. For the same reason a goal's own value cannot be saved as negative.
+A supplied `value` is read like any other amount (see [Value and currency](#value-and-currency)): more than two decimal places round half-up, so `{ value: 0.57 * 3 }` records 1.71, not the 1.70 its binary noise would truncate to. Zero is accepted — a free booking is a real completion worth nothing. A **negative** value, like one that is not a number, is ignored and the goal's own value is used: it can only be a bug in the page's code or someone tampering, and recording it would subtract from the goal's attributed value. For the same reason a goal's own value cannot be saved as negative. "Not a number" is checked in the browser: only a finite number, or a string that is a decimal number once trimmed (`" 42.5 "`, `"1e3"`), is sent. `null`, `""`, a blank string, `true`, `false`, an array or other text is not sent at all, so an empty price field on the page leaves the goal's own value in place rather than recording 0.00.
 
 The pre-existing `convermetry:conversion` DOM event and the server-side `cvmtry_track_event()` helper are unchanged.
 
@@ -551,7 +555,7 @@ A single dependency-free script (`assets/js/tracker.js`) is enqueued deferred on
 
 **Endpoint defenses** — whitelisted, currently-enabled event types only; tracked page URLs must be `http(s)` on this site's host and are canonicalized to scheme+host+path; foreign `Origin`/`Referer` rejected; bots and empty user agents ignored (matched by how a crawler, headless browser or scripted client names itself — `Googlebot/2.1`, a `+https://…` contact URL, `HeadlessChrome`, `curl/` — so a handset such as a CUBOT is not mistaken for one); DNT/GPC enforced server-side when enabled; request bodies and batch sizes capped; scalar-only field values, sanitized and truncated; rate limits charged **per event** — 300/IP/minute plus 3,000/minute site-wide (`convermetry_rate_limits` filter) — via atomic object-cache counters, falling back (and failing **closed**) to an atomic single-statement database counter. The per-IP check runs first so a flooding IP never consumes the site-wide budget. A dashboard warning appears for 24 hours after the site-wide cap is hit. The per-IP cap raises **no** warning, because a single flooding bot is exactly what it exists to stop — but it is per *address*, not per visitor. An office, a school or a mobile carrier can put many visitors behind one IP, and while that address is over its limit, a visitor on it whose page sends one last batch as they leave loses it (the exit beacon's 429 is never seen). If many of your visitors share a network, raise `per_ip` with the filter; the `convermetry_tracking_rate_limited` action fires for both limits if you want to watch for it. The rate-limit key itself is a hashed, short-lived derivative of the IP; the address is separately stored on each event row when IP storage is enabled (see [Privacy](#privacy)).
 
-**Tracked events** (each individually toggleable): `pageview`, `click` (links, buttons and `role="button"`; a middle-click that opens a link in a new tab counts too, and completes click goals like any other click — a right-click never does), `form_submit` (attempts), `form_success` (confirmed conversions), `hover` (configurable dwell, opt-in via `data-cvmtry-hover`), `scroll_depth` (50/100%). Custom server-side events via `cvmtry_track_event()`.
+**Tracked events** (each individually toggleable): `pageview`, `click` (links, including SVG links and image-map `<area>` links labelled by their `alt` text, buttons and `role="button"`; a middle-click that opens a link in a new tab counts too, and completes click goals like any other click — a right-click never does), `form_submit` (attempts), `form_success` (confirmed conversions), `hover` (configurable dwell, opt-in via `data-cvmtry-hover`), `scroll_depth` (50/100%). Custom server-side events via `cvmtry_track_event()`.
 
 A `pageview` is one page **shown**, which is not the same as one page load. Back and Forward can restore a page from the browser's back/forward cache without reloading it: that counts as a page view, and scroll milestones, hovers and form events start over as they would after a reload. A page the browser prerendered on speculation records nothing at all until the visitor opens it, so a page they never open costs no pageview and completes no goal.
 
@@ -1184,7 +1188,7 @@ Every outbound message shares one versioned envelope:
 {
     "schema_version": "1.0 | 2.0",
     "source": "convermetry",
-    "plugin_version": "1.1.4",
+    "plugin_version": "1.1.5",
     "message_type": "analytics_report | form_submission",
     "website_info": { },
     "generated_at": "2026-08-22T14:00:00+00:00",
@@ -1212,7 +1216,7 @@ Every outbound message shares one versioned envelope:
 {
     "schema_version": "1.1",
     "source": "convermetry",
-    "plugin_version": "1.1.4",
+    "plugin_version": "1.1.5",
     "message_type": "analytics_report",
     "website_info": {
         "name": "Example Financial", "url": "https://example.com", "domain": "example.com",
@@ -1319,8 +1323,8 @@ Every outbound message shares one versioned envelope:
 - **`conversions.recent[].ip_address`** is the visitor's IP — taken from the server-confirmed submission record when there is one (captured in the form POST the provider confirmed), otherwise from the analytics `form_success` event. Empty when IP storage is disabled in Settings.
 - **`conversions.recent`** holds the **individual conversion records** for the window — each with the attribution snapshot taken when it occurred, plus provider/form/submission identity when `server_confirmed` is `true`. Every other section is aggregate reporting data.
 - **Conversion delivery is lossless on the scheduled path:** a window holding more than 100 individual conversions is split into consecutive deliveries rather than truncated. (`recent` itself is capped at 500 entries; scheduled windows are bounded well below that, but a *test* send — which uses a fixed 7-day window with no such bounding — can reach the cap on a busy site.)
-- Each `top_*` list holds up to 200 rows (`convermetry_webhook_report_limit`), deliberately deeper than the dashboard's top 10.
-- **`goals`** (new in schema 1.1) reports [goal](#goals) completions for the window. `goals.sessions` is the denominator every `conversion_rate` uses — sessions in the window, not completions — so a once-per-session goal can never exceed 100%. `completions` counts every recorded completion; `sessions` counts distinct sessions that completed it. `value` is an exact decimal **string**, never a number, and is `"0.00"` when the goal carries no configured value; parse it with a decimal type, not a float. The list is capped at 100 goals ordered by completions, and `truncated` says so explicitly rather than leaving you to infer it from a row count.
+- Each `top_*` list holds up to 200 rows (`convermetry_webhook_report_limit`), deliberately deeper than the dashboard's top 10. In `top_pages` and `top_landing_pages`, `page_title` is the title of the page's most recent view in the window that had one.
+- **`goals`** (new in schema 1.1) reports [goal](#goals) completions for the window. `goals.sessions` is the denominator every `conversion_rate` uses — sessions with a page view in the window, not completions — so a once-per-session goal can never exceed 100%. It can be lower than the Home screen's session count, which includes sessions with no page view in the window (see [Analytics](#analytics)). `completions` counts every recorded completion; `sessions` counts distinct sessions that completed it. `value` is an exact decimal **string**, never a number, and is `"0.00"` when the goal carries no configured value; parse it with a decimal type, not a float. The list is capped at 100 goals ordered by completions, and `truncated` says so explicitly rather than leaving you to infer it from a row count.
 
 **Test analytics payloads** (**Send analytics test** on the Webhooks page) cover the **last 7 days**, carry `"test": true`, get a fresh random `delivery_id`, are **never retried**, and **do not advance the endpoint's last-sent marker** — so testing an endpoint never creates a gap in its scheduled reporting.
 
@@ -1332,7 +1336,7 @@ Every outbound message shares one versioned envelope:
 {
     "schema_version": "2.0",
     "source": "convermetry",
-    "plugin_version": "1.1.4",
+    "plugin_version": "1.1.5",
     "message_type": "form_submission",
     "website_info": {
         "name": "Example Financial", "url": "https://example.com", "domain": "example.com",
@@ -1494,7 +1498,7 @@ Three headers are *not* frozen; they are regenerated on each attempt from the fr
 
 The **Activity Log** — the last section of **Convermetry → Webhooks** (`admin.php?page=convermetry-webhooks#cvmtry-activity-log`; the retired `admin.php?page=convermetry-activity` redirects there) — records every delivery attempt — analytics report or form submission; scheduled, immediate, retry, or test — as normalized columns (`message_type`, `kind`, `attempt`; never parsed from display labels), with: timestamp, endpoint URL + label, delivery/submission/conversion ids, form provider and name, HTTP status, final request URL, request headers (credential values redacted), the **JSON payload sent**, the response body, and transport errors.
 
-Stored bodies are a **redacted representation of the request, not a byte-exact copy**: values under sensitive-looking keys (`password`, `token`, `secret`, `api_key`, …) are replaced with `[REDACTED]` in both request and response before storage, form `submission_data`, the submitter's IP, the page's URL parameters and the endpoint's whole response body are replaced when *Store form submission data in the Activity Log* is off (the status code and any transport error stay), and both bodies are capped at 64 KB. A stored body therefore will **not** reproduce the original `X-Convermetry-Signature` — verify signatures against what your endpoint received, never against a log copy.
+Stored bodies are a **redacted representation of the request, not a byte-exact copy**: values under sensitive-looking keys (`password`, `token`, `secret`, `api_key`, …) are replaced with `[REDACTED]` in both request and response before storage, form `submission_data`, the submitter's IP, the page's URL parameters and the endpoint's whole response body are replaced when *Store form submission data in the Activity Log* is off (the status code and any transport error stay), and both bodies are capped at 64 KB and stored as valid UTF-8: a body in another encoding keeps its text with each byte that is not UTF-8 replaced by U+FFFD, and the cap never splits a character. A stored body therefore will **not** reproduce the original `X-Convermetry-Signature` — verify signatures against what your endpoint received, never against a log copy.
 
 Two paginated accordions (Successful / Failed) offer year/month, message-type, endpoint, provider, and form filters, debounced payload search, a per-page selector (5–100), and per-entry delete. The toolbar provides **Clear All Logs** and **CSV/JSON export** — the exports stream in keyset-paginated chunks, so even huge logs export in bounded memory. Entries share the analytics retention window.
 
@@ -1967,7 +1971,7 @@ an explicit ZIP selection.
 
 ```bash
 bash bin/prepare-svn.sh                           # prepare the newest build
-bash bin/prepare-svn.sh build/convermetry-1.1.4.zip # prepare a specific build
+bash bin/prepare-svn.sh build/convermetry-1.1.5.zip # prepare a specific build
 bash bin/prepare-svn.sh --publish                 # prepare and commit newest build
 ```
 

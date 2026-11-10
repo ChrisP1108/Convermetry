@@ -163,7 +163,7 @@
     const FLUSH_INTERVAL = config.flushIntervalMs || 5000;
     const HOVER_DWELL = config.hoverDwellMs || 800;
     const SESSION_IDLE_MS = 30 * 60 * 1000;
-    const INTERACTIVE = 'a, button, input[type="button"], input[type="submit"], [role="button"]';
+    const INTERACTIVE = 'a, area[href], button, input[type="button"], input[type="submit"], [role="button"]';
     const PENDING_KEY = 'cvmtry_pending';
 
     /* Declared up here rather than beside formIdentity() because the tracker is
@@ -538,6 +538,26 @@
         return url.split('#')[0].split('?')[0];
     }
 
+    /** A link's destination as an absolute URL string. An SVG <a> answers
+     *  href with an SVGAnimatedString, not a string, so its click had no
+     *  destination: no URL click goal could match it, and a middle-click on it
+     *  recorded nothing. Its baseVal is the attribute as written, resolved
+     *  here the way the browser resolves it. */
+    function hrefOf(el) {
+        const href = el.href;
+        if (typeof href === 'string') {
+            return href;
+        }
+        if (href && typeof href.baseVal === 'string' && href.baseVal !== '') {
+            try {
+                return new URL(href.baseVal, document.baseURI || location.href).href;
+            } catch (e) {
+                return '';
+            }
+        }
+        return '';
+    }
+
     /* ------------------------------------------------------------------ *
      *  Reading an element without trusting its own properties
      *
@@ -696,10 +716,12 @@
         return clip(raw.replace(/\s+/g, ' ').trim(), 120);
     }
 
-    /** Best human-readable label for an element: aria-label > text/value > id. */
+    /** Best human-readable label for an element: aria-label > text/value >
+     *  (an image-map area's) alt > id. */
     function labelFor(el) {
         return cleanLabel(attr(el, 'aria-label'))
             || cleanLabel(el.innerText || el.value)
+            || (tagOf(el) === 'AREA' ? cleanLabel(attr(el, 'alt')) : '')
             || cleanLabel(attr(el, 'id'));
     }
 
@@ -1146,7 +1168,8 @@
     track('pageview', {});
 
     /* ------------------------------------------------------------------ *
-     *  Clicks — links, buttons, and role="button" elements
+     *  Clicks — links (SVG links and image-map areas included), buttons,
+     *  and role="button" elements
      * ------------------------------------------------------------------ */
 
     /* A middle-click opens a link in a new tab, and the browser reports it as
@@ -1172,7 +1195,7 @@
             return;
         }
 
-        const targetUrl = cleanTarget(el.href);
+        const targetUrl = cleanTarget(hrefOf(el));
 
         // On anything but a link a middle-click activates nothing, so it is
         // not a click and must not complete a goal.
@@ -2557,6 +2580,25 @@
         return matched;
     }
 
+    /**
+     * The number a Convermetry.track() value stands for, or null when it is
+     * not one: a finite number, or a string that is a decimal number once
+     * trimmed ("42.5", " -5 ", "1e3"). Number() alone turned null, "", " "
+     * and false into 0, true into 1 and [7] into 7, so a page that passed an
+     * empty price field recorded a 0.00 conversion instead of the goal's own
+     * value. A negative number is still carried: the server ignores it.
+     */
+    function numericValue(raw) {
+        if (typeof raw === 'number') {
+            return isFinite(raw) ? raw : null;
+        }
+        if (typeof raw === 'string' && /^[+-]?(\d+\.?\d*|\.\d+)(e[+-]?\d+)?$/i.test(raw.trim())) {
+            const value = Number(raw.trim());
+            return isFinite(value) ? value : null;
+        }
+        return null;
+    }
+
     window.Convermetry = window.Convermetry || {};
 
     window.Convermetry.track = function (name, data) {
@@ -2567,13 +2609,11 @@
 
         const payload = { name: eventName };
 
-        // Only a finite number is carried, and only as a string. Anything else
-        // in `data` is ignored rather than serialized.
-        if (data && typeof data.value !== 'undefined') {
-            const value = Number(data.value);
-            if (isFinite(value)) {
-                payload.value = String(value);
-            }
+        // Only a number is carried, and only as a string. Anything else in
+        // `data` is ignored rather than serialized.
+        const value = data ? numericValue(data.value) : null;
+        if (value !== null) {
+            payload.value = String(value);
         }
 
         track('custom_event', payload);
@@ -2612,7 +2652,7 @@
             track('hover', {
                 element_tag: tagOf(el).toLowerCase(),
                 element_label: labelFor(el) || cleanLabel(cleanTarget(el.src)),
-                target_url: cleanTarget(el.href),
+                target_url: cleanTarget(hrefOf(el)),
                 event_value: String(HOVER_DWELL)
             });
         }, HOVER_DWELL);

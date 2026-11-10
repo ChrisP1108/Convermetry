@@ -916,6 +916,46 @@ await test('fields with no name or id, and a non-ASCII name, report distinct fie
     });
 });
 
+// ─────────────── 14. links that are not an HTML <a>: SVG and image maps ──────
+
+/** Like STAY_HERE, for an image-map area as well as a link. */
+const STAY_ON_PAGE = '<script>document.addEventListener("click", (e) => { if (e.target.closest("a, area")) e.preventDefault(); });</script>';
+
+await test('an SVG link records its destination, and a middle-click on it counts', async () => {
+    const { url } = fixture(`<svg width="200" height="50"><a id="svg-link" href="/pricing/?ref=mail#plans">
+            <rect width="200" height="50" fill="#ccc"></rect><text x="10" y="30">Pricing</text></a></svg>
+        <button id="sentinel">Sentinel</button>${STAY_ON_PAGE}`);
+
+    await withPage(url, async (page) => {
+        await mouse(page, 'svg-link', 'click', 0);
+        await mouse(page, 'svg-link', 'auxclick', 1);
+        const clicks = await clicksBeforeSentinel(page, url);
+        assert.equal(clicks.length, 2, 'the click, and the middle-click that opens it in a new tab');
+        for (const click of clicks) {
+            assert.equal(click.element_tag, 'a');
+            assert.equal(click.target_url, `${site.origin}/pricing/`, 'resolved, without its query or fragment');
+        }
+        assert.deepEqual(page.exceptions, []);
+    });
+});
+
+await test('an image-map area records a click under its alt text', async () => {
+    const pixel = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
+    const { url } = fixture(`<img src="${pixel}" usemap="#regions" width="100" height="100" alt="">
+        <map name="regions"><area id="region" shape="rect" coords="0,0,100,100" href="/contact/?src=map" alt="Contact us"></map>
+        <button id="sentinel">Sentinel</button>${STAY_ON_PAGE}`);
+
+    await withPage(url, async (page) => {
+        await mouse(page, 'region', 'click', 0);
+        const clicks = await clicksBeforeSentinel(page, url);
+        assert.equal(clicks.length, 1);
+        assert.equal(clicks[0].element_tag, 'area');
+        assert.equal(clicks[0].element_label, 'Contact us');
+        assert.equal(clicks[0].target_url, `${site.origin}/contact/`);
+        assert.deepEqual(page.exceptions, []);
+    });
+});
+
 // ──────────────────────────────────────────────────────────────────────────────
 
 await browser.close();

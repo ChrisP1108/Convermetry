@@ -24,7 +24,8 @@ use Convermetry\Support\SensitiveKeys;
  * Stored bodies are a REDACTED REPRESENTATION of the request, not a
  * byte-exact copy: sensitive-key values are replaced (see below), the
  * visitor's data and the endpoint's response can be dropped by a setting, and
- * both bodies are capped at 64 KB so a misbehaving endpoint cannot balloon the table. A stored body
+ * both bodies are capped at 64 KB so a misbehaving endpoint cannot balloon the table. Both are
+ * stored as valid UTF-8, a byte sequence that is not becoming U+FFFD (see capBody()). A stored body
  * therefore cannot be used to re-verify the delivery's HMAC signature — that
  * signature was computed over the bytes actually sent.
  *
@@ -956,24 +957,74 @@ final class DeliveryLog
     }
 
     /**
-     * Truncates a body to the storage cap, marking the cut.
+     * Makes a body storable: valid UTF-8, at most MAX_BODY_BYTES, the cut
+     * marked.
      *
-     * The limit is enforced in BYTES (plain substr), not characters — the
-     * cap exists to bound storage. A multibyte character sliced at the
-     * boundary may be left incomplete; acceptable for a diagnostic log.
+     * Both halves matter because $wpdb refuses the WHOLE ROW otherwise. Before
+     * an INSERT it checks every value against its column's charset
+     * (wpdb::strip_invalid_text()), and a value that is not valid UTF-8 makes
+     * insert() return false. The attempt then had no Activity Log row, and a
+     * submission's delivery state is computed from those rows, so a lead that
+     * was delivered, or that failed every retry, settled on "not_sent". Two
+     * ordinary responses did it:
+     *
+     *  - a body in another encoding (an ISO-8859-1 error page with "é"),
+     *    stored as received because only JSON is re-encoded, by
+     *    {@see redactSensitiveJson()};
+     *  - a body over the cap whose cut, made in bytes, split a multibyte
+     *    character (a large HTML page in Japanese).
+     *
+     * Invalid sequences become U+FFFD first, then a cut that splits a
+     * character moves back to that character's first byte. The limit stays in
+     * BYTES, because the cap bounds storage. The scrub runs before the cut
+     * because U+FFFD is three bytes and can lengthen the body.
      *
      * @param string $body Raw body.
-     * @return string At most MAX_BODY_BYTES bytes.
+     * @return string Valid UTF-8 of at most MAX_BODY_BYTES bytes.
      */
     private static function capBody(string $body): string
     {
+        $body = self::validUtf8($body);
+
         if (strlen($body) <= self::MAX_BODY_BYTES) {
             return $body;
         }
 
         $marker = ' [TRUNCATED]';
+        $cut    = substr($body, 0, self::MAX_BODY_BYTES - strlen($marker));
 
-        return substr($body, 0, self::MAX_BODY_BYTES - strlen($marker)) . $marker;
+        // The body is valid, so only its last character can be split, and a
+        // UTF-8 character is at most four bytes: dropping at most three ends
+        // the cut on a character boundary. No mbstring needed.
+        for ($dropped = 0; $dropped < 3 && preg_match('//u', $cut) !== 1; $dropped++) {
+            $cut = substr($cut, 0, -1);
+        }
+
+        return $cut . $marker;
+    }
+
+    /**
+     * The body as valid UTF-8, each invalid sequence replaced with U+FFFD.
+     *
+     * A valid body, which includes every JSON body, is returned unchanged.
+     * Otherwise htmlspecialchars() with ENT_SUBSTITUTE replaces the invalid
+     * sequences, and htmlspecialchars_decode() undoes its escaping of &, < and
+     * >, so nothing else in the body changes. Both are core PHP, so this needs
+     * neither mbstring nor iconv.
+     *
+     * @param string $body Raw body.
+     * @return string
+     */
+    private static function validUtf8(string $body): string
+    {
+        if (preg_match('//u', $body) === 1) {
+            return $body;
+        }
+
+        return htmlspecialchars_decode(
+            htmlspecialchars($body, ENT_NOQUOTES | ENT_SUBSTITUTE, 'UTF-8'),
+            ENT_NOQUOTES
+        );
     }
 
     /**

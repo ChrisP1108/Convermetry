@@ -4,7 +4,7 @@ Tags: analytics, lead tracking, utm, webhooks, forms
 Requires at least: 6.3
 Tested up to: 7.1
 Requires PHP: 8.3
-Stable tag: 1.1.4
+Stable tag: 1.1.5
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -123,6 +123,10 @@ Those builders only run the actions you select for each form. Add **Convermetry*
 
 A page change made by JavaScript with `history.pushState()` is not counted as a page view, and later events keep the address the page was loaded on, so page-address goals and funnel steps cannot fire on those sections. Report such a step with `Convermetry.track()` and a custom-event goal instead. A page of your site shown inside an iframe is counted as its own page view, so a page that embeds another of your pages counts both; use the `convermetry_should_enqueue_tracker` filter to keep the tracker off a page that is only ever embedded.
 
+= Why does the Home screen show more sessions than the Goals screen? =
+
+They count different visits. Home's session count includes every visit with any recorded activity in the period. Goal conversion rates, on the Goals screen and as `goals.sessions` in the analytics webhook, divide by visits with a page view in the period. A visit with no page view in the period is counted only on Home: for example one that began before the period, one that continued on the same page after 30 idle minutes (which starts a new visit without a new page view), or one whose tracking requests were blocked while its form still reached your site. Both figures are correct for what they measure.
+
 = What data leaves my site? =
 
 Nothing, unless you configure webhook endpoints or email notifications. See "External services" in the Description for exactly what each one sends.
@@ -148,14 +152,21 @@ Deactivating stops tracking and scheduled tasks but keeps your data. Deleting th
 1. The Home screen: what Convermetry is recording on this site, the setup checklist and a status overview.
 2. The Analytics dashboard: overview totals and daily page views, followed by content, engagement, acquisition, device, goal and lead reports.
 3. A submission expanded: lead status and value, form details, channel and campaign attribution, and the visitor's path to the form.
-4. The Forms screen: form engagement and abandonment, detected form plugins and per-form settings.
+4. The Forms screen: per-form engagement, abandonment and completion rates, and the fields visitors most often fail validation on.
 5. Webhook endpoints: the message types each one receives, signing secrets and test buttons.
-6. The Activity Log, at the foot of the Webhooks screen: every delivery attempt with its payload and response, including retries.
+6. The Activity Log, at the foot of the Webhooks screen: every delivery attempt with its endpoint, status and payload, searchable and exportable; failed attempts retry automatically.
 7. Goals with their completions, conversion rates and value.
 8. A funnel showing how many visits reached each step on the way to a quote request.
 9. Tracking and privacy settings: interaction types, logged-in users, Do Not Track / Global Privacy Control, IP storage and data retention.
 
 == Changelog ==
+
+= 1.1.5 =
+* Fix: a webhook delivery whose response was a large page in a language such as Japanese, or an error page in an encoding other than UTF-8, is now recorded in the Activity Log. Previously the attempt was not logged, so the lead showed "not sent" even when it had been delivered, or when every retry had failed.
+* Fix: Top Pages and Top Landing Pages, on the Analytics screen and in the analytics webhook, label each page with its most recent title in the period. Previously the title that sorted last alphabetically was shown, so a single view under a translated or unusual title could relabel a page.
+* Fix: `Convermetry.track()` sends a value only when it is a number, or text that is a number. An empty or blank string, `null`, `true`, `false` or an array is now ignored and the goal's own value is used, instead of recording 0.00 or 1.00.
+* Fix: clicks on links drawn in SVG now record their destination, so they can complete link-click goals and a middle-click on them counts. Image-map links (`<area>`) are recorded as clicks, labelled with their alt text.
+* Documentation: why the Home screen's session count can be higher than the one goal conversion rates use.
 
 = 1.1.4 =
 * Fix: a middle-click that opens a link in a new tab now records the click and completes click goals. A right-click, or a middle-click on something that is not a link, records nothing.
@@ -227,6 +238,9 @@ Deactivating stops tracking and scheduled tasks but keeps your data. Deleting th
 * Changed: first public release on WordPress.org. Earlier 0.x versions were distributed privately; their full history is in CHANGELOG.md, included with the plugin.
 
 == Upgrade Notice ==
+
+= 1.1.5 =
+Webhook deliveries with large non-English or non-UTF-8 responses are logged again, so their leads show the right delivery status. Fixes page titles in Top Pages and empty values in Convermetry.track(). No migration.
 
 = 1.1.4 =
 Middle-clicks on links now count as clicks and complete click goals, so click figures can rise. Lead and goal values can no longer be negative, and amounts round to the nearest cent. No migration.

@@ -140,7 +140,8 @@ final class WebhookReceiver
     /**
      * The URL a webhook endpoint should be pointed at.
      *
-     * @param string $path '/ok' answers 200, '/fail' answers 500.
+     * @param string $path '/ok' answers 200, '/fail' answers 500; a second
+     *                     segment picks another body (see receiver.php).
      * @return string
      */
     public function url(string $path = '/ok'): string

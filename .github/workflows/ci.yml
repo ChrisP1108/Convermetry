@@ -70,6 +70,7 @@ jobs:
           node tests/js/ninja-tracker.test.mjs
           node tests/js/ajax-attempts.test.mjs
           node tests/js/form-events.test.mjs
+          node tests/js/custom-event.test.mjs
           node tests/js/admin-confirm.test.mjs
 
       # The shim above cannot model a form's named controls shadowing the
