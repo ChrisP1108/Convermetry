@@ -310,8 +310,9 @@ final class AnalyticsDispatcher
                 self::renewLock($lock);
                 $delivery = self::deliveryFromState($url, $state);
 
-                if (!self::attemptDelivery($url, $delivery, DeliveryKind::Scheduled, 0)) {
-                    self::scheduleRetry($url, 1, $delivery);
+                $result = self::attemptDelivery($url, $delivery, DeliveryKind::Scheduled, 0);
+                if (!$result->ok) {
+                    self::retryOrExhaust($url, 1, $delivery, $result);
                     continue;
                 }
                 // Acknowledged — last-sent now sits at the frozen window's
@@ -338,8 +339,9 @@ final class AnalyticsDispatcher
                 $endTs    = ($horizon - $startTs > $interval + intdiv($interval, 2)) ? $startTs + $interval : $horizon;
                 $delivery = self::freezeDelivery($url, $startTs, $endTs);
 
-                if (!self::attemptDelivery($url, $delivery, DeliveryKind::Scheduled, 0)) {
-                    self::scheduleRetry($url, 1, $delivery);
+                $result = self::attemptDelivery($url, $delivery, DeliveryKind::Scheduled, 0);
+                if (!$result->ok) {
+                    self::retryOrExhaust($url, 1, $delivery, $result);
                     break;
                 }
 
@@ -399,22 +401,12 @@ final class AnalyticsDispatcher
             $attempt  = $state->attempt;
             $delivery = self::deliveryFromState($url, $state);
 
-            if (self::attemptDelivery($url, $delivery, DeliveryKind::Retry, $attempt)) {
+            $result = self::attemptDelivery($url, $delivery, DeliveryKind::Retry, $attempt);
+            if ($result->ok) {
                 return; // Success already cleared the pending retry state.
             }
 
-            if ($attempt < count(self::retryDelays())) {
-                self::scheduleRetry($url, $attempt + 1, $delivery);
-            } else {
-                self::storeRetryState($url, $attempt, 0, $delivery, true);
-
-                // Not "abandoned": the frozen body stays in the retry state and
-                // the next scheduled dispatch resumes it, so the window is not
-                // lost. Only retention expiry ever discards it.
-                DeliveryContext::retryChainExhausted(
-                    self::contextFor($url, $delivery, DeliveryKind::Retry, $attempt)
-                );
-            }
+            self::retryOrExhaust($url, $attempt + 1, $delivery, $result);
         } finally {
             self::releaseLock($lock);
         }
@@ -885,14 +877,14 @@ final class AnalyticsDispatcher
      * @param FrozenDelivery $delivery Frozen delivery.
      * @param DeliveryKind   $kind     Delivery kind for the log.
      * @param int            $attempt  Retry attempt number (0 for scheduled runs).
-     * @return bool True when the endpoint returned a 2xx response.
+     * @return TransportResult What the attempt came back with; ok when the endpoint returned 2xx.
      */
     private static function attemptDelivery(
         string $url,
         FrozenDelivery $delivery,
         DeliveryKind $kind,
         int $attempt
-    ): bool {
+    ): TransportResult {
         $requestUrl = $delivery->url !== '' ? $delivery->url : $url;
         $label      = Options::endpointLabel($url);
         $context    = self::contextFor($url, $delivery, $kind, $attempt, $label);
@@ -948,7 +940,40 @@ final class AnalyticsDispatcher
             DeliveryContext::succeeded($context);
         }
 
-        return $result->ok;
+        return $result;
+    }
+
+    /**
+     * After a failed attempt: schedules retry $nextAttempt, or exhausts the
+     * chain when the schedule is spent or the answer was final.
+     *
+     * Exhausted is not abandoned: the frozen body stays in the retry state and
+     * the next scheduled dispatch resumes it, so the window is not lost. Only
+     * retention expiry ever discards it. A final answer
+     * ({@see TransportResult::isFinal()}: a 400, 410, 422 …) exhausts it at
+     * once rather than after five more attempts that would be refused the same
+     * way, so a misconfigured receiver is asked once per scheduled dispatch, not
+     * six times.
+     *
+     * @param string          $url         Endpoint URL.
+     * @param int             $nextAttempt The retry attempt that would come next (1-based).
+     * @param FrozenDelivery  $delivery    Frozen delivery.
+     * @param TransportResult $result      What the failed attempt came back with.
+     * @return void
+     */
+    private static function retryOrExhaust(string $url, int $nextAttempt, FrozenDelivery $delivery, TransportResult $result): void
+    {
+        if (!$result->isFinal() && $nextAttempt <= count(self::retryDelays())) {
+            self::scheduleRetry($url, $nextAttempt, $delivery, $result);
+            return;
+        }
+
+        $attempt = max(1, $nextAttempt - 1);
+        self::storeRetryState($url, $attempt, 0, $delivery, true);
+
+        DeliveryContext::retryChainExhausted(
+            self::contextFor($url, $delivery, DeliveryKind::Retry, $attempt)
+        );
     }
 
     /**
@@ -988,12 +1013,16 @@ final class AnalyticsDispatcher
      * in the exhausted state instead of being dropped — the next scheduled
      * dispatch then resumes it under the same delivery_id.
      *
-     * @param string         $url      Endpoint URL to retry.
-     * @param int            $attempt  Attempt number being scheduled (1-based).
-     * @param FrozenDelivery $delivery Frozen delivery to re-send.
+     * A Retry-After on the failed attempt's 429 or 503 lengthens the wait,
+     * never shortens it ({@see TransportResult::nextDelay()}).
+     *
+     * @param string               $url      Endpoint URL to retry.
+     * @param int                  $attempt  Attempt number being scheduled (1-based).
+     * @param FrozenDelivery       $delivery Frozen delivery to re-send.
+     * @param TransportResult|null $result   The failed attempt's result, when there was one.
      * @return void
      */
-    private static function scheduleRetry(string $url, int $attempt, FrozenDelivery $delivery): void
+    private static function scheduleRetry(string $url, int $attempt, FrozenDelivery $delivery, ?TransportResult $result = null): void
     {
         $delays = self::retryDelays();
 
@@ -1001,7 +1030,8 @@ final class AnalyticsDispatcher
             return;
         }
 
-        $when = time() + $delays[$attempt - 1];
+        $delay = $delays[$attempt - 1];
+        $when  = time() + ($result !== null ? $result->nextDelay($delay) : $delay);
 
         if (wp_schedule_single_event($when, self::RETRY_HOOK, [self::stateKeyFor($url)]) === false) {
             self::storeRetryState($url, max(1, $attempt - 1), 0, $delivery, true);

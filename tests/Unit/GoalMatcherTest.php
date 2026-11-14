@@ -145,6 +145,109 @@ final class GoalMatcherTest extends TestCase
         self::assertNotEmpty($this->matchedIds($event, [$goal]));
     }
 
+    // ── Non-ASCII slugs, and what 1.1.5 left of them ─────────────────────────
+
+    /** The page_url the tracker stores for /контакты/: WordPress's own lowercase encoding. */
+    private const string KONTAKTY_URL = 'https://example.com/%d0%ba%d0%be%d0%bd%d1%82%d0%b0%d0%ba%d1%82%d1%8b/';
+
+    /**
+     * A goal for a page with a Cyrillic slug, entered the three ways a site
+     * owner can: typed as the address bar shows it, pasted from Chrome
+     * (uppercase hex), and copied from WordPress (lowercase hex). Each must
+     * match that page under every operator, and none may match the home page.
+     * 1.1.5 compared the typed form against the encoded page_url undecoded,
+     * so it never matched.
+     *
+     * @dataProvider kontaktyRules
+     */
+    public function testANonAsciiSlugMatchesHoweverItWasEntered(string $operator, string $pattern): void
+    {
+        $goal = $this->goal(['type' => 'url', 'operator' => $operator, 'value' => $pattern]);
+
+        self::assertNotEmpty(
+            $this->matchedIds($this->event(['page_url' => self::KONTAKTY_URL]), [$goal]),
+            "{$operator} {$pattern} must match the page it names"
+        );
+        self::assertSame(
+            [],
+            $this->matchedIds($this->event(['page_url' => 'https://example.com/']), [$goal]),
+            "{$operator} {$pattern} must not match the home page"
+        );
+    }
+
+    /**
+     * @return array<string, array{0: string, 1: string}>
+     */
+    public static function kontaktyRules(): array
+    {
+        $typed = '/контакты/';
+        $upper = '/%D0%BA%D0%BE%D0%BD%D1%82%D0%B0%D0%BA%D1%82%D1%8B/';
+        $lower = '/%d0%ba%d0%be%d0%bd%d1%82%d0%b0%d0%ba%d1%82%d1%8b/';
+
+        return [
+            'equals, typed'           => ['equals', $typed],
+            'equals, pasted'          => ['equals', $upper],
+            'equals, WordPress'       => ['equals', $lower],
+            'equals, no slash, typed' => ['equals', '/контакты'],
+            'contains, typed'         => ['contains', 'контакт'],
+            'contains, pasted'        => ['contains', '%D0%BA%D0%BE%D0%BD%D1%82'],
+            'starts with, typed'      => ['starts_with', '/конт'],
+            'ends with, typed'        => ['ends_with', 'акты/'],
+            'ends with, WordPress'    => ['ends_with', '%d0%b0%d0%ba%d1%82%d1%8b/'],
+            'full url, typed'         => ['equals', 'https://example.com/контакты/'],
+        ];
+    }
+
+    /**
+     * Rules 1.1.5 stored with their octets deleted. "//" forgave its slashes
+     * down to "", which is also what the home page's "/" becomes, so the goal
+     * completed on every home-page view. Whatever the operator, a rule with an
+     * empty path segment now matches nothing, the home page included.
+     *
+     * @dataProvider damagedRules
+     */
+    public function testARuleDamagedBy115MatchesNothing(string $operator, string $pattern): void
+    {
+        $goal = $this->goal(['type' => 'url', 'operator' => $operator, 'value' => $pattern]);
+
+        foreach (['https://example.com/', 'https://example.com', self::KONTAKTY_URL, 'https://example.com/catalog/'] as $url) {
+            self::assertSame(
+                [],
+                $this->matchedIds($this->event(['page_url' => $url]), [$goal]),
+                "{$operator} {$pattern} must not match {$url}"
+            );
+        }
+    }
+
+    /**
+     * @return array<string, array{0: string, 1: string}>
+     */
+    public static function damagedRules(): array
+    {
+        $rules = [];
+
+        foreach (['equals', 'contains', 'starts_with', 'ends_with'] as $operator) {
+            foreach (['//', '///', '/catalog//', 'https://example.com//'] as $pattern) {
+                $rules["{$operator} {$pattern}"] = [$operator, $pattern];
+            }
+        }
+
+        return $rules;
+    }
+
+    /**
+     * The home page's own rule is "/", which 1.1.5 also produced from an
+     * all-non-ASCII address pasted without its trailing slash. The two cannot
+     * be told apart, so "/" keeps meaning the home page.
+     */
+    public function testTheHomePageRuleStillMatchesTheHomePage(): void
+    {
+        $goal = $this->goal(['type' => 'url', 'operator' => 'equals', 'value' => '/']);
+
+        self::assertNotEmpty($this->matchedIds($this->event(['page_url' => 'https://example.com/']), [$goal]));
+        self::assertSame([], $this->matchedIds($this->event(['page_url' => self::KONTAKTY_URL]), [$goal]));
+    }
+
     public function testAUrlGoalIgnoresNonPageviewEvents(): void
     {
         $goal = $this->goal(['type' => 'url', 'operator' => 'contains', 'value' => '/pricing/']);
@@ -219,6 +322,21 @@ final class GoalMatcherTest extends TestCase
 
         self::assertNotEmpty($this->matchedIds($hit, [$goal]));
         self::assertSame([], $this->matchedIds($miss, [$goal]));
+    }
+
+    /**
+     * A link-click rule is compared decoded as well, now that target_url keeps
+     * its %XX sequences: "a%20b" and "a b" are the same file name.
+     */
+    public function testAClickRuleMatchesAnEncodedDestinationEitherWay(): void
+    {
+        $target = $this->event(['event_type' => 'click', 'target_url' => 'https://example.com/files/Price%20List%202026.pdf']);
+
+        foreach (['Price%20List', 'price list 2026', 'PRICE%20LIST%202026.PDF'] as $pattern) {
+            $goal = $this->goal(['type' => 'click', 'operator' => 'contains', 'value' => $pattern]);
+
+            self::assertNotEmpty($this->matchedIds($target, [$goal]), "contains {$pattern}");
+        }
     }
 
     // ── Selector goals: the browser-assisted case ────────────────────────────

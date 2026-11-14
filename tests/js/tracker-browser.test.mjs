@@ -956,6 +956,91 @@ await test('an image-map area records a click under its alt text', async () => {
     });
 });
 
+// ──────────── 13. a tap on a phone is a click, never a hover ──────────────────
+
+/** Waits a fixed time in Node, for a dwell that has to pass before asserting. */
+const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/** The middle of an element, in the viewport's CSS pixels. */
+function centreOf(page, id) {
+    return page.evaluate((target) => {
+        const box = document.getElementById(target).getBoundingClientRect();
+        return { x: box.left + box.width / 2, y: box.top + box.height / 2 };
+    }, id);
+}
+
+/** A real tap on a touch screen: touch emulation on, then a touch down and up. */
+async function tap(page, id) {
+    await page.send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 1 });
+    const { x, y } = await centreOf(page, id);
+    await page.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y }] });
+    await page.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+}
+
+/** Hovers tracked before a sentinel click, which arrives after anything tracked earlier. */
+async function hoversBeforeSentinel(page, url) {
+    await press(page, 'sentinel');
+    await waitFor(() => site.trackedEvents(url).some((event) => event.type === 'click' && event.element_label === 'Sentinel'),
+        'the sentinel click');
+    return site.trackedEvents(url).filter((event) => event.type === 'hover');
+}
+
+const MENU = `<button id="menu" style="padding:20px">Menu</button>
+    <button id="other" style="padding:20px">Other</button>
+    <button id="sentinel">Sentinel</button>`;
+
+/** Longer than the tracker's 800 ms dwell, with room for a slow machine. */
+const PAST_THE_DWELL = 1500;
+
+await test('a tap on a phone records its click and no hover, even after the dwell', async () => {
+    const { url } = fixture(MENU);
+
+    await withPage(url, async (page) => {
+        await tap(page, 'menu');
+        await waitFor(() => site.trackedEvents(url).some((event) => event.type === 'click' && event.element_label === 'Menu'),
+            "the tap's click");
+        await pause(PAST_THE_DWELL);
+
+        assert.deepEqual(await hoversBeforeSentinel(page, url), [],
+            'the browser fires a compatibility mouseover for the tap, and no mouseout, but nothing hovered');
+        assert.deepEqual(page.exceptions, []);
+    });
+});
+
+await test('a mouse resting on a button for the dwell still records one hover', async () => {
+    const { url } = fixture(MENU);
+
+    await withPage(url, async (page) => {
+        const { x, y } = await centreOf(page, 'menu');
+        await page.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x, y });
+
+        const hovers = await delivered(url, 'hover');
+        assert.equal(hovers.length, 1);
+        assert.equal(hovers[0].element_label, 'Menu');
+    });
+});
+
+await test('without Pointer Events, a tap is still no hover and a mouse still is', async () => {
+    const { url } = fixture(MENU, { head: '<script>delete window.PointerEvent;</script>' });
+
+    await withPage(url, async (page) => {
+        assert.equal(await page.evaluate(() => typeof window.PointerEvent), 'undefined', 'the premise');
+
+        await tap(page, 'menu');
+        // The tap's click is its last compatibility event. Moving the mouse
+        // before it arrived let a slow machine deliver the tap after the move.
+        await waitFor(() => site.trackedEvents(url).some((event) => event.type === 'click' && event.element_label === 'Menu'),
+            "the tap's click");
+        await pause(PAST_THE_DWELL);
+        assert.deepEqual(await hoversBeforeSentinel(page, url), [], 'the mouseover a touch preceded is ignored');
+
+        const { x, y } = await centreOf(page, 'other');
+        await page.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x, y });
+        const hovers = await delivered(url, 'hover');
+        assert.deepEqual(hovers.map((hover) => hover.element_label), ['Other']);
+    });
+});
+
 // ──────────────────────────────────────────────────────────────────────────────
 
 await browser.close();

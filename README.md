@@ -22,7 +22,7 @@ Was the lead successfully delivered to external systems?
 
 Convermetry works standalone — full analytics dashboard, form integrations, and webhook delivery inside one WordPress install — and is architected so a future Convermetry SaaS can receive `analytics_report` and `form_submission` messages from many installations, keyed by a shared, versioned payload schema.
 
-- **Version:** 1.1.5
+- **Version:** 1.1.6
 - **Requires WordPress:** 6.3+
 - **Requires PHP:** 8.3+
 - **License:** GPL-2.0-or-later
@@ -296,9 +296,11 @@ Because that map is the one piece of goal configuration a visitor page load need
 
 | Type | Rules | Notes |
 |---|---|---|
-| **Reaching a page** | is exactly / contains / starts with / ends with | Write the path as it appears in the address bar (`/thank-you/`) and it is matched against the URL's path; write a full URL and the whole URL is matched. Trailing slashes are forgiven, and matching is case-insensitive. |
-| **A click** | on a phone number link · on an email link · that leaves this site · where the link contains / is exactly · matching a CSS selector | `tel:` and `mailto:` need no value. A phone tap is deliberately **not** counted as an external link. |
+| **Reaching a page** | is exactly / contains / starts with / ends with | Write the path as it appears in the address bar (`/thank-you/`) and it is matched against the URL's path; write a full URL and the whole URL is matched. Trailing slashes are forgiven, and matching is case-insensitive. An address with non-Latin characters matches however it was entered: typed as the address bar shows it (`/контакты/`) or pasted percent-encoded, in either hex case (`/%D0%BA%D0%BE…/`). An address containing an empty segment (`//`) is refused, because no page has one. |
+| **A click** | on a phone number link · on an email link · that leaves this site · where the link contains / is exactly · matching a CSS selector | `tel:` and `mailto:` need no value. A phone tap is deliberately **not** counted as an external link. A "contains" or "is exactly" value is compared percent-decoded too, so `Price%20List` and `price list` both match a link to `/Price%20List.pdf`. |
 | **A custom event** | named | Fired from your own code — see below. |
+
+**Goals saved before 1.1.6 from a pasted non-Latin address.** Up to 1.1.5 a goal's value was cleaned with `sanitize_text_field()`, which deletes every `%XX` sequence, so an address pasted from the browser for a page such as `/контакты/` was saved as `//` and completed on every home-page view; an address mixing Latin and non-Latin characters lost the non-Latin part and matched nothing. 1.1.6 cannot recover what was deleted. A goal whose address has an empty segment now matches nothing, and the Goals screen names it so you can enter the address again; one whose address only lost characters (`/-probe/`) needs the same, but cannot be detected. A goal saved as `/` is indistinguishable from a real home-page goal and keeps matching the home page, so check any `/` goal you did not mean for the home page.
 
 ### Counting
 
@@ -364,6 +366,8 @@ Overall conversion: 8.37%
 ```
 
 Step types: **visited a page**, **completed a goal**, **saw a form**, **started filling a form**, **attempted to submit**, and **submission confirmed by the form plugin**. A form step with no specific form counts any form on the site.
+
+A page step is matched like a [URL goal](#goal-types): a path against the URL's path, a full URL against the whole URL, trailing slashes forgiven, case-insensitive, and a non-Latin address matched however it was entered (the SQL compares it in the percent-encoded form WordPress stores). A step with an empty segment (`//`) is refused when saved. One saved that way before 1.1.6, from a pasted non-Latin address, counted every home-page visitor; the funnel now reports that it cannot be measured until the step is entered again.
 
 ### Ordering is real
 
@@ -555,7 +559,7 @@ A single dependency-free script (`assets/js/tracker.js`) is enqueued deferred on
 
 **Endpoint defenses** — whitelisted, currently-enabled event types only; tracked page URLs must be `http(s)` on this site's host and are canonicalized to scheme+host+path; foreign `Origin`/`Referer` rejected; bots and empty user agents ignored (matched by how a crawler, headless browser or scripted client names itself — `Googlebot/2.1`, a `+https://…` contact URL, `HeadlessChrome`, `curl/` — so a handset such as a CUBOT is not mistaken for one); DNT/GPC enforced server-side when enabled; request bodies and batch sizes capped; scalar-only field values, sanitized and truncated; rate limits charged **per event** — 300/IP/minute plus 3,000/minute site-wide (`convermetry_rate_limits` filter) — via atomic object-cache counters, falling back (and failing **closed**) to an atomic single-statement database counter. The per-IP check runs first so a flooding IP never consumes the site-wide budget. A dashboard warning appears for 24 hours after the site-wide cap is hit. The per-IP cap raises **no** warning, because a single flooding bot is exactly what it exists to stop — but it is per *address*, not per visitor. An office, a school or a mobile carrier can put many visitors behind one IP, and while that address is over its limit, a visitor on it whose page sends one last batch as they leave loses it (the exit beacon's 429 is never seen). If many of your visitors share a network, raise `per_ip` with the filter; the `convermetry_tracking_rate_limited` action fires for both limits if you want to watch for it. The rate-limit key itself is a hashed, short-lived derivative of the IP; the address is separately stored on each event row when IP storage is enabled (see [Privacy](#privacy)).
 
-**Tracked events** (each individually toggleable): `pageview`, `click` (links, including SVG links and image-map `<area>` links labelled by their `alt` text, buttons and `role="button"`; a middle-click that opens a link in a new tab counts too, and completes click goals like any other click — a right-click never does), `form_submit` (attempts), `form_success` (confirmed conversions), `hover` (configurable dwell, opt-in via `data-cvmtry-hover`), `scroll_depth` (50/100%). Custom server-side events via `cvmtry_track_event()`.
+**Tracked events** (each individually toggleable): `pageview`, `click` (links, including SVG links and image-map `<area>` links labelled by their `alt` text, buttons and `role="button"`; a middle-click that opens a link in a new tab counts too, and completes click goals like any other click — a right-click never does), `form_submit` (attempts), `form_success` (confirmed conversions), `hover` (configurable dwell, opt-in via `data-cvmtry-hover`; a mouse only — a tap on a touch screen is a click, never a hover, and neither is a pen), `scroll_depth` (50/100%). Custom server-side events via `cvmtry_track_event()`.
 
 A `pageview` is one page **shown**, which is not the same as one page load. Back and Forward can restore a page from the browser's back/forward cache without reloading it: that counts as a page view, and scroll milestones, hovers and form events start over as they would after a reload. A page the browser prerendered on speculation records nothing at all until the visitor opens it, so a page they never open costs no pageview and completes no goal.
 
@@ -583,7 +587,7 @@ All six UTM parameters (`utm_source`, `utm_medium`, `utm_campaign`, `utm_id`, `u
 
 Attribution is **last-touch within the session**: the most recent tagged landing attributes the visit from that point on, and the snapshot rides on **every** event in the session. Untagged acquisition persists too — the session's entrance referrer travels as `session_referrer` (with an explicit `session_direct` marker for verified direct entrances), so organic/social/referral visits keep their channel across internal navigation. The session's landing page is persisted alongside and carried into each form submission's `analytics_context.landing_page`.
 
-**Channels** — every attributed event is classified at ingestion into: Paid Search, Paid Social, Organic Search, Organic Social, Email, Display, Affiliate, SMS, Referral, Direct, Other. Source aliases are normalized (`fb`/`facebook.com` → `facebook`; `convermetry_source_aliases` filter), referrer hosts match search/social networks only in the registrable-domain position, and the rules are overridable per event (`convermetry_channel` filter). There is exactly **one** attribution engine (`Convermetry\Tracking\Channels`): the dashboard, the analytics payloads, and every form submission's `analytics_context.channel` classify through the same code.
+**Channels** — every attributed event is classified at ingestion into: Paid Search, Paid Social, Organic Search, Organic Social, Email, Display, Affiliate, SMS, Referral, Direct, Other. Source aliases are normalized (`fb`/`facebook.com` → `facebook`, and Meta's `{{site_source_name}}` values `ig` → `instagram`, `msg` → `messenger`, `an` → `facebook`; `convermetry_source_aliases` filter), referrer hosts match search/social networks only in the registrable-domain position, and the rules are overridable per event (`convermetry_channel` filter). An untagged referrer host is also looked up in the alias map (without `www.`), which is what makes a network's short-link domain count as that network: `t.co` and `x.com` (X/Twitter), `lnkd.in` (LinkedIn), `bsky.app` and `go.bsky.app` (Bluesky) are Organic Social. There is exactly **one** attribution engine (`Convermetry\Tracking\Channels`): the dashboard, the analytics payloads, and every form submission's `analytics_context.channel` classify through the same code.
 
 ## Session → submission → conversion correlation
 
@@ -830,7 +834,7 @@ convermetry_submit_form(
 |---|---|---|---|
 | `id` | string | **yes** | The field's stable, machine-readable identifier — what a receiver should match on. Passed through `sanitize_text_field()`. An entry whose `id` is empty after sanitizing is **dropped**, as is any `id` beginning with `cvmtry_` (Convermetry's own correlation fields, in any letter case). |
 | `label` | string | no | The human-readable label — what a person reads in the Submissions panel, a CSV export, or a notification email. Passed through `sanitize_text_field()`. **Falls back to `id`** when it is missing, blank, or not a scalar. |
-| `value` | string \| string[] | no | A scalar (cast to string) or a list of scalars, each `sanitize_text_field()`-ed. Arrays are reindexed with `array_values()`, so a multi-select's own keys are not part of the contract. Anything non-scalar — an object, a nested array — becomes an empty string rather than nested data. Missing `value` is an empty string. |
+| `value` | string \| string[] | no | A scalar (cast to string) or a list of scalars, each stored **as text, as the visitor typed it**: byte sequences that are not UTF-8 and control characters other than tab and line feed are removed, CR LF and CR become LF, and surrounding whitespace is trimmed. Line breaks, repeated spaces, `<`, `&`, tag-like text and `%` are kept, and nothing is HTML-escaped before storage: the Submissions screen, notification emails and the privacy export escape on output, CSV cells are guarded against formula injection, and webhook JSON carries the plain text. (Before 1.1.6 every value went through `sanitize_text_field()`, which joined lines, stored `<` as `&lt;`, deleted tags and `%XX` sequences; rows stored then keep that form.) Arrays are reindexed with `array_values()`, so a multi-select's own keys are not part of the contract. Anything non-scalar — an object, a nested array — becomes an empty string rather than nested data. Missing `value` is an empty string. |
 
 **(b) `name => value` map — the long-standing shape.** Every key becomes both
 the field's `id` **and** its `label`:
@@ -1162,11 +1166,11 @@ Merge precedence for query parameters (later overrides earlier for shared keys):
 Global URL parameters → Page URL parameters → Per-form URL parameters → Runtime parameters
 ```
 
-Headers: `Content-Type` → global → per-form → runtime, with `User-Agent`, `Idempotency-Key`, and `X-Convermetry-Signature` added at send time.
+Headers: `Content-Type` → global → per-form → runtime, with `User-Agent`, `Idempotency-Key`, and `X-Convermetry-Signature` added at send time. Names are compared case-insensitively, as HTTP reads them, so a later layer's `x-api-key` replaces an earlier `X-Api-Key` rather than being sent beside it. `Host`, `Content-Length`, `Transfer-Encoding`, `Connection`, `User-Agent`, `Idempotency-Key` and `X-Convermetry-Signature` are Convermetry's or the transport's to set: the Webhooks and Forms screens refuse them in any letter case, with a notice naming them, and they are dropped from saved, per-form and runtime headers at send time, including headers frozen with a queued delivery. `Content-Type` can still be replaced.
 
 **Per-endpoint tests** — every endpoint block has **Send analytics test** and **Send form test** buttons. Test payloads carry `"test": true` and clearly marked sample data, never touch delivery markers or real submissions, are never retried, and appear in the Activity Log with kind `test`. An analytics test reports on the **last 7 days** and does **not** advance the endpoint's last-sent marker, so testing never creates a gap in scheduled reporting; a form test builds a sample submission and never reads real lead data.
 
-All requests go through one transport: `wp_safe_remote_post()` (URL re-validated at request time — SSRF protection even if DNS changed after saving), redirects disabled, response downloads capped at 64 KB at the transport layer, 15-second timeout.
+All requests go through one transport: `wp_safe_remote_post()` (URL re-validated at request time — SSRF protection even if DNS changed after saving), redirects disabled, response downloads capped at 64 KB at the transport layer, 15-second timeout. **Redirects are never followed**: a `3xx` is logged as a failed attempt and retried on the schedule, and a receiver that has moved is not reached at its new address, so enter the endpoint's final URL.
 
 ## The three identifiers: `submission_id` / `conversion_id` / `delivery_id`
 
@@ -1188,7 +1192,7 @@ Every outbound message shares one versioned envelope:
 {
     "schema_version": "1.0 | 2.0",
     "source": "convermetry",
-    "plugin_version": "1.1.5",
+    "plugin_version": "1.1.6",
     "message_type": "analytics_report | form_submission",
     "website_info": { },
     "generated_at": "2026-08-22T14:00:00+00:00",
@@ -1216,7 +1220,7 @@ Every outbound message shares one versioned envelope:
 {
     "schema_version": "1.1",
     "source": "convermetry",
-    "plugin_version": "1.1.5",
+    "plugin_version": "1.1.6",
     "message_type": "analytics_report",
     "website_info": {
         "name": "Example Financial", "url": "https://example.com", "domain": "example.com",
@@ -1336,7 +1340,7 @@ Every outbound message shares one versioned envelope:
 {
     "schema_version": "2.0",
     "source": "convermetry",
-    "plugin_version": "1.1.5",
+    "plugin_version": "1.1.6",
     "message_type": "form_submission",
     "website_info": {
         "name": "Example Financial", "url": "https://example.com", "domain": "example.com",
@@ -1484,13 +1488,15 @@ Both message types share the retry schedule (filterable via `convermetry_retry_s
 Initial delivery → 5 minutes → 30 minutes → 2 hours → 6 hours → 16 hours   (~24.6 h total)
 ```
 
+**Which answers are retried.** A `2xx` is delivered. A `4xx` other than `408`, `409`, `425` and `429` is **final**: the request is frozen and would be refused the same way on every attempt, so a form delivery is abandoned at once (reason `rejected`, and the lead shows *failed*) and an analytics chain is marked exhausted, so the next scheduled dispatch re-sends it rather than five more attempts in between. A `5xx`, those four `4xx`, a `3xx` (redirects are not followed) and a network error are retried on the schedule. A `Retry-After` on a `429` or `503`, in seconds or as an HTTP date, makes the next attempt wait at least that long, never less than the schedule's own delay and never more than 24 hours. Before 1.1.6 every non-2xx answer was retried on the full schedule and `Retry-After` was ignored.
+
 **Frozen requests.** On the first delivery attempt the final URL (all query-parameter layers merged), the **configured** headers (global + per-form + runtime), and the serialized JSON body are frozen. Every retry replays that exact body and URL under the same `delivery_id` — retention cleanup, settings changes, or plugin updates between attempts can never mutate them.
 
 Three headers are *not* frozen; they are regenerated on each attempt from the frozen body: `Idempotency-Key` (always the same `delivery_id`), `User-Agent` (carries the plugin version, so it changes if the site updates mid-chain), and `X-Convermetry-Signature` (computed with the secret **current at send time**, so rotating a secret changes a retry's signature — intentionally, so a rotated key still verifies). A payload that fails to JSON-encode (e.g. a filter introduced an unencodable value) is treated as a *failed attempt* entering the normal chain; an empty body is never sent, and the payload is never rebuilt without the filter.
 
 **Analytics reports** — per-endpoint retry chains via single-event crons. An exhausted chain (or one whose cron could not be scheduled — detected as *orphaned*) keeps its frozen delivery; the next scheduled dispatch re-sends it under the original `delivery_id` first, and only after acknowledgment does the endpoint's marker advance — exactly to the frozen window's end — so consecutive deliveries never overlap. Every retry-state mutation happens under the dispatch mutex. Deactivating the plugin *suspends* chains (frozen deliveries resume after reactivation under their original ids); frozen deliveries older than the retention window expire, and each pending retry has a **Discard** action on the Webhooks page.
 
-**Form submissions** — one queue row per submission × endpoint in `cvmtry_delivery_queue`. Endpoints that acknowledged are deleted from the queue and **never re-sent** when a sibling endpoint fails. Rows are claimed atomically (a token-stamped conditional `UPDATE`), so overlapping workers can't double-send; rows stranded in `sending` by a dead worker are reclaimed after 10 minutes. The worker cron is re-armed by activation, the daily cleanup, and every analytics dispatch run, so queued leads survive lost cron events and deactivate/reactivate cycles. After the final failed attempt the delivery is abandoned — every attempt remains in the Activity Log.
+**Form submissions** — one queue row per submission × endpoint in `cvmtry_delivery_queue`. Endpoints that acknowledged are deleted from the queue and **never re-sent** when a sibling endpoint fails. Rows are claimed atomically (a token-stamped conditional `UPDATE`), so overlapping workers can't double-send; rows stranded in `sending` by a dead worker are reclaimed after 10 minutes. The worker cron is re-armed by activation, the daily cleanup, and every analytics dispatch run, so queued leads survive lost cron events and deactivate/reactivate cycles. After the final failed attempt, or a final `4xx` answer, the delivery is abandoned — every attempt remains in the Activity Log.
 
 **Delivery is at-least-once.** Any duplicate a receiver can ever see carries a `delivery_id` it has already processed — deduplicating by `delivery_id` is sufficient to never double-count.
 
@@ -1688,8 +1694,8 @@ The lifecycle actions all receive the same credential-free `$context`: `message_
 | `convermetry_delivery_attempt_logged` | action | What became of the Activity Log row. `(array $context, string $disposition)` — `'stored'`, `'suppressed'` (a `convermetry_delivery_log_row` callback returned false), or `'failed'` |
 | `convermetry_webhook_delivery_succeeded` | action | The endpoint accepted it **and** the bookkeeping committed. `(array $context)` — analytics: last-sent advanced and retry chain cleared; form queue: row deleted and delivery state recomputed. Once per successful attempt per endpoint |
 | `convermetry_webhook_retry_scheduled` | action | The next attempt is persisted. `(array $context, int $nextAttempt, int $nextAttemptAt)` — never speculative; never on a test or on the synchronous path |
-| `convermetry_webhook_retry_chain_exhausted` | action | An **analytics** chain gave up, and its terminal state is persisted. `(array $context)` — *not* abandonment: the frozen body stays in the retry state and the next scheduled dispatch resumes it. Read as "this endpoint is failing", not "this data is gone" |
-| `convermetry_webhook_delivery_abandoned` | action | A queued **form** delivery is gone for good, its row deleted. `(array $context, string $reason)` — genuinely terminal, unlike the analytics chain |
+| `convermetry_webhook_retry_chain_exhausted` | action | An **analytics** chain gave up, and its terminal state is persisted. `(array $context)` — *not* abandonment: the frozen body stays in the retry state and the next scheduled dispatch resumes it. Fires after the last scheduled attempt, or at once after a final `4xx`. Read as "this endpoint is failing", not "this data is gone" |
+| `convermetry_webhook_delivery_abandoned` | action | A queued **form** delivery is gone for good, its row deleted. `(array $context, string $reason)` — genuinely terminal, unlike the analytics chain. `$reason` is `retries_exhausted` after the last scheduled attempt, or `rejected` when the endpoint answered a final `4xx` (anything but `408`, `409`, `425` and `429`) |
 | `convermetry_webhook_delivery_canceled` | action | A queued delivery was removed unsent. `(array $context, string $reason)` — currently `'submission_deleted'`: the submission was deleted before the worker reached the row |
 | `convermetry_retry_schedule` | filter | The webhook retry backoff delays in seconds (both message types). `(int[] $delays)` — default `[300, 1800, 7200, 21600, 57600]`; each entry is clamped to a minimum of 60, and an empty or fully invalid list falls back to the default. The list length **is** the attempt count |
 | `convermetry_webhook_report_limit` | filter | Max rows per `top_*` list in analytics payloads. `(int $limit)` — default 200, clamped to a minimum of 1. Does **not** apply to `conversions.recent[]`, which is lossless: a window holding more than 100 conversions is split across consecutive deliveries rather than truncated |
@@ -1710,7 +1716,7 @@ The lifecycle actions all receive the same credential-free `$context`: `message_
 | `convermetry_tracking_batch_recorded` | action | One batch was written. `(int $stored, int $accepted, int $offered, ?string $batchId)` — one action per batch, never per event, on the plugin's hottest path. The three counts differ: offered → accepted (survived sanitization) → stored (survived deduplication) |
 | `convermetry_tracking_rate_limited` | action | A batch was rejected by the rate limiter. `(int $events, int $window)` — carries no address and no hash of one; the endpoint is public and unauthenticated |
 | `convermetry_rate_limits` | filter | `['per_ip' => 300, 'site_wide' => 3000]` events/minute. `(array $defaults)` — both clamped to a minimum of 1; a non-array return or a missing key falls back. Charged **per event**, so one 20-event batch costs 20, and the per-IP check runs first so a flooding IP never consumes the site-wide budget. The per-IP limit counts an address, not a visitor: raise it when many visitors share one network (an office, a school, a mobile carrier) |
-| `convermetry_source_aliases` | filter | Extend/override the utm_source alias map. `(array $aliases)` — keys are raw lowercase source values, values the canonical name. Return the map with entries **added**: a replacement map loses the defaults, and a source with no entry is stored as submitted |
+| `convermetry_source_aliases` | filter | Extend/override the utm_source alias map. `(array $aliases)` — keys are raw lowercase source values, values the canonical name. Return the map with entries **added**: a replacement map loses the defaults, and a source with no entry is stored as submitted. The map is also consulted for an untagged visit's referrer host (without `www.`, and only a host with a dot), so a host added here is classified by the name it maps to. Remove `an` here if a source of yours is called that and is not Meta's Audience Network |
 | `convermetry_channel` | filter | Override the marketing channel assigned at ingestion. `(string $channel, array $row, string $type)` |
 
 ### Analytics
@@ -1887,7 +1893,7 @@ Helper functions: `convermetry_submit_form()` (result-aware submission) and `cvm
 - **Email notifications are opt-in and leave your retention window.** Convermetry → Notifications is off by default. When enabled, each notification is a copy of lead data in a mailbox Convermetry does not control: deleting a submission cancels anything still queued and guarantees no queued message can be rendered afterwards, but it **cannot recall a message already sent**. Retention, deletion, and export controls in this plugin do not reach those copies. The visitor-journey and IP-address toggles are off by default for the same reason, and credential-looking fields are never emailed at all. See [Notifications](#notifications).
 - **No cookies — but browser storage.** The tracker keeps a random visit id (`cvmtry_session`) and the visit's attribution (`cvmtry_campaign`) in `localStorage`, and events not yet sent (`cvmtry_pending`) in `sessionStorage`. The visit id rotates after 30 minutes of inactivity. In the EU/UK the rules that govern cookies also apply to this storage.
 - **Tracking starts on activation, with no consent integration.** There is no consent banner and no consent-plugin integration. Where consent is required, have your consent tool block the `cvmtry-tracker` script handle, or return `false` from `convermetry_should_enqueue_tracker` until consent is given. Server-confirmed form submissions are still recorded — without analytics context — when the tracker does not run.
-- Tracked URLs are canonicalized to scheme + host + path — **no query strings are ever stored**. Referrers and click/form destinations are likewise stripped (whole `mailto:`/`tel:` destinations are kept — the address *is* the destination; strip via `convermetry_tracked_event` if unacceptable).
+- Tracked URLs are canonicalized to scheme + host + path — **no query strings are ever stored**. Referrers and click/form destinations are likewise stripped (whole `mailto:`/`tel:` destinations are kept — the address *is* the destination; strip via `convermetry_tracked_event` if unacceptable). A path keeps its percent-encoding (`/Price%20List.pdf`, a non-Latin slug), in page URLs, referrers and click destinations alike.
 - Campaign values are stored after sanitization, except values containing `@` (dropped as likely emails) — never put personal data in UTM parameters. The tracker keeps only an ad-click identifier's parameter **name** and never sends its value. The one exception is one you opt into: with **Include page URL parameters** on, the value on the submitting page's URL is stored with the submission and forwarded to your endpoints, because that is what the setting does.
 - **A submitting page's other URL parameters are discarded by default.** Only the campaign parameters are kept, so a reset token or an email address in a page URL goes no further. See [Page URL parameters](#webhooks) for what forwarding keeps when you turn it on. Submissions recorded by 1.1.2 or earlier can still hold every parameter in their stored row until retention removes them, but those values are no longer shown or sent. Activity Log rows written by those versions are unchanged and age out the same way.
 - **Visitor IP addresses are stored by default**, on both write paths: every analytics event (page views, clicks, hovers, scroll milestones, conversions) and every server-confirmed form submission. Turn it off with **Settings → Tracking → IP addresses**; new rows then record an empty value while existing rows are untouched and age out with retention. User agents are never stored on either path.
@@ -1971,7 +1977,7 @@ an explicit ZIP selection.
 
 ```bash
 bash bin/prepare-svn.sh                           # prepare the newest build
-bash bin/prepare-svn.sh build/convermetry-1.1.5.zip # prepare a specific build
+bash bin/prepare-svn.sh build/convermetry-1.1.6.zip # prepare a specific build
 bash bin/prepare-svn.sh --publish                 # prepare and commit newest build
 ```
 

@@ -277,10 +277,11 @@ final class WebhooksPage
 
         // Structured only — a position, a reason code and a sanitized,
         // bounded excerpt. The URL as typed is never stored.
-        if ($input['rejected'] !== [] || $input['rejected_pairs'] > 0) {
+        if ($input['rejected'] !== [] || $input['rejected_pairs'] > 0 || $input['reserved_headers'] !== []) {
             set_transient(
                 self::REJECTED_TRANSIENT . get_current_user_id(),
-                ['endpoints' => $input['rejected'], 'pairs' => $input['rejected_pairs']],
+                ['endpoints' => $input['rejected'], 'pairs' => $input['rejected_pairs']]
+                    + ($input['reserved_headers'] !== [] ? ['reserved' => $input['reserved_headers']] : []),
                 MINUTE_IN_SECONDS
             );
         }
@@ -509,6 +510,43 @@ final class WebhooksPage
             ?></p></div>
             <?php
         }
+
+        self::renderReservedHeadersNotice(is_array($stored['reserved'] ?? null) ? $stored['reserved'] : []);
+    }
+
+    /**
+     * Names the header rows a save refused because Convermetry or WordPress
+     * sets that header itself. Shared with the Forms screen, whose per-form
+     * headers follow the same rule.
+     *
+     * The names passed the RFC 9110 token check before they were refused, and
+     * each is re-checked to be a string and escaped here all the same.
+     *
+     * @param array<mixed> $names Refused header names, as typed.
+     * @return void
+     */
+    public static function renderReservedHeadersNotice(array $names): void
+    {
+        $names = array_values(array_filter($names, static fn(mixed $name): bool => is_string($name) && $name !== ''));
+
+        if ($names === []) {
+            return;
+        }
+
+        ?>
+        <div class="notice notice-warning"><p><?php
+        echo wp_kses(sprintf(
+            /* translators: %s: comma-separated header names. */
+            _n(
+                'The header %s was not saved: Convermetry or WordPress sets it on every request, and a second copy, in any letter case, would make the receiver misread the request or reject its signature.',
+                'The headers %s were not saved: Convermetry or WordPress sets them on every request, and a second copy, in any letter case, would make the receiver misread the request or reject its signature.',
+                count($names),
+                'convermetry'
+            ),
+            implode(', ', array_map(static fn(string $name): string => '<code>' . esc_html($name) . '</code>', $names))
+        ), ['code' => []]);
+        ?></p></div>
+        <?php
     }
 
     /**

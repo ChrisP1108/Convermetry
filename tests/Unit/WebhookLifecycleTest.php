@@ -99,6 +99,9 @@ final class WebhookLifecycleTest extends TestCase
         Functions\when('wp_remote_retrieve_response_code')->justReturn($response['response']['code'] ?? 200);
         Functions\when('wp_remote_retrieve_response_message')->justReturn($response['response']['message'] ?? 'OK');
         Functions\when('wp_remote_retrieve_body')->justReturn($response['body'] ?? '');
+        Functions\when('wp_remote_retrieve_header')->alias(
+            static fn(array $r, string $name): string => (string) ($response['headers'][strtolower($name)] ?? '')
+        );
     }
 
     /**

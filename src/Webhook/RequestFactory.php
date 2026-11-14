@@ -45,9 +45,39 @@ use Convermetry\Support\KeyValuePairs;
  * are added at SEND time by the senders, not here — the signature is always
  * computed over the exact bytes being sent, and rotating a secret between
  * retries must re-sign the identical frozen body with the new key.
+ *
+ * HEADER NAMES ARE CASE-INSENSITIVE, so every layer is merged as HTTP reads it:
+ * a later "x-api-key" replaces an earlier "X-Api-Key" rather than travelling
+ * next to it. Until 1.1.6 the merge compared exact keys, so a saved global
+ * header "x-convermetry-signature" was sent beside the real signature, and a
+ * receiver that joined the two ("sha256=stale, sha256=<real>") failed every
+ * verification and every Idempotency-Key de-duplication. The names in
+ * {@see RESERVED_HEADERS} are now dropped from every configured layer, in any
+ * letter case, and again at send time from a header set frozen before 1.1.6.
  */
 final class RequestFactory
 {
+    /**
+     * Header names no configured layer may set, in any letter case: the
+     * Webhooks and Forms screens refuse them, and {@see mergeHeaders()} and
+     * {@see withProtocolHeaders()} drop them.
+     *
+     * Convermetry sets the last three on every attempt, and WordPress's
+     * transport the first four; a second copy of any of them makes the request
+     * mean something other than what was sent. Content-Type is the one
+     * protected header that is NOT here: an administrator may still replace
+     * the JSON default, as documented.
+     */
+    public const array RESERVED_HEADERS = [
+        'host',
+        'content-length',
+        'transfer-encoding',
+        'connection',
+        'user-agent',
+        'idempotency-key',
+        'x-convermetry-signature',
+    ];
+
     /**
      * Header names a filter may not introduce, remove, or alter.
      *
@@ -62,16 +92,7 @@ final class RequestFactory
      *
      * Compared case-insensitively, since HTTP header names are.
      */
-    private const array PROTECTED_HEADERS = [
-        'content-type',
-        'host',
-        'content-length',
-        'transfer-encoding',
-        'connection',
-        'user-agent',
-        'idempotency-key',
-        'x-convermetry-signature',
-    ];
+    private const array PROTECTED_HEADERS = ['content-type', ...self::RESERVED_HEADERS];
 
     /**
      * Builds the delivery URL for one endpoint: the endpoint URL with the
@@ -226,15 +247,38 @@ final class RequestFactory
      */
     public static function withProtocolHeaders(array $headers, string $endpointRef, string $body, string $deliveryId): array
     {
-        $headers['User-Agent']      = 'WordPress/Convermetry ' . CVMTRY_VERSION;
-        $headers['Idempotency-Key'] = $deliveryId;
+        // Re-merged as HTTP reads names, because a header set frozen before
+        // 1.1.6 can still hold a reserved name in another letter case (a
+        // queued lead, a pending analytics retry). Set by exact key, the real
+        // User-Agent, Idempotency-Key and signature travelled beside it.
+        $out = [];
+        foreach ($headers as $name => $value) {
+            if (!self::isReserved((string) $name)) {
+                self::put($out, (string) $name, (string) $value);
+            }
+        }
+
+        $out['User-Agent']      = 'WordPress/Convermetry ' . CVMTRY_VERSION;
+        $out['Idempotency-Key'] = $deliveryId;
 
         $secret = Options::secretForEndpointRef($endpointRef);
         if ($secret !== '') {
-            $headers['X-Convermetry-Signature'] = 'sha256=' . hash_hmac('sha256', $body, $secret);
+            $out['X-Convermetry-Signature'] = 'sha256=' . hash_hmac('sha256', $body, $secret);
         }
 
-        return $headers;
+        return $out;
+    }
+
+    /**
+     * Whether a header name is one no configured layer may set
+     * ({@see RESERVED_HEADERS}), compared case-insensitively.
+     *
+     * @param string $name Header name as written.
+     * @return bool
+     */
+    public static function isReserved(string $name): bool
+    {
+        return in_array(strtolower(trim($name)), self::RESERVED_HEADERS, true);
     }
 
     /**
@@ -277,22 +321,52 @@ final class RequestFactory
      */
     private static function mergeHeaders(string $formKey = '', array $runtime = []): array
     {
-        $headers = ['Content-Type' => 'application/json; charset=utf-8'];
-
-        $headers = array_merge($headers, KeyValuePairs::toMap(Options::globalHeaders()));
+        $layers = [KeyValuePairs::toMap(Options::globalHeaders())];
 
         if ($formKey !== '') {
-            $headers = array_merge($headers, KeyValuePairs::toMap(FormSettings::forForm($formKey)['headers']));
+            $layers[] = KeyValuePairs::toMap(FormSettings::forForm($formKey)['headers']);
         }
 
-        foreach ($runtime as $key => $value) {
-            $key = trim((string) $key);
-            if ($key !== '') {
-                $headers[$key] = (string) $value;
+        $layers[] = $runtime;
+
+        $headers = ['Content-Type' => 'application/json; charset=utf-8'];
+
+        // A reserved name is dropped from every layer: the Webhooks and Forms
+        // screens refuse it now, but a row saved before 1.1.6, or a runtime
+        // header from convermetry_submit_form(), can still hold one.
+        foreach ($layers as $layer) {
+            foreach ($layer as $key => $value) {
+                $key = trim((string) $key);
+                if ($key !== '' && !self::isReserved($key)) {
+                    self::put($headers, $key, (string) $value);
+                }
             }
         }
 
         return $headers;
+    }
+
+    /**
+     * Sets a header, first removing any header of the same name in another
+     * letter case, so the later layer replaces the earlier one as HTTP reads
+     * names.
+     *
+     * @param array<string, string> $headers Headers being built.
+     * @param string                $name    Header name as written.
+     * @param string                $value   Header value.
+     * @return void
+     */
+    private static function put(array &$headers, string $name, string $value): void
+    {
+        $lower = strtolower($name);
+
+        foreach (array_keys($headers) as $existing) {
+            if (strtolower((string) $existing) === $lower) {
+                unset($headers[$existing]);
+            }
+        }
+
+        $headers[$name] = $value;
     }
 
     /**
@@ -338,7 +412,7 @@ final class RequestFactory
         foreach (is_array($filtered) ? $filtered : [] as $key => $value) {
             $key = trim((string) $key);
             if ($key !== '' && is_scalar($value) && !self::isProtected($key)) {
-                $out[$key] = (string) $value;
+                self::put($out, $key, (string) $value);
             }
         }
 

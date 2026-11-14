@@ -358,4 +358,66 @@ final class SubmissionFieldsTest extends TestCase
             'null'      => [null, ''],
         ];
     }
+
+    // ── Values are stored as text ────────────────────────────────────────────
+
+    /**
+     * The message-fidelity scenario: what the visitor typed into a textarea is
+     * what is stored, exported and sent. sanitize_text_field() joined the
+     * lines, turned "<" into "&lt;", deleted the tag-like text and every "%"
+     * followed by two hex digits ("100%accuracy" became "100curacy").
+     */
+    public function testAValueIsStoredAsTheVisitorTypedIt(): void
+    {
+        $message = "Hi team,\nOur budget is < \$5k & we need 100%accuracy.\n\n<b>bold</b>  two  spaces\tand tab\nThanks";
+
+        $out = SubmissionFields::normalize([['id' => 'message', 'label' => 'Message', 'value' => $message]]);
+
+        self::assertSame($message, $out[0]['value']);
+    }
+
+    /**
+     * Windows and old Mac line endings read the same as Unix ones, and the
+     * control characters no text field can hold are removed; tab and line
+     * feed are kept, and so is the spacing inside the value. Only surrounding
+     * whitespace is trimmed.
+     */
+    public function testLineEndingsAreNormalizedAndControlCharactersRemoved(): void
+    {
+        $out = SubmissionFields::normalize([
+            'crlf'     => "  line one\r\nline two\rline three  ",
+            'controls' => "a\x00b\x07c\x1Bd\x7Fe\tf",
+            'list'     => ["one\r\ntwo", " \x0Bthree "],
+        ]);
+
+        self::assertSame("line one\nline two\nline three", $out[0]['value']);
+        self::assertSame("abcde\tf", $out[1]['value']);
+        self::assertSame(["one\ntwo", 'three'], $out[2]['value']);
+    }
+
+    /**
+     * A byte sequence that is not UTF-8 is removed and the rest of the value
+     * kept. sanitize_text_field() returned "" for the whole value.
+     */
+    public function testInvalidUtf8IsRemovedAndTheRestKept(): void
+    {
+        $out = SubmissionFields::normalize(['note' => "caf\xE9 & cr\xC3\xA8me <ok>"]);
+
+        self::assertSame('caf & crème <ok>', $out[0]['value']);
+    }
+
+    /**
+     * A stored row is cleaned again when it is read back, and that changes
+     * nothing: the Submissions screen, CSV export and every redelivery read the
+     * same text that was stored.
+     */
+    public function testAStoredValueReadsBackUnchanged(): void
+    {
+        $message = "Line one\n<i>&amp; %ac</i>\n  indented";
+
+        $stored = (string) json_encode(SubmissionFields::normalize(['message' => $message]));
+        $read   = SubmissionFields::fromStoredJson($stored)->toArray();
+
+        self::assertSame($message, $read[0]['value']);
+    }
 }

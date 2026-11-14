@@ -666,7 +666,12 @@ final class DatabaseManager
             'page_title'    => self::truncate(sanitize_text_field((string) ($data['page_title'] ?? '')), 255),
             'element_tag'   => self::truncate(sanitize_key((string) ($data['element_tag'] ?? '')), 32),
             'element_label' => self::truncate(sanitize_text_field((string) ($data['element_label'] ?? '')), 191),
-            'target_url'    => self::truncate(sanitize_text_field((string) ($data['target_url'] ?? '')), 255),
+            // A URL, sanitized as one, like page_url and referrer.
+            // sanitize_text_field() deleted every %XX octet, so a link to
+            // "/Price%20List.pdf" was stored as "/PriceList.pdf", a link to
+            // a non-ASCII slug lost the slug, and a "contains" click goal was
+            // matched against an address that does not exist.
+            'target_url'    => self::truncate(esc_url_raw((string) ($data['target_url'] ?? '')), 255),
             'event_value'   => self::truncate(sanitize_text_field((string) ($data['event_value'] ?? '')), 100),
             'referrer'      => self::truncate(esc_url_raw((string) ($data['referrer'] ?? '')), 255),
             'session_id'    => self::truncate((string) preg_replace('/[^a-f0-9]/i', '', (string) ($data['session_id'] ?? '')), 64),

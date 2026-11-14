@@ -374,6 +374,73 @@ final class FunnelMathTest extends TestCase
     }
 
     /**
+     * Page steps 1.1.5 stored with their octets deleted. "//" trimmed to "",
+     * which is what the home page's "/" trims to, so the step counted every
+     * home-page visitor (a funnel starting there reported [3, 3] for visitors
+     * who never opened the page). It now aborts the funnel under every
+     * operator, so the Funnels screen says the step has to be entered again.
+     *
+     * @dataProvider damagedPageSteps
+     */
+    public function testAPageStepDamagedBy115AbortsTheFunnel(string $operator, string $pattern): void
+    {
+        global $wpdb;
+        $wpdb = new class {
+            public function esc_like(string $text): string
+            {
+                return addcslashes($text, '_%\\');
+            }
+        };
+
+        self::assertNull(StepCompiler::compile(['type' => 'page', 'operator' => $operator, 'value' => $pattern], 'e1'));
+    }
+
+    /**
+     * @return array<string, array{0: string, 1: string}>
+     */
+    public static function damagedPageSteps(): array
+    {
+        $steps = [];
+
+        foreach (StepCompiler::PAGE_OPERATORS as $operator) {
+            foreach (['//', '///', '/catalog//', 'https://example.com//'] as $pattern) {
+                $steps["{$operator} {$pattern}"] = [$operator, $pattern];
+            }
+        }
+
+        return $steps;
+    }
+
+    /**
+     * MySQL cannot decode page_url, so the pattern is bound in the encoding
+     * WordPress stores: typed, pasted from Chrome (uppercase hex) or copied
+     * from WordPress (lowercase hex), "/контакты/" is bound as one value.
+     * 1.1.5 bound what was typed, which never equals the stored URL.
+     */
+    public function testANonAsciiPageStepIsBoundInTheStoredEncoding(): void
+    {
+        global $wpdb;
+        $wpdb = new class {
+            public function esc_like(string $text): string
+            {
+                return addcslashes($text, '_%\\');
+            }
+        };
+
+        $stored = '/%d0%ba%d0%be%d0%bd%d1%82%d0%b0%d0%ba%d1%82%d1%8b/';
+
+        foreach (['/контакты/', '/%D0%BA%D0%BE%D0%BD%D1%82%D0%B0%D0%BA%D1%82%D1%8B/', $stored] as $pattern) {
+            $equals = StepCompiler::compile(['type' => 'page', 'operator' => 'equals', 'value' => $pattern], 'e1');
+            self::assertNotNull($equals);
+            self::assertSame([$stored], $equals['params'], "equals {$pattern}");
+
+            $contains = StepCompiler::compile(['type' => 'page', 'operator' => 'contains', 'value' => $pattern], 'e1');
+            self::assertNotNull($contains);
+            self::assertSame(['%' . addcslashes($stored, '_%\\') . '%'], $contains['params'], "contains {$pattern}");
+        }
+    }
+
+    /**
      * The generated chain must constrain each step's position to be strictly
      * after the previous one. This is the ordering guarantee itself; the
      * B@09/A@10/B@11 case is exactly what it exists to get right.

@@ -378,6 +378,88 @@ final class AdminRequestHandlersTest extends WordPressTestCase
         self::assertFalse(wp_verify_nonce($query[ReportPeriod::NONCE_FIELD], GoalsPage::DELETE_ACTION));
     }
 
+    // ── 1.1.6: addresses keep their %XX sequences ────────────────────────────
+
+    /**
+     * Chrome copies /контакты/ as /%D0%BA…/. Through the real
+     * sanitize_text_field() that became "//", which matched the home page.
+     */
+    public function testAGoalPastedForANonAsciiSlugIsSavedAsPasted(): void
+    {
+        $pasted = '/%D0%BA%D0%BE%D0%BD%D1%82%D0%B0%D0%BA%D1%82%D1%8B/';
+
+        $halt = $this->adminPost('cvmtry_save_goal', [
+            'cvmtry_nonce' => wp_create_nonce(GoalsPage::SAVE_ACTION),
+            'goal'         => ['name' => 'Contacts', 'type' => 'url', 'operator' => 'equals', 'value' => $pasted, 'enabled' => '1'],
+        ]);
+
+        self::assertSame('created', $this->queryOf($halt->location)['cvmtry_goal_saved']);
+        self::assertContains($pasted, array_column(GoalRepository::visible(), 'value'));
+    }
+
+    /**
+     * "//" is what an earlier sanitizer left of that paste. However it
+     * arrives, it is refused, and the notice says why.
+     */
+    public function testAGoalWhoseAddressHasAnEmptySegmentIsRefused(): void
+    {
+        foreach (['//', '/catalog//', 'https://example.com//'] as $value) {
+            $halt = $this->adminPost('cvmtry_save_goal', [
+                'cvmtry_nonce' => wp_create_nonce(GoalsPage::SAVE_ACTION),
+                'goal'         => ['name' => 'Contacts', 'type' => 'url', 'operator' => 'starts_with', 'value' => $value],
+            ]);
+
+            self::assertSame('url_rule', $this->queryOf($halt->location)['cvmtry_goal_error'], $value);
+        }
+
+        self::assertCount(1, GoalRepository::visible(), 'Only the fixture goal');
+    }
+
+    /**
+     * A goal 1.1.5 saved as "//" stays on the screen, with its history, and
+     * the screen names it so it can be entered again.
+     */
+    public function testTheGoalsScreenNamesAGoalDamagedBefore116(): void
+    {
+        $goal = GoalSettings::sanitize(['name' => 'Contacts & map', 'type' => 'url', 'operator' => 'equals', 'value' => '/x/', 'enabled' => '1'], null, gmdate('Y-m-d H:i:s'));
+        self::assertNotNull($goal);
+        $goal['value'] = '//';
+        self::assertTrue(GoalRepository::save($goal));
+        GoalRepository::flushCache();
+
+        $_GET = ['page' => GoalsPage::MENU_SLUG];
+        $html = $this->render([GoalsPage::class, 'render']);
+
+        self::assertStringContainsString('no longer counts anything: Contacts &amp; map.', $html);
+        self::assertCount(2, GoalRepository::visible());
+    }
+
+    public function testAFunnelStepPastedForANonAsciiSlugIsSavedAsPastedAndAnEmptySegmentRefused(): void
+    {
+        $pasted = '/%D0%BA%D0%BE%D0%BD%D1%82%D0%B0%D0%BA%D1%82%D1%8B/';
+        $fields = $this->funnelFields('Contacts');
+
+        $fields['steps'][0]['value'] = $pasted;
+        $this->adminPost('cvmtry_save_funnel', [
+            'cvmtry_nonce' => wp_create_nonce(FunnelsPage::SAVE_ACTION),
+            'funnel'       => $fields,
+        ]);
+
+        $saved = array_values(array_filter(FunnelRepository::visible(), static fn(array $f): bool => $f['name'] === 'Contacts'));
+        self::assertCount(1, $saved);
+        self::assertSame($pasted, $saved[0]['steps'][0]['value']);
+
+        $fields['name']              = 'Damaged';
+        $fields['steps'][0]['value'] = '//';
+        $halt = $this->adminPost('cvmtry_save_funnel', [
+            'cvmtry_nonce' => wp_create_nonce(FunnelsPage::SAVE_ACTION),
+            'funnel'       => $fields,
+        ]);
+
+        self::assertSame('url_rule', $this->queryOf($halt->location)['cvmtry_funnel_error']);
+        self::assertCount(2, FunnelRepository::visible(), 'The fixture funnel and Contacts, not Damaged');
+    }
+
     public function testARedirectDropsAPeriodWhoseFilterNonceDidNotVerify(): void
     {
         $halt = $this->adminPost('cvmtry_save_goal', [
@@ -495,6 +577,34 @@ final class AdminRequestHandlersTest extends WordPressTestCase
         ]);
         self::assertTrue($submission['success']);
         self::assertSame(0, $this->rowCount(FormSubmissions::tableName()));
+    }
+
+    /**
+     * A submitted value is stored as typed since 1.1.6, markup included, so
+     * the Submissions panel is where it is escaped; its line breaks show.
+     */
+    public function testTheSubmissionPanelEscapesWhatTheVisitorTyped(): void
+    {
+        global $wpdb;
+
+        do_action(
+            'convermetry_form_submission',
+            ['form_name' => 'Contact', 'form_id' => 'e2e-1'],
+            ['email' => 'grace@example.com', 'message' => "Line one\n<script>alert(1)</script> & <b>bold</b>"],
+            []
+        );
+        $row = (int) $wpdb->get_var('SELECT MAX(id) FROM ' . FormSubmissions::tableName());
+
+        $detail = $this->ajax('cvmtry_get_submission_detail', [
+            'nonce'          => wp_create_nonce('cvmtry_get_submission_detail'),
+            'submission_row' => (string) $row,
+        ]);
+
+        self::assertTrue($detail['success']);
+        $html = $detail['data']['html'];
+        self::assertStringContainsString("Line one\n&lt;script&gt;alert(1)&lt;/script&gt; &amp; &lt;b&gt;bold&lt;/b&gt;", $html);
+        self::assertStringNotContainsString('<script>alert(1)', $html);
+        self::assertStringNotContainsString('<b>bold</b>', $html);
     }
 
     public function testALeadIsUpdatedOnlyWithScalarFields(): void
@@ -656,6 +766,62 @@ final class AdminRequestHandlersTest extends WordPressTestCase
 
         // The retry chain keyed by the first endpoint's id is untouched.
         self::assertArrayHasKey(self::ENDPOINT_ID, (array) get_option(self::RETRY_OPTION));
+    }
+
+    /**
+     * A header Convermetry or WordPress sets itself is not saved, in any
+     * letter case, and the notice names it; Content-Type stays configurable.
+     */
+    public function testAWebhookSaveRefusesReservedHeadersAndNamesThem(): void
+    {
+        $this->adminPost('cvmtry_save_webhooks', $this->webhookForm([
+            ['id' => self::ENDPOINT_ID, 'url' => self::ENDPOINT_URL, 'analytics' => '1'],
+        ], [
+            'cvmtry_global_headers' => [
+                ['key' => 'x-convermetry-signature', 'value' => 'sha256=stale'],
+                ['key' => 'Idempotency-Key', 'value' => 'fixed'],
+                ['key' => 'user-agent', 'value' => 'Mine/1.0'],
+                ['key' => 'content-type', 'value' => 'application/vnd.api+json'],
+                ['key' => 'Authorization', 'value' => 'Bearer t'],
+            ],
+        ]));
+
+        self::assertSame([
+            ['key' => 'content-type', 'value' => 'application/vnd.api+json'],
+            ['key' => 'Authorization', 'value' => 'Bearer t'],
+        ], Options::globalHeaders());
+
+        $stored = get_transient('cvmtry_webhook_rejected_' . self::$users['admin']);
+        self::assertIsArray($stored);
+        self::assertSame(0, $stored['pairs']);
+        self::assertSame(['x-convermetry-signature', 'Idempotency-Key', 'user-agent'], $stored['reserved']);
+
+        ob_start();
+        WebhooksPage::renderReservedHeadersNotice($stored['reserved']);
+        $notice = (string) ob_get_clean();
+        self::assertStringContainsString(
+            'The headers <code>x-convermetry-signature</code>, <code>Idempotency-Key</code>, <code>user-agent</code> were not saved',
+            $notice
+        );
+    }
+
+    public function testAFormSaveRefusesReservedHeaders(): void
+    {
+        $this->adminPost('cvmtry_save_forms', [
+            'cvmtry_forms_nonce' => wp_create_nonce('cvmtry_save_forms'),
+            'cvmtry_forms'       => [
+                md5('a') => [
+                    'key'     => 'elementor:Contact Form 2',
+                    'headers' => [['key' => 'IDEMPOTENCY-KEY', 'value' => 'fixed'], ['key' => 'X-Api-Key', 'value' => 'k']],
+                ],
+            ],
+        ]);
+
+        self::assertSame([['key' => 'X-Api-Key', 'value' => 'k']], FormSettings::all()['elementor:Contact Form 2']['headers']);
+        self::assertSame(
+            ['forms' => 0, 'pairs' => 0, 'reserved' => ['IDEMPOTENCY-KEY']],
+            get_transient('cvmtry_forms_skipped_' . self::$users['admin'])
+        );
     }
 
     public function testAPostedIdCanNeitherBeInventedNorClaimedTwice(): void

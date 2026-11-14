@@ -2628,8 +2628,9 @@
     let hoverTimer = null;
     let hoverEl = null;
 
-    document.addEventListener('mouseover', function (e) {
-        const el = closestOf(e.target, INTERACTIVE + ', [data-cvmtry-hover]');
+    /** Starts the dwell timer for the element a mouse pointer moved onto. */
+    function startHover(target) {
+        const el = closestOf(target, INTERACTIVE + ', [data-cvmtry-hover]');
 
         if (!el || el === hoverEl || inAdminBar(el)) {
             return;
@@ -2656,7 +2657,35 @@
                 event_value: String(HOVER_DWELL)
             });
         }, HOVER_DWELL);
-    }, true);
+    }
+
+    // Only a mouse hovers. A touch browser fires a compatibility mouseover for
+    // every tap and no mouseout until the next tap elsewhere, so listening to
+    // mouseover alone counted each tap on a menu, tab or accordion that did not
+    // navigate within the dwell as a hover. Pointer Events say which kind of
+    // pointer it was; where they are missing (Safari before 13), a mouseover
+    // within a second of a touch is that tap's, and is ignored. Measured from
+    // touchend as well as touchstart, because the compatibility mouseover
+    // follows the finger lifting, however long it rested.
+    if (typeof window.PointerEvent === 'function') {
+        document.addEventListener('pointerover', function (e) {
+            if (e.pointerType === 'mouse') {
+                startHover(e.target);
+            }
+        }, true);
+    } else {
+        let lastTouch = -Infinity;
+        const touched = function () {
+            lastTouch = Date.now();
+        };
+        document.addEventListener('touchstart', touched, { capture: true, passive: true });
+        document.addEventListener('touchend', touched, { capture: true, passive: true });
+        document.addEventListener('mouseover', function (e) {
+            if (Date.now() - lastTouch >= 1000) {
+                startHover(e.target);
+            }
+        }, true);
+    }
 
     document.addEventListener('mouseout', function (e) {
         if (!hoverEl) {

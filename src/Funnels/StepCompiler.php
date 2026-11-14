@@ -6,6 +6,7 @@ namespace Convermetry\Funnels;
 if (!defined('ABSPATH')) exit;
 
 use Convermetry\Database\EventOrder;
+use Convermetry\Support\UrlPattern;
 
 /**
  * Turns one funnel step into the SQL fragment that identifies it.
@@ -33,6 +34,11 @@ use Convermetry\Database\EventOrder;
  * {@see \Convermetry\Goals\GoalMatcher}, which lowercases explicitly. A page
  * linked as "/Pricing/" in one template and "/pricing/" in another is one page
  * in both engines.
+ *
+ * PERCENT-ENCODING is handled the other way round from GoalMatcher, because
+ * MySQL cannot decode a column: the pattern is brought to the encoding
+ * WordPress stores ({@see UrlPattern::encoded()}), so "/контакты/" and
+ * "/%D0%BA…/" both become "/%d0%ba…/", and the collation ignores hex case.
  */
 final class StepCompiler
 {
@@ -233,13 +239,21 @@ final class StepCompiler
         $operator = (string) ($step['operator'] ?? '');
         $pattern  = (string) ($step['value'] ?? '');
 
-        if (!in_array($operator, self::PAGE_OPERATORS, true) || $pattern === '') {
+        if (!in_array($operator, self::PAGE_OPERATORS, true) || !UrlPattern::isUsable($pattern)) {
             // An empty pattern would match every page view or none, and the site
             // owner asked for neither. Aborting the whole funnel is deliberate:
             // rendering the other steps as though this one had been satisfied
             // would report a conversion rate that means nothing.
+            //
+            // So does a pattern 1.1.5 saved as "//" (or with another empty
+            // segment) after deleting the %XX octets of a pasted address. Its
+            // trimmed "" equalled the home page's, so the step counted every
+            // home-page visitor. What is left cannot be repaired; the funnel
+            // says it cannot be measured until the step is entered again.
             return null;
         }
+
+        $encoded = UrlPattern::encoded($pattern);
 
         // A rule written as a path is compared against the path; a rule naming a
         // host is compared against the whole URL.
@@ -256,11 +270,11 @@ final class StepCompiler
                 'source' => 'events',
                 'sql'    => "{$alias}.event_type = 'pageview'"
                     . " AND TRIM(TRAILING '/' FROM {$subject}) = TRIM(TRAILING '/' FROM %s)",
-                'params' => [$pattern],
+                'params' => [$encoded],
             ];
         }
 
-        $escaped = $wpdb->esc_like($pattern);
+        $escaped = $wpdb->esc_like($encoded);
 
         $like = match ($operator) {
             'contains'    => '%' . $escaped . '%',

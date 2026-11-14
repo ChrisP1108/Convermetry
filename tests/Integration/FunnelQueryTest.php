@@ -227,6 +227,107 @@ final class FunnelQueryTest extends IntegrationTestCase
         self::assertSame(1, $result['steps'][1]['sessions']);
     }
 
+    // ── Non-ASCII slugs, and what 1.1.5 left of them ─────────────────────────
+
+    /** /контакты/ as WordPress links it (lowercase hex) and as a browser sends a typed address (uppercase). */
+    private const string KONTAKTY_LOWER = '/%d0%ba%d0%be%d0%bd%d1%82%d0%b0%d0%ba%d1%82%d1%8b/';
+    private const string KONTAKTY_UPPER = '/%D0%BA%D0%BE%D0%BD%D1%82%D0%B0%D0%BA%D1%82%D1%8B/';
+
+    /**
+     * The intl-paths scenario, against a real server: two visitors open the
+     * Cyrillic page (one through a link, one by typing the address) and then
+     * the demo page, and one only ever views the home page. A first step for
+     * the page counts both visitors who opened it, and not the third, however
+     * the step was entered. 1.1.5 compared the typed form against the encoded
+     * column and reported [0, 0].
+     *
+     * @dataProvider kontaktySteps
+     * @param array<string, mixed> $step
+     */
+    public function testANonAsciiPageStepMatchesThePageHoweverItWasEntered(array $step): void
+    {
+        $this->view('linked', self::KONTAKTY_LOWER, '2026-08-10 09:00:00');
+        $this->view('linked', '/demo-services/', '2026-08-10 09:05:00');
+        $this->view('typed', self::KONTAKTY_UPPER, '2026-08-10 10:00:00');
+        $this->view('typed', '/demo-services/', '2026-08-10 10:05:00');
+        $this->view('home', '/', '2026-08-10 11:00:00');
+        $this->view('home', '/demo-services/', '2026-08-10 11:05:00');
+
+        $result = $this->compute([$step + ['label' => 'Contacts'], $this->pageStep('/demo-services/')]);
+
+        self::assertSame('', $result['error']);
+        self::assertSame([2, 2], array_column($result['steps'], 'sessions'));
+    }
+
+    /**
+     * @return array<string, array{array<string, mixed>}>
+     */
+    public static function kontaktySteps(): array
+    {
+        return [
+            'equals, typed'        => [['type' => 'page', 'operator' => 'equals', 'value' => '/контакты/']],
+            'equals, pasted'       => [['type' => 'page', 'operator' => 'equals', 'value' => self::KONTAKTY_UPPER]],
+            'equals, WordPress'    => [['type' => 'page', 'operator' => 'equals', 'value' => self::KONTAKTY_LOWER]],
+            'equals, full url'     => [['type' => 'page', 'operator' => 'equals', 'value' => 'https://example.com/контакты']],
+            'contains, typed'      => [['type' => 'page', 'operator' => 'contains', 'value' => 'контакт']],
+            'starts with, pasted'  => [['type' => 'page', 'operator' => 'starts_with', 'value' => '/%D0%BA%D0%BE%D0%BD']],
+            'ends with, typed'     => [['type' => 'page', 'operator' => 'ends_with', 'value' => 'акты/']],
+        ];
+    }
+
+    /**
+     * The intl-home-match scenario: a step 1.1.5 saved as "//" from a pasted
+     * address. TRIM(TRAILING '/') made it and the home page's "/" both "", so
+     * a funnel starting there reported [3, 3] for three visitors who only
+     * viewed the home page and the demo page. Under any operator it now says
+     * the funnel cannot be measured, so the step is entered again.
+     *
+     * @dataProvider damagedSteps
+     */
+    public function testAPageStepDamagedBy115NeverCountsTheHomePage(string $operator, string $pattern): void
+    {
+        foreach (['v1', 'v2', 'v3'] as $i => $session) {
+            $this->view($session, '/', '2026-08-10 0' . ($i + 1) . ':00:00');
+            $this->view($session, '/demo-services/', '2026-08-10 0' . ($i + 1) . ':05:00');
+        }
+
+        $result = $this->compute([
+            ['type' => 'page', 'operator' => $operator, 'value' => $pattern, 'label' => 'Contacts'],
+            $this->pageStep('/demo-services/'),
+        ]);
+
+        self::assertSame([], $result['steps']);
+        self::assertNotSame('', $result['error']);
+    }
+
+    /**
+     * @return array<string, array{string, string}>
+     */
+    public static function damagedSteps(): array
+    {
+        return [
+            'equals //'          => ['equals', '//'],
+            'equals full url //' => ['equals', 'https://example.com//'],
+            'contains //'        => ['contains', '//'],
+            'starts with //'     => ['starts_with', '//'],
+            'ends with //'       => ['ends_with', '//'],
+        ];
+    }
+
+    /**
+     * And a genuine home-page step still counts the home page.
+     */
+    public function testAHomePageStepStillCountsTheHomePage(): void
+    {
+        $this->view('v1', '/', '2026-08-10 09:00:00');
+        $this->view('v1', '/demo-services/', '2026-08-10 09:05:00');
+        $this->view('v2', self::KONTAKTY_LOWER, '2026-08-10 10:00:00');
+
+        $result = $this->compute([$this->pageStep('/'), $this->pageStep('/demo-services/')]);
+
+        self::assertSame([1, 1], array_column($result['steps'], 'sessions'));
+    }
+
     // ── Session integrity ────────────────────────────────────────────────────
 
     /**

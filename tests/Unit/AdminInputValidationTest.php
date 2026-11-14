@@ -149,7 +149,49 @@ final class AdminInputValidationTest extends TestCase
 
     public function testAnAbsentPairListIsEmptyRatherThanMalformed(): void
     {
-        self::assertSame(['pairs' => [], 'rejected' => 0, 'malformed' => false], KeyValuePairs::fromHeaderInput(null));
+        self::assertSame(
+            ['pairs' => [], 'rejected' => 0, 'reserved' => [], 'malformed' => false],
+            KeyValuePairs::fromHeaderInput(null)
+        );
+    }
+
+    /**
+     * A header Convermetry or WordPress sets itself is refused in any letter
+     * case and named, so the screen can say why. Saved, "x-convermetry-signature"
+     * travelled next to the real signature, and a receiver that joined the two
+     * failed verification on every request. Content-Type stays configurable.
+     */
+    public function testAReservedHeaderIsRefusedInAnyCaseAndNamed(): void
+    {
+        $result = KeyValuePairs::fromHeaderInput([
+            ['key' => 'x-convermetry-signature', 'value' => 'sha256=stale'],
+            ['key' => 'IDEMPOTENCY-KEY', 'value' => 'fixed'],
+            ['key' => 'User-Agent', 'value' => 'Mine/1.0'],
+            ['key' => 'host', 'value' => 'other.example'],
+            ['key' => 'Content-Length', 'value' => '0'],
+            ['key' => 'Transfer-Encoding', 'value' => 'chunked'],
+            ['key' => 'connection', 'value' => 'close'],
+            ['key' => 'X-Convermetry-Signature', 'value' => 'again'],
+            ['key' => 'content-type', 'value' => 'application/vnd.api+json'],
+            ['key' => 'Authorization', 'value' => 'Bearer t'],
+        ]);
+
+        self::assertFalse($result['malformed']);
+        self::assertSame(0, $result['rejected'], 'Valid names: refused for what they are, not counted as invalid rows');
+        self::assertSame([
+            'x-convermetry-signature',
+            'IDEMPOTENCY-KEY',
+            'User-Agent',
+            'host',
+            'Content-Length',
+            'Transfer-Encoding',
+            'connection',
+            'X-Convermetry-Signature',
+        ], $result['reserved']);
+        self::assertSame([
+            ['key' => 'content-type', 'value' => 'application/vnd.api+json'],
+            ['key' => 'Authorization', 'value' => 'Bearer t'],
+        ], $result['pairs']);
     }
 
     // ── Form keys ────────────────────────────────────────────────────────────

@@ -4,6 +4,10 @@ declare(strict_types=1);
 namespace Convermetry\Tests\WordPress;
 
 use Convermetry\Database\FormSubmissions;
+use Convermetry\Forms\SubmissionFields;
+use Convermetry\Goals\GoalCompletions;
+use Convermetry\Goals\GoalRepository;
+use Convermetry\Goals\GoalSettings;
 use Convermetry\Settings\Options;
 use Convermetry\Webhook\AnalyticsDispatcher;
 use Convermetry\Webhook\DeliveryLog;
@@ -653,5 +657,412 @@ final class EndToEndDeliveryTest extends WordPressTestCase
         do_action(FormDeliveryQueue::WORKER_HOOK);
 
         self::assertSame([], $this->receiver()->received(), 'Nothing may be sent anywhere');
+    }
+
+    // ── 1.1.6: what a visitor typed is what is stored and sent ────────────────
+
+    /**
+     * The message-fidelity scenario, through the real sanitizing path.
+     * sanitize_text_field() joined the lines, stored "<" as "&lt;" (so a CRM's
+     * JSON carried the entity), deleted the tag-like text and turned
+     * "100%accuracy" into "100curacy".
+     */
+    public function testAMessageIsStoredAndDeliveredAsTheVisitorTypedIt(): void
+    {
+        $values = [
+            'message' => "Hi team,\nOur budget is < \$5k and we need 100%accuracy.\n\nThanks,\nProbe",
+            'markup'  => '<b>bold</b> <script>x()</script> text',
+            'spacing' => "two  spaces\tand tab",
+        ];
+
+        $this->configureEndpoint();
+        do_action(
+            'convermetry_form_submission',
+            ['form_name' => 'Contact', 'form_id' => 'e2e-1'],
+            ['email' => 'ada@example.com'] + $values + ['padded' => "  {$values['spacing']}  "],
+            []
+        );
+        $submissionId = $this->submissionId();
+
+        $submission = FormSubmissions::getBySubmissionId($submissionId);
+        self::assertNotNull($submission);
+        $stored = array_column(SubmissionFields::fromStoredJson((string) $submission['submission_data'])->toArray(), 'value', 'id');
+
+        foreach ($values as $id => $value) {
+            self::assertSame($value, $stored[$id], "{$id} is stored as typed");
+        }
+        self::assertSame($values['spacing'], $stored['padded'], 'Only surrounding whitespace is trimmed');
+
+        do_action(FormDeliveryQueue::WORKER_HOOK);
+        self::assertTrue($this->receiver()->waitFor(1));
+
+        $body = $this->receiver()->received()[0]['body'];
+        self::assertStringNotContainsString('&lt;', $body, 'Webhook JSON carries text, not HTML entities');
+
+        $payload = json_decode($body, true);
+        self::assertIsArray($payload);
+        $sent = array_column($payload['form_submission']['submission_data'], 'value', 'id');
+
+        foreach ($values as $id => $value) {
+            self::assertSame($value, $sent[$id], "{$id} is delivered as typed");
+        }
+    }
+
+    // ── 1.1.6: Convermetry's own headers travel once ──────────────────────────
+
+    /**
+     * The webhook-protocol scenario: global headers saved by 1.1.5 in another
+     * letter case than Convermetry's own. Each travelled next to the real one,
+     * and this receiver, like most servers, joined them ("fixed, <id>"), so
+     * signature verification and Idempotency-Key de-duplication failed on
+     * every request.
+     */
+    public function testAHeaderSavedInAnotherCaseIsNotSentBesideConvermetrysOwn(): void
+    {
+        $this->configureEndpoint();
+        $settings                   = (array) get_option(Options::WEBHOOK_OPTION_KEY);
+        $settings['global_headers'] = [
+            ['key' => 'x-convermetry-signature', 'value' => 'sha256=stale'],
+            ['key' => 'idempotency-key', 'value' => 'fixed'],
+            ['key' => 'user-agent', 'value' => 'Mine/1.0'],
+            ['key' => 'X-Kept', 'value' => 'yes'],
+        ];
+        update_option(Options::WEBHOOK_OPTION_KEY, $settings);
+
+        $this->submit();
+        do_action(FormDeliveryQueue::WORKER_HOOK);
+        self::assertTrue($this->receiver()->waitFor(1));
+
+        $received = $this->receiver()->received()[0];
+        $headers  = $received['headers'];
+        $payload  = json_decode($received['body'], true);
+        self::assertIsArray($payload);
+
+        self::assertSame($payload['delivery_id'], $headers['idempotency-key']);
+        self::assertSame('sha256=' . hash_hmac('sha256', $received['body'], 'e2e-secret'), $headers['x-convermetry-signature']);
+        self::assertSame('WordPress/Convermetry ' . CVMTRY_VERSION, $headers['user-agent']);
+        self::assertSame('yes', $headers['x-kept']);
+    }
+
+    // ── 1.1.6: which answers are retried ──────────────────────────────────────
+
+    /** The queue row a submission's delivery waits in, or null once it is gone. */
+    private function queueRow(string $submissionId): ?array
+    {
+        global $wpdb;
+
+        $row = $wpdb->get_row($wpdb->prepare(
+            'SELECT attempt, status, next_attempt_at FROM %i WHERE submission_id = %s',
+            FormDeliveryQueue::tableName(),
+            $submissionId
+        ), ARRAY_A);
+
+        return is_array($row) ? $row : null;
+    }
+
+    /** Seconds from now until a queue row's next attempt. */
+    private function secondsUntilNextAttempt(string $submissionId): int
+    {
+        $row = $this->queueRow($submissionId);
+        self::assertNotNull($row, 'The delivery must still be queued');
+
+        return (int) strtotime($row['next_attempt_at'] . ' UTC') - time();
+    }
+
+    /**
+     * A 400 refuses the same frozen request every time. It used to be retried
+     * five more times over a day while the lead showed "pending"; the lead is
+     * now "failed" after the one attempt, abandoned as 'rejected'.
+     *
+     * @dataProvider finalAnswers
+     */
+    public function testAFinalClientErrorFailsTheLeadAtOnce(int $code): void
+    {
+        $reasons  = [];
+        $listener = static function (array $context, string $reason) use (&$reasons): void {
+            $reasons[] = $reason;
+        };
+        add_action('convermetry_webhook_delivery_abandoned', $listener, 10, 2);
+
+        try {
+            $this->configureEndpoint("/status/{$code}");
+            $this->submit();
+            $submissionId = $this->submissionId();
+
+            do_action(FormDeliveryQueue::WORKER_HOOK);
+            self::assertTrue($this->receiver()->waitFor(1));
+
+            self::assertNull($this->queueRow($submissionId), "A {$code} is not retried");
+            self::assertCount(1, $this->logRows($submissionId));
+            self::assertSame('failed', $this->deliveryState($submissionId));
+            self::assertSame(['rejected'], $reasons);
+        } finally {
+            remove_action('convermetry_webhook_delivery_abandoned', $listener, 10);
+        }
+    }
+
+    /**
+     * @return array<string, array{int}>
+     */
+    public static function finalAnswers(): array
+    {
+        return ['400' => [400], '404' => [404], '410' => [410], '422' => [422]];
+    }
+
+    /**
+     * What a later attempt can still change keeps the schedule: the first
+     * retry five minutes on. A redirect is one of them, and it is not followed
+     * (the receiver's Location target records nothing).
+     *
+     * @dataProvider retriedAnswers
+     */
+    public function testARetryableAnswerKeepsTheSchedule(int $code): void
+    {
+        $this->configureEndpoint("/status/{$code}");
+        $this->submit();
+        $submissionId = $this->submissionId();
+
+        do_action(FormDeliveryQueue::WORKER_HOOK);
+        self::assertTrue($this->receiver()->waitFor(1));
+
+        self::assertSame('pending', $this->deliveryState($submissionId));
+        self::assertEqualsWithDelta(AnalyticsDispatcher::retryDelays()[0], $this->secondsUntilNextAttempt($submissionId), 60);
+
+        self::assertSame(["/status/{$code}"], array_column($this->receiver()->received(), 'path'),
+            'Exactly one request, and a redirect is never followed');
+    }
+
+    /**
+     * @return array<string, array{int}>
+     */
+    public static function retriedAnswers(): array
+    {
+        return [
+            '301' => [301], '308' => [308], '408' => [408], '409' => [409],
+            '425' => [425], '429' => [429], '500' => [500], '503' => [503],
+        ];
+    }
+
+    /**
+     * Retry-After on a 429 or 503 lengthens the wait, as seconds or as a date,
+     * and never shortens it below the schedule's five minutes.
+     *
+     * @dataProvider retryAfterAnswers
+     */
+    public function testRetryAfterLengthensTheWaitBeforeTheNextAttempt(string $path, int $expected): void
+    {
+        $path = str_replace('{in-2h}', rawurlencode(gmdate('D, d M Y H:i:s', time() + 7200) . ' GMT'), $path);
+
+        $this->configureEndpoint($path);
+        $this->submit();
+        $submissionId = $this->submissionId();
+
+        do_action(FormDeliveryQueue::WORKER_HOOK);
+        self::assertTrue($this->receiver()->waitFor(1));
+
+        self::assertSame('pending', $this->deliveryState($submissionId));
+        self::assertEqualsWithDelta($expected, $this->secondsUntilNextAttempt($submissionId), 60);
+    }
+
+    /**
+     * @return array<string, array{string, int}>
+     */
+    public static function retryAfterAnswers(): array
+    {
+        return [
+            '429, two hours'      => ['/status/429/retry-after-7200', 7200],
+            '503, a date'         => ['/status/503/retry-after-{in-2h}', 7200],
+            '429, thirty seconds' => ['/status/429/retry-after-30', 300],
+            '500 ignores it'      => ['/status/500/retry-after-7200', 300],
+        ];
+    }
+
+    /**
+     * Points the plugin at one analytics endpoint and returns its durable id.
+     */
+    private function configureAnalyticsEndpoint(string $path): string
+    {
+        update_option(Options::WEBHOOK_OPTION_KEY, [
+            'active'        => true,
+            'shared_secret' => 'e2e-secret',
+            'interval'      => 'daily',
+            'endpoints'     => [[
+                'url'       => $this->receiver()->url($path),
+                'label'     => 'E2E analytics',
+                'analytics' => true,
+                'forms'     => false,
+            ]],
+        ]);
+        Options::ensureEndpointIds();
+
+        return Options::endpoints()[0]->id;
+    }
+
+    /** Clears what an analytics dispatch leaves behind. */
+    private function forgetAnalyticsState(): void
+    {
+        wp_clear_scheduled_hook(AnalyticsDispatcher::RETRY_HOOK);
+        delete_option('cvmtry_webhook_retry_state');
+        delete_option('cvmtry_webhook_last_sent');
+        delete_option('cvmtry_webhook_dispatch_lock');
+    }
+
+    /**
+     * An analytics report answered with a 400 ends its chain at once, so the
+     * receiver is asked again at the next scheduled dispatch rather than five
+     * more times in between; the frozen window is kept for that dispatch.
+     */
+    public function testAFinalClientErrorEndsAnAnalyticsChainAtOnce(): void
+    {
+        $this->forgetAnalyticsState();
+
+        try {
+            $id = $this->configureAnalyticsEndpoint('/status/400');
+
+            AnalyticsDispatcher::dispatch();
+            self::assertTrue($this->receiver()->waitFor(1));
+
+            $state = (array) get_option('cvmtry_webhook_retry_state', []);
+            self::assertArrayHasKey($id, $state, 'The frozen delivery is kept');
+            self::assertTrue((bool) $state[$id]['exhausted'], 'and its chain ended');
+            self::assertFalse(wp_next_scheduled(AnalyticsDispatcher::RETRY_HOOK, [$id]), 'No retry is scheduled');
+        } finally {
+            $this->forgetAnalyticsState();
+        }
+    }
+
+    public function testRetryAfterLengthensTheWaitBeforeAnAnalyticsRetry(): void
+    {
+        $this->forgetAnalyticsState();
+
+        try {
+            $id = $this->configureAnalyticsEndpoint('/status/429/retry-after-7200');
+
+            AnalyticsDispatcher::dispatch();
+            self::assertTrue($this->receiver()->waitFor(1));
+
+            $next = wp_next_scheduled(AnalyticsDispatcher::RETRY_HOOK, [$id]);
+            self::assertIsInt($next);
+            self::assertEqualsWithDelta(7200, $next - time(), 60);
+        } finally {
+            $this->forgetAnalyticsState();
+        }
+    }
+
+    // ── 1.1.6: percent-encoded URLs through the tracking route ────────────────
+
+    /**
+     * Posts one batch to the tracking route, as the tracker does.
+     *
+     * @param list<array<string, mixed>> $events
+     */
+    private function track(array $events): void
+    {
+        $request = new WP_REST_Request('POST', '/convermetry/v1/track');
+        $request->add_header('Content-Type', 'application/json');
+        $request->set_body((string) wp_json_encode(['events' => $events]));
+
+        self::assertSame(202, rest_do_request($request)->get_status());
+    }
+
+    /** Stores a goal through the save path the Goals screen uses. */
+    private function saveGoal(array $fields): array
+    {
+        $goal = GoalSettings::sanitize($fields + ['enabled' => '1'], null, gmdate('Y-m-d H:i:s'));
+        self::assertNotNull($goal, 'The goal must be accepted');
+        self::assertTrue(GoalRepository::save($goal));
+
+        return $goal;
+    }
+
+    /** Completions of one goal, by session. */
+    private function completionSessions(string $goalId): array
+    {
+        global $wpdb;
+
+        return $wpdb->get_col($wpdb->prepare(
+            'SELECT session_id FROM %i WHERE goal_id = %s ORDER BY id',
+            GoalCompletions::tableName(),
+            $goalId
+        ));
+    }
+
+    /**
+     * The intl-paths scenario, item 4: a link to a percent-encoded file name
+     * or slug was stored with every %XX deleted ("/PriceList2026.pdf"), and
+     * a "contains" click goal was matched against an address that does not
+     * exist.
+     */
+    public function testAClickKeepsItsEncodedDestinationAndCompletesAContainsGoal(): void
+    {
+        try {
+            $encoded = $this->saveGoal(['name' => 'Price list (encoded)', 'type' => 'click', 'operator' => 'contains', 'value' => 'Price%20List']);
+            $typed   = $this->saveGoal(['name' => 'Price list (typed)', 'type' => 'click', 'operator' => 'contains', 'value' => 'price list 2026']);
+            self::assertSame('Price%20List', $encoded['value'], 'The goal keeps its %20');
+
+            $file  = home_url('/demo-contact/Price%20List%202026.pdf');
+            $slug  = home_url('/%d0%ba%d0%be%d0%bd%d1%82%d0%b0%d0%ba%d1%82%d1%8b/');
+            $page  = home_url('/demo-contact/');
+
+            $this->track([
+                ['type' => 'pageview', 'page_url' => $page, 'session_id' => 'aaaa0001'],
+                ['type' => 'click', 'page_url' => $page, 'session_id' => 'aaaa0001', 'element_tag' => 'a', 'target_url' => $file],
+                ['type' => 'click', 'page_url' => $page, 'session_id' => 'aaaa0001', 'element_tag' => 'a', 'target_url' => $slug],
+            ]);
+
+            global $wpdb;
+            self::assertSame([$file, $slug], $wpdb->get_col(
+                'SELECT target_url FROM ' . $wpdb->prefix . "cvmtry_events WHERE event_type = 'click' ORDER BY id"
+            ));
+            self::assertSame(['aaaa0001'], $this->completionSessions((string) $encoded['goal_id']));
+            self::assertSame(['aaaa0001'], $this->completionSessions((string) $typed['goal_id']));
+        } finally {
+            delete_option(Options::GOALS_OPTION_KEY);
+            GoalRepository::flushCache();
+        }
+    }
+
+    /**
+     * The intl-paths and intl-home-match scenarios, item 1, through the real
+     * sanitize_text_field(): an address pasted from Chrome for /контакты/ used
+     * to be saved as "//", and completed the goal, with its value, on every
+     * home-page view. It is now saved as pasted and completes on that page
+     * only; and a goal 1.1.5 already stored as "//" completes on nothing.
+     */
+    public function testAUrlGoalForANonAsciiSlugCompletesOnThatPageAndNeverOnTheHomePage(): void
+    {
+        global $wpdb;
+
+        try {
+            $pasted = '/%D0%BA%D0%BE%D0%BD%D1%82%D0%B0%D0%BA%D1%82%D1%8B/';
+            $goals  = [
+                'pasted' => $this->saveGoal(['name' => 'Contacts (pasted)', 'type' => 'url', 'operator' => 'equals', 'value' => $pasted]),
+                'typed'  => $this->saveGoal(['name' => 'Contacts (typed)', 'type' => 'url', 'operator' => 'equals', 'value' => '/контакты/']),
+            ];
+            self::assertSame($pasted, $goals['pasted']['value'], 'Saved as pasted, not as "//"');
+
+            // What 1.1.5 stored for that paste: written to the option as it was,
+            // since no save path in 1.1.6 accepts it.
+            $damaged          = $this->saveGoal(['name' => 'Contacts (1.1.5)', 'type' => 'url', 'operator' => 'equals', 'value' => '/x/']);
+            $damaged['value'] = '//';
+            $damaged['definition_hash'] = GoalSettings::definitionHash($damaged);
+            self::assertTrue(GoalRepository::save($damaged));
+            GoalRepository::flushCache();
+            self::assertNotNull(GoalRepository::find((string) $damaged['goal_id']), 'A damaged goal is kept, not dropped');
+
+            $this->track([
+                ['type' => 'pageview', 'page_url' => home_url('/'), 'session_id' => 'bbbb0001'],
+                ['type' => 'pageview', 'page_url' => home_url('/demo-services/'), 'session_id' => 'bbbb0001'],
+                ['type' => 'pageview', 'page_url' => home_url('/%d0%ba%d0%be%d0%bd%d1%82%d0%b0%d0%ba%d1%82%d1%8b/'), 'session_id' => 'cccc0002'],
+            ]);
+
+            self::assertSame(['cccc0002'], $this->completionSessions((string) $goals['pasted']['goal_id']));
+            self::assertSame(['cccc0002'], $this->completionSessions((string) $goals['typed']['goal_id']));
+            self::assertSame([], $this->completionSessions((string) $damaged['goal_id']), 'The home page completes nothing');
+            self::assertSame('3', $wpdb->get_var('SELECT COUNT(*) FROM ' . $wpdb->prefix . "cvmtry_events WHERE event_type = 'pageview'"));
+        } finally {
+            delete_option(Options::GOALS_OPTION_KEY);
+            GoalRepository::flushCache();
+        }
     }
 }

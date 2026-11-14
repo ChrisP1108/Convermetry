@@ -8,8 +8,9 @@
  * what the plugin believed it sent.
  *
  * The path decides the response: /ok answers 200, /fail answers 500, so the
- * retry and failure paths can be exercised against genuine HTTP statuses. A
- * second segment swaps the JSON body for another (see the end of this file).
+ * retry and failure paths can be exercised against genuine HTTP statuses, and
+ * /status/<code> answers any other status. A second segment swaps the JSON
+ * body for another (see the end of this file).
  * /whoami answers this instance's token and is NOT captured — it is how the
  * caller tells its own server apart from a stale one left on the port.
  */
@@ -51,6 +52,27 @@ if ($log !== '') {
 // A second segment picks a body other than the default JSON, for the Activity
 // Log's storage tests: /ok/japanese-html, /fail/japanese-html, /fail/latin1-html.
 [$outcome, $variant] = array_pad(explode('/', ltrim($uri, '/'), 2), 2, '');
+
+// /status/<code>[/retry-after-<value>] answers any status, for the retry-policy
+// tests: /status/400, /status/429/retry-after-7200. A 3xx points its Location at
+// /ok/redirected, which is captured like any request, so a test can prove a
+// redirect was never followed.
+if ($outcome === 'status') {
+    [$code, $extra] = array_pad(explode('/', $variant, 2), 2, '');
+    http_response_code((int) $code);
+
+    if (str_starts_with($extra, 'retry-after-')) {
+        header('Retry-After: ' . rawurldecode(substr($extra, strlen('retry-after-'))));
+    }
+    if ((int) $code >= 300 && (int) $code < 400) {
+        header('Location: /ok/redirected');
+    }
+
+    header('Content-Type: application/json');
+    echo '{"status":' . (int) $code . '}';
+
+    return true;
+}
 
 http_response_code($outcome === 'fail' ? 500 : 200);
 

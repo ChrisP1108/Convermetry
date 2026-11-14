@@ -5,6 +5,8 @@ namespace Convermetry\Funnels;
 
 if (!defined('ABSPATH')) exit;
 
+use Convermetry\Support\UrlPattern;
+
 /**
  * Interpretation of a funnel definition: what a valid one looks like and what
  * an administrator submitted reduces to.
@@ -78,6 +80,13 @@ final class FunnelSettings
     {
         $name = self::text($raw['name'] ?? '', self::MAX_NAME_LEN);
         if ($name === '') {
+            return null;
+        }
+
+        // Refused as a whole rather than dropping the step, which is what
+        // sanitizeSteps() does with an empty editor row: a funnel saved one step
+        // short would report a different chain than the one entered.
+        if (self::hasUnusablePageStep($raw)) {
             return null;
         }
 
@@ -157,7 +166,14 @@ final class FunnelSettings
             return null;
         }
 
-        $value = self::text($raw['value'] ?? '', self::MAX_VALUE_LEN);
+        // A page step's value is a URL and keeps its %XX sequences
+        // (UrlPattern::clean()); sanitize_text_field() deleted them, so an
+        // address pasted from the browser was saved as "//" and counted every
+        // home-page visitor. A step stored that way before 1.1.6 is kept here,
+        // because this also runs on every read, and StepCompiler refuses it.
+        $value = $type === 'page'
+            ? UrlPattern::clean($raw['value'] ?? '', self::MAX_VALUE_LEN)
+            : self::text($raw['value'] ?? '', self::MAX_VALUE_LEN);
 
         $operator = is_scalar($raw['operator'] ?? null) ? sanitize_key((string) $raw['operator']) : '';
 
@@ -186,6 +202,31 @@ final class FunnelSettings
             'value'    => $value,
             'label'    => self::text($raw['label'] ?? '', self::MAX_NAME_LEN),
         ];
+    }
+
+    /**
+     * Whether a submitted funnel has a page step whose address cannot match
+     * any page ({@see UrlPattern::isUsable()}), so the Funnels screen can say
+     * why it was refused. {@see sanitize()} refuses it too.
+     *
+     * @param array<string, mixed> $raw Unslashed submitted funnel.
+     * @return bool
+     */
+    public static function hasUnusablePageStep(array $raw): bool
+    {
+        foreach (is_array($raw['steps'] ?? null) ? $raw['steps'] : [] as $step) {
+            if (!is_array($step) || !is_scalar($step['type'] ?? null) || sanitize_key((string) $step['type']) !== 'page') {
+                continue;
+            }
+
+            $value = UrlPattern::clean($step['value'] ?? '', self::MAX_VALUE_LEN);
+
+            if ($value !== '' && !UrlPattern::isUsable($value)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**

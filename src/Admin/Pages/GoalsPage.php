@@ -187,6 +187,13 @@ final class GoalsPage
             self::redirect(['cvmtry_goal_error' => 'negative_value']);
         }
 
+        // Checked before sanitize() for the same reason: an address with an
+        // empty segment ("//") is refused for a reason the generic message
+        // does not give.
+        if (GoalSettings::hasUnusableUrlRule($submitted)) {
+            self::redirect(['cvmtry_goal_error' => 'url_rule']);
+        }
+
         $goal = GoalSettings::sanitize($submitted, $existing, gmdate('Y-m-d H:i:s'));
 
         if ($goal === null) {
@@ -507,6 +514,8 @@ final class GoalsPage
 
         $goals = GoalRepository::visible();
 
+        self::renderDamagedRuleNotice($goals);
+
         if ($period->refused) {
             ?>
             <div class="notice notice-warning inline"><p><?php echo esc_html(ReportPeriod::refusedMessage()); ?></p></div>
@@ -555,6 +564,7 @@ final class GoalsPage
             ),
             'missing' => __('That goal could not be found. It may already have been removed.', 'convermetry'),
             'negative_value' => __('That goal could not be saved. Its value cannot be negative: enter what one completion is worth, or leave it blank.', 'convermetry'),
+            'url_rule' => __('That goal could not be saved. Its address contains an empty segment ("//"), which no page has. Type the address as the browser shows it, or paste it again.', 'convermetry'),
             default   => '',
         };
 
@@ -616,6 +626,45 @@ final class GoalsPage
                 . wp_kses_post(sprintf($warning, $settingsUrl))
                 . '</p></div>';
         }
+    }
+
+    /**
+     * Names the URL goals whose address 1.1.5 damaged, which now match nothing.
+     *
+     * Saved through sanitize_text_field(), an address pasted from the browser
+     * lost every %XX octet, so a page with a non-ASCII slug became "//" and
+     * completed the goal on every home-page view. 1.1.6 stops matching it
+     * ({@see GoalSettings::isDamagedUrlRule()}), but what is left cannot be
+     * repaired, and a goal that silently stopped counting would look like a
+     * quiet week. So the screen says which ones to enter again.
+     *
+     * @param array<int, array<string, mixed>> $goals The goals listed on this screen.
+     * @return void
+     */
+    private static function renderDamagedRuleNotice(array $goals): void
+    {
+        $names = [];
+
+        foreach ($goals as $goal) {
+            if (GoalSettings::isDamagedUrlRule($goal)) {
+                $names[] = (string) ($goal['name'] ?? '');
+            }
+        }
+
+        if ($names === []) {
+            return;
+        }
+
+        echo '<div class="notice notice-warning inline"><p>' . esc_html(sprintf(
+            /* translators: %s: comma-separated goal names. */
+            _n(
+                'This goal\'s address was damaged when it was saved by an earlier version, so it no longer counts anything: %s. Edit it and enter the page\'s address again.',
+                'These goals\' addresses were damaged when they were saved by an earlier version, so they no longer count anything: %s. Edit each one and enter the page\'s address again.',
+                count($names),
+                'convermetry'
+            ),
+            implode(', ', $names)
+        )) . '</p></div>';
     }
 
     /**

@@ -87,6 +87,10 @@ Convermetry\Autoloader::boot(dirname(__DIR__, 2) . '/');
 
 require_once __DIR__ . '/TestWpdb.php';
 
+// The unit suite's pass-through __() and friends: a funnel that cannot be
+// measured reports a translated reason, and an English site shows it untranslated.
+require_once __DIR__ . '/../stubs/i18n.php';
+
 /*
  * The WordPress functions the query layer under test touches. Everything here
  * is either a pure string helper or a value the queries do not depend on — a

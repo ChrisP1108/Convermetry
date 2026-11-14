@@ -6,6 +6,7 @@ namespace Convermetry\Goals;
 if (!defined('ABSPATH')) exit;
 
 use Convermetry\Leads\Money;
+use Convermetry\Support\UrlPattern;
 
 /**
  * Interpretation of a conversion goal: what a valid definition looks like,
@@ -173,11 +174,19 @@ final class GoalSettings
             return null;
         }
 
-        $value = self::text($raw['value'] ?? '', self::MAX_VALUE_LEN);
+        $value = self::value($raw['value'] ?? '', $type, $operator);
         if ($value === '' && !in_array($operator, self::VALUELESS_OPERATORS, true)) {
             // Every other operator compares against something. An empty pattern
             // would match everything ('contains' of '') or nothing, and either
             // way the site owner did not ask for that.
+            return null;
+        }
+
+        if ($type === 'url' && !UrlPattern::isUsable($value)) {
+            // "//" is what an earlier sanitizer left of a pasted non-ASCII
+            // address, and it forgave its slashes down to the home page.
+            // Refused here, whatever a future cleaning rule turns a pattern
+            // into, so no rule can silently come to mean "the home page".
             return null;
         }
 
@@ -330,7 +339,10 @@ final class GoalSettings
         }
 
         $goal['name']             = self::text($goal['name'], self::MAX_NAME_LEN);
-        $goal['value']            = self::text($goal['value'], self::MAX_VALUE_LEN);
+        // Kept, not refused, when it is a URL rule 1.1.5 damaged: dropping the
+        // goal would orphan its completion history. GoalMatcher declines to
+        // match it, and the Goals screen names it so it can be entered again.
+        $goal['value']            = self::value($goal['value'], (string) $goal['type'], (string) $goal['operator']);
         $goal['enabled']          = !empty($goal['enabled']);
         $goal['once_per_session'] = !empty($goal['once_per_session']);
         $goal['dynamic_value']    = $goal['type'] === 'custom_event' && !empty($goal['dynamic_value']);
@@ -376,6 +388,57 @@ final class GoalSettings
             'custom_event' => 'custom_event',
             default        => '',
         };
+    }
+
+    /**
+     * Whether a submitted goal is a URL rule that cannot match any page, so
+     * the Goals screen can say why it was refused. {@see sanitize()} refuses
+     * it too, for every other caller.
+     *
+     * @param array<string, mixed> $raw Unslashed submitted goal.
+     * @return bool
+     */
+    public static function hasUnusableUrlRule(array $raw): bool
+    {
+        if (self::key($raw['type'] ?? '') !== 'url') {
+            return false;
+        }
+
+        $value = UrlPattern::clean($raw['value'] ?? '', self::MAX_VALUE_LEN);
+
+        return $value !== '' && !UrlPattern::isUsable($value);
+    }
+
+    /**
+     * Whether a stored goal's URL rule was damaged before 1.1.6 and now
+     * matches nothing until it is entered again.
+     *
+     * @param array<string, mixed> $goal A normalized goal.
+     * @return bool
+     */
+    public static function isDamagedUrlRule(array $goal): bool
+    {
+        return (string) ($goal['type'] ?? '') === 'url' && !UrlPattern::isUsable((string) ($goal['value'] ?? ''));
+    }
+
+    /**
+     * Sanitizes a goal's match value by what kind of value it is.
+     *
+     * A URL goal and a link-click "contains"/"equals" rule hold a URL, and
+     * keep their %XX sequences ({@see UrlPattern::clean()}): sanitize_text_field()
+     * deleted them, which turned an address pasted from the browser into "//"
+     * and "a%20b" into "ab". A CSS selector and a custom event name are text.
+     *
+     * @param mixed  $value    Raw value.
+     * @param string $type     The goal type.
+     * @param string $operator The goal operator.
+     * @return string
+     */
+    private static function value(mixed $value, string $type, string $operator): string
+    {
+        $isUrl = $type === 'url' || ($type === 'click' && in_array($operator, ['contains', 'equals'], true));
+
+        return $isUrl ? UrlPattern::clean($value, self::MAX_VALUE_LEN) : self::text($value, self::MAX_VALUE_LEN);
     }
 
     /**

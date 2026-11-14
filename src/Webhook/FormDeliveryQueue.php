@@ -1356,7 +1356,7 @@ final class FormDeliveryQueue
             return;
         }
 
-        self::rescheduleOrAbandon($rowId, $attempt, $submissionId, $context);
+        self::rescheduleOrAbandon($rowId, $attempt, $submissionId, $context, $result);
     }
 
     /**
@@ -1459,25 +1459,34 @@ final class FormDeliveryQueue
      * schedule, or abandons the delivery once every attempt is spent (each
      * attempt is already in the Activity Log, so nothing is silently lost).
      *
+     * A final answer abandons it at once, with reason 'rejected'
+     * ({@see TransportResult::isFinal()}): a 400, 410 or 422 refuses the same
+     * frozen request every time, and retrying it cost five more requests per
+     * lead and held the lead "pending" for a day. A Retry-After on a 429 or
+     * 503 lengthens the wait before the next attempt, never shortens it.
+     *
      * @param int                  $rowId        Queue row id.
      * @param int                  $attempt      The attempt number that just failed (1-based).
      * @param string               $submissionId The submission whose recorded delivery state to refresh.
      * @param DeliveryDetails|null $context      Delivery details for the terminal lifecycle action.
+     * @param TransportResult|null $result       What the attempt came back with, when one was made.
      * @return void
      */
     private static function rescheduleOrAbandon(
         int $rowId,
         int $attempt,
         string $submissionId = '',
-        ?DeliveryDetails $context = null
+        ?DeliveryDetails $context = null,
+        ?TransportResult $result = null
     ): void {
         global $wpdb;
 
-        $table  = self::tableName();
-        $delays = AnalyticsDispatcher::retryDelays();
+        $table    = self::tableName();
+        $delays   = AnalyticsDispatcher::retryDelays();
+        $rejected = $result !== null && $result->isFinal();
 
         // Attempt 1 is the initial send; delays[0] gates attempt 2, etc.
-        if ($attempt > count($delays)) {
+        if ($rejected || $attempt > count($delays)) {
             // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- queue worker on the custom delivery queue table; claims and state must read the live rows, so they are never cached.
             $wpdb->delete($table, ['id' => $rowId], ['%d']);
 
@@ -1488,12 +1497,13 @@ final class FormDeliveryQueue
             // Genuinely terminal, unlike the analytics chain: this row will
             // never be retried, and only the Activity Log remembers it.
             if ($context !== null) {
-                DeliveryContext::abandoned($context, 'retries_exhausted');
+                DeliveryContext::abandoned($context, $rejected ? 'rejected' : 'retries_exhausted');
             }
             return;
         }
 
-        $nextAt = time() + $delays[$attempt - 1];
+        $delay  = $delays[$attempt - 1];
+        $nextAt = time() + ($result !== null ? $result->nextDelay($delay) : $delay);
         $next   = gmdate('Y-m-d H:i:s', $nextAt);
 
         // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- queue worker on the custom delivery queue table; claims and state must read the live rows, so they are never cached.

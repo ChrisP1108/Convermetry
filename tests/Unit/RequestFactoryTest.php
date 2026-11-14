@@ -138,4 +138,122 @@ final class RequestFactoryTest extends TestCase
 
         self::assertSame('https://receiver.test/hook', RequestFactory::buildUrl('https://receiver.test/hook'));
     }
+
+    // ── Header names are case-insensitive ────────────────────────────────────
+
+    /**
+     * Global headers saved in another letter case than Convermetry's own,
+     * as the webhook-protocol scenario configured them.
+     */
+    private function storeHeaders(array $global, array $form = []): void
+    {
+        Functions\when('get_option')->alias(static function (string $key, $default = false) use ($global, $form) {
+            if ($key === Options::WEBHOOK_OPTION_KEY) {
+                return [
+                    'endpoints'      => [[
+                        'id'        => 'ep_receiver',
+                        'url'       => 'https://receiver.test/hook',
+                        'label'     => 'Receiver',
+                        'secret'    => 's3cret',
+                        'analytics' => true,
+                        'forms'     => true,
+                    ]],
+                    'global_query'   => [],
+                    'global_headers' => $global,
+                ];
+            }
+
+            if ($key === FormSettings::OPTION_KEY) {
+                return [self::FORM_KEY => ['query_params' => [], 'headers' => $form, 'include_page_params' => false]];
+            }
+
+            return $default;
+        });
+    }
+
+    /**
+     * How many headers a set holds under one name, as HTTP reads names.
+     *
+     * @param array<string, string> $headers
+     */
+    private static function copies(array $headers, string $name): int
+    {
+        return count(array_filter(array_keys($headers), static fn(string $key): bool => strtolower($key) === strtolower($name)));
+    }
+
+    /**
+     * The webhook-protocol scenario: with global headers x-convermetry-signature,
+     * idempotency-key and user-agent saved, each was sent twice, and a receiver
+     * that joined them ("sha256=stale, sha256=<real>") failed every signature
+     * check and every de-duplication.
+     */
+    public function testAReservedHeaderInAnotherCaseIsNeverSentBesideConvermetrysOwn(): void
+    {
+        $this->storeHeaders([
+            ['key' => 'x-convermetry-signature', 'value' => 'sha256=stale'],
+            ['key' => 'idempotency-key', 'value' => 'fixed'],
+            ['key' => 'user-agent', 'value' => 'Mine/1.0'],
+            ['key' => 'HOST', 'value' => 'other.example'],
+            ['key' => 'X-Kept', 'value' => 'yes'],
+        ], [['key' => 'Content-length', 'value' => '1']]);
+
+        $frozen = RequestFactory::buildHeaders(self::FORM_KEY, ['Transfer-Encoding' => 'chunked', 'connection' => 'close']);
+
+        foreach (RequestFactory::RESERVED_HEADERS as $name) {
+            self::assertSame(0, self::copies($frozen, $name), "{$name} is not composed from any configured layer");
+        }
+        self::assertSame('yes', $frozen['X-Kept']);
+
+        $body = '{"delivery_id":"d1"}';
+        $sent = RequestFactory::withProtocolHeaders($frozen, 'ep_receiver', $body, 'd1');
+
+        foreach (['User-Agent', 'Idempotency-Key', 'X-Convermetry-Signature'] as $name) {
+            self::assertSame(1, self::copies($sent, $name), "exactly one {$name}");
+        }
+        self::assertSame('d1', $sent['Idempotency-Key']);
+        self::assertSame('sha256=' . hash_hmac('sha256', $body, 's3cret'), $sent['X-Convermetry-Signature']);
+    }
+
+    /**
+     * A queued lead or a pending analytics retry froze its headers under
+     * 1.1.5, duplicates included. They are dropped at send time.
+     */
+    public function testAHeaderSetFrozenBefore116LosesItsReservedCopiesAtSendTime(): void
+    {
+        $this->storeHeaders([]);
+
+        $sent = RequestFactory::withProtocolHeaders([
+            'Content-Type'            => 'application/json; charset=utf-8',
+            'x-convermetry-signature' => 'sha256=stale',
+            'IDEMPOTENCY-KEY'         => 'fixed',
+            'host'                    => 'other.example',
+            'X-Kept'                  => 'yes',
+        ], 'ep_receiver', '{}', 'd2');
+
+        self::assertSame(1, self::copies($sent, 'X-Convermetry-Signature'));
+        self::assertSame(1, self::copies($sent, 'Idempotency-Key'));
+        self::assertSame(0, self::copies($sent, 'Host'));
+        self::assertSame('d2', $sent['Idempotency-Key']);
+        self::assertSame('yes', $sent['X-Kept']);
+    }
+
+    /**
+     * Content-Type stays configurable, but one configured in another case
+     * replaces the JSON default instead of travelling next to it; and a later
+     * layer replaces an earlier one whatever case either was typed in.
+     */
+    public function testLaterLayersReplaceEarlierOnesWhateverTheCase(): void
+    {
+        $this->storeHeaders(
+            [['key' => 'content-type', 'value' => 'application/vnd.api+json'], ['key' => 'X-Api-Key', 'value' => 'global']],
+            [['key' => 'x-api-key', 'value' => 'form']]
+        );
+
+        $headers = RequestFactory::buildHeaders(self::FORM_KEY, ['X-API-KEY' => 'runtime']);
+
+        self::assertSame(1, self::copies($headers, 'Content-Type'));
+        self::assertSame('application/vnd.api+json', $headers['content-type']);
+        self::assertSame(1, self::copies($headers, 'X-Api-Key'));
+        self::assertSame('runtime', $headers['X-API-KEY']);
+    }
 }

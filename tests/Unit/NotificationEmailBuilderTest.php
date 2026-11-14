@@ -200,13 +200,10 @@ final class NotificationEmailBuilderTest extends TestCase
     // ── Body: escaping ───────────────────────────────────────────────────────
 
     /**
-     * Markup in a value is caught twice, and both layers are worth pinning.
-     *
-     * sanitize_text_field() strips the tags when the field is normalized, so a
-     * <script> never even reaches the builder. That is the layer that would
-     * disappear silently if normalization changed, hence the second test below
-     * covering characters that DO survive sanitizing and must still be escaped
-     * on the way into the HTML.
+     * Markup in a value reaches the builder as text: since 1.1.6 a submitted
+     * value is stored as the visitor typed it, tags included, so escaping on
+     * the way into the HTML is the one layer, and it is pinned here and in the
+     * test below.
      */
     public function testTagsInFieldValuesDoNotReachTheEmail(): void
     {
@@ -238,6 +235,26 @@ final class NotificationEmailBuilderTest extends TestCase
         self::assertStringContainsString('&quot;hi&quot;', $html);
         self::assertStringContainsString('Q &amp; A', $html);
         self::assertStringNotContainsString('Tom & Jerry', $html);
+    }
+
+    /**
+     * A textarea's line breaks are kept in storage, and the email shows them:
+     * HTML would otherwise run the lines together. The text around them is
+     * escaped first, so a break cannot open a tag.
+     */
+    public function testLineBreaksInAValueAreShownAndTheTextAroundThemEscaped(): void
+    {
+        $html = EmailBuilder::body(
+            $this->submission(['submission_data' => (string) json_encode([
+                ['id' => 'msg', 'label' => 'Message', 'value' => "Hi team,\nBudget < \$5k\n<b>Thanks</b>"],
+            ])]),
+            $this->context(),
+            $this->snapshot(),
+            $this->siteInfo()
+        );
+
+        self::assertStringContainsString("Hi team,<br>\nBudget &lt; \$5k<br>\n&lt;b&gt;Thanks&lt;/b&gt;", $html);
+        self::assertStringNotContainsString('<b>', $html);
     }
 
     public function testHtmlInFieldLabelsIsEscaped(): void

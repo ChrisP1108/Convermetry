@@ -166,6 +166,7 @@ final class FormsPage
         $rendered = [];
         $skipped  = 0;
         $pairs    = 0;
+        $reserved = [];
 
         foreach ($rawForms as $entry) {
             $block = self::sanitizeFormBlock($entry);
@@ -181,14 +182,17 @@ final class FormsPage
             $rendered[]             = $block['key'];
             $configs[$block['key']] = $block['config'];
             $pairs                 += $block['rejected_pairs'];
+            $reserved               = array_merge($reserved, $block['reserved_headers']);
         }
 
         FormSettings::saveRendered($configs, $rendered);
 
-        if ($skipped > 0 || $pairs > 0) {
+        $reserved = array_values(array_unique($reserved));
+
+        if ($skipped > 0 || $pairs > 0 || $reserved !== []) {
             set_transient(
                 self::SKIPPED_TRANSIENT . get_current_user_id(),
-                ['forms' => $skipped, 'pairs' => $pairs],
+                ['forms' => $skipped, 'pairs' => $pairs] + ($reserved !== [] ? ['reserved' => $reserved] : []),
                 MINUTE_IN_SECONDS
             );
         }
@@ -209,7 +213,7 @@ final class FormsPage
      * {@see FormProviderRegistry::validFormKey()}.
      *
      * @param mixed $entry One unslashed cvmtry_forms[...] block.
-     * @return array{key: string, config: array{form_id: string, excluded: bool, include_page_params: bool, query_params: list<array{key: string, value: string}>, headers: list<array{key: string, value: string}>}, rejected_pairs: int}|null
+     * @return array{key: string, config: array{form_id: string, excluded: bool, include_page_params: bool, query_params: list<array{key: string, value: string}>, headers: list<array{key: string, value: string}>}, rejected_pairs: int, reserved_headers: list<string>}|null
      *         Null when the block is malformed and must not be written.
      */
     private static function sanitizeFormBlock(mixed $entry): ?array
@@ -245,7 +249,8 @@ final class FormsPage
                 'query_params'        => $query['pairs'],
                 'headers'             => $headers['pairs'],
             ],
-            'rejected_pairs' => $query['rejected'] + $headers['rejected'],
+            'rejected_pairs'   => $query['rejected'] + $headers['rejected'],
+            'reserved_headers' => $headers['reserved'],
         ];
     }
 
@@ -325,6 +330,8 @@ final class FormsPage
             ?></p></div>
             <?php
         }
+
+        WebhooksPage::renderReservedHeadersNotice(is_array($stored['reserved'] ?? null) ? $stored['reserved'] : []);
     }
 
     /**

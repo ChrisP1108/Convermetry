@@ -62,11 +62,11 @@ final class WebhookSettingsInput
      *                                            include_page_params, failure_mode.
      * @param array<string, true>  $knownIds      Ids of the endpoints configured before this save.
      * @param bool                 $allowInsecure Whether http:// endpoints are allowed.
-     * @return array{malformed: bool, settings: array<string, mixed>, rejected: list<array{row: int, reason: string, display: string}>, rejected_pairs: int}
+     * @return array{malformed: bool, settings: array<string, mixed>, rejected: list<array{row: int, reason: string, display: string}>, rejected_pairs: int, reserved_headers: list<string>}
      */
     public static function sanitize(array $fields, array $knownIds, bool $allowInsecure): array
     {
-        $malformed = ['malformed' => true, 'settings' => [], 'rejected' => [], 'rejected_pairs' => 0];
+        $malformed = ['malformed' => true, 'settings' => [], 'rejected' => [], 'rejected_pairs' => 0, 'reserved_headers' => []];
 
         // ── Scalar settings ─────────────────────────────────────────────
         // The interval is a <select> and always posted; the failure mode is a
@@ -191,8 +191,9 @@ final class WebhookSettingsInput
                 'include_page_params' => !empty($fields['include_page_params']),
                 'failure_mode'        => $failureMode,
             ],
-            'rejected'       => $rejected,
-            'rejected_pairs' => $headers['rejected'] + $query['rejected'],
+            'rejected'         => $rejected,
+            'rejected_pairs'   => $headers['rejected'] + $query['rejected'],
+            'reserved_headers' => $headers['reserved'],
         ];
     }
 

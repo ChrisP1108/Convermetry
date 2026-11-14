@@ -19,10 +19,12 @@ if (!defined('ABSPATH')) exit;
  *    falls back to the id when no distinct label can be obtained reliably
  *    (Contact Form 7 and Fluent Forms expose no dependable label in their hook
  *    payloads), so it is never empty either.
- *  - {@see $value} is a sanitized string or a LIST of sanitized strings —
- *    nothing else, no nested objects, no arbitrary depth.
+ *  - {@see $value} is a cleaned string or a LIST of cleaned strings —
+ *    nothing else, no nested objects, no arbitrary depth. It is text, not
+ *    HTML: line breaks, "<" and "%" are kept, so it is escaped where it is
+ *    rendered ({@see SubmissionFields} says what cleaning removes).
  *
- * CARRIES PERSONAL DATA. This is the visitor's submitted value, sanitized and
+ * CARRIES PERSONAL DATA. This is the visitor's submitted value, cleaned and
  * with Convermetry's own cvmtry_* fields already stripped, but otherwise exactly
  * what they typed.
  *
@@ -36,7 +38,7 @@ final readonly class SubmissionField
     /**
      * @param string             $id    Provider-native field id; never empty.
      * @param string             $label Human-readable label; never empty.
-     * @param string|list<string> $value Sanitized value, or list of them.
+     * @param string|list<string> $value Cleaned value, or list of them.
      */
     public function __construct(
         public string $id,

@@ -5,6 +5,155 @@ All notable changes to Convermetry are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 1.1.6
+
+No schema change and no migration. Stored rows are not rewritten: a goal or
+funnel step that 1.1.5 saved with its `%XX` octets deleted stays as it was
+saved, and must be entered again (see the first entry); a submission recorded
+before 1.1.6 keeps the flattened values `sanitize_text_field()` left it with;
+and a click recorded before 1.1.6 keeps its stripped `target_url`.
+
+### Fixed
+
+- **A URL goal or funnel page step for a non-ASCII slug matched the home page,
+  or nothing.** WordPress stores a Cyrillic, Greek, Arabic, Hebrew or CJK slug
+  percent-encoded, and the tracker stores `page_url` in that form. Pasted from
+  the address bar (`/%D0%BA…/`), a rule went through `sanitize_text_field()`,
+  which deletes every `%XX` octet, so a slug made only of non-ASCII letters was
+  saved as `//`. Both `GoalMatcher` and `StepCompiler` forgive trailing
+  slashes, which reduced `//` and the home page's `/` alike to `""`: the goal
+  completed, with its value, on every home-page view, and a funnel starting
+  there counted every home-page visitor (`[3, 3]` for three visitors who never
+  opened the page). Typed as the address bar shows it (`/контакты/`), the rule
+  was kept but compared against the encoded `page_url` without decoding either
+  side, so it never matched. URL goals, link-click "contains"/"is exactly"
+  values and funnel page steps are now cleaned by `UrlPattern::clean()`, which
+  keeps `%XX` sequences; `GoalMatcher` compares both sides percent-decoded and
+  lowercased, and `StepCompiler`, since MySQL cannot decode a column, binds the
+  pattern in the lowercase encoding WordPress stores (the `*_ci` collation
+  ignores hex case). Typed, pasted in either hex case, or copied from
+  WordPress, the rule matches the page under every operator. A pattern whose
+  path has an empty segment (`//`, `/catalog//`, `https://example.com//`) is
+  refused when saved, and one 1.1.5 already stored is never matched, under any
+  operator: the goal records nothing and the Goals screen names it, and the
+  funnel says it cannot be measured (cached funnel reports are now keyed by
+  plugin version too, so its old numbers do not outlive the upgrade by the
+  five minutes a report is cached). Such goals and steps cannot be repaired
+  from what is left and **must be entered again**. A rule that kept some
+  characters (`/-probe/`) never matched and needs the same, but cannot be
+  detected; one saved as `/` is indistinguishable from a real home-page goal
+  and keeps matching the home page.
+- **Submitted form values were rewritten before they were stored and sent.**
+  `SubmissionFields::sanitizeValue()` ran every value, from every provider,
+  through `sanitize_text_field()`, a sanitizer for single-line settings: a
+  textarea's line breaks became spaces, `<` was stored as `&lt;` (so the JSON a
+  CRM received carried the entity), tag-like text was deleted, repeated spaces
+  and tabs were collapsed, and `%` followed by two hex digits disappeared
+  (`100%accuracy` became `100curacy`). Values are now stored as text: invalid
+  UTF-8 sequences and control characters other than tab and line feed are
+  removed, CR LF and CR become LF, surrounding whitespace is trimmed, and
+  nothing is HTML-escaped. Escaping happens on output, where it already did:
+  the Submissions screen, notification emails (which now also show line
+  breaks) and the privacy export escape, CSV cells keep their formula guard,
+  and webhook JSON needs none. Pure PHP, without mbstring.
+- **A tap on a phone recorded a hover.** Touch browsers fire a compatibility
+  `mouseover` for every tap and no `mouseout` until the next tap elsewhere, so
+  the 800 ms dwell completed for any tapped menu, tab, accordion or toggle that
+  did not navigate away, and Most Hovered Elements and the hover totals counted
+  taps (5 of 31 stored hovers came from phones in a 50-visitor run). The
+  tracker now starts a hover on `pointerover` from a mouse only, and where
+  Pointer Events are missing ignores a `mouseover` within a second of a touch.
+- **Click destinations lost every `%XX` sequence.** `DatabaseManager` stored
+  `target_url` through `sanitize_text_field()`, so a link to
+  `/Price%20List%202026.pdf` was stored as `/PriceList2026.pdf` and a link to
+  a non-ASCII slug lost the slug. Top Clicked Elements showed addresses that do
+  not exist and "link contains" goals were matched against them. It is stored
+  through `esc_url_raw()`, like `page_url` and `referrer`.
+- **Untagged visits from X/Twitter, LinkedIn and Bluesky share links were
+  Referral.** `Channels::hostChannel()` recognizes a network only by its name in
+  the registrable-domain position, and `t.co`, `x.com`, `lnkd.in`, `bsky.app`
+  and `go.bsky.app` carry none. The referrer host, without `www.`, is now also
+  looked up in the source alias map, which already knew `t.co`, `x.com` and
+  `lnkd.in` and now has `bsky.app` and `go.bsky.app`. Only a host with a dot is
+  looked up, so an intranet host called `x` stays Referral.
+- **Meta's `msg` and `an` placement sources were Paid Search.** Meta's
+  `utm_source={{site_source_name}}` produces `fb`, `ig`, `msg` or `an`, and only
+  the first two were aliased, so a paid Messenger or Audience Network ad was
+  classified Paid Search. `msg` now normalizes to `messenger` and `an` to
+  `facebook`; a site that uses `an` for something else can remove it with
+  `convermetry_source_aliases`.
+- **A custom webhook header in another letter case travelled beside
+  Convermetry's own.** `RequestFactory` protected `X-Convermetry-Signature`,
+  `Idempotency-Key`, `User-Agent` and the transport's headers only from the
+  `convermetry_webhook_headers` filter, and merged every layer, and then the
+  protocol headers, by exact key. A saved global header `x-convermetry-signature`,
+  `idempotency-key` or `user-agent`, or the same in a per-form or runtime
+  header, was therefore sent twice; most servers join the copies
+  (`sha256=stale, sha256=<real>`), so signature verification and
+  Idempotency-Key de-duplication failed on every request. Every layer is now
+  merged case-insensitively (a later `x-api-key` replaces an earlier
+  `X-Api-Key`), `RequestFactory::RESERVED_HEADERS` (`Host`, `Content-Length`,
+  `Transfer-Encoding`, `Connection`, `User-Agent`, `Idempotency-Key`,
+  `X-Convermetry-Signature`) are dropped from every configured layer, and
+  `withProtocolHeaders()` drops them again from a header set frozen before
+  1.1.6. The Webhooks and Forms screens refuse those names in any case and say
+  which. `Content-Type` can still be replaced, and a configured one in another
+  case now replaces the default instead of joining it.
+
+### Changed
+
+- **A final 4xx answer is no longer retried.** Every non-2xx answer was retried
+  on the full schedule, about 24.6 hours and six attempts, although a `400`,
+  `410` or `422` refuses the same frozen request every time: five more requests
+  per lead, and a lead shown "pending" for a day. `TransportResult::isFinal()`
+  now treats a 4xx other than `408`, `409`, `425` and `429` as final. A form
+  delivery is abandoned after that attempt, with the new reason `rejected` on
+  `convermetry_webhook_delivery_abandoned`, and the lead shows "failed"; an
+  analytics chain is marked exhausted at once, so the next scheduled dispatch
+  re-sends it instead of five retries in between. 5xx, those four 4xx, 3xx and
+  network errors keep the schedule.
+- **`Retry-After` is honored on a `429` or `503`.** In seconds or as an HTTP
+  date, it sets the least the next attempt waits, never less than the
+  schedule's own delay and never more than 24 hours. The attempt count is
+  unchanged.
+
+### Documentation
+
+- README.md and readme.txt say that webhook redirects are not followed (a 3xx
+  is a failed attempt; enter the endpoint's final address), which answers are
+  final, and the `rejected` reason.
+- README.md describes how URL goals and funnel page steps match non-Latin
+  addresses and what to do about rules saved under 1.1.5, how submitted values
+  are cleaned (the `value` row of the custom-form API table), mouse-only
+  hovers, percent-encoded click destinations, the short-link referrer hosts and
+  Meta aliases, and the reserved webhook header names. readme.txt has an FAQ
+  entry for goals whose address was damaged.
+
+### Tests
+
+- Unit tests cover the URL-pattern rule (`UrlPatternTest`), non-ASCII slugs
+  entered three ways and every damaged pattern under every operator in
+  `GoalMatcher` and `StepCompiler`, encoded link-click values, submitted values
+  stored as typed and read back unchanged, line breaks in notification emails,
+  channel classification of short-link referrers and Meta placements
+  (`ChannelsTest`), reserved and case-variant headers in every layer and in a
+  frozen header set, and which answers are final and how `Retry-After` is read
+  (`RetryPolicyTest`).
+- Integration tests run the page-step SQL against MySQL: a Cyrillic page
+  entered seven ways counts the two visitors who opened it and not the one who
+  saw only the home page, and a damaged step aborts the funnel instead of
+  counting the home page.
+- The WordPress suite saves goals and funnel steps through the admin handlers,
+  with WordPress's own sanitizing functions, tracks clicks and pageviews
+  through the REST route, delivers a typed message and case-variant headers to
+  a real receiver, and drives the retry policy with real 3xx, 4xx and 5xx
+  answers and `Retry-After` for both form and analytics deliveries. Its
+  receiver gained a `/status/<code>` route.
+- The real-browser suite taps with touch emulation and moves a real mouse, with
+  and without Pointer Events.
+- Every new test except the guards against over-correcting fails against
+  1.1.5.
+
 ## 1.1.5
 
 No schema change and no migration. Stored rows are not rewritten: a delivery

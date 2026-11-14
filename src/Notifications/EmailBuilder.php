@@ -376,7 +376,9 @@ final class EmailBuilder
                    . esc_html($row['label'])
                    . '</th>'
                    . '<td style="vertical-align:top;padding:6px 0;word-break:break-word;">'
-                   . esc_html($row['value'])
+                   // A submitted value keeps its line breaks (a textarea
+                   // message), and HTML would run them into one line.
+                   . nl2br(esc_html($row['value']), false)
                    . '</td>'
                    . '</tr>';
         }

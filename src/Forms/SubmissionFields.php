@@ -24,8 +24,11 @@ if (!defined('ABSPATH')) exit;
  *    string; it falls back to the id when no distinct label can be obtained
  *    reliably (Contact Form 7 and Fluent Forms expose no dependable label in
  *    their hook payloads).
- *  - 'value' is a sanitized string or a list of sanitized strings. Nothing
- *    else — no nested objects, no arbitrary depth.
+ *  - 'value' is a cleaned string or a list of cleaned strings. Nothing
+ *    else — no nested objects, no arbitrary depth. Cleaned means TEXT, exactly
+ *    as the visitor typed it apart from what text cannot hold (see
+ *    {@see self::cleanValue()}); it is not HTML-escaped, and every surface that
+ *    renders it escapes it there.
  *
  * WHY A LIST AND NOT A MAP. The historical format keyed by label, so two
  * fields both labelled "Name" silently collapsed into one and the field's
@@ -263,11 +266,55 @@ final class SubmissionFields
     {
         if (is_array($value)) {
             return array_map(
-                static fn(mixed $item): string => sanitize_text_field(is_scalar($item) ? (string) $item : ''),
+                static fn(mixed $item): string => self::cleanValue(is_scalar($item) ? (string) $item : ''),
                 array_values($value)
             );
         }
 
-        return sanitize_text_field(is_scalar($value) ? (string) $value : '');
+        return self::cleanValue(is_scalar($value) ? (string) $value : '');
+    }
+
+    /**
+     * What the visitor typed, stored as text.
+     *
+     * Not sanitize_text_field(), which is for a single-line admin setting and
+     * rewrote every message before it was stored and sent: line breaks became
+     * spaces, so a textarea arrived as one line; "<" became "&lt;", so a CRM's
+     * JSON carried the entity; anything shaped like a tag was deleted; and so
+     * was every "%" followed by two hex digits ("100%accuracy" became
+     * "100curacy"). HTML escaping belongs where HTML is written, and every
+     * surface does it: the Submissions screen, notification emails and the
+     * privacy export escape on output, CSV cells are guarded against formula
+     * injection, and webhook JSON needs no HTML escaping at all.
+     *
+     * What text cannot hold is removed: byte sequences that are not UTF-8,
+     * and control characters other than tab and line feed. CR LF and a lone CR
+     * become LF, so a message reads the same whichever browser sent it.
+     * Surrounding whitespace is trimmed; the visitor's own spacing inside the
+     * value is kept. Pure PHP, so this needs neither WordPress nor mbstring.
+     *
+     * Applied again when a stored row is read back, which changes nothing in a
+     * value it already cleaned. A row stored before 1.1.6 keeps the form
+     * sanitize_text_field() left it in.
+     *
+     * @param string $value Raw value.
+     * @return string
+     */
+    private static function cleanValue(string $value): string
+    {
+        if (preg_match('//u', $value) !== 1) {
+            // ENT_IGNORE drops each invalid sequence and keeps the rest;
+            // decoding undoes the escaping of &, < and >, so nothing else in
+            // the value changes.
+            $value = htmlspecialchars_decode(
+                htmlspecialchars($value, ENT_NOQUOTES | ENT_IGNORE, 'UTF-8'),
+                ENT_NOQUOTES
+            );
+        }
+
+        $value = str_replace(["\r\n", "\r"], "\n", $value);
+        $value = (string) preg_replace('/[\x00-\x08\x0B-\x1F\x7F]/', '', $value);
+
+        return trim($value);
     }
 }

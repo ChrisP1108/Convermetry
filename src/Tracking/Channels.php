@@ -78,14 +78,22 @@ final class Channels
             'fb'             => 'facebook',
             'fb.com'         => 'facebook',
             'meta'           => 'facebook',
+            // Meta's {{site_source_name}} URL parameter answers fb, ig, msg or
+            // an. "an" is Audience Network, Meta's ads in other publishers'
+            // apps; only Meta sends a bare "an", and a site that uses it for
+            // something else can remove it with the filter below.
+            'an'             => 'facebook',
             'instagram.com'  => 'instagram',
             'ig'             => 'instagram',
+            'msg'            => 'messenger',
             'twitter.com'    => 'twitter',
             'x'              => 'twitter',
             'x.com'          => 'twitter',
             't.co'           => 'twitter',
             'linkedin.com'   => 'linkedin',
             'lnkd.in'        => 'linkedin',
+            'bsky.app'       => 'bluesky',
+            'go.bsky.app'    => 'bluesky',
             'youtube.com'    => 'youtube',
             'youtu.be'       => 'youtube',
             'tiktok.com'     => 'tiktok',
@@ -99,6 +107,9 @@ final class Channels
         /**
          * Filters the utm_source alias map used to normalize sources at
          * ingestion. Keys are raw lowercase values, values the canonical name.
+         *
+         * Also consulted for an untagged visit's referrer host (without
+         * "www."), so a host added here is classified by the name it maps to.
          *
          * @param array<string, string> $aliases The default alias map.
          */
@@ -223,15 +234,27 @@ final class Channels
     /**
      * Channel implied by an external referrer host.
      *
+     * A network's name in the registrable-domain position is recognized by
+     * {@see hostMatches()}. Its short-link and app domains carry no such name:
+     * X/Twitter links arrive from t.co (or x.com), LinkedIn's from lnkd.in and
+     * Bluesky's from bsky.app or go.bsky.app, so all four were classified
+     * Referral. The alias map already knew most of them, but only utm_source
+     * was ever run through it; the host now is too. Only a host with a dot is:
+     * the map also holds bare source names ("x", "fb"), and a referrer from an
+     * intranet host called "x" is not a visit from X.
+     *
      * @param string $host Lowercase external hostname.
      * @return string
      */
     private static function hostChannel(string $host): string
     {
-        if (self::hostMatches($host, self::SEARCH_SOURCES)) {
+        $bare  = str_starts_with($host, 'www.') ? substr($host, 4) : $host;
+        $alias = str_contains($bare, '.') ? self::normalizeSource($bare) : '';
+
+        if (in_array($alias, self::SEARCH_SOURCES, true) || self::hostMatches($host, self::SEARCH_SOURCES)) {
             return 'Organic Search';
         }
-        if (self::hostMatches($host, self::SOCIAL_SOURCES)) {
+        if (in_array($alias, self::SOCIAL_SOURCES, true) || self::hostMatches($host, self::SOCIAL_SOURCES)) {
             return 'Organic Social';
         }
 

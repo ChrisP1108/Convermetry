@@ -6,6 +6,7 @@ namespace Convermetry\Goals;
 if (!defined('ABSPATH')) exit;
 
 use Convermetry\Database\PreparedEvent;
+use Convermetry\Support\UrlPattern;
 
 /**
  * Decides which configured goals an incoming event completes.
@@ -44,6 +45,13 @@ use Convermetry\Database\PreparedEvent;
  * types "/thank-you/", not "https://www.example.com/thank-you/", and both should
  * work — so a rule beginning with "/" is compared against the stored URL's path
  * and a rule that names a host is compared against the whole URL.
+ *
+ * AND IT COMPARES WHAT THE ADDRESS SAYS, NOT HOW IT IS SPELLED. WordPress
+ * stores a non-ASCII slug percent-encoded, and a site owner types it as the
+ * address bar shows it or pastes it encoded in either hex case. Both sides are
+ * decoded and lowercased before any operator runs ({@see UrlPattern::canonical()}),
+ * which {@see \Convermetry\Funnels\StepCompiler} matches by bringing the
+ * pattern to the stored encoding instead.
  */
 final class GoalMatcher
 {
@@ -129,6 +137,14 @@ final class GoalMatcher
             return false;
         }
 
+        // Saved as "//" (or with another empty segment) by 1.1.5, whose
+        // sanitizer deleted every %XX octet of a pasted address. Forgiving its
+        // slashes made it the home page. It cannot be repaired from what is
+        // left, so it matches nothing until it is entered again.
+        if (!UrlPattern::isUsable($pattern)) {
+            return false;
+        }
+
         // A rule written as a path is compared against the path; a rule naming a
         // host is compared against the whole URL. Anything else would make
         // "/pricing/" fail against "https://example.com/pricing/", which is what
@@ -196,6 +212,10 @@ final class GoalMatcher
      * counting because a page was linked as "/Pricing/" would be reported as the
      * plugin being broken — correctly.
      *
+     * Percent-decoded on both sides first, so "/контакты/" and
+     * "/%D0%BA%D0%BE…/" are one page, and so is a link to "/a%20b.pdf" for a
+     * rule containing "a b".
+     *
      * @param string $subject  The value from the event.
      * @param string $pattern  The value from the goal.
      * @param string $operator One of GoalSettings::OPERATORS.
@@ -207,8 +227,8 @@ final class GoalMatcher
             return false;
         }
 
-        $subject = strtolower($subject);
-        $pattern = strtolower($pattern);
+        $subject = UrlPattern::canonical($subject);
+        $pattern = UrlPattern::canonical($pattern);
 
         return match ($operator) {
             'equals'      => self::equalsIgnoringTrailingSlash($subject, $pattern),
@@ -227,8 +247,8 @@ final class GoalMatcher
      * as different goals would produce a goal that counts roughly half of what
      * actually happened, with no visible cause.
      *
-     * @param string $subject Lowercased subject.
-     * @param string $pattern Lowercased pattern.
+     * @param string $subject Canonical subject.
+     * @param string $pattern Canonical pattern.
      * @return bool
      */
     private static function equalsIgnoringTrailingSlash(string $subject, string $pattern): bool

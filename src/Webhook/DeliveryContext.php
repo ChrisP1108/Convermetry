@@ -346,7 +346,10 @@ final class DeliveryContext
          * the settled state.
          *
          * @param array<string, mixed> $context Credential-free delivery context.
-         * @param string               $reason  Stable reason code, currently 'retries_exhausted'.
+         * @param string               $reason  Stable reason code: 'retries_exhausted' after the last
+         *                                       scheduled attempt, or 'rejected' when the endpoint
+         *                                       answered a 4xx that no retry can change (anything
+         *                                       but 408, 409, 425 and 429).
          */
         do_action('convermetry_webhook_delivery_abandoned', $context->toArray(), $reason);
     }

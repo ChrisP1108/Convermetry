@@ -101,7 +101,9 @@ final class FunnelReport
             return [
                 'steps'        => [],
                 'overall_rate' => 0.0,
-                'error'        => __('One of this funnel\'s steps is not fully configured, so it cannot be measured.', 'convermetry'),
+                // Also what a page step 1.1.5 saved as "//" reaches: see
+                // StepCompiler::compilePage().
+                'error'        => __('One of this funnel\'s steps is not fully configured, or its address was damaged when an earlier version saved it, so it cannot be measured. Edit the funnel and enter that step again.', 'convermetry'),
             ];
         }
 
@@ -333,7 +335,10 @@ final class FunnelReport
      *
      * The funnel's definition hash is part of the key, so editing a step
      * invalidates the cache by construction rather than by remembering to clear
-     * it — the commonest way a cached report goes stale.
+     * it — the commonest way a cached report goes stale. So is the plugin
+     * version, because an upgrade can change what an unchanged step matches:
+     * a page step 1.1.5 saved as "//" counted every home-page visitor, and its
+     * cached numbers must not outlive the release that stops counting them.
      *
      * @param array<string, mixed> $funnel A normalized funnel.
      * @param string               $start  UTC datetime.
@@ -347,6 +352,7 @@ final class FunnelReport
             FunnelSettings::definitionHash($funnel),
             $start,
             $end,
+            CVMTRY_VERSION,
         ]));
     }
 }

@@ -175,6 +175,12 @@ final class FunnelsPage
         $postedId = is_string($submitted['funnel_id'] ?? null) ? sanitize_text_field($submitted['funnel_id']) : '';
         $existing = FunnelSettings::isValidId($postedId) ? FunnelRepository::find($postedId) : null;
 
+        // Checked before sanitize(), which refuses it too, so the notice can
+        // say what was wrong with the step.
+        if (FunnelSettings::hasUnusablePageStep($submitted)) {
+            self::redirect(['cvmtry_funnel_error' => 'url_rule']);
+        }
+
         $funnel = FunnelSettings::sanitize($submitted, $existing, gmdate('Y-m-d H:i:s'));
 
         if ($funnel === null) {
@@ -577,6 +583,7 @@ final class FunnelsPage
                 FunnelSettings::MAX_FUNNELS
             ),
             'missing' => __('That funnel could not be found. It may already have been removed.', 'convermetry'),
+            'url_rule' => __('That funnel could not be saved. A page step\'s address contains an empty segment ("//"), which no page has. Type the address as the browser shows it, or paste it again.', 'convermetry'),
             default   => '',
         };
 

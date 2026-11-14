@@ -93,10 +93,15 @@ final class Http
             return TransportResult::failure($response->get_error_message());
         }
 
+        // Read for every status; TransportResult keeps it only for a 429 or
+        // 503. An array means the header came twice, and the first is used.
+        $retryAfter = wp_remote_retrieve_header($response, 'retry-after');
+
         return TransportResult::fromResponse(
             (int) wp_remote_retrieve_response_code($response),
             (string) wp_remote_retrieve_response_message($response),
-            (string) wp_remote_retrieve_body($response)
+            (string) wp_remote_retrieve_body($response),
+            is_array($retryAfter) ? (string) ($retryAfter[0] ?? '') : (string) $retryAfter
         );
     }
 }

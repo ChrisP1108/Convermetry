@@ -783,7 +783,7 @@ final class AboutPage
             ],
             'convermetry_webhook_delivery_abandoned' => [
                 'array $context' => self::deliveryContext(),
-                'string $reason' => __('Why it was given up on. Terminal: the queue row is deleted', 'convermetry'),
+                'string $reason' => __('Why it was given up on: <code>\'retries_exhausted\'</code> after the last scheduled attempt, or <code>\'rejected\'</code> when the endpoint answered a 4xx no retry can change (anything but 408, 409, 425 and 429). Terminal: the queue row is deleted', 'convermetry'),
             ],
             'convermetry_webhook_delivery_canceled' => [
                 'array $context' => self::deliveryContext(),
@@ -841,7 +841,7 @@ final class AboutPage
                 'array $defaults' => __('<code>[\'per_ip\' => 300, \'site_wide\' => 3000]</code>, in events per minute. Both clamped to a minimum of 1; a non-array return or a missing key falls back to the default. Charged <strong>per event</strong>, so one 20-event batch costs 20', 'convermetry'),
             ],
             'convermetry_source_aliases' => [
-                'array $aliases' => __('Raw lowercase <code>utm_source</code> value => canonical name. <strong>Add to the map, do not replace it</strong> — a fresh array loses every default. A source with no entry is stored exactly as submitted', 'convermetry'),
+                'array $aliases' => __('Raw lowercase <code>utm_source</code> value => canonical name. <strong>Add to the map, do not replace it</strong> — a fresh array loses every default. A source with no entry is stored exactly as submitted. Also consulted for an untagged visit\'s referrer host, without <code>www.</code>', 'convermetry'),
             ],
             'convermetry_channel' => [
                 'string $channel' => __('The channel classified at ingestion — <code>direct</code>, <code>organic</code>, <code>paid</code>, <code>social</code>, <code>email</code>, <code>referral</code>, <code>other</code>', 'convermetry'),

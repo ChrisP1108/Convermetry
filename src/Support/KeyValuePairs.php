@@ -5,6 +5,8 @@ namespace Convermetry\Support;
 
 if (!defined('ABSPATH')) exit;
 
+use Convermetry\Webhook\RequestFactory;
+
 /**
  * The stored {key, value} pair lists behind custom webhook headers and URL
  * query parameters — global ones on the Webhooks page, per-form ones on the
@@ -44,15 +46,41 @@ final class KeyValuePairs
      * rejected and counted so the screen can say so, rather than stored in a
      * mangled form or sent as an injected header line.
      *
+     * A valid name that Convermetry or WordPress's transport sets itself
+     * ({@see RequestFactory::RESERVED_HEADERS}: User-Agent, Idempotency-Key,
+     * X-Convermetry-Signature, Host, …) is refused in any letter case and
+     * returned in 'reserved', so the screen can name it. Saved, it travelled
+     * NEXT TO Convermetry's own copy, and a receiver that joined the two
+     * failed signature verification and de-duplication on every request.
+     *
      * @param mixed $raw The unslashed POST value: absent (null), or a list of
      *                   {key, value} rows.
-     * @return array{pairs: list<array{key: string, value: string}>, rejected: int, malformed: bool}
+     * @return array{pairs: list<array{key: string, value: string}>, rejected: int, reserved: list<string>, malformed: bool}
      *         'malformed' is true when the value is not the shape the screen
      *         posts at all; 'pairs' is then empty and must not be stored.
+     *         'reserved' lists the refused names as typed, once each.
      */
     public static function fromHeaderInput(mixed $raw): array
     {
-        return self::fromInput($raw, self::headerName(...), self::headerValue(...));
+        $result   = self::fromInput($raw, self::headerName(...), self::headerValue(...));
+        $pairs    = [];
+        $reserved = [];
+
+        foreach ($result['pairs'] as $pair) {
+            if (RequestFactory::isReserved($pair['key'])) {
+                $reserved[] = $pair['key'];
+                continue;
+            }
+
+            $pairs[] = $pair;
+        }
+
+        return [
+            'pairs'     => $pairs,
+            'rejected'  => $result['rejected'],
+            'reserved'  => array_values(array_unique($reserved)),
+            'malformed' => $result['malformed'],
+        ];
     }
 
     /**

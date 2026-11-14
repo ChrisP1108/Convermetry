@@ -4,7 +4,7 @@ Tags: analytics, lead tracking, utm, webhooks, forms
 Requires at least: 6.3
 Tested up to: 7.1
 Requires PHP: 8.3
-Stable tag: 1.1.5
+Stable tag: 1.1.6
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -47,7 +47,7 @@ Submissions made before a form is connected are not recorded and cannot be recov
 = Webhooks and email notifications =
 
 * Send **form submissions** (one message per confirmed lead, delivered in the background) and/or scheduled **analytics reports** (hourly, twice daily, daily or weekly) to any number of HTTPS endpoints you configure.
-* Optional HMAC-SHA256 signatures, stable delivery IDs for idempotency, automatic retries and an Activity Log of every attempt with its (redacted) payload and response.
+* Optional HMAC-SHA256 signatures, stable delivery IDs for idempotency, automatic retries and an Activity Log of every attempt with its (redacted) payload and response. An answer no retry can change, such as 400 or 410, is not retried, and a Retry-After on a 429 or 503 is honored. Redirects are not followed, so enter each endpoint's final address.
 * Optional internal **email notifications** to addresses you choose, sent through `wp_mail()`. They are off by default.
 
 = Privacy and data handling =
@@ -58,7 +58,7 @@ This section describes what Convermetry does. It is not legal advice, and Conver
 
 * For each tracked interaction: the event type, the page address without its query string, page title, clicked element text and link target, referrer (without query string), campaign parameters, a traffic channel, a device type (desktop, tablet or mobile), a random visit identifier and a timestamp.
 * **IP addresses are stored by default** with analytics events and form submissions. You can turn this off under Convermetry → Settings ("Store visitor IP addresses"). User agents are never stored.
-* For each confirmed form submission: the values the visitor submitted, the page, its campaign (UTM) parameters, and the analytics context of the visit (channel, campaign, landing page, pages viewed). Fields that look like passwords or other credentials are withheld from email notifications and redacted in the Activity Log, but they are still stored and sent to your webhooks, and card numbers are not recognized at all. If you send a form through the developer API, leave passwords and payment details out. If you turn on "Include page URL parameters", the page's other URL parameters are stored as well, including ad-click identifiers such as gclid, except those whose names look like secrets or contact details and any value containing an email address.
+* For each confirmed form submission: the values the visitor submitted, as typed (line breaks included), the page, its campaign (UTM) parameters, and the analytics context of the visit (channel, campaign, landing page, pages viewed). Fields that look like passwords or other credentials are withheld from email notifications and redacted in the Activity Log, but they are still stored and sent to your webhooks, and card numbers are not recognized at all. If you send a form through the developer API, leave passwords and payment details out. If you turn on "Include page URL parameters", the page's other URL parameters are stored as well, including ad-click identifiers such as gclid, except those whose names look like secrets or contact details and any value containing an email address.
 * Logged-in users are excluded from tracking by default. A member who arrived from a campaign and then logged in therefore submits with no campaign or channel; the submission is still recorded and delivered.
 * **Do Not Track / Global Privacy Control are not honored by default.** When you enable that setting, visitors who send either signal are not tracked, and no IP address is stored with a form they submit.
 
@@ -123,6 +123,10 @@ Those builders only run the actions you select for each form. Add **Convermetry*
 
 A page change made by JavaScript with `history.pushState()` is not counted as a page view, and later events keep the address the page was loaded on, so page-address goals and funnel steps cannot fire on those sections. Report such a step with `Convermetry.track()` and a custom-event goal instead. A page of your site shown inside an iframe is counted as its own page view, so a page that embeds another of your pages counts both; use the `convermetry_should_enqueue_tracker` filter to keep the tracker off a page that is only ever embedded.
 
+= A goal or funnel says its address was damaged. What do I do? =
+
+Edit it and enter the page's address again, typed as the address bar shows it or pasted from it. Before 1.1.6, an address pasted from the browser for a page whose address uses non-Latin letters (such as Cyrillic, Greek, Arabic or Chinese) lost those characters when it was saved. One saved as "//" counted every visit to your home page; it now counts nothing, and the Goals screen names it. One that kept some characters, such as "/-probe/", never counted anything and needs the same fix, but cannot be detected. One saved as "/" is the same as a home-page goal and keeps counting the home page.
+
 = Why does the Home screen show more sessions than the Goals screen? =
 
 They count different visits. Home's session count includes every visit with any recorded activity in the period. Goal conversion rates, on the Goals screen and as `goals.sessions` in the analytics webhook, divide by visits with a page view in the period. A visit with no page view in the period is counted only on Home: for example one that began before the period, one that continued on the same page after 30 idle minutes (which starts a new visit without a new page view), or one whose tracking requests were blocked while its form still reached your site. Both figures are correct for what they measure.
@@ -160,6 +164,16 @@ Deactivating stops tracking and scheduled tasks but keeps your data. Deleting th
 9. Tracking and privacy settings: interaction types, logged-in users, Do Not Track / Global Privacy Control, IP storage and data retention.
 
 == Changelog ==
+
+= 1.1.6 =
+* Fix: a page goal or funnel step for an address with non-Latin letters, such as `/контакты/`, now matches that page whether the address was typed or pasted from the browser. Previously a pasted address was saved as "//" and counted every home-page visit, and a typed one never matched. Goals and steps saved that way by an earlier version count nothing now and must be entered again; the Goals screen names the goals.
+* Fix: submitted form values are stored and sent as the visitor typed them. Line breaks, "<", "&" and "%" are kept, so a message arrives in your CRM as written and not as one line with "&lt;" in it. The Submissions screen, emails and exports still display it safely. Submissions recorded earlier are not changed.
+* Fix: a tap on a phone or tablet no longer counts as a hover, so Most Hovered Elements and the hover totals count mouse hovers only.
+* Fix: link and download addresses with encoded characters, such as `/Price%20List.pdf` or a non-Latin page address, are stored complete, and link-click goals that contain them complete.
+* Fix: visits from X/Twitter (t.co, x.com), LinkedIn (lnkd.in) and Bluesky (bsky.app) share links count as Organic Social instead of Referral, and Meta ads tagged `msg` (Messenger) or `an` (Audience Network) count as Paid Social instead of Paid Search.
+* Fix: a webhook header saved as `x-convermetry-signature`, `idempotency-key` or `user-agent`, in any letter case, is no longer sent beside Convermetry's own, which made receivers reject the signature and fail to deduplicate. The Webhooks and Forms screens refuse such headers and name them.
+* Changed: a webhook delivery answered with a 4xx error other than 408, 409, 425 or 429 is not retried; the lead shows "failed" straight away instead of waiting a day. A Retry-After on a 429 or 503 is honored, up to 24 hours.
+* Documentation: webhook redirects are not followed.
 
 = 1.1.5 =
 * Fix: a webhook delivery whose response was a large page in a language such as Japanese, or an error page in an encoding other than UTF-8, is now recorded in the Activity Log. Previously the attempt was not logged, so the lead showed "not sent" even when it had been delivered, or when every retry had failed.
@@ -238,6 +252,9 @@ Deactivating stops tracking and scheduled tasks but keeps your data. Deleting th
 * Changed: first public release on WordPress.org. Earlier 0.x versions were distributed privately; their full history is in CHANGELOG.md, included with the plugin.
 
 == Upgrade Notice ==
+
+= 1.1.6 =
+Page goals and funnel steps for non-Latin addresses now match; one pasted under 1.1.5 counted your home page and must be entered again. Form messages keep their line breaks. A 4xx webhook answer is no longer retried. No migration.
 
 = 1.1.5 =
 Webhook deliveries with large non-English or non-UTF-8 responses are logged again, so their leads show the right delivery status. Fixes page titles in Top Pages and empty values in Convermetry.track(). No migration.
