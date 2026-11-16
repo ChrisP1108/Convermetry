@@ -5,6 +5,82 @@ All notable changes to Convermetry are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 1.1.7
+
+No schema change and no migration. Stored rows are not rewritten: submitted
+values stay as typed, since escaping belongs to output; and a header row written
+to an option outside the admin screens that fails the save rule stays in the
+option until that screen is next saved, but is not sent.
+
+### Fixed
+
+- **The personal-data export did not escape submitted values, although the
+  1.1.6 changelog said it did.** Since 1.1.6 values are stored as typed, markup
+  included, and `PersonalDataExporter` handed them to WordPress unchanged.
+  WordPress prints each export value through
+  `wp_kses($value, 'personal_data_export')`, which keeps `<a href>`, `<b>`,
+  `<i>`, `<strong>` and `<blockquote>`, so a visitor who typed
+  `<a href="https://…">Verify your account</a>` into a form put a working link
+  into the export file the site sends to the address on that form. kses still
+  removed scripts and event handlers, so this was content injection, not script
+  execution; before 1.1.6 tags were deleted before storage. Every value of
+  every export item now goes through `esc_html()`
+  (`PersonalDataExporter::text()`): the submitted fields, and the activity
+  rows' page titles, element labels, campaign tags, referrers and addresses,
+  which are stripped of tags when stored but come from the visitor's browser.
+  The labels need nothing, as WordPress prints them escaped. A value WordPress
+  turns into a link itself, a bare `http://` or `https://` address, still
+  does, with the `&` of its query string intact, and a field that looks like a
+  credential is still withheld.
+- **A stored webhook header value with a line break was sent as stored.** The
+  Webhooks and Forms screens have always refused CR and LF in a header value,
+  but `Options::globalHeaders()` and `FormSettings::forForm()` checked only the
+  shape of the option they read, so a value written another way (a migration,
+  an import, a database edit, WP-CLI) reached the transport unchanged, and
+  WordPress's transport wrote the text after the line break as a header line
+  of its own. Both now read through `KeyValuePairs::storedHeaders()`, which
+  applies the save rule again (the name an RFC 9110 token; the value valid
+  UTF-8, at most 8 KB, with no control character but tab) and drops a row that
+  fails, so it is never sent and no longer appears in the screens' editors. A
+  header set already frozen into a queued delivery before 1.1.7 is sent as
+  frozen.
+- **Plugin Check reported an error in `UrlPattern::clean()`.** It removed tags
+  with `strip_tags()`, which WordPress's coding standards refuse
+  (`WordPress.WP.AlternativeFunctions.strip_tags_strip_tags`). It now uses
+  `wp_strip_all_tags()`, which also removes the contents of a `<script>` or
+  `<style>` element; no URL pattern has one. `clean()` runs where
+  `GoalSettings` and `FunnelSettings` save and read goals and funnels (an admin
+  screen, a tracking request, a cron run), so always inside WordPress; the
+  methods matching runs on (`canonical()`, `encoded()`, `isUsable()`), which
+  `GoalMatcher` and `StepCompiler` call, still use no WordPress functions.
+
+### Documentation
+
+- README.md and readme.txt say that `401`, `403` and `404` are final answers,
+  which a receiver can also give while an API key is rotated or a route
+  redeployed; that a lead rejected that way is not sent again, as Convermetry
+  has no resend action; and how to recover it with the Submissions screen's
+  export.
+- README.md and readme.txt document that one visitor action completes at most
+  five goals (`GoalMatcher::MAX_MATCHES_PER_EVENT`), which five count when more
+  match, and the Goals screen's *Overlapping goals* notice.
+
+### Tests
+
+- Unit tests cover tag removal in `UrlPattern::clean()`, with the unit suite's
+  `wp_strip_all_tags()` defined as WordPress defines it
+  (`tests/stubs/formatting.php`); a scan that no shipped PHP file calls
+  `strip_tags()`; and stored global and per-form header rows holding CR, LF,
+  NUL, invalid UTF-8 and malformed names, checked against the save rule.
+- The WordPress suite renders an export with WordPress's own
+  `wp_privacy_generate_personal_data_export_group_html()` and parses it as a
+  browser would: submitted links, formatting and quotes come out as text,
+  exactly as typed, and so does a stored page title with markup; bare URLs,
+  one with `&` in its query string, are still links to the address typed; and
+  a credential stays withheld. It also delivers to a real receiver with a
+  stored header value holding CR LF and checks that no extra header arrives.
+- Every new test fails against 1.1.6.
+
 ## 1.1.6
 
 No schema change and no migration. Stored rows are not rewritten: a goal or

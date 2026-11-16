@@ -19,7 +19,7 @@ use Convermetry\Support\Extensions;
  *     {
  *         "schema_version": "1.0" | "1.1" | "2.0",
  *         "source": "convermetry",
- *         "plugin_version": "1.1.6",
+ *         "plugin_version": "1.1.7",
  *         "message_type": "analytics_report" | "form_submission",
  *         "website_info": { ... },
  *         "generated_at": "...",

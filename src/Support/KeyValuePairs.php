@@ -263,6 +263,48 @@ final class KeyValuePairs
     }
 
     /**
+     * Normalizes a stored header list and checks every named row again by the
+     * rule the admin screens apply on save ({@see headerName()},
+     * {@see headerValue()}), dropping a row that fails.
+     *
+     * The Webhooks and Forms screens have always refused a line break in a
+     * header value, but a value written to the option another way (a
+     * migration, an import, a database edit, WP-CLI) was read back as stored.
+     * WordPress's transport writes a CR or LF inside a value as a line break,
+     * so the rest of the value went out as a header line of its own. Checked
+     * here, where both stored lists are read, such a row is never sent, and
+     * the settings screens no longer show it in their editors (it could not
+     * be saved from them).
+     *
+     * Rows with a blank name are kept, as {@see normalize()} keeps them, and
+     * names Convermetry sets itself are not removed here: the screens name
+     * those, and {@see RequestFactory} drops them when a request is built.
+     *
+     * @param mixed $raw The stored value, whatever it turns out to be.
+     * @return list<array{key: string, value: string}>
+     */
+    public static function storedHeaders(mixed $raw): array
+    {
+        $out = [];
+
+        foreach (self::normalize($raw) as $pair) {
+            if ($pair['key'] === '') {
+                $out[] = $pair;
+                continue;
+            }
+
+            $name  = self::headerName($pair['key']);
+            $value = self::headerValue($pair['value']);
+
+            if ($name !== null && $value !== null) {
+                $out[] = ['key' => $name, 'value' => $value];
+            }
+        }
+
+        return $out;
+    }
+
+    /**
      * Flattens a normalized pair list into an associative map, skipping blank
      * keys. Later duplicates override earlier ones, which is what gives the
      * documented precedence order (global, then page, then per-form, then

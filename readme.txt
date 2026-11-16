@@ -4,7 +4,7 @@ Tags: analytics, lead tracking, utm, webhooks, forms
 Requires at least: 6.3
 Tested up to: 7.1
 Requires PHP: 8.3
-Stable tag: 1.1.6
+Stable tag: 1.1.7
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -23,7 +23,7 @@ Everything is stored in your WordPress database. Convermetry works on its own: i
 * Page views, clicks, form views, starts, validation errors and submit attempts, confirmed conversions, scroll depth, hover and custom events. Each type can be switched off.
 * UTM campaign parameters, ad-click identifiers (only which parameter was present, never its value) and entrance referrers classified into channels such as Paid Search, Organic Social or Email.
 * An analytics dashboard with top pages, landing pages, referrers, campaigns, channels, devices, conversions and lead outcomes, with summary charts beside the full tables and CSV and JSON export of the selected period.
-* Goals for actions that are not form submissions (phone and email link clicks, downloads, reaching a page, custom events) and funnels that measure the ordered path to a conversion, each exportable as CSV or JSON.
+* Goals for actions that are not form submissions (phone and email link clicks, downloads, reaching a page, custom events) and funnels that measure the ordered path to a conversion, each exportable as CSV or JSON. One visitor action completes at most five goals: when more match, the five listed first on the Goals screen count, and the screen says how many completions overlapping goals skipped.
 * Form engagement and abandonment reporting that never records what a visitor typed into a form they did not submit.
 
 = Leads =
@@ -48,6 +48,7 @@ Submissions made before a form is connected are not recorded and cannot be recov
 
 * Send **form submissions** (one message per confirmed lead, delivered in the background) and/or scheduled **analytics reports** (hourly, twice daily, daily or weekly) to any number of HTTPS endpoints you configure.
 * Optional HMAC-SHA256 signatures, stable delivery IDs for idempotency, automatic retries and an Activity Log of every attempt with its (redacted) payload and response. An answer no retry can change, such as 400 or 410, is not retried, and a Retry-After on a 429 or 503 is honored. Redirects are not followed, so enter each endpoint's final address.
+* 401, 403 and 404 are final answers too. Some receivers give them for a few minutes while an API key is rotated or a route is redeployed, and a lead submitted then is not sent again. It stays on the Submissions screen, marked failed, where you can export it and enter it in the receiving system. Convermetry has no resend button.
 * Optional internal **email notifications** to addresses you choose, sent through `wp_mail()`. They are off by default.
 
 = Privacy and data handling =
@@ -165,6 +166,12 @@ Deactivating stops tracking and scheduled tasks but keeps your data. Deleting th
 
 == Changelog ==
 
+= 1.1.7 =
+* Fix: the personal-data export (Tools → Export Personal Data) shows submitted form values as text. 1.1.6 did not escape them, although its changelog said so, and a link or formatting typed into a form appeared as a working link or formatting in the export file. Plain web addresses are still links.
+* Fix: a webhook header value containing a line break is never sent, including one written to the settings outside the Webhooks and Forms screens, for example by an import or a migration.
+* Fix: resolves the Plugin Check error about `strip_tags()`.
+* Documentation: 401, 403 and 404 webhook answers are final, and how to recover a lead rejected that way. One visitor action completes at most five goals.
+
 = 1.1.6 =
 * Fix: a page goal or funnel step for an address with non-Latin letters, such as `/контакты/`, now matches that page whether the address was typed or pasted from the browser. Previously a pasted address was saved as "//" and counted every home-page visit, and a typed one never matched. Goals and steps saved that way by an earlier version count nothing now and must be entered again; the Goals screen names the goals.
 * Fix: submitted form values are stored and sent as the visitor typed them. Line breaks, "<", "&" and "%" are kept, so a message arrives in your CRM as written and not as one line with "&lt;" in it. The Submissions screen, emails and exports still display it safely. Submissions recorded earlier are not changed.
@@ -252,6 +259,9 @@ Deactivating stops tracking and scheduled tasks but keeps your data. Deleting th
 * Changed: first public release on WordPress.org. Earlier 0.x versions were distributed privately; their full history is in CHANGELOG.md, included with the plugin.
 
 == Upgrade Notice ==
+
+= 1.1.7 =
+The personal-data export shows submitted values as text; under 1.1.6 a link typed into a form appeared as a working link. Header values with line breaks are no longer sent. Resolves a Plugin Check error. No migration.
 
 = 1.1.6 =
 Page goals and funnel steps for non-Latin addresses now match; one pasted under 1.1.5 counted your home page and must be entered again. Form messages keep their line breaks. A 4xx webhook answer is no longer retried. No migration.

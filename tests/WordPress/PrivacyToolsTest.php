@@ -212,6 +212,105 @@ final class PrivacyToolsTest extends WordPressTestCase
         self::assertSame(['data' => [], 'done' => true], PersonalDataExporter::export('nobody@example.com', 1));
     }
 
+    /**
+     * 1.1.6 stored submitted values as typed and handed them to the exporter
+     * unescaped. WordPress prints each export value through
+     * wp_kses($value, 'personal_data_export'), which keeps <a href> and
+     * formatting, so a visitor could put a working link into the file the site
+     * sends to the address on the form. Rendered here by WordPress's own
+     * function, markup comes out as text, and a bare URL is still a link with
+     * its '&' intact.
+     */
+    public function testTheExportFileShowsSubmittedMarkupAsText(): void
+    {
+        global $wpdb;
+
+        require_once ABSPATH . 'wp-admin/includes/privacy-tools.php';
+
+        $link    = '<a href="https://example.com/">Verify your account</a>';
+        $bold    = '<b>bold</b> and <i>x</i>';
+        $title   = '<a href="https://evil.example/">Pricing</a> <b>now</b>';
+        $site    = 'https://example.com/';
+        $query   = 'https://example.com/?a=1&b=2';
+        $quoted  = 'O\'Brien & "Sons" <ltd>';
+
+        // A page title written before tags were stripped from it, or by an
+        // import: the export must not depend on how a row was stored.
+        $now = time();
+        foreach ([['pageview', $title, ''], ['form_success', '', 'conv_ann_000002']] as $i => [$type, $pageTitle, $value]) {
+            $wpdb->insert($wpdb->prefix . 'cvmtry_events', [
+                'event_type'  => $type,
+                'page_url'    => home_url('/pricing/?plan=pro&term=year'),
+                'page_title'  => $pageTitle,
+                'event_value' => $value,
+                'session_id'  => self::SESSION,
+                'device'      => 'desktop',
+                'ip_address'  => '198.51.100.7',
+                'created_at'  => gmdate('Y-m-d H:i:s', $now - 60 + $i),
+            ]);
+        }
+
+        $_POST = [
+            'cvmtry_conversion_id' => 'conv_ann_000002',
+            'cvmtry_session_id'    => self::SESSION,
+        ];
+
+        do_action(
+            'convermetry_form_submission',
+            ['form_name' => 'Contact', 'form_id' => 'privacy-1'],
+            [
+                ['id' => 'email', 'label' => 'Email', 'value' => self::ANN],
+                ['id' => 'message', 'label' => 'Message', 'value' => $link],
+                ['id' => 'notes', 'label' => 'Notes', 'value' => $bold],
+                ['id' => 'company', 'label' => 'Company', 'value' => $quoted],
+                ['id' => 'website', 'label' => 'Website', 'value' => $site],
+                ['id' => 'campaign', 'label' => 'Campaign link', 'value' => $query],
+                ['id' => 'password', 'label' => 'Password', 'value' => '<b>hunter2</b>'],
+            ],
+            []
+        );
+
+        $_POST = [];
+
+        $export = PersonalDataExporter::export(self::ANN, 1);
+
+        // Stored as typed: escaping belongs to the export, not to storage.
+        $stored = array_column((array) json_decode((string) $this->submissionFor(self::ANN)['submission_data'], true), 'value', 'id');
+        self::assertSame($link, $stored['message']);
+
+        $submissions = $this->renderedGroup($export, 'convermetry-submissions');
+        self::assertCount(1, $submissions);
+        $submission = $submissions[0];
+
+        foreach (['Message' => $link, 'Notes' => $bold, 'Company' => $quoted] as $name => $typed) {
+            self::assertSame(0, $submission[$name]->getElementsByTagName('*')->length, "{$name}: no markup survives");
+            self::assertSame($typed, $submission[$name]->textContent, "{$name}: shown exactly as typed");
+        }
+
+        foreach (['Website' => $site, 'Campaign link' => $query] as $name => $url) {
+            $anchors = $submission[$name]->getElementsByTagName('a');
+            self::assertSame(1, $anchors->length, "{$name}: a bare URL is still a link");
+            self::assertSame($url, $anchors->item(0)?->getAttribute('href'), "{$name}: the link goes where the visitor typed, & intact");
+            self::assertSame($url, $submission[$name]->textContent);
+        }
+
+        self::assertSame('[Withheld: this field looks like a password or other credential]', $submission['Password']->textContent);
+
+        $titled   = array_values(array_filter(
+            $this->renderedGroup($export, 'convermetry-activity'),
+            static fn(array $cells): bool => isset($cells['Page title'])
+        ));
+        self::assertCount(1, $titled, 'The page view with the stored title is exported');
+        $activity = $titled[0];
+        self::assertSame(0, $activity['Page title']->getElementsByTagName('*')->length, 'A page title is shown as text too');
+        self::assertSame($title, $activity['Page title']->textContent);
+        self::assertSame(
+            home_url('/pricing/?plan=pro&term=year'),
+            $activity['Page']->getElementsByTagName('a')->item(0)?->getAttribute('href'),
+            'A page address with a query string is still a working link'
+        );
+    }
+
     // ── Erasure ──────────────────────────────────────────────────────────────
 
     public function testErasureRemovesTheLeadAndScrubsEveryLinkedCopy(): void
@@ -489,6 +588,56 @@ final class PrivacyToolsTest extends WordPressTestCase
         }
 
         return $out;
+    }
+
+    /**
+     * Renders one export group the way WordPress builds the export file
+     * (wp_privacy_generate_personal_data_export_file(): items grouped by
+     * group_id, keyed by item_id) and returns each item's value cells by
+     * their row name, parsed as a browser would read them.
+     *
+     * @param array{data: list<array<string, mixed>>, done: bool} $export
+     * @return list<array<string, \DOMElement>>
+     */
+    private function renderedGroup(array $export, string $group): array
+    {
+        $data = ['group_label' => '', 'items' => []];
+
+        foreach ($export['data'] as $item) {
+            if ($item['group_id'] === $group) {
+                $data['group_label']               = (string) $item['group_label'];
+                $data['items'][$item['item_id']] = $item['data'];
+            }
+        }
+
+        self::assertNotSame([], $data['items'], "The export has a {$group} item");
+
+        $html = wp_privacy_generate_personal_data_export_group_html($data, $group, 1);
+
+        $document = new \DOMDocument();
+        $previous = libxml_use_internal_errors(true);
+        $document->loadHTML('<?xml encoding="utf-8"?><div>' . $html . '</div>');
+        libxml_clear_errors();
+        libxml_use_internal_errors($previous);
+
+        $items = [];
+
+        foreach ($document->getElementsByTagName('table') as $table) {
+            $cells = [];
+
+            foreach ($table->getElementsByTagName('tr') as $row) {
+                $name = $row->getElementsByTagName('th')->item(0);
+                $cell = $row->getElementsByTagName('td')->item(0);
+
+                if ($name !== null && $cell !== null) {
+                    $cells[$name->textContent] = $cell;
+                }
+            }
+
+            $items[] = $cells;
+        }
+
+        return $items;
     }
 
     /**

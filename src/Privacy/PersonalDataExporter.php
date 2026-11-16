@@ -199,11 +199,14 @@ final class PersonalDataExporter
         foreach (SubmissionFields::fromStoredJson((string) ($row['submission_data'] ?? ''))->all() as $field) {
             $sensitive = SensitiveKeys::matches($field->id) || SensitiveKeys::matches($field->label);
 
+            // The label needs no escaping here: WordPress prints the name
+            // with esc_html(). It prints the value with wp_kses(), which keeps
+            // links and formatting, so the value is escaped (see text()).
             $data[] = [
                 'name'  => $field->label,
                 'value' => $sensitive
                     ? __('[Withheld: this field looks like a password or other credential]', 'convermetry')
-                    : $field->displayValue(),
+                    : self::text($field->displayValue()),
             ];
         }
 
@@ -237,6 +240,12 @@ final class PersonalDataExporter
      * A list of pairs rather than a label-keyed map: two labels can translate
      * to the same word, and a map would silently drop one of them.
      *
+     * Every value is escaped ({@see text()}). Most of these columns are
+     * stripped of tags when they are stored, but page titles, element labels,
+     * campaign tags and referrers all come from the visitor's browser, and
+     * the export should not depend on how an older version, an import or a
+     * filter wrote a row.
+     *
      * @param list<array{0: string, 1: string}> $pairs [label, value] pairs.
      * @return list<array{name: string, value: string}>
      */
@@ -246,11 +255,34 @@ final class PersonalDataExporter
 
         foreach ($pairs as [$name, $value]) {
             if ($value !== '') {
-                $out[] = ['name' => $name, 'value' => $value];
+                $out[] = ['name' => $name, 'value' => self::text($value)];
             }
         }
 
         return $out;
+    }
+
+    /**
+     * A stored value made safe for the export file, which shows it as typed.
+     *
+     * WordPress prints each value with wp_kses($value, 'personal_data_export')
+     * (wp_privacy_generate_personal_data_export_group_html()). That keeps
+     * <a href>, <b>, <i>, <blockquote> and other formatting, so a visitor who
+     * typed '<a href="https://…">Verify your account</a>' into a form would
+     * get a working link in the file the site sends to the address on that
+     * form. Escaped, the markup is shown as text.
+     *
+     * A bare URL still becomes a link. WordPress links a value with no spaces
+     * that starts with http:// or https://, and builds the href with
+     * esc_url(), which writes the '&amp;' that esc_html() makes of '&' as
+     * '&#038;'. So the link's query string arrives with its '&' intact.
+     *
+     * @param string $value Stored text.
+     * @return string
+     */
+    private static function text(string $value): string
+    {
+        return esc_html($value);
     }
 
     /**

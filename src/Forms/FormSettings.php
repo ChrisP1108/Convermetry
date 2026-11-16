@@ -86,6 +86,10 @@ final class FormSettings
      * Returns one form's configuration with every key present and typed, so
      * callers never guard against missing sub-keys.
      *
+     * Headers are checked again as read ({@see KeyValuePairs::storedHeaders()}),
+     * so a value with a line break that was written to the option directly is
+     * never sent.
+     *
      * @param string $formKey Provider-scoped form key.
      * @return array{form_id: string, excluded: bool, include_page_params: bool, query_params: list<array{key: string, value: string}>, headers: list<array{key: string, value: string}>}
      */
@@ -98,7 +102,7 @@ final class FormSettings
             'excluded'            => !empty($entry['excluded']),
             'include_page_params' => !empty($entry['include_page_params']),
             'query_params'        => KeyValuePairs::normalize($entry['query_params'] ?? null),
-            'headers'             => KeyValuePairs::normalize($entry['headers'] ?? null),
+            'headers'             => KeyValuePairs::storedHeaders($entry['headers'] ?? null),
         ];
     }
 

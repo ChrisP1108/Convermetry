@@ -256,4 +256,68 @@ final class RequestFactoryTest extends TestCase
         self::assertSame(1, self::copies($headers, 'X-Api-Key'));
         self::assertSame('runtime', $headers['X-API-KEY']);
     }
+
+    // ── Stored header values are checked again when read ─────────────────────
+
+    /**
+     * The Webhooks and Forms screens refuse a line break in a header value,
+     * but a value written to the option directly (a migration, an import, a
+     * database edit) was sent as stored, and WordPress's transport wrote the
+     * text after the line break as a header line of its own.
+     */
+    public function testAStoredHeaderValueWithALineBreakIsNeverSent(): void
+    {
+        $this->storeHeaders(
+            [
+                ['key' => 'X-Global-Injected', 'value' => "a\r\nX-Smuggled: 1"],
+                ['key' => 'X-Global-Ok', 'value' => 'kept'],
+            ],
+            [
+                ['key' => 'X-Form-Injected', 'value' => "b\nX-Smuggled: 2"],
+                ['key' => 'X-Form-Bare-Cr', 'value' => "c\rd"],
+                ['key' => 'X-Form-Ok', 'value' => 'kept too'],
+            ]
+        );
+
+        $headers = RequestFactory::buildHeaders(self::FORM_KEY);
+
+        foreach (['X-Global-Injected', 'X-Form-Injected', 'X-Form-Bare-Cr'] as $name) {
+            self::assertArrayNotHasKey($name, $headers, "{$name} holds a line break and must not be sent");
+        }
+        foreach ($headers as $name => $value) {
+            self::assertDoesNotMatchRegularExpression('/[\r\n]/', $name . $value, "no header carries a line break ({$name})");
+        }
+        self::assertSame('kept', $headers['X-Global-Ok']);
+        self::assertSame('kept too', $headers['X-Form-Ok']);
+
+        // Analytics deliveries read the global layer alone.
+        self::assertArrayNotHasKey('X-Global-Injected', RequestFactory::buildHeaders());
+    }
+
+    /**
+     * The same check as the screens apply on save: a name that is not an
+     * HTTP token, a control character, and invalid UTF-8 are dropped; a tab
+     * inside a value is legal and kept; surrounding blanks are trimmed. A row
+     * with a blank name stays for the editors, which render it back.
+     */
+    public function testStoredHeadersAreCheckedByTheSaveRule(): void
+    {
+        $this->storeHeaders([
+            ['key' => 'X-Bad Name', 'value' => 'v'],
+            ['key' => "X-Name\r\nX-Smuggled", 'value' => 'v'],
+            ['key' => 'X-Nul', 'value' => "a\x00b"],
+            ['key' => 'X-Latin1', 'value' => "caf\xE9"],
+            ['key' => 'X-Tab', 'value' => " a\tb  "],
+            ['key' => '', 'value' => "half\ntyped"],
+        ]);
+
+        self::assertSame(
+            [['key' => 'X-Tab', 'value' => "a\tb"], ['key' => '', 'value' => "half\ntyped"]],
+            Options::globalHeaders()
+        );
+
+        $sent = RequestFactory::buildHeaders();
+        unset($sent['Content-Type']);
+        self::assertSame(['X-Tab' => "a\tb"], $sent);
+    }
 }

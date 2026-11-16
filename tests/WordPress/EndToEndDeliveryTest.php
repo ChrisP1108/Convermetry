@@ -744,6 +744,35 @@ final class EndToEndDeliveryTest extends WordPressTestCase
         self::assertSame('yes', $headers['x-kept']);
     }
 
+    // ── 1.1.7: a stored header value is checked again before it is sent ───────
+
+    /**
+     * The Webhooks screen refuses a line break in a header value, but one
+     * written to the option directly (a migration, an import, a database edit)
+     * was sent as stored, and WordPress's transport wrote the rest of the value
+     * as a header line of its own. The receiver saw a header nobody configured.
+     */
+    public function testAStoredHeaderValueWithALineBreakDoesNotReachTheReceiver(): void
+    {
+        $this->configureEndpoint();
+        $settings                   = (array) get_option(Options::WEBHOOK_OPTION_KEY);
+        $settings['global_headers'] = [
+            ['key' => 'X-Imported', 'value' => "a\r\nX-Smuggled: 1"],
+            ['key' => 'X-Kept', 'value' => 'yes'],
+        ];
+        update_option(Options::WEBHOOK_OPTION_KEY, $settings);
+
+        $this->submit();
+        do_action(FormDeliveryQueue::WORKER_HOOK);
+        self::assertTrue($this->receiver()->waitFor(1));
+
+        $headers = $this->receiver()->received()[0]['headers'];
+
+        self::assertArrayNotHasKey('x-smuggled', $headers, 'No header line is made from a stored value');
+        self::assertArrayNotHasKey('x-imported', $headers, 'The row with the line break is not sent at all');
+        self::assertSame('yes', $headers['x-kept'], 'The other stored headers still are');
+    }
+
     // ── 1.1.6: which answers are retried ──────────────────────────────────────
 
     /** The queue row a submission's delivery waits in, or null once it is gone. */

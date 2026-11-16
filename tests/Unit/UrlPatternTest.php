@@ -40,6 +40,47 @@ final class UrlPatternTest extends TestCase
         self::assertSame('/конт', UrlPattern::clean(self::TYPED, 5), 'Cut in characters, not bytes.');
     }
 
+    /**
+     * Tags are removed with wp_strip_all_tags(), which Plugin Check accepts,
+     * instead of strip_tags(), which it reports as an error. The visible
+     * difference: the contents of a script or style element go too.
+     */
+    public function testCleaningRemovesTagsTheWayWordPressDoes(): void
+    {
+        self::assertSame('/pricing/', UrlPattern::clean('/pricing/<script>alert(1)</script>', 191));
+        self::assertSame('/pricing/', UrlPattern::clean('<style>a{}</style>/pricing/', 191));
+        self::assertSame('/a/b/', UrlPattern::clean('/a/<i>b</i>/', 191));
+    }
+
+    /**
+     * Plugin Check (WordPress.WP.AlternativeFunctions.strip_tags_strip_tags)
+     * reported strip_tags() in UrlPattern::clean() as an ERROR on 1.1.6. No
+     * shipped PHP file calls it.
+     */
+    public function testNoShippedFileCallsStripTags(): void
+    {
+        $root  = dirname(__DIR__, 2);
+        $files = [$root . '/convermetry.php', $root . '/uninstall.php'];
+
+        $iterator = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($root . '/src', \FilesystemIterator::SKIP_DOTS));
+        foreach ($iterator as $file) {
+            if ($file->getExtension() === 'php') {
+                $files[] = $file->getPathname();
+            }
+        }
+
+        $callers = [];
+        foreach ($files as $file) {
+            foreach (token_get_all((string) file_get_contents($file)) as $token) {
+                if (is_array($token) && in_array($token[0], [T_STRING, T_NAME_FULLY_QUALIFIED], true) && strtolower(ltrim($token[1], '\\')) === 'strip_tags') {
+                    $callers[] = substr($file, strlen($root) + 1) . ':' . $token[2];
+                }
+            }
+        }
+
+        self::assertSame([], $callers, 'strip_tags() is called; use wp_strip_all_tags().');
+    }
+
     public function testEveryWayOfEnteringTheAddressHasOneCanonicalForm(): void
     {
         self::assertSame(self::TYPED, UrlPattern::canonical(self::TYPED));

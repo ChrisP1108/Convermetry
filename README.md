@@ -22,7 +22,7 @@ Was the lead successfully delivered to external systems?
 
 Convermetry works standalone — full analytics dashboard, form integrations, and webhook delivery inside one WordPress install — and is architected so a future Convermetry SaaS can receive `analytics_report` and `form_submission` messages from many installations, keyed by a shared, versioned payload schema.
 
-- **Version:** 1.1.6
+- **Version:** 1.1.7
 - **Requires WordPress:** 6.3+
 - **Requires PHP:** 8.3+
 - **License:** GPL-2.0-or-later
@@ -312,6 +312,8 @@ Every occurrence      PDF downloaded three times    → 3 completions
 ```
 
 Deduplication is enforced by a **UNIQUE database constraint**, not a PHP check, so an at-least-once replay of a tracker batch collides with the original instead of double-counting.
+
+**One action completes at most five goals** (`GoalMatcher::MAX_MATCHES_PER_EVENT`). When a single page view, click or custom event matches more, the five that come first on the Goals screen (the order the goals were created in; editing one does not move it) are recorded and the rest are skipped for that action: they get no completion and no value. The cut is the same on every request and every replay, so a retried batch records the same five. The Goals screen's *Overlapping goals* notice counts the completions skipped this way; narrow the overlapping rules if a goal you need is among them.
 
 ### Custom events
 
@@ -1192,7 +1194,7 @@ Every outbound message shares one versioned envelope:
 {
     "schema_version": "1.0 | 2.0",
     "source": "convermetry",
-    "plugin_version": "1.1.6",
+    "plugin_version": "1.1.7",
     "message_type": "analytics_report | form_submission",
     "website_info": { },
     "generated_at": "2026-08-22T14:00:00+00:00",
@@ -1220,7 +1222,7 @@ Every outbound message shares one versioned envelope:
 {
     "schema_version": "1.1",
     "source": "convermetry",
-    "plugin_version": "1.1.6",
+    "plugin_version": "1.1.7",
     "message_type": "analytics_report",
     "website_info": {
         "name": "Example Financial", "url": "https://example.com", "domain": "example.com",
@@ -1340,7 +1342,7 @@ Every outbound message shares one versioned envelope:
 {
     "schema_version": "2.0",
     "source": "convermetry",
-    "plugin_version": "1.1.6",
+    "plugin_version": "1.1.7",
     "message_type": "form_submission",
     "website_info": {
         "name": "Example Financial", "url": "https://example.com", "domain": "example.com",
@@ -1489,6 +1491,8 @@ Initial delivery → 5 minutes → 30 minutes → 2 hours → 6 hours → 16 hou
 ```
 
 **Which answers are retried.** A `2xx` is delivered. A `4xx` other than `408`, `409`, `425` and `429` is **final**: the request is frozen and would be refused the same way on every attempt, so a form delivery is abandoned at once (reason `rejected`, and the lead shows *failed*) and an analytics chain is marked exhausted, so the next scheduled dispatch re-sends it rather than five more attempts in between. A `5xx`, those four `4xx`, a `3xx` (redirects are not followed) and a network error are retried on the schedule. A `Retry-After` on a `429` or `503`, in seconds or as an HTTP date, makes the next attempt wait at least that long, never less than the schedule's own delay and never more than 24 hours. Before 1.1.6 every non-2xx answer was retried on the full schedule and `Retry-After` was ignored.
+
+**`401`, `403` and `404` are final too.** They are also what many receivers answer for a few minutes while an API key is being rotated or a route redeployed, so a lead submitted in that window is abandoned after its first attempt instead of being retried for a day. Convermetry does not send it again by itself, and the Submissions screen has no resend action. The submission stays there with its values and shows *Failed* (or *Partial*, when another endpoint accepted it), and the Activity Log keeps the attempt with its status code. To recover it, export it from the Submissions screen (CSV or JSON) and enter it in the receiving system. When you rotate a key, have the receiver accept both the old and the new one until Convermetry sends the new one.
 
 **Frozen requests.** On the first delivery attempt the final URL (all query-parameter layers merged), the **configured** headers (global + per-form + runtime), and the serialized JSON body are frozen. Every retry replays that exact body and URL under the same `delivery_id` — retention cleanup, settings changes, or plugin updates between attempts can never mutate them.
 
@@ -1977,7 +1981,7 @@ an explicit ZIP selection.
 
 ```bash
 bash bin/prepare-svn.sh                           # prepare the newest build
-bash bin/prepare-svn.sh build/convermetry-1.1.6.zip # prepare a specific build
+bash bin/prepare-svn.sh build/convermetry-1.1.7.zip # prepare a specific build
 bash bin/prepare-svn.sh --publish                 # prepare and commit newest build
 ```
 

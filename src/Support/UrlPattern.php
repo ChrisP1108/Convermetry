@@ -11,8 +11,15 @@ if (!defined('ABSPATH')) exit;
  * of it is compared, and when a stored one can no longer mean what it was
  * written for.
  *
- * PURE. No WordPress functions, so {@see \Convermetry\Goals\GoalMatcher} (which
- * is pure by design) and the unit suite can use it as it is.
+ * PURE, apart from {@see clean()}. What a match runs ({@see canonical()},
+ * {@see encoded()}, {@see isUsable()}) uses no WordPress functions, so
+ * {@see \Convermetry\Goals\GoalMatcher} (which is pure by design) and
+ * {@see \Convermetry\Funnels\StepCompiler} can use it as it is. clean() removes
+ * tags with wp_strip_all_tags(). It runs where goals and funnels are saved and
+ * read (GoalSettings, FunnelSettings: an admin screen, a tracking request, a
+ * cron run), so always inside WordPress, never inside the matchers. The unit
+ * suite defines the function the way WordPress does
+ * (tests/stubs/formatting.php).
  *
  * WHY THIS EXISTS. WordPress stores a slug in Cyrillic, Greek, Arabic, Hebrew or
  * CJK percent-encoded ("/%d0%ba%d0%be%d0%bd%d1%82%d0%b0%d0%ba%d1%82%d1%8b/" for
@@ -41,6 +48,11 @@ final class UrlPattern
      * space is kept, because "/price list/" is how the address bar shows
      * "/price%20list/" and {@see canonical()} treats the two as one.
      *
+     * Tags go through wp_strip_all_tags(), not strip_tags(), which WordPress's
+     * coding standards (and so Plugin Check) refuse. The difference is that it
+     * also drops the contents of a <script> or <style> element, which no URL
+     * pattern has.
+     *
      * @param mixed $value Raw submitted or stored value.
      * @param int   $max   Maximum length in characters.
      * @return string
@@ -57,7 +69,7 @@ final class UrlPattern
             return '';
         }
 
-        $value = (string) preg_replace('/[\x00-\x1F\x7F]+/', '', strip_tags($value));
+        $value = (string) preg_replace('/[\x00-\x1F\x7F]+/', '', wp_strip_all_tags($value));
 
         return mb_substr(trim($value), 0, $max);
     }

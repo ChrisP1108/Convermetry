@@ -882,11 +882,15 @@ final class Options
      * Custom HTTP headers included on every webhook request to every
      * endpoint (e.g. an Authorization header for a downstream API).
      *
+     * Checked again as read ({@see KeyValuePairs::storedHeaders()}), so a
+     * value with a line break that was written to the option directly is
+     * never sent.
+     *
      * @return list<array{key: string, value: string}>
      */
     public static function globalHeaders(): array
     {
-        return KeyValuePairs::normalize(self::webhookAll()['global_headers']);
+        return KeyValuePairs::storedHeaders(self::webhookAll()['global_headers']);
     }
 
     /**
